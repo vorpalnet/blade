@@ -40,9 +40,9 @@ A WebLogic shared library with `Extension-Name: blade-shared`, containing every 
 - **Why it's deployed twice:** WebLogic shared libraries are scoped to deployment targets. An admin app on AdminServer can only resolve a library that's also deployed to AdminServer, and the same goes for the cluster.
 - **Updating:** bumping a 3rd-party version requires one shared-library redeploy, not a rebuild of every service.
 
-### 3. Admin apps — `dist/<ver>/admin/`
+### 3. Admin apps — `blade-admin.ear` (root) / `dist/<ver>/admin/` (loose)
 
-Management tools that run **only on AdminServer**. `dist/<ver>/admin/` holds both the loose admin WARs **and** the assembled `blade-admin.ear`, so you can deploy the whole tier in one step (the EAR) or one app at a time (a WAR) — your call, per deploy. Each bundled WAR is self-contained exactly as it deploys standalone — it carries the framework jar and references the `blade-shared` shared library via its own `weblogic.xml`. The EAR is a packaging convenience over those WARs; it bundles no libraries itself. The bundled web modules and their (unchanged) context-roots:
+Management tools that run **only on AdminServer**. The whole-tier EAR sits at the dist root (`dist/<ver>/blade-admin.ear`); the same apps ship loose under `dist/<ver>/admin/`. Deploy the EAR in one step, or one WAR at a time — your call, per deploy. Each bundled WAR is self-contained exactly as it deploys standalone — it carries the framework jar and references the `blade-shared` shared library via its own `weblogic.xml`. The EAR is a packaging convenience over those WARs; it bundles no libraries itself. The bundled web modules and their (unchanged) context-roots:
 
 | Source module | WAR (in EAR) | Context root | Purpose |
 |---|---|---|---|
@@ -61,9 +61,9 @@ Management tools that run **only on AdminServer**. `dist/<ver>/admin/` holds bot
 - **EAR or loose WAR:** deploy `blade-admin.ear` for the whole tier, or a single `blade-*.war` from `dist/<ver>/admin/` for a one-app test. Both are in the same directory.
 - **Watcher is retired.** The headless config auto-publish shim (`blade-watcher.war`) moved to `retired/watcher/` and is no longer built or shipped — the Configurator's auto-publish covers the same need. (It was always standalone-only, never in the EAR.)
 
-### 4. Services + test apps — `dist/<ver>/services/` and `dist/<ver>/test/`
+### 4. Services + test apps — `blade-services.ear` / `blade-test.ear` (root), loose in `services/` and `test/`
 
-The SIP service applications (Analytics, Hold, Proxy-Registrar, Gateway, etc.). `dist/<ver>/services/` holds both the loose service WARs **and** `blade-services.ear`; `dist/<ver>/test/` likewise holds the test WARs and `blade-test.ear`. Deploy whichever suits you:
+The SIP service applications (Analytics, Hold, Proxy-Registrar, Gateway, etc.). The whole-tier EARs `blade-services.ear` and `blade-test.ear` sit at the dist root; the same apps ship loose under `dist/<ver>/services/` and `dist/<ver>/test/`. Deploy whichever suits you:
 
 - **Loose WARs** — one WebLogic deployment per service (`hold`, `gateway`, …), each **individually visible** in Remote Console with its own state, start/stop and targeting. This is the model to reach for when you want per-service control (Remote Console cannot see inside an EAR).
 - **The EAR** — the whole tier in one deployment, when a single unit is more convenient than a longer per-WAR loop.
@@ -180,7 +180,15 @@ The JARs can be updated in place and re-activated by a rolling engine-tier resta
 
 This is regenerated on every build as `dist/<ver>-<build>/DEPLOYMENT.txt`. The static view:
 
-Each tier has its own `dist/<ver>/` subdirectory holding its loose artifacts **and**, where applicable, its EAR — deploy whichever you want.
+The **whole-tier EARs sit at the dist root**; the loose artifacts sit in per-tier folders. Deploy an EAR from the root, or a loose WAR from its folder.
+
+**Dist root** — the whole-tier EARs:
+
+| Artifact | Target | Notes |
+|---|---|---|
+| `blade-admin.ear` | AdminServer | the whole admin tier in one EAR |
+| `blade-services.ear` | cluster | the whole services tier in one EAR |
+| `blade-test.ear` | engine0 | the test apps in one EAR |
 
 **`dist/<ver>/lib/`** (libraries):
 
@@ -190,20 +198,11 @@ Each tier has its own `dist/<ver>/` subdirectory holding its loose artifacts **a
 | `blade-fsmar.jar` | `--approuter` | `approuter/` | SIP application router (restart engine tier) |
 | `blade-framework.jar` | *(not deployed)* | bundled in WARs | BLADE framework library |
 
-**`dist/<ver>/admin/`** → AdminServer:
+**Per-tier folders** — the same apps, loose, for single-app deploys:
 
-| Artifact | Notes |
-|---|---|
-| `blade-admin.ear` | whole admin tier in one EAR |
-| `blade-*.war` | the same admin apps, loose, for single-app deploys |
-
-**`dist/<ver>/services/`** → the cluster:
-
-| Artifact | Notes |
-|---|---|
-| `blade-services.ear` | whole services tier in one EAR |
-| `<service>.war` | the same services, loose (`gateway.war`, `hold.war`, …) — individually visible in Remote Console; context-root matches filename |
-
-**`dist/<ver>/test/`** → engine0: `blade-test.ear`, or `test-uac.war` / `test-uas.war` / `test-b2bua.war` loose.
-
-**`dist/<ver>/proto/`** (incubator, deploy by hand): `blade-proto.ear`, or the individual proto WARs when built with the `full` profile.
+| Folder | Target | Contents |
+|---|---|---|
+| `admin/` | AdminServer | `blade-*.war` admin apps |
+| `services/` | cluster | `<service>.war` (`gateway.war`, `hold.war`, …) — individually visible in Remote Console; context-root matches filename |
+| `test/` | engine0 | `test-uac.war` / `test-uas.war` / `test-b2bua.war` |
+| `proto/` | ad-hoc | incubator WARs (built by the `full` profile). **No proto EAR** — proto is a grab-bag; deploy its WARs individually. |

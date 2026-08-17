@@ -474,7 +474,8 @@
 			</plugin></plugins></build>
 		</profile>
 		<profile>
-			<id>javadocs</id>
+			<id>ear-javadoc</id>
+			<activation><property><name>!skip.javadoc</name></property></activation>
 			<dependencies>
 				<dependency>
 					<groupId>org.vorpal.blade</groupId>

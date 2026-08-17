@@ -6,7 +6,7 @@
 #   build profile's list, passed by build.sh via -Dblade.included.modules.
 #   When given, ONLY those modules are collected and any previously collected
 #   module not in the list is pruned, so blade-javadoc.war matches the build
-#   profile exactly. When omitted/empty (plain `mvn -Pjavadocs` without
+#   profile exactly. When omitted/empty (plain `mvn -Pjavadoc-gen` without
 #   build.sh), every module with apidocs on disk is collected and the docroot
 #   accumulates across builds (legacy union behavior).
 

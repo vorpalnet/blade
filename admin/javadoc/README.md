@@ -6,10 +6,14 @@ It is the only admin app with no login: the Javadoc site is deliberately public.
 
 ## How it's built
 
-Javadoc generation runs under the `javadocs` Maven profile (`./build.sh -- -Pjavadocs`,
-automatic on JDK 23+, skippable with `--no-javadoc`). Each module's javadoc is generated
-with the UML Doclet — SVG class diagrams alongside the HTML — plus BLADE's own stylesheet
-and a topbar linking back to the [Portal](../portal/README.md).
+`javadoc` is a normal build-profile module: profiles that list it (`default`, `full`) build
+the docs; others don't. Because this app aggregates every module's apidocs, build.sh runs it
+in a final pass — it first builds the whole project with per-module generation (the
+`javadoc-gen` Maven profile), then builds this module + the admin EAR over the now-complete
+set, so blade-javadoc.war is never missing a module. Needs a build JDK ≥ 23 (BLADE's `///`
+Markdown doc comments). Each module's javadoc is generated with the UML Doclet — SVG class
+diagrams alongside the HTML — plus BLADE's own stylesheet and a topbar linking back to the
+[Portal](../portal/README.md).
 
 At packaging time, `collect-javadocs.sh` walks the sibling modules, copies each generated
 `apidocs` tree into `target/javadoc-content/<module>/`, and generates the index page. When

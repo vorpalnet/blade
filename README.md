@@ -130,7 +130,7 @@ Deployed to the cluster alongside production applications (or to a standalone te
 
 # Deployment Model
 
-BLADE deploys across the OCCAS domain by scope. Each tier ships both as loose WARs and as a per-tier EAR (`blade-admin/services/test/proto.ear`); deploy whichever fits:
+BLADE deploys across the OCCAS domain by scope. The three shippable tiers each produce a whole-tier EAR at the dist root (`blade-admin.ear`, `blade-services.ear`, `blade-test.ear`) plus the same apps loose in per-tier folders — deploy whichever fits:
 
 ```
 OCCAS Domain
@@ -295,7 +295,7 @@ directory is the authoritative per-artifact tier/target listing for the build yo
 Admin-tier WARs are named `blade-<app>.war` so their WebLogic app names never collide with the like-named services-tier WARs (e.g. admin `blade-crud.war` vs. a service `crud.war`); `blade-configurator.war` still deploys at `/blade/configurator` because the WAR filename and the `<wls:context-root>` are independent. **A SIP servlet application is always named for its context root** — `<finalName>` equals `<wls:context-root>`, with no prefix (`hold.war` → `/hold`, `gateway.war` → `/gateway`). That name is what the container reports to the App Router, so it is the name FSMAR configs target; a prefixed WAR would deploy under a name no FSMAR `next` could resolve. The `blade-` prefix belongs to admin-tier WARs only, and there it doesn't always equal the context — `blade-crud.war` → `/blade/crud-editor`, `blade-analytics.war` → `/blade/analytics`, `blade-test.war` → `/blade/test-console` — those three are deliberately shortened.
 
 - The dist contents are driven by the active build profile (`build-profiles/*.conf`). Stale artifacts from previous builds in unrelated `target/` directories do **not** leak in — only modules listed in the active conf are copied.
-- **Per-tier dist layout — loose WARs and an EAR, side by side.** Each tier gets its own `dist/<ver>-<build>/` subdirectory (`lib/ admin/ services/ test/ proto/`) holding its loose artifacts **and** the assembled EAR (`blade-admin.ear`, `blade-services.ear`, `blade-test.ear`, `blade-proto.ear`). Deploy the EAR for the whole tier in one step, or a loose WAR for per-service control — Remote Console can't see inside an EAR, so the loose WARs remain the way to get per-service state, start/stop and targeting. The EARs build automatically from whichever WARs the profile selected; they aren't `--init`-selectable modules.
+- **Dist layout — whole-tier EARs at the root, loose WARs in folders.** The three shippable tiers each produce a whole-tier EAR at the `dist/<ver>-<build>/` root (`blade-admin.ear`, `blade-services.ear`, `blade-test.ear`); the same apps ship loose in per-tier folders (`lib/ admin/ services/ test/ proto/`). Deploy an EAR for the whole tier in one step, or a loose WAR for per-service control — Remote Console can't see inside an EAR, so the loose WARs remain the way to get per-service state, start/stop and targeting. The EARs build automatically from whichever WARs the profile selected; they aren't `--init`-selectable modules. **`proto/` has no EAR** — it's a grab-bag of admin- and service-shaped apps, so its WARs deploy ad-hoc.
 - **FSMAR JAR** must be installed manually into the OCCAS approuter folder (`./deploy.sh <env> blade-fsmar.jar --approuter`).
 - **Admin WARs** are skinny like service WARs — `WEB-INF/lib` carries only the framework jar; 3rd-party JARs come from the `blade-shared` shared library. They deploy to AdminServer (as `blade-admin.ear`, or individually).
 - On a failed build, the current build's `dist/` directory is deleted to prevent incomplete artifacts.
@@ -352,7 +352,7 @@ Need a different subset? `./build.sh --init` builds one interactively and saves 
 ./build.sh full                         # base set + proto/ incubator apps
 ./build.sh default clean package        # with explicit Maven goals
 ./build.sh default occas-8.1 clean package   # REQUIRED shape when switching platforms
-./build.sh --no-javadoc default         # skip javadoc generation (fast dev loop)
+./build.sh minimal                      # a profile without javadoc → no docs (fast dev loop)
 ./build.sh default -- -Dfoo=bar         # extra Maven flags
 ```
 
@@ -442,25 +442,23 @@ source uses Java 23+ Markdown `///` doc comments ([JEP 467](https://openjdk.org/
 the javadoc tool has to come from a JDK that understands them. This is independent of the
 bytecode target: docs generate on JDK 23+ while `--release` still compiles to Java 11.
 
-On an older build JDK the docs are skipped with a warning and the build itself is fine. Either
-way the build summary says which happened:
+**Javadoc is a normal profile module.** It builds when the active profile lists `javadoc`
+(`default` and `full` do) and not otherwise — there is no `--no-javadoc` flag. To skip it (fast
+dev loops — the javadoc WAR is ~150 MB and the slowest part of the build), use a profile that
+omits `javadoc` (e.g. `minimal`, or a `--init` profile without it). Omitting it means the admin
+EAR assembles **without** `blade-javadoc.war`, so `/blade/javadoc` 404s on that deployment.
+
+Because the javadoc app aggregates **every** module's apidocs, it must build after all of them.
+`build.sh` guarantees that structurally: when `javadoc` is selected it runs a **two-pass** build —
+first the whole project (each module generates its apidocs), then `admin/javadoc` + the admin EAR
+alone, over the now-complete set. So the WAR is never missing a module, regardless of reactor
+order. On a build JDK older than 23 the docs are dropped with a warning and the build is
+otherwise fine. The summary line says which happened:
 
 ```
-Javadocs:      generating (-Pjavadocs → admin/javadoc → blade-javadoc.war)
-Javadocs:      SKIPPED — needs JDK 23+ (build JDK is 21); admin EAR built without blade-javadoc.war
+Javadocs:      generating (final pass → admin/javadoc → blade-javadoc.war)
+Javadocs:      SKIPPED — javadoc is in default but needs JDK 23+ (build JDK is 21); admin EAR built without blade-javadoc.war
 ```
-
-To skip generation deliberately (fast dev loops — the javadoc WAR is ~150 MB and the slowest
-module in the build):
-
-```bash
-./build.sh default --no-javadoc  # one-off
-export BLADE_SKIP_JAVADOC=1      # sticky for the current shell
-```
-
-Skipping means the admin EAR assembles **without** `blade-javadoc.war`, so `/blade/javadoc`
-404s on that deployment. Passing `-Pjavadocs` by hand still works but is the legacy form; it is
-no longer needed.
 
 This uses the [UML Doclet](https://github.com/talsma-ict/umldoclet) to generate class diagrams (SVG) alongside the standard Javadoc HTML, with Vorpal purple branding. All module javadocs are bundled into `blade-javadoc.war`, which ships **inside the admin EAR** — admin WARs are not copied to `dist/` individually:
 

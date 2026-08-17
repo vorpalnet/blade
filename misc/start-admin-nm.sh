@@ -28,6 +28,12 @@ NM_TYPE="${NM_TYPE:-ssl}"          # ssl|plain — must match SecureListener in 
 NM_ACTION="${NM_ACTION:-start}"    # start | kill (stop) | restart, via Node Manager
 NM_ADMINURL="${NM_ADMINURL:-}"     # for MANAGED servers: t3://<admin>:<port> passed as AdminURL
 
+# JAVA_VENDOR must be set for wlst.sh below: it sources commBaseEnv.sh, which resets
+# JAVA_HOME to the OUI install record (the BUILD JDK, absent on runtime-only engine
+# boxes) whenever JAVA_VENDOR is empty — so wlst.sh would fail to find Java. With it
+# set, wlst.sh honors the JAVA_HOME the systemd unit passes (the runtime JDK link).
+export JAVA_VENDOR="${JAVA_VENDOR:-Oracle}"
+
 # NM password: env var, else a gitignored secret file next to this script, else prompt.
 SECRET="$(dirname "$0")/.nmsecret"          # one line:  NM_PASSWORD=...
 [ -z "${NM_PASSWORD:-}" ] && [ -f "$SECRET" ] && . "$SECRET"

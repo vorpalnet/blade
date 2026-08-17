@@ -1713,6 +1713,13 @@ iu_wlst_run() {
 #!/bin/bash
 cd '${work}'
 ${jh:+export JAVA_HOME='${jh}'; PATH='${jh}/bin':"\$PATH"}
+# JAVA_VENDOR must accompany JAVA_HOME. setWLSEnv.sh sources commBaseEnv.sh, which
+# resets JAVA_HOME to the OUI install record (the BUILD JDK) whenever JAVA_VENDOR is
+# empty. Unset, the domain-creation Wizard then bakes that build-JDK path into the
+# new domain's setNMJavaHome.sh / setDomainEnv.sh — which fails on every runtime-only
+# engine box. Setting it keeps WLST (and the Wizard) on our JAVA_HOME, so the domain
+# records the runtime JDK link that provisioning ships to engines.
+export JAVA_VENDOR=Oracle
 export MW_HOME='${mw}' BEA_HOME='${mw}'
 . '${setwls}' >/dev/null
 exec java ${wlp} weblogic.WLST '${py}'
@@ -2114,7 +2121,7 @@ provision_one_host() {
 
     if [ "$DRY" = "on" ]; then
         log "${C_DIM}  [dry-run] ssh ${tgt} true; ensure ${grp} + ${user} exist there${C_RESET}"
-        log "${C_DIM}  [dry-run] sudo install -d -o ${user} -g ${grp} $(dirname "$mw")${jdk_real:+ $(dirname "$jdk_real")}${jdk_link:+ $(dirname "$jdk_link")}; -o ${sshu} $(dirname "$cdir")${C_RESET}"
+        log "${C_DIM}  [dry-run] sudo install -d -o ${user} -g ${grp} $(dirname "$mw") ${DOMAINS_DIR} ${LOG_DIR:-/var/log/weblogic}/nodemanager${jdk_real:+ $(dirname "$jdk_real")}${jdk_link:+ $(dirname "$jdk_link")}; -o ${sshu} $(dirname "$cdir")${C_RESET}"
         log "${C_DIM}  [dry-run] xfer_rsync ${user}:${grp} ${mw}/ ${tgt}:${mw}/   (first run moves several GB)${C_RESET}"
         [ -n "$jdk_real" ] && log "${C_DIM}  [dry-run] xfer_rsync ${user}:${grp} ${jdk_real} ${tgt}:$(dirname "$jdk_real")/${C_RESET}"
         [ -n "$jdk_link" ] && log "${C_DIM}  [dry-run] ssh ${tgt} sudo ln -sfn ${jdk_real} ${jdk_link}${C_RESET}"
@@ -2181,7 +2188,7 @@ provision_one_host() {
     # Install trees land under the install user; only the cert staging dir
     # (inside the login user's own home) stays the ssh user's.
     if ! ssh -o BatchMode=yes "$tgt" \
-         "sudo install -d -o '${user}' -g '${grp}' '$(dirname "$real_home")' '${DOMAINS_DIR}'${jdk_real:+ '$(dirname "$jdk_real")'}${jdk_link:+ '$(dirname "$jdk_link")'} \
+         "sudo install -d -o '${user}' -g '${grp}' '$(dirname "$real_home")' '${DOMAINS_DIR}' '${LOG_DIR:-/var/log/weblogic}/nodemanager'${jdk_real:+ '$(dirname "$jdk_real")'}${jdk_link:+ '$(dirname "$jdk_link")'} \
           && sudo install -d -o '${sshu}' '$(dirname "$cdir")'" 2>/dev/null; then
         warn "${name}: could not create target dirs — skipped."
         return 1
@@ -3863,12 +3870,19 @@ emit_serverstart_block() {
     mem="${mem:--Xms512m -Xmx1024m -XX:MaxMetaspaceSize=512m}"
     local cp="${OH}/wlserver/server/lib/weblogic.jar:${OH}/wlserver/../oracle_common/modules/thirdparty/ant-contrib-1.0b3.jar:${OH}/wlserver/modules/features/oracle.wls.common.nodemanager.jar:${OH}/occas/server/lib/platform/oracle.sdp.occas.depended.jar:${OH}/wlserver/sip/server/lib/wlss-runtime-rest-proxy.jar:${OH}/wlserver/sip/server/lib/weblogic_sip.jar:${OH}/wlserver/common/derby/lib/derbytools.jar:${OH}/wlserver/common/derby/lib/derbyclient.jar:${OH}/wlserver/common/derby/lib/derby.jar:${OH}/wlserver/common/derby/lib/derbyshared.jar"
     local args="${mem} -da -javaagent:${OH}/wlserver/server/lib/debugpatch-agent.jar -Dwls.home=${OH}/wlserver/server -Dweblogic.home=${OH}/wlserver/server -Dwlss.maddr.enable=true -Dwlss.replication=on -Dwlss.callstate.manager.classname=com.bea.wcp.sip.replicatedstore.server.CoherenceCallStateManager -Dweblogic.security.SSL.minimumProtocolVersion=TLSv1.2 -Dweblogic.servlet.ClasspathServlet.disableSecureMode=false -Dweblogic.nodemanager.sslHostNameVerificationEnabled=false"
+    # MaxMessageSize is set as a first-class config.xml attribute on the template and
+    # AdminServer -- NOT a -D JVM arg -- so it is honoured at startup independent of how
+    # the JVM args are assembled, and it is the same attribute the Tuning app edits
+    # (per-server, live). Raises the T3 cap from its 10 MB default so an engine can pull
+    # the FSMAR custom App Router jar (~10.5 MB) from the AdminServer on every AR load
+    # (AppRouterResource.getRemoteFileContent) without MaxMessageSizeExceededException.
     echo "# --- BLADE: per-server ServerStart (MBean-mode JVM args + SIP classpath) ---"
     local spec coll nm
     for spec in "ServerTemplates:${tmpl}" "Servers:AdminServer"; do
         coll="${spec%%:*}"; nm="${spec##*:}"
         cat <<PYSS
 cd('/${coll}/${nm}')
+set('MaxMessageSize', 40000000)
 try:
     create('${nm}','ServerStart')
 except:

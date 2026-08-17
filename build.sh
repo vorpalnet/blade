@@ -9,7 +9,7 @@
 # non-zero error naming the available profiles. Clean-only runs need no profile.
 #
 # Usage:
-#   ./build.sh <profile> [platform] [--dev|--prod] [--no-dist] [--no-javadoc] [maven-args...]
+#   ./build.sh <profile> [platform] [--dev|--prod] [--no-dist] [maven-args...]
 #   ./build.sh --init                       # build a new profile interactively, then build it
 #   ./build.sh --list                       # list available profiles and exit
 #
@@ -22,7 +22,7 @@
 #   ./build.sh clean                        # clean-only (no profile needed); purges org.vorpal.blade from ~/.m2
 #   ./build.sh cleanAll                     # clean + delete the entire dist/ tree
 #   ./build.sh default --no-dist            # skip dist/ copy
-#   ./build.sh default --no-javadoc         # skip javadoc generation
+#   ./build.sh minimal                      # a profile without javadoc → no docs, faster
 #   ./build.sh default                      # dev versioning (default): app version 3.0.4
 #   ./build.sh default --prod               # release versioning: app version 3.0.4-<build>
 #
@@ -47,8 +47,9 @@
 # header (e.g. "Platform: occas-8.3 ($MW_HOME)").
 #
 # Per-tier EARs (automatic; contents track the profile):
-#   Every tier builds a per-tier EAR from apps/<tier> — blade-admin.ear,
-#   blade-services.ear, blade-test.ear, blade-proto.ear. Each component WAR is
+#   Each SHIPPABLE tier builds a per-tier EAR from apps/<tier> — blade-admin.ear,
+#   blade-services.ear, blade-test.ear (no proto EAR — proto/ is a grab-bag,
+#   deployed ad-hoc as loose WARs). Each component WAR is
 #   contributed by an ear-<name> Maven profile activated by !skip.<name> — the same
 #   flags this script derives from the conf — so an EAR shrinks to match a trimmed
 #   profile. The EAR modules are NOT discovered/selectable (see discover_modules),
@@ -58,11 +59,14 @@
 #
 # Dist management:
 #   Every WAR/JAR built during the run is copied to dist/<ver>-<build>/:
-#     dist/<ver>-<build>/            blade-admin.ear + libraries + conf files
-#                                    (the deploy units: admin EAR, fsmar.jar,
-#                                    shared.war). No admin/ subdir — the EAR is
-#                                    the admin tier's only deployable.
-#     dist/<ver>-<build>/services/   Service WARs (the services deploy units)
+#     dist/<ver>-<build>/            the whole-tier EARs (blade-admin/services/
+#                                    test.ear) + conf files + build.log
+#     dist/<ver>-<build>/lib/        blade-framework.jar, blade-shared.war, blade-fsmar.jar
+#     dist/<ver>-<build>/admin/      loose admin WARs (the same apps as blade-admin.ear)
+#     dist/<ver>-<build>/services/   loose service WARs
+#     dist/<ver>-<build>/test/       loose test WARs
+#     dist/<ver>-<build>/proto/      loose incubator WARs (full profile; no EAR)
+#   Deploy a whole-tier EAR from the root, or a loose WAR from its folder.
 #   Plus the active build profile + platform conf files at the root for
 #   traceability, and build.log — the full build console (Maven output +
 #   summary) so administrators can see how the build went after the fact.
@@ -77,15 +81,16 @@
 #
 #   --no-dist on the CLI overrides BLADE_SKIP_DIST=0 from the environment.
 #
-# Javadoc generation:
-#   BLADE's source uses Java 23+ Markdown '///' doc comments (JEP 467), so docs
-#   are generated automatically (via the -Pjavadocs profile) whenever the build
-#   JDK is >= 23 — even though bytecode still targets Java 11 (--release). The
-#   resulting blade-javadoc.war is bundled into the admin EAR (blade-admin.ear). On an older
-#   build JDK the docs are skipped with a warning; the build itself is fine.
-#   To skip generation deliberately (e.g. fast dev loops):
-#     ./build.sh --no-javadoc               # one-off
-#     export BLADE_SKIP_JAVADOC=1           # sticky for the current shell
+# Javadoc:
+#   `javadoc` is a normal profile module — it builds when the active build
+#   profile lists it (default/full do), and not otherwise. There is no separate
+#   flag; "no javadoc" = a profile that omits it. The javadoc app aggregates every
+#   module's apidocs into blade-javadoc.war, bundled in the admin EAR. Because it
+#   must run AFTER every module has generated its apidocs, build.sh builds it in a
+#   final pass (see the JAVADOC_ON block), so the WAR is always complete regardless
+#   of reactor order. BLADE's ///-Markdown doc comments (JEP 467) need the javadoc
+#   tool from a JDK >= 23; on an older build JDK a javadoc-listing profile still
+#   builds, but the docs are dropped with a warning (bytecode still targets Java 11).
 #
 # ============================================================================
 
@@ -354,17 +359,16 @@ copy_all_to_dist() {
         [ $produced -eq 0 ] && missing=$((missing + 1))
     done <<< "$INCLUDED_MODULES"
 
-    # Each tier's EAR (apps/<tier> → blade-<tier>.ear) into that tier's dir, so
-    # dist/<tier>/ holds the loose WARs AND the assembled EAR side by side. The
-    # apps/ subdir name is the tier name (admin/services/test/proto).
-    local eardir eartier earf
+    # The per-tier EARs (apps/<tier> → blade-<tier>.ear) go at the dist ROOT — the
+    # "deploy the whole tier" units, sitting prominently above the per-tier folders
+    # that hold the loose WARs. Deploy an EAR from the root, or a loose WAR from
+    # its folder.
+    local eardir earf
     for eardir in "${SCRIPT_DIR}"/apps/*/; do
         [ -d "${eardir}target" ] || continue
-        eartier=$(basename "$eardir")
         for earf in "${eardir}target"/*.ear; do
             [ -f "$earf" ] || continue
-            mkdir -p "$DISTDIR/$eartier"
-            cp -f "$earf" "$DISTDIR/$eartier/"
+            cp -f "$earf" "$DISTDIR/"
             copied=$((copied + 1))
         done
     done
@@ -429,6 +433,8 @@ write_deployment_manifest() {
                 echo "framework|bundled in WARs|BLADE framework library (not deployed directly)" ;;
             blade-admin.ear)
                 echo "admin|AdminServer|Admin tier EAR — every admin console in one deployable" ;;
+            blade-services.ear)
+                echo "services|cluster|Services tier EAR — every engine-tier service in one deployable" ;;
             blade-test.ear)
                 echo "test|engine0|Test tier EAR — test harness apps (never the production cluster)" ;;
             *.conf)
@@ -487,7 +493,7 @@ write_deployment_manifest() {
 
     {
         echo "BLADE ${REVISION}-${BUILD_NUM} deployment manifest"
-        echo "See DEPLOYMENT.md for the four-tier deployment model."
+        echo "See DEPLOYMENT.md for the deployment model (whole-tier EARs at root; loose WARs in folders)."
         echo ""
         # Which app version the artifacts actually carry. In dev the build number is
         # deliberately NOT in the app version, so OCCAS redeploys in place instead of
@@ -855,14 +861,6 @@ case "${BLADE_SKIP_DIST:-}" in
     1|true|yes|on) SKIP_DIST=true ;;
 esac
 
-# Sticky dev-mode switch: BLADE_SKIP_JAVADOC=1 disables javadoc generation.
-# The CLI flag --no-javadoc always wins. Javadocs are generated by default when
-# the build JDK is >= 23 (see the javadoc decision block further down).
-SKIP_JAVADOC=false
-case "${BLADE_SKIP_JAVADOC:-}" in
-    1|true|yes|on) SKIP_JAVADOC=true ;;
-esac
-
 # `cleanAll`: same as `clean` plus wiping the whole dist/ tree (not just this
 # build's dist/<ver>-<build>/). We translate it to Maven's `clean` here and
 # remember to nuke dist/ after the clean-purge block below.
@@ -887,8 +885,6 @@ for arg in "$@"; do
         continue
     elif [ "$arg" = "--no-dist" ]; then
         SKIP_DIST=true
-    elif [ "$arg" = "--no-javadoc" ]; then
-        SKIP_JAVADOC=true
     elif [ "$arg" = "--prod" ]; then
         BLADE_MODE=prod
     elif [ "$arg" = "--dev" ]; then
@@ -1238,55 +1234,59 @@ else
     BUILD_JDK_SOURCE="PATH: $(command -v java 2>/dev/null || echo 'not found')"
 fi
 
-# --- Javadoc generation (on by default) ---
-# BLADE source uses Java 23+ Markdown '///' doc comments (JEP 467), so the
-# javadoc tool must come from a JDK >= 23 — even though we compile to Java
-# ${JAVA_VERSION:-11} bytecode (--release). When the build JDK is older we
-# can't render the docs, so we skip them (the build itself is unaffected) and
-# warn below. Generating activates the -Pjavadocs profile, which adds the
-# admin/javadoc module; we append "javadoc" to the dist copy list so the
-# blade-javadoc.war is bundled into blade-admin.ear (admin WARs are not copied to dist individually).
+# --- Silence Maven's own JDK warnings (not BLADE's) ---
+# Maven 3.9.x bundles jansi + guava; on a recent JDK those trip two runtime
+# warnings from ~/.m2/wrapper/dists — jansi's System::load (native access) and
+# guava's sun.misc.Unsafe::objectFieldOffset. Neither touches BLADE's compile.
+# The flags that quiet them are version-gated, so add each ONLY when the build
+# JDK understands it — an older JDK hard-fails on an unrecognized VM option:
+#   --enable-native-access       JDK 17+
+#   --sun-misc-unsafe-memory-access  JDK 24+
+# mvnw applies $MAVEN_OPTS to the Maven JVM. Direct ./mvnw runs don't get this
+# (they still warn harmlessly); the flags only silence, they change nothing.
+if [ -n "${BUILD_JDK_MAJOR:-}" ]; then
+    _maven_jdk_opts=""
+    [ "$BUILD_JDK_MAJOR" -ge 17 ] 2>/dev/null && _maven_jdk_opts="--enable-native-access=ALL-UNNAMED"
+    [ "$BUILD_JDK_MAJOR" -ge 24 ] 2>/dev/null && _maven_jdk_opts="${_maven_jdk_opts} --sun-misc-unsafe-memory-access=allow"
+    [ -n "$_maven_jdk_opts" ] && export MAVEN_OPTS="${MAVEN_OPTS:+$MAVEN_OPTS }${_maven_jdk_opts}"
+fi
+
+# --- Javadoc: driven by the profile, built in a final pass ---
+# `javadoc` is a normal profile module now: listing it in the active profile
+# includes admin/javadoc, which aggregates every module's apidocs into
+# blade-javadoc.war (bundled in blade-admin.ear). Two facts shape the handling:
+#   * BLADE's ///-Markdown doc comments (JEP 467) need the javadoc tool from a
+#     JDK >= 23. On an older build JDK we can't render them, so we DROP javadoc
+#     (force -Dskip.javadoc) with a warning — the rest of the build is unaffected.
+#   * collect-javadocs.sh (in admin/javadoc) must run AFTER every module has
+#     generated its apidocs. Instead of relying on reactor order, JAVADOC_ON
+#     triggers a two-pass build below: generate everything (-Pjavadoc-gen), then
+#     build admin/javadoc + the admin EAR alone, over the now-complete set.
 JAVADOC_MIN_JDK=23
-JAVADOC_FLAGS=()
+JAVADOC_ON=false
 JAVADOC_OLD_JDK=false
 jdk_ok_for_javadoc=false
 if [ -n "${BUILD_JDK_MAJOR:-}" ] && [ "${BUILD_JDK_MAJOR}" -ge "$JAVADOC_MIN_JDK" ] 2>/dev/null; then
     jdk_ok_for_javadoc=true
 fi
-# Was -Pjavadocs already passed by hand (the legacy `-- -Pjavadocs` form)?
-javadoc_manual=false
-for f in "${MAVEN_FLAGS[@]+"${MAVEN_FLAGS[@]}"}"; do
-    case "$f" in -P*javadocs*) javadoc_manual=true ;; esac
-done
+# Is `javadoc` an included module in the active profile?
+javadoc_selected=false
+if printf '%s\n' "$INCLUDED_MODULES" | grep -qx javadoc; then
+    javadoc_selected=true
+fi
 
 if [ "$HAS_BUILD_GOAL" != true ]; then
-    # Clean-only run. admin/javadoc is gated behind the `javadocs` profile, so
-    # without it a plain `./build.sh clean` would leave admin/javadoc/target/
-    # stale. Activate -Pjavadocs so the clean lifecycle reaches that module —
-    # safe on any JDK because clean never runs the javadoc tool (it only
-    # deletes target/, no JDK 23+ requirement).
-    if [ "$HAS_CLEAN" = true ]; then
-        JAVADOC_FLAGS+=("-Pjavadocs")
-        INCLUDED_MODULES="${INCLUDED_MODULES}"$'\n'"javadoc"
-        JAVADOC_STATUS="n/a (clean-only run; admin/javadoc pulled in so clean reaches it)"
-    else
-        JAVADOC_STATUS="n/a (clean-only run)"
-    fi
-elif [ "$SKIP_JAVADOC" = true ]; then
-    # The admin EAR's javadoc webModule rides the `javadocs` profile id, so
-    # without it the EAR simply assembles without blade-javadoc.war.
-    JAVADOC_STATUS="SKIPPED (--no-javadoc or BLADE_SKIP_JAVADOC set) — admin EAR built without blade-javadoc.war"
-elif [ "$javadoc_manual" = true ]; then
-    INCLUDED_MODULES="${INCLUDED_MODULES}"$'\n'"javadoc"
-    JAVADOC_STATUS="generating (-Pjavadocs passed explicitly)"
+    JAVADOC_STATUS="n/a (clean-only run)"
+elif [ "$javadoc_selected" != true ]; then
+    JAVADOC_STATUS="off (javadoc not listed in the ${PROFILE} profile)"
 elif [ "$jdk_ok_for_javadoc" = true ]; then
-    JAVADOC_FLAGS+=("-Pjavadocs")
-    INCLUDED_MODULES="${INCLUDED_MODULES}"$'\n'"javadoc"
-    JAVADOC_STATUS="generating (-Pjavadocs → admin/javadoc → blade-javadoc.war)"
+    JAVADOC_ON=true
+    JAVADOC_STATUS="generating (final pass → admin/javadoc → blade-javadoc.war)"
 else
+    # Selected, but this JDK can't render ///-Markdown docs — drop it, don't fail.
     JAVADOC_OLD_JDK=true
-    # No javadoc WAR on an older JDK → the admin EAR assembles without it.
-    JAVADOC_STATUS="SKIPPED — needs JDK ${JAVADOC_MIN_JDK}+ (build JDK is ${BUILD_JDK_MAJOR:-unknown}); admin EAR built without blade-javadoc.war"
+    SKIP_FLAGS+=("-Dskip.javadoc")
+    JAVADOC_STATUS="SKIPPED — javadoc is in ${PROFILE} but needs JDK ${JAVADOC_MIN_JDK}+ (build JDK is ${BUILD_JDK_MAJOR:-unknown}); admin EAR built without blade-javadoc.war"
 fi
 
 # Reusable so the same block prints in the header and the post-build summary.
@@ -1316,7 +1316,7 @@ if [ "$JAVADOC_OLD_JDK" = true ]; then
     echo "WARNING: skipping Javadoc generation — the javadoc tool needs a JDK ${JAVADOC_MIN_JDK}+"
     echo "         for BLADE's Markdown '///' doc comments (JEP 467); build JDK is ${BUILD_JDK_MAJOR:-unknown}."
     echo "         This affects the docs only — bytecode still targets Java ${JAVA_VERSION:-11} (--release ${JAVA_VERSION:-11})."
-    echo "         Point JAVA_HOME at a JDK ${JAVADOC_MIN_JDK}+ to build docs, or pass --no-javadoc to silence this."
+    echo "         Point JAVA_HOME at a JDK ${JAVADOC_MIN_JDK}+ to build docs, or use a profile without javadoc."
 fi
 echo "Modules: ${INCLUDED_COUNT} of ${TOTAL_COUNT}"
 # DIST_MSG distinguishes "user told us to skip" from "nothing to dist anyway",
@@ -1341,16 +1341,53 @@ echo ""
 # docs of exactly this build's modules — collected fresh, stale ones pruned.
 INCLUDED_CSV=$(printf '%s' "$INCLUDED_MODULES" | tr '\n' ',' | sed 's/^,*//;s/,*$//')
 
+run_maven() { "${SCRIPT_DIR}/mvnw" -f "${SCRIPT_DIR}/pom.xml" "$@"; }
+
 set +e
-"${SCRIPT_DIR}/mvnw" -f "${SCRIPT_DIR}/pom.xml" \
-    "${MAVEN_GOALS[@]}" \
-    "${MAVEN_FLAGS[@]+"${MAVEN_FLAGS[@]}"}" \
-    "${JAVADOC_FLAGS[@]+"${JAVADOC_FLAGS[@]}"}" \
-    "${SKIP_FLAGS[@]+"${SKIP_FLAGS[@]}"}" \
-    "${PLATFORM_FLAGS[@]+"${PLATFORM_FLAGS[@]}"}" \
-    "-Dbuild.number=${BUILD_NUM}" \
-    "-Dblade.included.modules=${INCLUDED_CSV}"
-MVN_EXIT=$?
+if [ "$JAVADOC_ON" = true ]; then
+    # Two-pass so javadoc collects a COMPLETE apidoc set regardless of reactor
+    # order (see the javadoc block above). Pass 1: build + install everything,
+    # generating each module's apidocs (-Pjavadoc-gen), but hold back admin/javadoc
+    # and the admin EAR. Pass 2: build ONLY those two — admin/javadoc's
+    # collect-javadocs.sh now runs after every apidoc exists, and the admin EAR
+    # bundles the resulting blade-javadoc.war. Pass 2's deps (framework, admin
+    # WARs) resolve from ~/.m2, installed by pass 1.
+    # -Dblade.skip.install=false: pass 2 is a separate reactor, so the admin WARs
+    # apps/admin bundles must be resolvable from ~/.m2 — install them here (this is
+    # the same contract downstream repos rely on; see optum/build.sh Step 0).
+    run_maven \
+        "${MAVEN_GOALS[@]}" \
+        "${MAVEN_FLAGS[@]+"${MAVEN_FLAGS[@]}"}" \
+        -Pjavadoc-gen -Dblade.skip.install=false \
+        "${SKIP_FLAGS[@]+"${SKIP_FLAGS[@]}"}" \
+        -Dskip.javadoc -Dskip.admin \
+        "${PLATFORM_FLAGS[@]+"${PLATFORM_FLAGS[@]}"}" \
+        "-Dbuild.number=${BUILD_NUM}" \
+        "-Dblade.included.modules=${INCLUDED_CSV}"
+    MVN_EXIT=$?
+    if [ $MVN_EXIT -eq 0 ]; then
+        echo ""
+        echo "=== Javadoc pass: collecting apidocs → blade-javadoc.war → admin EAR ==="
+        run_maven \
+            -pl admin/javadoc,apps/admin \
+            "${MAVEN_GOALS[@]}" \
+            "${MAVEN_FLAGS[@]+"${MAVEN_FLAGS[@]}"}" \
+            "${SKIP_FLAGS[@]+"${SKIP_FLAGS[@]}"}" \
+            "${PLATFORM_FLAGS[@]+"${PLATFORM_FLAGS[@]}"}" \
+            "-Dbuild.number=${BUILD_NUM}" \
+            "-Dblade.included.modules=${INCLUDED_CSV}"
+        MVN_EXIT=$?
+    fi
+else
+    run_maven \
+        "${MAVEN_GOALS[@]}" \
+        "${MAVEN_FLAGS[@]+"${MAVEN_FLAGS[@]}"}" \
+        "${SKIP_FLAGS[@]+"${SKIP_FLAGS[@]}"}" \
+        "${PLATFORM_FLAGS[@]+"${PLATFORM_FLAGS[@]}"}" \
+        "-Dbuild.number=${BUILD_NUM}" \
+        "-Dblade.included.modules=${INCLUDED_CSV}"
+    MVN_EXIT=$?
+fi
 set -e
 
 if [ $MVN_EXIT -ne 0 ]; then

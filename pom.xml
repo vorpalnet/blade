@@ -890,20 +890,25 @@ fi
 			<modules><module>admin/callflow</module></modules>
 		</profile>
 
-		<!-- One deployable EAR per tier, under apps/. Each is assembled from its
-		     component WARs via ear-<name> profiles inside the EAR pom (activated by
-		     !skip.<name>), so an EAR shrinks to match a trimmed build profile:
+		<!-- One deployable EAR per SHIPPABLE tier, under apps/. Each is assembled
+		     from its component WARs via ear-<name> profiles inside the EAR pom
+		     (activated by !skip.<name>), so an EAR shrinks to match a trimmed build
+		     profile:
 		       apps/admin    -> blade-admin.ear     -> AdminServer
 		       apps/services -> blade-services.ear  -> engine cluster
 		       apps/test     -> blade-test.ear      -> engine0
-		       apps/proto    -> blade-proto.ear     -> by hand (incubator)
 		     These build automatically — build.sh does not offer them as selectable
 		     modules, so their !skip.<name> activations are always on. The EAR is a
 		     packaging convenience: every tier's loose WARs ALSO ship in dist/<tier>/
 		     and remain the per-service deploy path (individually visible in Remote
 		     Console, which cannot see inside an EAR). Deploy whichever suits the
 		     tier. The javadoc WAR rides the `javadocs` profile id — blade-admin.ear
-		     carries javadoc.war exactly when docs are generated. -->
+		     carries javadoc.war exactly when docs are generated.
+
+		     There is deliberately NO proto EAR: the proto/ incubator is a grab-bag
+		     of admin- and service-shaped apps with mismatched context roots, so it
+		     doesn't bundle into one coherent deployable. Proto WARs ship loose in
+		     dist/proto/ and are deployed ad-hoc. -->
 		<profile>
 			<id>admin</id>
 			<activation><property><name>!skip.admin</name></property></activation>
@@ -919,18 +924,27 @@ fi
 			<activation><property><name>!skip.test</name></property></activation>
 			<modules><module>apps/test</module></modules>
 		</profile>
-		<profile>
-			<id>proto-ear</id>
-			<activation><property><name>!skip.proto</name></property></activation>
-			<modules><module>apps/proto</module></modules>
-		</profile>
 
 
+		<!-- javadoc is a normal profile module now: listing `javadoc` in a build
+		     profile includes admin/javadoc (which aggregates every module's apidocs
+		     into blade-javadoc.war); omitting it sets -Dskip.javadoc and drops it.
+		     The reactor-wide apidoc GENERATION is a separate concern, in the
+		     `javadoc-gen` profile below — build.sh turns it on (and runs a final
+		     pass so admin/javadoc collects a COMPLETE set) only when javadoc is
+		     selected. See build.sh's javadoc block. -->
 		<profile>
-			<id>javadocs</id>
+			<id>javadoc</id>
+			<activation><property><name>!skip.javadoc</name></property></activation>
 			<modules>
 				<module>admin/javadoc</module>
 			</modules>
+		</profile>
+		<!-- Per-module apidoc generation. Id-activated (no auto-activation): build.sh
+		     passes -Pjavadoc-gen in its first pass so every module writes its
+		     target/.../apidocs, which admin/javadoc then collects in the second pass. -->
+		<profile>
+			<id>javadoc-gen</id>
 			<build>
 				<plugins>
 					<plugin>
