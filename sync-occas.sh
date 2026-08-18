@@ -62,7 +62,7 @@ ok()   { printf '%s✓%s %s\n' "$C_GREEN" "$C_RESET" "$*"; }
 warn() { printf '%s⚠%s %s\n' "$C_YELLOW" "$C_RESET" "$*"; }
 die()  { printf '%s✗%s %s\n' "$C_RED" "$C_RESET" "$*" >&2; exit 1; }
 
-# Privileged transfer + run-as helpers (shared with blade.sh): the versioned
+# Privileged transfer + run-as helpers (shared with install.sh): the versioned
 # homes are the install user's, ssh reaches the nodes as the login user.
 # shellcheck source=misc/xfer.sh
 . "${SCRIPT_DIR}/misc/xfer.sh"

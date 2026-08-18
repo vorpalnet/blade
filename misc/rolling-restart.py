@@ -12,7 +12,7 @@
 #               fail over via the replicated state tier; throughput is the
 #               safe-to-bounce signal.
 #   3. BOUNCE — WLST shutdown(force)/start via Node Manager (the engine must
-#               be NM-managed, as blade.sh sets up). The drain flag is
+#               be NM-managed, as install.sh sets up). The drain flag is
 #               runtime state and dies with the JVM: the engine rejoins the
 #               pool on its first successful ping after the app deploys.
 #

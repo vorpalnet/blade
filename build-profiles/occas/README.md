@@ -1,21 +1,21 @@
 # Installing OCCAS
 
-**Use `./blade.sh`.** This directory no longer drives the install — it survives only for
+**Use `./install.sh`.** This directory no longer drives the install — it survives only for
 legacy env conf files. Profiles live in `.conf/<name>/` (gitignored) and are created and
 edited by the installer itself.
 
 ```
-./blade.sh                    pick or create a profile, then the dashboard
-./blade.sh <name> install     unattended, end to end
-./blade.sh <name> status      health snapshot, including patch level per host
+./install.sh                    pick or create a profile, then the dashboard
+./install.sh <name> install     unattended, end to end
+./install.sh <name> status      health snapshot, including patch level per host
 ```
 
-`install-occas.sh` was deleted once `blade.sh` had been exercised end-to-end on a real
+`install-occas.sh` was deleted once `install.sh` had been exercised end-to-end on a real
 cluster. It is in git history if you need it.
 
 ## What the installer does
 
-One machine at a time. `./blade.sh <name> install` builds **AdminServer + engine0 on the
+One machine at a time. `./install.sh <name> install` builds **AdminServer + engine0 on the
 machine it runs on**, and that is a complete, working deployment — not a stepping stone to a
 cluster. Growth is a separate, online step.
 
@@ -62,5 +62,5 @@ Promote it deliberately:
 Rollback is switching back — the previous home is still on disk.
 
 **Engines are never patched.** They receive a home that was patched and validated once, on
-machine0. `./blade.sh <name> status` reports the patch level of every host and warns if they
+machine0. `./install.sh <name> status` reports the patch level of every host and warns if they
 disagree.

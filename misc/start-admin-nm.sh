@@ -96,7 +96,7 @@ PY="$(mktemp /tmp/nmstart.XXXXXX.py)"
 trap 'rm -f "$PY"' EXIT
 
 # The launch ClassPath + Arguments come from config.xml's ServerStart -- the single
-# source of truth (blade.sh's emit_serverstart_block writes them there). We no longer
+# source of truth (install.sh's emit_serverstart_block writes them there). We no longer
 # source setDomainEnv/setUserOverrides: the WLST script below readDomain()s and reads
 # the ServerStart of this server (a static server has its own; a dynamic engine's
 # comes from the cluster's ServerTemplate), then hands ClassPath+Arguments to nmStart

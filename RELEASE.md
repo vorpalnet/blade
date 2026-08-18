@@ -69,7 +69,7 @@ editing panels and a dispatch-fidelity test suite for the round-trip.
 
 - Node Manager now has its **own permanent certificate**: a self-signed
   ~100-year `blade-nm` cert (`nm-identity.p12`/`nm-trust.p12`, minted once by
-  blade.sh's `n` step, its passphrase auto-generated as
+  install.sh's `n` step, its passphrase auto-generated as
   `nm.keystore.passphrase`) replaces the env identity on NM's listener — and
   is the only supported NM deployment (the `nm.type=plain` option is gone; a
   plain listener carries the NM password cleartext). The NM channel is a
@@ -86,7 +86,7 @@ editing panels and a dispatch-fidelity test suite for the round-trip.
   reliably covers, and trust is the real authentication; and
   `nodemanager.properties` is now written mode 600 (it holds plaintext
   passphrases until NM's first start encrypts them).
-- **MBean-mode server start restored** (blade.sh had regressed to script mode;
+- **MBean-mode server start restored** (install.sh had regressed to script mode;
   install-occas.sh gained this in 3.0.3): `weblogic.StartScriptEnabled=false`
   (the prefixed key — the plain one is silently ignored by this OCCAS NM) plus
   per-server `ServerStart` MBeans on the engine ServerTemplate and the
@@ -366,7 +366,7 @@ instead of vanishing — and adds a State column plus a per-server Restart butto
 Engines restart via force-shutdown + Node Manager start with the State column
 polling the progress; restarting the AdminServer works wifi-router style: the page
 counts down 90 seconds and reloads while Node Manager auto-restart brings the
-server back (the server must be NM-started, as blade.sh's boot service does). Also
+server back (the server must be NM-started, as install.sh's boot service does). Also
 fixed a JS name collision that rendered every RAM/swap value as "0m", and added a
 boot-blocker finding for -XX:+ZGenerational on a pre-21 JDK.
 

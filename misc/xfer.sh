@@ -1,4 +1,4 @@
-# misc/xfer.sh - privileged file transfer to engine hosts. Sourced by blade.sh,
+# misc/xfer.sh - privileged file transfer to engine hosts. Sourced by install.sh,
 # sync-occas.sh and tls/install-ssl.sh (needs `warn` from the host script).
 #
 # The problem this solves: the local trees (Oracle home, domains, keystores)

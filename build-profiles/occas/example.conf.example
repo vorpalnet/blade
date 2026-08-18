@@ -1,5 +1,5 @@
 # OCCAS silent install + dynamic-cluster domain config — EXAMPLE TEMPLATE.
-# LEGACY REFERENCE. The installer is ./blade.sh, which creates and edits its
+# LEGACY REFERENCE. The installer is ./install.sh, which creates and edits its
 # own profiles under .conf/<name>/ (gitignored) — start there, not here. An
 # <env>.conf in this directory only feeds the standalone './certs.sh <env> …'
 # form. Real env confs are gitignored — they carry your site's hostnames/IPs
@@ -10,7 +10,7 @@
 # ============================================================================
 # Step -1 — prep (user, group, directories)
 # ============================================================================
-# blade.sh's dashboard rows create install.user + inventory.group and the
+# install.sh's dashboard rows create install.user + inventory.group and the
 # oracle.home / installer / inventory / java directories, owned so every
 # later step runs without sudo.
 # install.user=oracle
@@ -18,7 +18,7 @@
 # ============================================================================
 # Step 0 — download the media from Oracle eDelivery
 # ============================================================================
-# blade.sh's download row fetches the installer media headlessly (curl); its
+# install.sh's download row fetches the installer media headlessly (curl); its
 # install step auto-runs it when installer.jar is missing. One-time browser
 # step per release (license click + wget.sh + access token) — the dashboard
 # walks you through it and stashes the URLs as .conf/<name>/occas.urls;
@@ -29,7 +29,7 @@
 # --- Oracle JDK (official tarballs from download.oracle.com — no login) ---
 # JDKs sit side by side under java.dir, and java.home is the
 # <java.dir>/current SYMLINK — a Java upgrade is a flip of that one link,
-# offered by blade.sh's patch step. Shared location — NOT under a user home:
+# offered by install.sh's patch step. Shared location — NOT under a user home:
 # the servers run as the oracle user, which can't traverse /home/<you>
 # (mode 700).
 java.dir=/opt/oracle/java
@@ -73,7 +73,7 @@ max.dynamic.cluster.size=99
 
 # --- Cluster firewall ---
 # firewalld on OCI/OEL images allows only ssh, which blocks NodeManager (5556),
-# t3 (7001), SIP, and coherence replication between the machines. blade.sh's
+# t3 (7001), SIP, and coherence replication between the machines. install.sh's
 # 'Open firewall ports' row (and engine provisioning) opens the NM/admin/ssl/sip
 # ports on every box; firewall.trusted.source was the old installer's key and
 # nothing reads it now.
@@ -82,7 +82,7 @@ max.dynamic.cluster.size=99
 # --- Physical machines + their Node Managers ---
 # CSV per machine: name:nmListenAddress:nmListenPort:nmType  (nmType = ssl|plain)
 # machine0 = the admin box (NM-managed, but no engines). To ADD A NODE:
-# blade.sh's 'Add a machine' row grows the cluster online and provisions the
+# install.sh's 'Add a machine' row grows the cluster online and provisions the
 # host. Keep this list in sync anyway — certs.sh reads machine.N for the
 # certificate SANs.
 machine.1=machine0:10.0.0.11:5556:ssl
@@ -90,15 +90,15 @@ machine.2=machine1:10.0.0.12:5556:ssl
 machine.3=machine2:10.0.0.13:5556:ssl
 
 # --- Static test engine on the admin box (HISTORICAL) ---
-# blade.sh dropped static.server: engines follow the machines, so machine0
+# install.sh dropped static.server: engines follow the machines, so machine0
 # runs engine0 from the same template as every other engine. Kept as a record
-# of the pre-blade.sh domain shape.
+# of the pre-install.sh domain shape.
 # Format: name:machine:listenPort:sipPort:sipsPort
 static.server=engine0:machine0:8001:5060:5061
 
-# --- TLS (steps: certs.sh + blade.sh's HTTPS / SIP-TLS row) ---
+# --- TLS (steps: certs.sh + install.sh's HTTPS / SIP-TLS row) ---
 # 1. ./certs.sh <env> generate      (test PKI)  — or 'import' for customer-issued
-# 2. ./blade.sh <profile> → the 'Turn on HTTPS / SIP-TLS' row (tls/make-certs.sh
+# 2. ./install.sh <profile> → the 'Turn on HTTPS / SIP-TLS' row (tls/make-certs.sh
 #    + tls/install-ssl.sh) wires the keystores + SSL ports into AdminServer and
 #    the engine template.
 # Defaults shown; uncomment to override. store.password lives in <env>.secret.

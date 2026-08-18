@@ -108,7 +108,7 @@ fi
 
 # --- Passphrases: env > secret file > prompt ---
 # A freshly supplied passphrase (from the environment or a prompt) is persisted
-# back into the one env conf as key=ENC(value). install-ssl and blade.sh's
+# back into the one env conf as key=ENC(value). install-ssl and install.sh's
 # emit_tls_block REQUIRE these keys to be present in the conf, so a passphrase
 # that only lived in a prompt would silently disable TLS on the next step.
 get_secret() {  # $1=env-var-name $2=secret-key $3=prompt-label
@@ -133,7 +133,7 @@ if [ "$SIP_TWOWAY" = "true" ]; then
 fi
 
 # Output beside the config under ~/.blade (default), not scattered in the repo.
-# certs.dir in the conf overrides. Kept in step with certs.sh and blade.sh.
+# certs.dir in the conf overrides. Kept in step with certs.sh and install.sh.
 OUTDIR="$(read_prop "$CONF_FILE" "certs.dir")"; OUTDIR="${OUTDIR/#\~/$HOME}"
 [ -z "$OUTDIR" ] && OUTDIR="${BLADE_HOME}/${ENV_NAME}"
 mkdir -p "$OUTDIR"
@@ -228,7 +228,7 @@ if [ "$SIP_TWOWAY" = "true" ]; then
         -keystore "$TRUST_P12" -storetype PKCS12 -storepass "$TRUST_PASS" >/dev/null
     echo "    + SBC CA imported (alias sbc-ca) for SIP mTLS"
 fi
-# The Node Manager's own permanent certificate (blade.sh ensure_nm_cert) rides
+# The Node Manager's own permanent certificate (install.sh ensure_nm_cert) rides
 # in the shared trust store so the AdminServer's built-in NM client — which
 # validates against the DOMAIN CustomTrust, not nm-trust.p12 — can reach NM.
 # Imported on every rebuild so replacing the CA never drops the NM entry.

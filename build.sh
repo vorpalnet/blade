@@ -100,7 +100,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROFILES_DIR="${SCRIPT_DIR}/build-profiles"
 PLATFORMS_DIR="${PROFILES_DIR}/platforms"
 # Local (gitignored) profiles the --init builder writes, resolved after the
-# canonical build-profiles/ ones. Shares the .conf/ dir blade.sh already uses.
+# canonical build-profiles/ ones. Shares the .conf/ dir install.sh already uses.
 LOCAL_PROFILES_DIR="${SCRIPT_DIR}/.conf"
 # The base profile. No longer applied automatically (a build now requires an
 # explicit profile) — this only names the set --init pre-checks as a starting
@@ -638,7 +638,7 @@ pick_profile() {
     done
 }
 
-# Read one keystroke, mapping arrows/space/enter/q to words. Mirrors blade.sh's
+# Read one keystroke, mapping arrows/space/enter/q to words. Mirrors install.sh's
 # _read_key: an Esc is followed by a short timed read to tell a lone Esc from an
 # arrow sequence. On EOF (no TTY, closed pipe) it returns 'quit' so --init fails
 # safe. j/k double for down/up.
@@ -662,7 +662,7 @@ _init_read_key() {
     esac
 }
 
-# The --init profile builder: a blade.sh-style accordion. Every discovered module
+# The --init profile builder: a install.sh-style accordion. Every discovered module
 # is grouped by tier; exactly one tier is expanded (the one the cursor is in),
 # the rest collapse to a header with an n/total count. Up/Down (or j/k) move the
 # cursor and flow between tiers; Space toggles the item under the cursor (or, on

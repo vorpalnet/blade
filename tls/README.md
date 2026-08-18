@@ -26,7 +26,7 @@ you're ready for a real CA, the same identity CSR goes to it instead (see
 
 Node Manager presents its own **permanent** self-signed certificate
 (`nm-identity.p12`, alias `blade-nm`, ~100-year validity), generated once by
-blade.sh's `n` step into the same `tls/out/<env>/` directory. The NM channel is
+install.sh's `n` step into the same `tls/out/<env>/` directory. The NM channel is
 a closed loop — AdminServer ↔ NM inside the cluster, authenticated by the NM
 username/password — so it gets the ssh-host-key treatment: one pinned cert,
 never rotated, never expiring in practice. Reissuing or replacing the identity

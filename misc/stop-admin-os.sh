@@ -7,7 +7,7 @@
 # it isn't a child of the systemd unit and can't be stopped by KillMode. nmKill is
 # unreliable with the pure-Java Node Manager (NativeVersionEnabled=false, required
 # on aarch64) when a server is script-launched with a child JVM, so we stop at the
-# OS level — the same thing blade.sh's stop_admin ('x') does.
+# OS level — the same thing install.sh's stop_admin ('x') does.
 #
 # Required env: DOMAIN_HOME (the app domain whose servers to stop).
 # Optional env: ADMIN_SERVER — stop ONLY that server.
@@ -17,7 +17,7 @@
 # the admin box, each with its own unit). Without this narrowing, a
 # 'systemctl restart weblogic.service' matches every JVM under DOMAIN_HOME and
 # silently kills the static engine too — whose own unit still believes it is
-# active, so nothing restarts it. blade.sh's stop_admin ('x') deliberately wants
+# active, so nothing restarts it. install.sh's stop_admin ('x') deliberately wants
 # the whole domain and so leaves ADMIN_SERVER unset.
 set -euo pipefail
 

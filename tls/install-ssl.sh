@@ -53,7 +53,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DEPLOY_DIR="${REPO_ROOT}/build-profiles/deploy"
 
-# Owner/transfer helpers shared with blade.sh and sync-occas.sh.
+# Owner/transfer helpers shared with install.sh and sync-occas.sh.
 # shellcheck source=../misc/xfer.sh
 . "${REPO_ROOT}/misc/xfer.sh"
 
@@ -145,7 +145,7 @@ ENGINE_NODES=()
 [ -n "$ENGINE_NODES_RAW" ] && IFS=', ' read -r -a ENGINE_NODES <<< "$ENGINE_NODES_RAW"
 
 # Cert source: ~/.blade/<env> by default (certs.dir overrides) — in step with
-# certs.sh / make-certs.sh / blade.sh, not the repo checkout.
+# certs.sh / make-certs.sh / install.sh, not the repo checkout.
 OUTDIR="$(read_prop "$CONF_FILE" "certs.dir")"; OUTDIR="${OUTDIR/#\~/$HOME}"
 [ -z "$OUTDIR" ] && OUTDIR="${BLADE_HOME}/${ENV_NAME}"
 ID_P12="${OUTDIR}/blade-identity.p12"
@@ -219,7 +219,7 @@ tier_keystores() {
     elif mkdir -p "$KS_DIR" 2>/dev/null && [ -w "$KS_DIR" ]; then
         cp "$ID_P12" "$TRUST_P12" "$KS_DIR/"; chmod 600 "${KS_DIR}/${ID_BASENAME}" "${KS_DIR}/${TRUST_BASENAME}" 2>/dev/null || true
     elif command -v sudo >/dev/null 2>&1; then
-        # KS_DIR belongs to the install user (blade.sh 'm' chowns it). The
+        # KS_DIR belongs to the install user (install.sh 'm' chowns it). The
         # servers read these at runtime, so the copies match the dir's owner.
         sudo mkdir -p "$KS_DIR"
         sudo cp "$ID_P12" "$TRUST_P12" "$KS_DIR/"

@@ -7,7 +7,7 @@
 # from customer-issued material (e.g. a corporate certificate process that
 # hands you PEM or PKCS12 files). The output feeds:
 #
-#   ./blade.sh <profile>  (row: Turn on HTTPS / SIP-TLS)  wires the keystores
+#   ./install.sh <profile>  (row: Turn on HTTPS / SIP-TLS)  wires the keystores
 #                                       the domain (admin, engine template,
 #                                       static engine)
 #
@@ -84,7 +84,7 @@ done
 ENV_ARG="${POSITIONAL[0]}"; MODE="${POSITIONAL[1]}"
 case "$MODE" in generate|import|show) ;; *) die "Unknown mode: ${MODE}" ;; esac
 
-# --- Resolve conf + secret (same convention as blade.sh profiles) ---
+# --- Resolve conf + secret (same convention as install.sh profiles) ---
 # One config file per env holds config + secrets: ~/.blade/<env>.conf (legacy
 # build-profiles path is a fallback). Secrets are keys in the same file.
 BLADE_HOME="${BLADE_HOME:-$HOME/.blade}"
@@ -103,7 +103,7 @@ read_prop() {
     printf '%s' "$v"
 }
 
-# Output goes to the SAME place make-certs and blade.sh use — default
+# Output goes to the SAME place make-certs and install.sh use — default
 # ~/.blade/<env>, beside the config, so keys live in one place off in the
 # user's home rather than scattered in the repo checkout. certs.dir overrides.
 CERTS_DIR="$(read_prop "$CONF_FILE" "certs.dir")"; CERTS_DIR="${CERTS_DIR/#\~/$HOME}"
@@ -314,7 +314,7 @@ do_import() {
                 -keystore "${CERTS_DIR}/blade-trust.p12" -storetype PKCS12 -storepass "$trust_pw"
             rm -f "$f"
         done
-        # Keep the Node Manager's permanent cert (blade.sh ensure_nm_cert) across
+        # Keep the Node Manager's permanent cert (install.sh ensure_nm_cert) across
         # trust rebuilds — the AdminServer's NM client validates NM against this
         # store, and losing the entry cuts the control plane to every machine.
         if [ -f "${CERTS_DIR}/nm-cert.pem" ]; then
