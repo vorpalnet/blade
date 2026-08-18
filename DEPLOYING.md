@@ -1,6 +1,17 @@
 # Deploying BLADE
 
-BLADE deploys in **four tiers**, each with its own scope. Once you see the picture, the artifact-to-where mapping is obvious and the rest is mechanics.
+`./deploy.sh` pushes built artifacts to a running server. This is the third of the
+three stages — see [INSTALLING.md](INSTALLING.md) for standing up the server and
+[BUILDING.md](BUILDING.md) for producing the artifacts.
+
+| Tool | Job |
+|---|---|
+| `./install.sh` | Stand up the server. |
+| `./build.sh` | Compile the artifacts into `dist/`. |
+| **`./deploy.sh`** | Push the artifacts to a running server. |
+
+BLADE deploys in **four tiers**, each with its own scope; the artifact-to-target map
+falls out of it.
 
 ```
 OCCAS Domain
@@ -76,42 +87,55 @@ Each WAR is self-contained exactly as it deploys standalone: framework JAR insid
 ## Quick start
 
 ```bash
-./build.sh default                    # dist/<ver>-<build>/ with per-tier dirs: lib/ admin/ services/ test/ proto/
-$EDITOR ~/.blade/production.conf       # wls.adminurl, wls.user, admin.password (ENC), optional wls.target
+./build.sh default              # produces dist/<ver>-<build>/
+./deploy.sh production           # no profile yet? deploy.sh builds ~/.blade/production.conf interactively
+./deploy.sh production --all     # deploy the whole build, in dependency order
 ```
 
-Deploy is **one artifact at a time** — you name the exact file and its WebLogic
-target, and `deploy.sh` does exactly that. There is no whole-environment
-orchestration and no built-in tier ordering: you sequence it. The usual order is
-shared library → FSMAR → apps, so every WAR's `<library-ref>` (≥ spec-version 3.0)
-resolves before the WARs that reference it:
+`--all` deploys the shared library first, then the admin EAR, the service WARs, and
+the test EAR — the order that makes every WAR's `<library-ref>` (≥ spec-version 3.0)
+resolve before the WARs that reference it. It reads the WebLogic target names from
+the profile and stops the batch at once if the AdminServer is unreachable.
+`./deploy.sh production --all undeploy` reverses it.
+
+For finer control, deploy **one artifact at a time** — name the exact file and its
+target, and `deploy.sh` does exactly that:
 
 ```bash
-./deploy.sh production blade-shared.war   cluster1 --library   # shared library (deploy to admin + cluster targets)
-./deploy.sh production blade-fsmar.jar    --approuter          # FSMAR jar into approuter/
-./deploy.sh production blade-admin.ear    AdminServer          # admin tier as one EAR ...
-./deploy.sh production blade-portal.war   AdminServer          #   ... or a single admin WAR
-./deploy.sh production blade-services.ear cluster1             # services tier as one EAR ...
-./deploy.sh production gateway.war        cluster1             #   ... or one loose service WAR
+./deploy.sh production blade-shared.war   AdminServer,cluster1 --library   # shared library → both
+./deploy.sh production blade-fsmar.jar    --approuter                      # FSMAR jar into approuter/
+./deploy.sh production blade-admin.ear    AdminServer                      # admin tier as one EAR ...
+./deploy.sh production blade-portal.war   AdminServer                      #   ... or a single admin WAR
+./deploy.sh production blade-services.ear cluster1                         # services tier as one EAR ...
+./deploy.sh production gateway.war        cluster1                         #   ... or one loose service WAR
 ```
 
-After changing the FSMAR jar, **restart the engine tier** so each engine
-re-fetches the App Router from the admin.
+After changing the FSMAR jar, **restart the engine tier** so each engine re-fetches
+the App Router from the admin.
 
 ## `./deploy.sh` reference
 
 ```
-./deploy.sh <env> <file> [target] [action] [--library|--approuter] [--name NAME] [--build VER] [--dry-run]
+./deploy.sh <env> [<file> [target]] [action] [--all] [--library|--approuter] [--name NAME] [--build VER] [--dry-run]
 ```
 
 `<env>` is a conf name (→ `~/.blade/<env>.conf`, or `build-profiles/deploy/<env>.conf`)
-or a path. `<file>` is the exact artifact — a path, or a bare filename found in the
-newest `dist/<ver>/` tree (searched across `lib/ admin/ services/ test/ proto/`).
-`[target]` is the WebLogic target (server or cluster name); if omitted, `wls.target`
-from the conf is used. `[action]` ∈ `deploy | undeploy | status`, default `deploy`.
+or a path; with no profile there yet, `deploy.sh` builds one interactively, and
+`./deploy.sh <env>` with no file just builds or updates it. `<file>` is the exact
+artifact — a path, or a bare filename found in the newest `dist/<ver>/` tree
+(searched across `lib/ admin/ services/ test/ proto/`). `[target]` is the WebLogic
+target (server or cluster name); if omitted, `wls.target` from the conf is used.
+`[action]` ∈ `deploy | undeploy | status`, default `deploy`. `--all` deploys (or
+undeploys) the whole build in dependency order instead of one named file.
+
+**Engine.** `deploy.sh` runs the deploy through the OCCAS install's own `wlst.sh`
+when an OCCAS home is resolvable — so it runs on the AdminServer host, which has no
+Maven — and otherwise through the WebLogic Maven plugin.
+`BLADE_DEPLOY_ENGINE=wlst|maven` overrides.
 
 | Invocation | Effect |
 |---|---|
+| `./deploy.sh production --all` | Deploy the whole build in order: shared lib → admin → services → test |
 | `./deploy.sh production blade-admin.ear AdminServer` | Deploy the admin EAR to AdminServer |
 | `./deploy.sh production gateway.war cluster1` | Deploy one service WAR to the cluster |
 | `./deploy.sh production blade-services.ear cluster1` | Deploy the whole services tier as one EAR |
@@ -131,8 +155,9 @@ unchanged by the WAR name — `blade-configurator.war` still deploys at
 
 ### Deploy profiles
 
-One file per environment, `~/.blade/<env>.conf`, holds both the connection and the
-(encrypted) password:
+One file per environment, `~/.blade/<env>.conf`, shared with `install.sh` — it holds
+the connection and the (encrypted) secrets. `deploy.sh` builds it interactively when
+it doesn't exist yet.
 
 | Key | Purpose |
 |---|---|
@@ -140,8 +165,11 @@ One file per environment, `~/.blade/<env>.conf`, holds both the connection and t
 | `wls.user` | WebLogic admin user |
 | `admin.password=ENC(…)` | admin password, ENC()-wrapped (offered on first prompt) |
 | `wls.target` | *(optional)* default WebLogic target when none is given on the CLI |
+| `wls.targets.admin` / `.cluster` / `.both` / `.test` | *(optional)* the target names `--all` deploys each tier to |
+| `oracle.home` | *(optional)* OCCAS home for the `wlst` engine (auto-detected on the server) |
+| `tls.trust.passphrase` | *(t3s)* passphrase for `~/.blade/<env>/blade-trust.p12`, the CA trust store |
 | `approuter.dir` | *(optional)* domain `approuter/` path for `--approuter` |
-| `wls.plugin.version` | *(optional)* override the weblogic-maven-plugin version |
+| `wls.plugin.version` | *(optional)* override the weblogic-maven-plugin version (maven engine) |
 
 Secret safeguards: `deploy.sh` runs `git check-ignore` on the conf if it's inside
 the repo and refuses to use a trackable one; a conf under `~/.blade` (outside the
@@ -174,6 +202,7 @@ The JARs can be updated in place and re-activated by a rolling engine-tier resta
 | `ClassCastException: class X cannot be cast to class X` | Two copies of a class are visible — usually because a service WAR bundles a JAR that's also in the shared library | Rebuild the service WAR; check its `pom.xml` excludes 3rd-party JARs via `packagingExcludes` |
 | `No target given and no wls.target in …` | No target on the CLI and no `wls.target` in the conf | Name the WebLogic target, or set a default `wls.target` in `<env>.conf` |
 | `REFUSING: <env>.conf is not gitignored` | A conf inside the repo is tracked by git | Move it to `~/.blade/`, or gitignore it |
+| `--all` aborts: "the AdminServer is unreachable" | Can't connect — server down, or the t3s trust store missing | Start the AdminServer; for t3s, ensure `~/.blade/<env>/blade-trust.p12` and `tls.trust.passphrase` are present |
 | FSMAR config changes ignored | Engine tier not restarted | Rolling restart of the engine tier |
 
 ## Appendix: artifact-to-target map

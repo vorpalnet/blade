@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<title>{{TITLE}}</title>
+<title>Installing BLADE</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root{
@@ -160,27 +160,228 @@
      ============================================================================ -->
 
 <section class="slide on title-slide" aria-label="Title">
-  <p class="eyebrow">{{EYEBROW}}</p>
-  <h1>{{HEADLINE}}</h1>
-  <p class="lede" style="max-width:63ch">{{STANDFIRST}}</p>
+  <p class="eyebrow">BLADE · Installation</p>
+  <h1>Installing BLADE</h1>
+  <p class="lede" style="max-width:63ch">Stand up the server — OCCAS, the domain and cluster, Node Manager, TLS, and boot services — from one re-runnable dashboard driven by a named profile.</p>
+  <div class="meta">
+    <span class="tag s"><span class="dot"></span>install.sh — the server</span>
+    <span class="tag">build.sh</span>
+    <span class="tag">deploy.sh</span>
+  </div>
 </section>
 
-<section class="slide" aria-label="Example - two columns">
+<section class="slide" aria-label="Three tools">
   <div class="head">
-    <p class="eyebrow">Section</p>
-    <h2>A statement, not a topic.</h2>
-    <p class="sub">One sentence of orientation. Optional.</p>
+    <p class="eyebrow">The tools</p>
+    <h2>Three tools, named for the three stages.</h2>
+    <p class="sub">One profile in <code>~/.blade/&lt;name&gt;.conf</code> describes one deployment; every tool reads it.</p>
+  </div>
+  <div class="body">
+    <table>
+      <thead><tr><th>Tool</th><th>Job</th></tr></thead>
+      <tbody>
+        <tr><td class="ev">install.sh</td><td class="df">Stand up the <b>server</b> — OCCAS, domain, cluster, Node Manager, TLS, boot services.</td></tr>
+        <tr><td class="ev">build.sh</td><td class="df">Compile the <b>artifacts</b> into <code>dist/</code>.</td></tr>
+        <tr><td class="ev">deploy.sh</td><td class="df">Push the artifacts to a running server.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="slide" aria-label="Prerequisites">
+  <div class="head">
+    <p class="eyebrow">Prerequisites</p>
+    <h2>What you need before you start.</h2>
   </div>
   <div class="body"><div class="two">
+    <ul class="facts">
+      <li><b>OCCAS 8.3</b> — WebLogic 14.1.2 with SIP. install.sh can download the eDelivery media, or point at an existing install.</li>
+      <li><b>Two JDKs.</b> Runtime = the certified major (<b>JDK 21</b> for 8.3): the server runs on it, and so must <code>opatch</code> — on the build JDK (25) it fails to parse a patch's XML, so <b>patching requires JDK 21</b>. Build = <b>23+</b> (25 works) for <code>./build.sh</code>.</li>
+    </ul>
+    <ul class="facts">
+      <li><b>sudo</b> on the targets, and a dedicated install user (default <code>oracle:oinstall</code>).</li>
+      <li>Admin console <code>7001</code>/<code>7002</code>, Node Manager <code>5556</code>, SIP <code>5060</code>/<code>5061</code> — reachable as configured.</li>
+    </ul>
+  </div></div>
+</section>
+
+<section class="slide" aria-label="Filesystem layout">
+  <div class="head">
+    <p class="eyebrow">Layout</p>
+    <h2>Domains and keystores live outside the versioned home.</h2>
+    <p class="sub">OCCAS installs under a versioned home reached through a <code>current</code> symlink.</p>
+  </div>
+  <div class="body"><div class="two l">
     <figure>
-<pre><span class="c">// code, SIP, JSON, SDP</span>
-<span class="p">{</span> <span class="k">"type"</span><span class="p">:</span> <span class="b">"call.offer"</span> <span class="p">}</span></pre>
-      <figcaption>What the figure shows.</figcaption>
+<pre><span class="c"># the product, reached through a symlink</span>
+/opt/oracle/occas/8.3        <span class="c">real home</span>
+/opt/oracle/occas/<span class="b">current</span> <span class="p">-&gt;</span> 8.3   <span class="c">oracle.home</span>
+<span class="c"># kept OUTSIDE the home:</span>
+/opt/oracle/domains/<span class="n">&lt;name&gt;</span>   <span class="c">domains</span>
+/opt/oracle/security/*.p12   <span class="c">keystores</span></pre>
+      <figcaption>A patch installs a new home beside the old one and flips <code>current</code>.</figcaption>
     </figure>
     <ul class="facts">
-      <li>A point. <b>Bold the load-bearing half.</b></li>
-      <li>Use <code>ul.facts.m</code> for the media-side accent instead.</li>
+      <li><b>Why outside:</b> a domain inside the home survives a flip — but resolves to the copy taken at patch time, silently reverting every config change and cert rotation since.</li>
+      <li>After configure, <b>no path in <code>config.xml</code> carries a version number</b>.</li>
+      <li>The install user owns the <b>base dir</b> (<code>/opt/oracle/occas</code>), not just the home — patching writes a sibling home and the link there.</li>
     </ul>
+  </div></div>
+</section>
+
+<section class="slide" aria-label="Quick start">
+  <div class="head">
+    <p class="eyebrow">Quick start</p>
+    <h2>One command opens the dashboard.</h2>
+  </div>
+  <div class="body"><div class="two r">
+    <ul class="facts">
+      <li>Move with <b>↑/↓</b>, press <b>1–8</b> to jump to a step, <b>space</b> to tick rows for a batch, <b>enter</b> to run, <b>d</b> for dry-run.</li>
+      <li>A green <b>✓</b> means a step is done; the right column shows live state — <code>nmdomain — running</code>, <code>AdminServer — running</code>.</li>
+    </ul>
+    <figure>
+<pre><span class="c"># open the dashboard for profile 'myenv'</span>
+<span class="s">./install.sh</span> myenv
+
+<span class="c"># or run it unattended</span>
+<span class="s">./install.sh</span> myenv <span class="b">install</span>
+<span class="s">./install.sh</span> myenv <span class="b">status</span>
+<span class="s">./install.sh</span> myenv <span class="b">uninstall</span></pre>
+      <figcaption>Add <code>--dry-run</code> to any run to preview it.</figcaption>
+    </figure>
+  </div></div>
+</section>
+
+<section class="slide" aria-label="Steps 1 to 3">
+  <div class="head">
+    <p class="eyebrow">Steps 1–3</p>
+    <h2>Point at OCCAS, name it, describe your machines.</h2>
+    <p class="sub">Run the steps top to bottom — the order is load-bearing.</p>
+  </div>
+  <div class="body">
+    <ul class="facts">
+      <li><b>STEP 1 · Point at OCCAS, then install it.</b> Choose the home, version and JDKs; create the install user and directories; download the media; install the product (patch here).</li>
+      <li><b>STEP 2 · Name it &amp; set the admin login.</b> The domain name and admin credentials. Configure <b>overwrites</b> an existing domain directory — don't point it at one you want to keep.</li>
+      <li><b>STEP 3 · Describe your machines.</b> The host list and Node Manager settings. A fresh install is <b>local-first</b>: it builds the AdminServer <b>and</b> <code>engine0</code> on the machine it runs on — already a complete deployment.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="slide" aria-label="TLS">
+  <div class="head">
+    <p class="eyebrow">Step 4 · TLS</p>
+    <h2>Generate a CA or supply your own — stamped on the template.</h2>
+  </div>
+  <div class="body">
+    <ul class="facts">
+      <li><b>Generate</b> a self-signed internal CA, or <b>supply</b> your own PKCS12/PEM (e.g. Let's Encrypt).</li>
+      <li>The certificate is stamped onto the cluster's <b>server template</b> at configure time — so every engine, including ones added years later, gets it automatically.</li>
+      <li>BLADE never leaves the WebLogic demo certificate on a live TLS port.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="slide" aria-label="Start it up">
+  <div class="head">
+    <p class="eyebrow">Step 5 · Start</p>
+    <h2>Node Manager, then the domain, then the AdminServer.</h2>
+  </div>
+  <div class="body"><div class="two l">
+    <ul class="facts">
+      <li><b>1 · Create &amp; start Node Manager</b> — in its own domain, MBean mode, SSL on <code>5556</code>.</li>
+      <li><b>2 · Create the cluster domain</b> — configure enrolls it into the Node Manager domain.</li>
+      <li><b>3 · Start the AdminServer</b> — through Node Manager.</li>
+      <li><b>4 · Install the boot services</b> — systemd units for NM and the AdminServer.</li>
+    </ul>
+    <figure>
+      <p class="pull"><span class="hs">Install the boot services.</span> They are part of the install, not an afterthought — without them, nothing restarts after a reboot.</p>
+    </figure>
+  </div></div>
+</section>
+
+<section class="slide" aria-label="Node Manager and boot services">
+  <div class="head">
+    <p class="eyebrow">Node Manager</p>
+    <h2>Node Manager runs in its own domain.</h2>
+  </div>
+  <div class="body">
+    <ul class="facts">
+      <li>A <b>separate domain</b> (<code>nmdomain</code>), MBean mode over SSL — so it outlives any single server restart and serves every domain enrolled into it.</li>
+      <li>The systemd units are <b>generated from the live domain paths</b> at install time.</li>
+      <li>The helper scripts are staged into <code>$DOMAIN/bin/</code> so they travel with the domain — a unit must never point into the repo clone, which engine hosts don't have.</li>
+      <li>The unit's <code>User</code>/<code>Group</code> come from the domain's real owner; that group must exist on every engine host.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="slide" aria-label="The cluster">
+  <div class="head">
+    <p class="eyebrow">The cluster</p>
+    <h2>The cluster grows online.</h2>
+    <p class="sub">The engine tier is a dynamic cluster — engines are materialized from a server template, so there is no per-engine entry to edit.</p>
+  </div>
+  <div class="body">
+    <ul class="facts">
+      <li><code>engine0</code> runs on the install host — a fresh install is already a complete deployment.</li>
+      <li><b>Add a machine</b> grows the cluster with no restart of what's already running.</li>
+      <li><b>Remove the last machine</b> shrinks it (highest-numbered only — server index N maps to the Nth machine).</li>
+      <li><b>Re-provision every engine host</b> re-renders a host's units, scripts, env and TLS consistently — reach for it instead of hand-patching a unit.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="slide" aria-label="Patching">
+  <div class="head">
+    <p class="eyebrow">Patching</p>
+    <h2>Patch in place, between install and configure.</h2>
+  </div>
+  <div class="body"><div class="two r">
+    <ul class="facts">
+      <li><code>opatch apply</code> runs on the live, inventory-registered home with servers stopped; <code>opatch rollback -id</code> is the undo.</li>
+      <li>Interim patches come from My Oracle Support — the eDelivery media is the base product, not a patch.</li>
+      <li>Distribute a patched home to engines, then promote — canary a subset first, rollback is a flip back.</li>
+    </ul>
+    <figure>
+<pre><span class="s">./sync-occas.sh</span> distribute
+<span class="s">./sync-occas.sh</span> switch <span class="k">--nodes</span> <span class="n">engine1</span></pre>
+      <figcaption>Canary a subset, then flip the rest.</figcaption>
+    </figure>
+  </div></div>
+</section>
+
+<section class="slide" aria-label="Troubleshooting">
+  <div class="head">
+    <p class="eyebrow">Troubleshooting</p>
+    <h2>The failures worth recognizing.</h2>
+  </div>
+  <div class="body"><div class="scroll">
+    <table>
+      <thead><tr><th>Symptom</th><th>Cause and fix</th></tr></thead>
+      <tbody>
+        <tr><td class="ev">203/EXEC, no app log</td><td class="df">SELinux <code>unlabeled_t</code> files (after moving <code>/opt/oracle</code>). <code>sudo restorecon -Rv /opt/oracle/domains/&lt;domain&gt;</code>.</td></tr>
+        <tr><td class="ev">OOM: Metaspace</td><td class="df">Dev-default MaxMetaspaceSize is too small for the admin EAR. BLADE sets it to <code>2g</code>.</td></tr>
+        <tr><td class="ev">MaxMessageSizeExceeded</td><td class="df">The App Router jar exceeds the 10 MB T3 cap on its fetch. BLADE raises <code>max-message-size</code> to 100 MB.</td></tr>
+        <tr><td class="ev">PKIX path building failed</td><td class="df">The per-domain demo CA isn't in the shipped DemoTrust. Use CustomTrust on the domain's own store — or BLADE's generated CA.</td></tr>
+      </tbody>
+    </table>
+  </div></div>
+</section>
+
+<section class="slide" aria-label="Wrap-up">
+  <div class="head">
+    <p class="eyebrow">Wrap-up</p>
+    <h2>Verify, then hand off to build and deploy.</h2>
+  </div>
+  <div class="body"><div class="two l">
+    <ul class="facts">
+      <li><b>Verify the cluster</b> health-checks every node — and confirms the domain's TLS keystore opens with the passphrase in <code>config.xml</code>.</li>
+      <li><code>./install.sh &lt;name&gt; status</code> reports the running state.</li>
+      <li>Then <code>./build.sh</code>, and <code>./deploy.sh &lt;name&gt; --all</code>.</li>
+    </ul>
+    <figure>
+      <p class="pull"><span class="hs">install.sh</span> · build.sh · deploy.sh</p>
+      <figcaption>See DEPLOYING.md, DEVELOPING.md and SECURITY.md.</figcaption>
+    </figure>
   </div></div>
 </section>
 
@@ -202,8 +403,8 @@
     </g>
   </g></svg>
     <span class="brand-lines">
-      <span>{{FOOTER}}</span>
-      <span class="copy">© {{YEAR}} Vorpal Networks, LLC</span>
+      <span><b>BLADE</b> · INSTALLING</span>
+      <span class="copy">© 2026 Vorpal Networks, LLC</span>
     </span>
   </div>
   <div class="dots" id="dots" role="tablist" aria-label="Slides"></div>

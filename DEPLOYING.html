@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<title>{{TITLE}}</title>
+<title>Deploying BLADE</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root{
@@ -160,27 +160,188 @@
      ============================================================================ -->
 
 <section class="slide on title-slide" aria-label="Title">
-  <p class="eyebrow">{{EYEBROW}}</p>
-  <h1>{{HEADLINE}}</h1>
-  <p class="lede" style="max-width:63ch">{{STANDFIRST}}</p>
+  <p class="eyebrow">BLADE · Deploying</p>
+  <h1>Deploying BLADE</h1>
+  <p class="lede" style="max-width:63ch"><code>./deploy.sh</code> pushes built artifacts to a running server — the whole build in dependency order with <code>--all</code>, or one named artifact at a time.</p>
+  <div class="meta">
+    <span class="tag">install.sh</span>
+    <span class="tag">build.sh</span>
+    <span class="tag s"><span class="dot"></span>deploy.sh — the push</span>
+  </div>
 </section>
 
-<section class="slide" aria-label="Example - two columns">
+<section class="slide" aria-label="The four tiers">
   <div class="head">
-    <p class="eyebrow">Section</p>
-    <h2>A statement, not a topic.</h2>
-    <p class="sub">One sentence of orientation. Optional.</p>
+    <p class="eyebrow">The picture</p>
+    <h2>BLADE deploys in four tiers.</h2>
+    <p class="sub">The artifact-to-target map falls out of it.</p>
   </div>
-  <div class="body"><div class="two">
+  <div class="body"><div class="two l">
     <figure>
-<pre><span class="c">// code, SIP, JSON, SDP</span>
-<span class="p">{</span> <span class="k">"type"</span><span class="p">:</span> <span class="b">"call.offer"</span> <span class="p">}</span></pre>
-      <figcaption>What the figure shows.</figcaption>
+<pre>OCCAS Domain
+├── approuter/      <span class="c">(1) blade-fsmar.jar</span>
+│                   <span class="c">    [engine reboot]</span>
+├── AdminServer     <span class="c">(2) shared lib</span>
+│                   <span class="c">(3) blade-admin.ear</span>
+└── Cluster         <span class="c">(2) shared lib</span>
+                    <span class="c">(4) services/*.war</span></pre>
+      <figcaption>The shared library is deployed to <b>both</b> AdminServer and the cluster — both sets of apps reference it.</figcaption>
     </figure>
     <ul class="facts">
-      <li>A point. <b>Bold the load-bearing half.</b></li>
-      <li>Use <code>ul.facts.m</code> for the media-side accent instead.</li>
+      <li><b>1 · FSMAR</b> — the App Router, a file in <code>approuter/</code>, not a WebLogic deployment.</li>
+      <li><b>2 · Shared library</b> — the 3rd-party JARs, referenced by every app.</li>
+      <li><b>3 · Admin apps</b> — management tools, AdminServer only.</li>
+      <li><b>4 · Services + test</b> — the SIP apps, on the cluster.</li>
     </ul>
+  </div></div>
+</section>
+
+<section class="slide" aria-label="Quick start">
+  <div class="head">
+    <p class="eyebrow">Quick start</p>
+    <h2>One command deploys the whole build, in order.</h2>
+  </div>
+  <div class="body"><div class="two r">
+    <ul class="facts">
+      <li><code>--all</code> deploys shared library → admin EAR → services → test, so each <code>&lt;library-ref&gt;</code> resolves before its apps.</li>
+      <li>Targets come from the profile; the batch <b>stops at once</b> if the AdminServer is unreachable.</li>
+      <li>No profile yet? <code>deploy.sh</code> builds one interactively.</li>
+    </ul>
+    <figure>
+<pre><span class="s">./build.sh</span> default
+<span class="s">./deploy.sh</span> production <span class="b">--all</span>
+
+<span class="c"># or one artifact at a time:</span>
+<span class="s">./deploy.sh</span> production gateway.war <span class="n">cluster1</span></pre>
+      <figcaption><code>--all</code> for the whole build; name a file for fine control.</figcaption>
+    </figure>
+  </div></div>
+</section>
+
+<section class="slide" aria-label="FSMAR">
+  <div class="head">
+    <p class="eyebrow">Tier 1 · FSMAR</p>
+    <h2>The App Router is a file, not a deployment.</h2>
+    <p class="sub"><code>blade-fsmar.jar</code> loads into OCCAS before any servlet sees a SIP message.</p>
+  </div>
+  <div class="body">
+    <ul class="facts">
+      <li>It goes into <code>$DOMAIN_HOME/approuter/</code> — <code>./deploy.sh &lt;env&gt; blade-fsmar.jar --approuter</code> copies it there (a plain file copy, no WebLogic).</li>
+      <li>Only the <b>admin</b> needs the file: each engine fetches the App Router from the admin over the management channel at activation and caches it. One copy reaches the cluster.</li>
+      <li>Takes effect after an <b>engine-tier restart</b> (not AdminServer) — it loads at server startup, so no hot update.</li>
+      <li>Activate the chosen FSMAR in the OCCAS admin console.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="slide" aria-label="Shared library">
+  <div class="head">
+    <p class="eyebrow">Tier 2 · Shared library</p>
+    <h2>Deployed to both targets, on purpose.</h2>
+  </div>
+  <div class="body"><div class="two l">
+    <ul class="facts">
+      <li><code>blade-shared.war</code> (<code>Extension-Name: blade-shared</code>) holds every 3rd-party JAR; every other app references it via <code>&lt;library-ref&gt;</code> instead of bundling its own.</li>
+      <li>WebLogic shared libraries are scoped to their targets — so it deploys to <b>AdminServer and the cluster both</b>, or the apps on the other target can't resolve it.</li>
+      <li>Bumping a 3rd-party version is one shared-library redeploy, not a rebuild of every service.</li>
+    </ul>
+    <figure>
+<pre><span class="s">./deploy.sh</span> production blade-shared.war \
+   <span class="n">AdminServer,cluster1</span> <span class="b">--library</span></pre>
+      <figcaption>A shared-library deploy needs a server restart before dependents resolve it.</figcaption>
+    </figure>
+  </div></div>
+</section>
+
+<section class="slide" aria-label="Admin and services">
+  <div class="head">
+    <p class="eyebrow">Tiers 3 &amp; 4 · Apps</p>
+    <h2>An EAR for the tier, or loose WARs for control.</h2>
+  </div>
+  <div class="body"><div class="two">
+    <ul class="facts">
+      <li><b>Admin apps</b> — <code>blade-admin.ear</code> or the loose <code>blade-*.war</code>. AdminServer only; they expose management endpoints.</li>
+      <li><b>Services + test</b> — <code>blade-services.ear</code>/<code>blade-test.ear</code>, or loose WARs. Cluster only; they handle live SIP.</li>
+    </ul>
+    <ul class="facts">
+      <li><b>Loose WARs</b> are each visible in Remote Console with their own state, start/stop and targeting — reach for them when you want per-service control.</li>
+      <li><b>The EAR</b> is the whole tier in one deployment when that's more convenient. Remote Console can't see inside an EAR.</li>
+    </ul>
+  </div></div>
+</section>
+
+<section class="slide" aria-label="deploy.sh reference">
+  <div class="head">
+    <p class="eyebrow">Reference</p>
+    <h2>Name the artifact and the target; it does exactly that.</h2>
+  </div>
+  <div class="body"><div class="two l">
+    <figure>
+<pre><span class="s">./deploy.sh</span> <span class="n">&lt;env&gt;</span> [<span class="n">&lt;file&gt;</span> [target]] [action]
+   [<span class="b">--all</span>] [--library|--approuter]
+   [--name N] [--build VER] [--dry-run]</pre>
+      <figcaption>action ∈ deploy | undeploy | status (default deploy).</figcaption>
+    </figure>
+    <ul class="facts">
+      <li>The name defaults to the filename without extension; admin WARs carry a <code>blade-</code> prefix so they never collide with like-named services.</li>
+      <li><b>Engine:</b> the deploy runs through the OCCAS install's <code>wlst.sh</code> when an OCCAS home is present (so it runs on the AdminServer host, no Maven), else the WebLogic Maven plugin. <code>BLADE_DEPLOY_ENGINE</code> overrides.</li>
+    </ul>
+  </div></div>
+</section>
+
+<section class="slide" aria-label="Deploy profiles">
+  <div class="head">
+    <p class="eyebrow">Profiles</p>
+    <h2>One profile per environment, shared with install.sh.</h2>
+    <p class="sub"><code>~/.blade/&lt;env&gt;.conf</code> — the connection and the encrypted secrets. deploy.sh builds it interactively when it's missing.</p>
+  </div>
+  <div class="body">
+    <table>
+      <thead><tr><th>Key</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td class="ev">wls.adminurl / wls.user</td><td class="df">AdminServer URL (<code>t3://</code> or <code>t3s://</code>) and admin user.</td></tr>
+        <tr><td class="ev">admin.password=ENC(…)</td><td class="df">Admin password, ENC()-wrapped. Priority: env var → conf → prompt.</td></tr>
+        <tr><td class="ev">wls.targets.*</td><td class="df">Target names <code>--all</code> uses for each tier.</td></tr>
+        <tr><td class="ev">tls.trust.passphrase</td><td class="df">For <code>~/.blade/&lt;env&gt;/blade-trust.p12</code>, the t3s CA trust.</td></tr>
+        <tr><td class="ev">oracle.home</td><td class="df">OCCAS home for the wlst engine (auto-detected on the server).</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="slide" aria-label="Troubleshooting">
+  <div class="head">
+    <p class="eyebrow">Troubleshooting</p>
+    <h2>The failures worth recognizing.</h2>
+  </div>
+  <div class="body"><div class="scroll">
+    <table>
+      <thead><tr><th>Symptom</th><th>Cause and fix</th></tr></thead>
+      <tbody>
+        <tr><td class="ev">NoClassDefFoundError</td><td class="df">Shared library not on that target. Redeploy <code>blade-shared.war</code> as <code>--library</code> to AdminServer and/or the cluster.</td></tr>
+        <tr><td class="ev">ClassCastException: X → X</td><td class="df">Two copies of a class — a WAR bundled a JAR that's also in the shared library. Rebuild it; check <code>packagingExcludes</code>.</td></tr>
+        <tr><td class="ev">--all aborts: unreachable</td><td class="df">Can't connect — server down, or the t3s trust store missing. Start the AdminServer; ensure <code>blade-trust.p12</code> + passphrase.</td></tr>
+        <tr><td class="ev">FSMAR change ignored</td><td class="df">Engine tier not restarted. Rolling restart of the engine tier.</td></tr>
+      </tbody>
+    </table>
+  </div></div>
+</section>
+
+<section class="slide" aria-label="Wrap-up">
+  <div class="head">
+    <p class="eyebrow">Wrap-up</p>
+    <h2>Build, then <code>--all</code>, then restart the engines for FSMAR.</h2>
+  </div>
+  <div class="body"><div class="two l">
+    <ul class="facts">
+      <li><code>./deploy.sh &lt;env&gt; --all</code> — shared library, admin, services, test, in order.</li>
+      <li>FSMAR is the one file copy — <code>--approuter</code>, then a rolling engine restart.</li>
+      <li>The per-build <code>DEPLOYMENT.txt</code> is the artifact-to-target map for that build.</li>
+    </ul>
+    <figure>
+      <p class="pull">install.sh · build.sh · <span class="hs">deploy.sh</span></p>
+      <figcaption>See INSTALLING.md and BUILDING.md.</figcaption>
+    </figure>
   </div></div>
 </section>
 
@@ -202,8 +363,8 @@
     </g>
   </g></svg>
     <span class="brand-lines">
-      <span>{{FOOTER}}</span>
-      <span class="copy">© {{YEAR}} Vorpal Networks, LLC</span>
+      <span><b>BLADE</b> · DEPLOYING</span>
+      <span class="copy">© 2026 Vorpal Networks, LLC</span>
     </span>
   </div>
   <div class="dots" id="dots" role="tablist" aria-label="Slides"></div>

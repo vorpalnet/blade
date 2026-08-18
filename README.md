@@ -8,7 +8,7 @@ BLADE is an open-source collection of libraries and applications that
 aid in the development of real-time, audio-visual streaming applications.
 
 The documentation lives in this repository's READMEs — start with the module tables below.
-To write a service, read the **[Framework Developer's Guide](DEVELOPING.md)**; to install one, read **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+To write a service, read the **[Framework Developer's Guide](DEVELOPING.md)**; to deploy one, read **[DEPLOYING.md](DEPLOYING.md)**.
 The full API reference (Javadocs with UML diagrams) ships in the product itself, at `/blade/javadoc` on the [Admin Portal](admin/portal/README.md).
 The company website can be found here: https://vorpal.net
 
@@ -82,7 +82,7 @@ Deployed to the WebLogic AdminServer as skinny WARs that reference the `blade-sh
 
 ### Services
 
-Deployed to the OCCAS cluster as individual WARs — one per service — and also bundled into `blade-services.ear`; deploy either (see [DEPLOYMENT.md](DEPLOYMENT.md)). Each WAR includes the framework JAR; 3rd-party libraries come from the shared library.
+Deployed to the OCCAS cluster as individual WARs — one per service — and also bundled into `blade-services.ear`; deploy either (see [DEPLOYING.md](DEPLOYING.md)). Each WAR includes the framework JAR; 3rd-party libraries come from the shared library.
 
 | Module | Description |
 | --- | --- |
@@ -139,7 +139,7 @@ OCCAS Domain
 └── Cluster (engine tier)    ← shared library  + service WARs / blade-services.ear
 ```
 
-See **[DEPLOYMENT.md](DEPLOYMENT.md)** for the full deployment guide, `./deploy.sh` reference, FSMAR install walkthrough, and troubleshooting.
+See **[DEPLOYING.md](DEPLOYING.md)** for the full deployment guide, `./deploy.sh` reference, FSMAR install walkthrough, and troubleshooting.
 
 # Project Layout
 
@@ -313,18 +313,17 @@ export BLADE_SKIP_DIST=1         # sticky for the current shell
 
 ### Deployment
 
-`./deploy.sh` deploys **one named artifact to one WebLogic target** — you name the exact file and where it goes, and it does exactly that. No tiers, no ordering, no allowlists baked in; you sequence the deploy. The `<env>.conf` carries only the connection (admin URL, user, encrypted password, optional default target). See **[DEPLOYMENT.md](DEPLOYMENT.md)** for the full guide. The short version:
+`./deploy.sh` is the single deploy authority. It deploys the whole build in dependency order with `--all` (shared library → admin EAR → services → test), or **one named artifact to one target** when you name the file. It builds the `~/.blade/<env>.conf` profile interactively when it doesn't exist, and runs the deploy through the OCCAS install's own `wlst.sh` (so it works on the AdminServer host, which has no Maven) or the WebLogic Maven plugin. See **[DEPLOYING.md](DEPLOYING.md)** for the full guide. The short version:
 
 ```bash
 ./build.sh default                    # dist/<ver>-<build>/ with per-tier dirs: lib/ admin/ services/ test/ proto/
-$EDITOR ~/.blade/production.conf       # wls.adminurl, wls.user, admin.password (ENC), optional wls.target
+./deploy.sh production --all           # deploy the whole build, in dependency order
 
-# usual order: shared library → FSMAR → apps
-./deploy.sh production blade-shared.war   cluster1 --library
-./deploy.sh production blade-fsmar.jar    --approuter
-./deploy.sh production blade-admin.ear    AdminServer     # whole tier ...
-./deploy.sh production gateway.war        cluster1        # ... or one loose WAR
-./deploy.sh production gateway.war        cluster1 --dry-run   # print, change nothing
+# or one artifact at a time:
+./deploy.sh production blade-shared.war   AdminServer,cluster1 --library
+./deploy.sh production blade-fsmar.jar    --approuter               # FSMAR: a separate file copy, not part of --all
+./deploy.sh production gateway.war        cluster1                  # one loose WAR
+./deploy.sh production gateway.war        cluster1 --dry-run        # print, change nothing
 ```
 
 ## Build Number
@@ -487,7 +486,7 @@ Traditional `/** */` comments remain fully compatible and can coexist with `///`
 
 ## Deploy
 
-Use `./deploy.sh <env>` — see **[DEPLOYMENT.md](DEPLOYMENT.md)**. It deploys the whole environment in dependency-safe order (shared → fsmar → admin → services), or one tier at a time; the services tier loops the WARs in `dist/<ver>-<build>/services/`, narrowable with `deploy.services` in the env conf.
+Use `./deploy.sh <env> --all` to deploy the whole build in dependency order (shared library → admin → services → test), or name a single artifact for one deploy. FSMAR is a separate `--approuter` file copy, not part of `--all`. Full guide: **[DEPLOYING.md](DEPLOYING.md)**.
 
 ## Eclipse
 
