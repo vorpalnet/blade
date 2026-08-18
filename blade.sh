@@ -4752,6 +4752,61 @@ start_admin() { nm_admin start "$@"; }
 # (block-volume trap), a missing NM log dir, a custom App Router jar larger than the
 # T3 MaxMessageSize, a node whose NM/engine isn't running. Runs each node's checks
 # locally on the admin (index 0) and over ssh elsewhere.
+# Boot-time proof for the SSL identity keystore: decrypt config.xml's stored
+# passphrase with the domain's OWN crypto service (SerializedSystemIni) and load
+# blade-identity.p12 with it -- exactly what a server does at startup. This
+# catches a silent, boot-fatal drift the plaintext secret cannot: when the p12
+# and ~/.blade/<env>.conf agree but config.xml carries a STALE encrypted
+# passphrase (a from-scratch rebuild can leave config.xml stamped from an older
+# passphrase value), the server dies in startup with a cryptic Coherence
+# "keystore password was incorrect" NPE, not an SSL error. Runs offline, on the
+# admin box, as the domain owner. The cleartext passphrase lives only inside the
+# JVM; only the already-on-disk ciphertext and the keystore path leave config.xml.
+# Echoes one word-prefixed line: OK <entries> | FAILS <msg> | SKIP <why>.
+verify_domain_keystore() {
+    local domhome="$1" cfg="${domhome}/config/config.xml"
+    local mw="${MWHOME:-$(read_prop "$OCCAS_CONF" oracle.home)}"; mw="${mw:-/opt/oracle/occas/current}"
+    as_install_user test -x "${mw}/wlserver/server/bin/setWLSEnv.sh" 2>/dev/null \
+        || { printf 'SKIP no setWLSEnv.sh under %s' "$mw"; return 0; }
+    local enc ksf
+    enc="$(as_install_user grep -om1 '<custom-identity-key-store-pass-phrase-encrypted>[^<]*' "$cfg" 2>/dev/null | sed 's/.*>//')"
+    ksf="$(as_install_user grep -om1 '<custom-identity-key-store-file-name>[^<]*' "$cfg" 2>/dev/null | sed 's/.*>//')"
+    [ -n "$enc" ] && [ -n "$ksf" ] || { printf 'SKIP no custom identity keystore in config.xml'; return 0; }
+    local jh; jh="$(read_prop "$OCCAS_CONF" java.home)"
+    local work; work="$(mktemp -d /tmp/blade-ksv.XXXXXX)" || { printf 'SKIP mktemp failed'; return 0; }
+    # Unquoted heredoc: the shell interpolates the domain home, the ciphertext and
+    # the keystore path. weblogic.WLST is just the Jython launcher here -- no
+    # readDomain (offline WLST refuses the decrypted passphrase getter anyway); the
+    # domain's crypto service does the decrypt straight from SerializedSystemIni.dat.
+    cat > "${work}/ksverify.py" <<PYEOF
+# -*- coding: utf-8 -*-
+from weblogic.security.internal import SerializedSystemIni
+from weblogic.security.internal.encryption import ClearOrEncryptedService
+from java.security import KeyStore
+from java.io import FileInputStream, File
+dh = '${domhome}'
+try:
+    pw = ClearOrEncryptedService(SerializedSystemIni.getEncryptionService(dh)).decrypt('${enc}')
+    p = '${ksf}'
+    if not File(p).isAbsolute():
+        p = dh + '/' + p.replace('./', '', 1)
+    ks = KeyStore.getInstance('PKCS12')
+    ks.load(FileInputStream(p), pw)
+    print('KSV_OK ' + str(ks.size()))
+except Exception, e:
+    print('KSV_FAIL ' + str(e))
+PYEOF
+    chmod 600 "${work}/ksverify.py"
+    local out
+    out="$(iu_wlst_run "$work" ksverify.py "$mw" "$jh" 2>/dev/null | grep -oE 'KSV_(OK|FAIL) .*')"
+    as_install_user rm -rf "$work"
+    case "$out" in
+        'KSV_OK '*)   printf 'OK %s' "${out#KSV_OK }" ;;
+        'KSV_FAIL '*) printf 'FAILS %s' "${out#KSV_FAIL }" ;;
+        *)            printf 'SKIP keystore probe produced no result' ;;
+    esac
+}
+
 do_verify() {
     local sshu="${SSH_USER:-$(id -un)}" domhome="${DOMAINS_DIR}/${DOMAIN}" i ok_n=0 bad_n=0
     _vok()  { ok "    $1";   ok_n=$((ok_n + 1)); }
@@ -4777,6 +4832,15 @@ do_verify() {
         elif [ -n "$jsz" ]; then _vok "FSMAR jar ${jsz} B fits under MaxMessageSize"; fi
         as_install_user grep -q 'use-custom-app-router>true' "${domhome}/config/custom/sipserver.xml" 2>/dev/null \
             && _vok "FSMAR is the active App Router" || _vbad "custom App Router OFF — routing on the DefaultAR"
+        # Prove the SSL identity boots: decrypt config.xml's keystore passphrase
+        # and open blade-identity.p12 (a ~15s offline WLST call). A stale config.xml
+        # passphrase boots to a cryptic Coherence keystore NPE, so catch it here.
+        local ksv; ksv="$(verify_domain_keystore "$domhome")"
+        case "$ksv" in
+            'OK '*)    _vok "SSL identity: config.xml passphrase opens blade-identity.p12 (${ksv#OK } entr$([ "${ksv#OK }" = 1 ] && echo y || echo ies))" ;;
+            'FAILS '*) _vbad "SSL identity: config.xml passphrase does NOT open blade-identity.p12 — server will fail startup (${ksv#FAILS })" ;;
+            *)         log "    ${C_DIM}SSL identity: keystore check skipped (${ksv#SKIP })${C_RESET}" ;;
+        esac
     else
         _vbad "config.xml not found (${cfg}) — domain not built on this host"
     fi
