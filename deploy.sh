@@ -209,9 +209,11 @@ fi
 # --- t3s: SSL trust for the WebLogic Maven plugin's Deployer JVM ---
 case "$WLS_ADMINURL" in
     t3s://*)
-        if [ -z "$WLS_TRUSTSTORE" ] && [ -f "${SCRIPT_DIR}/tls/out/${ENV_NAME}/blade-trust.p12" ]; then
-            WLS_TRUSTSTORE="${SCRIPT_DIR}/tls/out/${ENV_NAME}/blade-trust.p12"
-            WLS_TRUSTSTORE_TYPE=PKCS12
+        if [ -z "$WLS_TRUSTSTORE" ]; then
+            # Default cert store is ~/.blade/<env> (beside the config); certs.dir overrides.
+            _cd="$(read_prop "$CONF_FILE" "certs.dir")"; _cd="${_cd/#\~/$HOME}"
+            [ -z "$_cd" ] && _cd="${BLADE_HOME}/${ENV_NAME}"
+            [ -f "${_cd}/blade-trust.p12" ] && { WLS_TRUSTSTORE="${_cd}/blade-trust.p12"; WLS_TRUSTSTORE_TYPE=PKCS12; }
         fi
         if [ -n "$WLS_TRUSTSTORE" ]; then
             [ -f "$WLS_TRUSTSTORE" ] || die "wls.truststore not found: ${WLS_TRUSTSTORE}"

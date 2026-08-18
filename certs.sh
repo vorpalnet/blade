@@ -35,7 +35,7 @@
 # interchangeable and install-ssl / emit_tls_block consume either.
 #
 # Conf keys (~/.blade/<env>.conf):
-#   certs.dir     output directory — default tls/out/<env> (gitignored). Any
+#   certs.dir     output directory — default ~/.blade/<env>. Any
 #                 other in-repo path is refused (keys must not be committable).
 #   certs.hosts   extra SAN entries (CSV of dns:/ip: or bare hostnames)
 #   tls.identity.alias  key alias (default blade-identity)
@@ -103,14 +103,14 @@ read_prop() {
     printf '%s' "$v"
 }
 
-# Output goes to the SAME place make-certs uses (tls/out/<env>), so install-ssl
-# and blade.sh's emit_tls_block consume import and generate output identically.
-# tls/out is gitignored; any other in-repo certs.dir is refused (uncommittable).
+# Output goes to the SAME place make-certs and blade.sh use — default
+# ~/.blade/<env>, beside the config, so keys live in one place off in the
+# user's home rather than scattered in the repo checkout. certs.dir overrides.
 CERTS_DIR="$(read_prop "$CONF_FILE" "certs.dir")"; CERTS_DIR="${CERTS_DIR/#\~/$HOME}"
-[ -z "$CERTS_DIR" ] && CERTS_DIR="${SCRIPT_DIR}/tls/out/${ENV_NAME}"
+[ -z "$CERTS_DIR" ] && CERTS_DIR="${BLADE_HOME}/${ENV_NAME}"
 case "$CERTS_DIR" in
-    "${SCRIPT_DIR}/tls/out"/*) ;;                                   # the gitignored default — fine
-    "$SCRIPT_DIR"/*) die "certs.dir is inside the repo (${CERTS_DIR}) but not under tls/out — keys must not be committable. Use ~/.blade/certs/${ENV_NAME} or the default." ;;
+    "${SCRIPT_DIR}/tls/out"/*) ;;                                   # gitignored in-repo path — allowed for back-compat
+    "$SCRIPT_DIR"/*) die "certs.dir is inside the repo (${CERTS_DIR}) but not under tls/out — keys must not be committable. Use ~/.blade/${ENV_NAME} (the default) or another path outside the repo." ;;
 esac
 
 # Passphrases live in the one env conf as key=ENC(value); a prompted value is

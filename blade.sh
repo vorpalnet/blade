@@ -221,11 +221,14 @@ set_paths() {
     # names all alias it, so every existing read/write just targets the one file.
     BLADE_CONF="${BLADE_HOME}/${NAME}.conf"
     OCCAS_CONF="$BLADE_CONF"; DEPLOY_CONF="$BLADE_CONF"; WLS_SECRET="$BLADE_CONF"
-    PROFILE_DIR="$BLADE_HOME"                       # ancillary files, keyed by name
-    BLADE_LOG="${BLADE_HOME}/${NAME}.log"
-    URLS_FILE="${BLADE_HOME}/${NAME}.urls"
+    # Every GENERATED artifact for this env lives in one per-env folder,
+    # ~/.blade/<env>/ — TLS keystores, the log, the URL list. The authored config
+    # stays the ~/.blade/<env>.conf file beside it (it is input, not output).
+    PROFILE_DIR="${BLADE_HOME}/${NAME}"
+    BLADE_LOG="${PROFILE_DIR}/${NAME}.log"
+    URLS_FILE="${PROFILE_DIR}/${NAME}.urls"
     [ -n "$NAME" ] || return 0
-    mkdir -p "$BLADE_HOME" 2>/dev/null || true
+    mkdir -p "$PROFILE_DIR" 2>/dev/null || true
     # One-time migration: fold a legacy .conf/<name>/{occas,deploy}.conf + its
     # secrets into ~/.blade/<name>.conf. Config keys stay plain; secret keys are
     # wrapped ENC(...) (plaintext for now; a decrypt hook slots in later). The dead
@@ -763,7 +766,7 @@ host / FQDN / IP you entered, so one cert satisfies hostname verification.
 WebLogic's demo certificate is never used -- it is publicly known.
 EOF
     if [ "$DRY" = "on" ]; then
-        log "${C_DIM}  [dry-run] would generate a self-signed CA + identity into tls/out/${NAME} (make-certs)${C_RESET}"
+        log "${C_DIM}  [dry-run] would generate a self-signed CA + identity into ~/.blade/${NAME} (make-certs)${C_RESET}"
         return 0
     fi
     ask CA_CN "  Internal CA common name"   "${CA_CN:-BLADE Internal CA}"
@@ -787,7 +790,7 @@ production answer. Root-only files (e.g. Let's Encrypt under /etc/letsencrypt)
 are read via sudo. WebLogic's demo certificate is never used.
 EOF
     if [ "$DRY" = "on" ]; then
-        log "${C_DIM}  [dry-run] would import your certificate into tls/out/${NAME} (certs.sh import)${C_RESET}"
+        log "${C_DIM}  [dry-run] would import your certificate into ~/.blade/${NAME} (certs.sh import)${C_RESET}"
         return 0
     fi
     log "  Which format is your certificate in?"
@@ -2093,7 +2096,7 @@ provision_one_host() {
     fi
 
     local cdir; cdir="$(read_prop "$OCCAS_CONF" certs.dir)"
-    cdir="${cdir/#\~/$HOME}"; cdir="${cdir:-${HOME}/.blade/certs/${NAME}}"
+    cdir="${cdir/#\~/$HOME}"; cdir="${cdir:-${HOME}/.blade/${NAME}}"
     local domhome="${DOMAINS_DIR}/${dom}"
     local nmhome="${DOMAINS_DIR}/${nmdom}"
     local jdk; jdk="$(java_home_stable)"   # the link when it matches java.home
@@ -3707,7 +3710,17 @@ EOF
 # Emit the WLST that adds the optional static test engine as a configured member
 # of BEA_ENGINE_TIER_CLUST (a configured server doesn't inherit the dynamic
 # template, so its sip/sips channels are added by hand). Arg: name:mach:listen:sip:sips
-# Generate (or import) the env's TLS source keystores into tls/out/<env> and
+# The env's TLS source keystores live in its per-env folder, ~/.blade/<env>/,
+# with the log and URL list — never scattered in the repo checkout. certs.dir in
+# the conf overrides. This is the ONE definition blade.sh, certs.sh, make-certs.sh,
+# install-ssl.sh and deploy.sh must agree on — keep them in step.
+certs_source_dir() {
+    local d; d="$(read_prop "$OCCAS_CONF" certs.dir 2>/dev/null)"; d="${d/#\~/$HOME}"
+    [ -n "$d" ] && { printf '%s' "$d"; return 0; }
+    printf '%s/%s' "$BLADE_HOME" "$(basename "${DEPLOY_CONF%.conf}")"
+}
+
+# Generate (or import) the env's TLS source keystores into ~/.blade/<env> and
 # persist the passphrases into the conf. Called BEFORE emit_tls_block, which
 # reads those passphrases. There is deliberately NO demo-cert fallback anywhere
 # in BLADE -- callers that require TLS fail instead of letting WebLogic drop back
@@ -3716,7 +3729,7 @@ ensure_certs_source() {
     [ "$DRY" = "on" ] && return 0
     local envname srcp12
     envname="$(basename "${DEPLOY_CONF%.conf}")"
-    srcp12="${SCRIPT_DIR}/tls/out/${envname}/blade-identity.p12"
+    srcp12="$(certs_source_dir)/blade-identity.p12"
     if [ ! -f "$srcp12" ]; then
         if [ "${CERT_SOURCE:-generate}" = supply ]; then
             info "No certificates for '${envname}' yet — importing the supplied cert (the TLS certificate step) …"
@@ -3738,7 +3751,7 @@ ensure_certs_source() {
 # Encrypt lease on the 'sup' path) can NEVER take down the control plane — and
 # the control plane is exactly the channel you'd need to fix a botched rotation.
 #
-# Generates once into tls/out/<env>/: nm-identity.p12 (alias blade-nm),
+# Generates once into ~/.blade/<env>/: nm-identity.p12 (alias blade-nm),
 # nm-cert.pem, nm-trust.p12. Also idempotently imports the cert into an
 # existing blade-trust.p12 — the AdminServer's built-in NM client validates NM
 # against the DOMAIN trust store, not nm-trust.p12 — and refreshes the app
@@ -3748,7 +3761,7 @@ ensure_nm_cert() {
     [ "$DRY" = "on" ] && return 0
     local envname outdir nmpw keytool jh
     envname="$(basename "${DEPLOY_CONF%.conf}")"
-    outdir="${SCRIPT_DIR}/tls/out/${envname}"
+    outdir="$(certs_source_dir)"
     # Its own passphrase, minted like the tls.* three — the NM step depends on
     # nothing from the TLS phase.
     nmpw="${BLADE_NM_KEYSTORE_PASSWORD:-}"
@@ -3824,17 +3837,17 @@ ensure_nm_cert() {
     [ -f "${outdir}/nm-identity.p12" ]
 }
 
-# Copy named keystores from tls/out/<env> (login-user owned) into a domain dir
+# Copy named keystores from ~/.blade/<env> (login-user owned) into a domain dir
 # (install-user owned). The domain must already be WRITTEN -- WLST writeDomain
 # would clobber anything placed beforehand. Returns 0 only when the first named
 # keystore exists at the destination.
-place_p12s() {  # $1 = destination dir, $2... = filenames in tls/out/<env>
+place_p12s() {  # $1 = destination dir, $2... = filenames in ~/.blade/<env>
     [ "$DRY" = "on" ] && return 0
     local dest="$1"; shift
     local envname srcdir own f srcs="" dsts=""
     local SUDO=""; [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1 && SUDO="sudo"
     envname="$(basename "${DEPLOY_CONF%.conf}")"
-    srcdir="${SCRIPT_DIR}/tls/out/${envname}"
+    srcdir="$(certs_source_dir)"
     for f in "$@"; do
         [ -f "${srcdir}/${f}" ] || { warn "no ${f} at ${srcdir} — run the certificate step first."; return 1; }
         srcs="${srcs} ${srcdir}/${f}"; dsts="${dsts} ${dest}/${f}"
@@ -5118,7 +5131,7 @@ _deploy_one() {
         else
             trust="$(read_prop "$OCCAS_CONF" trust.keystore)"; trust="${trust/#\~/$HOME}"
             if [ -z "$trust" ]; then
-                local cdir; cdir="$(read_prop "$OCCAS_CONF" certs.dir)"; cdir="${cdir/#\~/$HOME}"; cdir="${cdir:-${HOME}/.blade/certs/${NAME}}"
+                local cdir; cdir="$(read_prop "$OCCAS_CONF" certs.dir)"; cdir="${cdir/#\~/$HOME}"; cdir="${cdir:-${HOME}/.blade/${NAME}}"
                 [ -f "${cdir}/trust.p12" ] && trust="${cdir}/trust.p12"
             fi
             trustpw="${BLADE_STORE_PASSWORD:-}"; [ -z "$trustpw" ] && [ -f "$WLS_SECRET" ] && trustpw="$(read_prop "$WLS_SECRET" store.password)"

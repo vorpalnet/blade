@@ -37,7 +37,7 @@
 #   tls.trust.passphrase      protects the trust keystore
 # Missing passphrases are prompted for (read -s).
 #
-# Output (gitignored):  tls/out/<env>/
+# Output:  ~/.blade/<env>/ (certs.dir overrides)
 #   blade-ca.p12        the CA keystore — KEEP OFFLINE, never deployed
 #   blade-ca.pem        the CA public cert — import into browsers / clients
 #   blade-identity.p12  deploy to every node (install-ssl.sh keystores)
@@ -132,7 +132,10 @@ if [ "$SIP_TWOWAY" = "true" ]; then
     [ -f "$SBC_CA_CERT" ] || { echo "sbc.ca.cert not found: ${SBC_CA_CERT}" >&2; exit 1; }
 fi
 
-OUTDIR="${SCRIPT_DIR}/out/${ENV_NAME}"
+# Output beside the config under ~/.blade (default), not scattered in the repo.
+# certs.dir in the conf overrides. Kept in step with certs.sh and blade.sh.
+OUTDIR="$(read_prop "$CONF_FILE" "certs.dir")"; OUTDIR="${OUTDIR/#\~/$HOME}"
+[ -z "$OUTDIR" ] && OUTDIR="${BLADE_HOME}/${ENV_NAME}"
 mkdir -p "$OUTDIR"
 CA_P12="${OUTDIR}/blade-ca.p12"
 CA_PEM="${OUTDIR}/blade-ca.pem"

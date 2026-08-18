@@ -16,7 +16,7 @@
 #   --dry-run print what would happen; run nothing
 #
 # Tiers:
-#   keystores  copy blade-identity.p12 + blade-trust.p12 from tls/out/<env>/
+#   keystores  copy blade-identity.p12 + blade-trust.p12 from ~/.blade/<env>/
 #              into tls.keystore.dir on the AdminServer (local) and every
 #              engine node (scp). Run make-certs.sh first.
 #   ssl        WLST: set CustomIdentityAndCustomTrust + enable the SSL listen
@@ -144,7 +144,10 @@ needs() { local t; for t in "${TIERS[@]}"; do [ "$t" = "$1" ] && return 0; done;
 ENGINE_NODES=()
 [ -n "$ENGINE_NODES_RAW" ] && IFS=', ' read -r -a ENGINE_NODES <<< "$ENGINE_NODES_RAW"
 
-OUTDIR="${SCRIPT_DIR}/out/${ENV_NAME}"
+# Cert source: ~/.blade/<env> by default (certs.dir overrides) — in step with
+# certs.sh / make-certs.sh / blade.sh, not the repo checkout.
+OUTDIR="$(read_prop "$CONF_FILE" "certs.dir")"; OUTDIR="${OUTDIR/#\~/$HOME}"
+[ -z "$OUTDIR" ] && OUTDIR="${BLADE_HOME}/${ENV_NAME}"
 ID_P12="${OUTDIR}/blade-identity.p12"
 TRUST_P12="${OUTDIR}/blade-trust.p12"
 ID_BASENAME="$(basename "$ID_P12")"
