@@ -449,9 +449,9 @@ do_all() {
         _one blade-test  "${DIST_DIR}/blade-test.ear"  "$t_test"  false || return 1
         _services || return 1
         _one blade-admin "${DIST_DIR}/blade-admin.ear" "$t_admin" false || return 1
-        _one blade-shared "${DIST_DIR}/blade-shared.war" "$t_both" true || return 1
+        _one blade-shared "${DIST_DIR}/lib/blade-shared.war" "$t_both" true || return 1
     else
-        _one blade-shared "${DIST_DIR}/blade-shared.war" "$t_both" true || return 1
+        _one blade-shared "${DIST_DIR}/lib/blade-shared.war" "$t_both" true || return 1
         _one blade-admin "${DIST_DIR}/blade-admin.ear" "$t_admin" false || return 1
         _services || return 1
         _one blade-test  "${DIST_DIR}/blade-test.ear"  "$t_test"  false || return 1
