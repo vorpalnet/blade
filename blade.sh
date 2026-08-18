@@ -5475,7 +5475,8 @@ if [ -z "$NAME" ]; then
         NAME=""
         dashboard
     else
-        log "${C_BOLD}BLADE install — profiles${C_RESET}"
+        printf '\e[2J\e[H'; banner
+        printf '  %sselect a profile%s\n\n' "$C_DIM" "$C_RESET"
         n=1; for p in "${profiles[@]}"; do log "  [$n] $p"; n=$((n+1)); done
         log "  [c] create a new profile"
         read -r -p "  choose: " pick || pick="c"
