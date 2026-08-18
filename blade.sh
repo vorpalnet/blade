@@ -37,7 +37,9 @@
 #     14.1.2 dropped the built-in /console
 #   - stop Node Manager to re-read enrollments (RUN: k)
 #   - open the firewalld ports OCCAS needs (RUN: f)
-#   - set up TLS  (RUN: g/t; tls/make-certs.sh, tls/install-ssl.sh)
+#   - supply/generate the TLS cert (RUN: g/sup; tls/make-certs.sh). HTTPS/SIP-TLS is
+#     stamped onto the ServerTemplate + AdminServer at configure (emit_tls_block),
+#     offline — no separate online "turn it on" step and no running server needed.
 #   - UNINSTALL, in reverse-of-install order (each row confirms first):
 #       remove app domain + profile (RUN: r) · remove Node Manager domain (RUN: b)
 #       deinstall the OCCAS product (RUN: di) · remove install dirs (RUN: md)
@@ -1105,11 +1107,10 @@ build_menu_rows() {
     _row phase  ident "Domain name + admin user & password"      "${DOMAIN:-—} / ${ADMIN_USER} · pw ${pwlbl}" "$p_ident"
     _row head ""      "STEP 3 · Describe your machines"          "" "-"
     _row phase  hosts   "Hosts & Node Manager"     "${nhosts} host(s) · ${NM_DOMAIN}@${NM_BIND}:${NM_PORT} ${NM_TYPE}" "$p_hosts"
-    _row head ""      "STEP 4 · TLS (certificate, then HTTPS/SIP-TLS)" "" "-"
+    _row head ""      "STEP 4 · TLS certificate (HTTPS/SIP-TLS is stamped on the template at configure)" "" "-"
     _row phase  tls "TLS settings"          "$(_sum_tls)" "$p_tls"
     _row action g   "Generate a self-signed CA"   "self-signed internal CA$([ "${CERT_SOURCE:-generate}" = generate ] && echo ' · current')" "-"
     _row action sup "Supply your own certificate" "PKCS12 / PEM (e.g. Let’s Encrypt)$([ "${CERT_SOURCE:-}" = supply ] && echo " · current: ${CERT_P12:-${CERT_PEM:-set}}")" "-"
-    _row action t "Turn on HTTPS / SIP-TLS" "" "-"
     _row head ""      "STEP 5 · Start it up (in order)"          "" "-"
     _row action n "Create & start Node Manager" "${NM_DOMAIN} — ${nm_state}" "$a_n"
     _row action c "Create the cluster domain"   "${DOMAIN:-?}" "$a_c"
@@ -1187,7 +1188,6 @@ dispatch_row() {
         repo) do_remove_repo   || true ;;
         g)   do_cert_generate || true ;;
         sup) do_cert_supply   || true ;;
-        t) [ "$DRY" = "on" ] && dr="--dry-run"; "${SCRIPT_DIR}/tls/install-ssl.sh" "$DEPLOY_CONF" $dr || warn "install-ssl returned an error" ;;
         *) warn "unknown row: $1" ;;
     esac
 }

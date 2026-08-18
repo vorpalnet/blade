@@ -354,6 +354,10 @@ next_steps() {
     # Only self-signed CAs need distributing; a real cert's issuer is already trusted.
     [ "$MODE" = generate ] && \
         log "  ${C_DIM}(Self-signed CA: to trust it elsewhere, hand out ${CERTS_DIR}/blade-ca.pem.)${C_RESET}"
+    # Return 0 explicitly: the conditional above is this function's last command, so
+    # in non-generate modes the failed test would otherwise become certs.sh's exit
+    # status and surface as a spurious "certificate import returned an error".
+    return 0
 }
 
 log "${C_BOLD}BLADE certs${C_RESET}"
