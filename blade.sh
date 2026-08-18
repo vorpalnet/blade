@@ -1087,6 +1087,10 @@ build_menu_rows() {
     local a_e=0; grep -qsF "${DOMAINS_DIR}/${NM_DOMAIN}" /etc/systemd/system/nodemanager.service && a_e=1
     local a_w=0; grep -qsF "${DOMAINS_DIR}/${DOMAIN}"    /etc/systemd/system/weblogic.service    && a_w=1
     local nm_state="stopped"; nm_listening "$NM_PORT" && nm_state="running"
+    # The AdminServer binds its ListenAddress (not loopback), so a 127.0.0.1 port
+    # probe would read "down" on a live server — match the JVM instead. Local, like
+    # the NM check: accurate on the admin box, where blade.sh and the domain live.
+    local admin_state="stopped"; pgrep -f 'weblogic.Name=AdminServer' >/dev/null 2>&1 && admin_state="running"
     local pwlbl="—"; _pw_set && pwlbl="set"
 
     _row() { MR_TYPE+=("$1"); MR_ID+=("$2"); MR_LABEL+=("$3"); MR_VAL+=("$4"); MR_DONE+=("$5"); }
@@ -1117,7 +1121,7 @@ build_menu_rows() {
     _row head ""      "STEP 5 · Start it up (in order)"          "" "-"
     _row action n "Create & start Node Manager" "${NM_DOMAIN} — ${nm_state}" "$a_n"
     _row action c "Create the cluster domain"   "${DOMAIN:-?}" "$a_c"
-    _row action s "Start the AdminServer"       "" "-"
+    _row action s "Start the AdminServer"       "AdminServer — ${admin_state}" "$([ "$admin_state" = running ] && echo 1 || echo -)"
     _row action x "Stop the AdminServer"        "" "-"
     _row action k "Stop Node Manager"           "" "-"
     _row action e "Install Node Manager boot service (systemd)"  "nodemanager.service" "$a_e"
