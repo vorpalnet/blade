@@ -11,7 +11,7 @@ var TUNING_REC = {
 	serverTuning: {
 		// The WLS default (10 MB) is too small to reliably push an updated
 		// domain configuration to a managed node at startup.
-		maxMessageSize: 40000000,
+		maxMessageSize: 100000000,
 		// Measured benefit above this is inconclusive; a reasonable start.
 		socketReaders: 4,
 		// Quiets Notice-level subsystem noise (e.g. transport idle-socket

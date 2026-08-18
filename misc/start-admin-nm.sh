@@ -34,6 +34,12 @@ NM_ADMINURL="${NM_ADMINURL:-}"     # for MANAGED servers: t3://<admin>:<port> pa
 # set, wlst.sh honors the JAVA_HOME the systemd unit passes (the runtime JDK link).
 export JAVA_VENDOR="${JAVA_VENDOR:-Oracle}"
 
+# readDomain (below) parses config.xml, which references the SIP server's custom
+# resource; without the SIP descriptor binding on the classpath it fails to load
+# SipServerBean. WLST_EXT_CLASSPATH extends WLST's own classpath (not the servers').
+_SIPLIB="$MW_HOME/wlserver/sip/server/lib"
+export WLST_EXT_CLASSPATH="${_SIPLIB}/wlss-descriptor-binding.jar:${_SIPLIB}/sip-app-binding.jar:${_SIPLIB}/weblogic_sip.jar:${_SIPLIB}/profile-service-descriptor-binding.jar${WLST_EXT_CLASSPATH:+:${WLST_EXT_CLASSPATH}}"
+
 # NM password: env var, else a gitignored secret file next to this script, else prompt.
 SECRET="$(dirname "$0")/.nmsecret"          # one line:  NM_PASSWORD=...
 [ -z "${NM_PASSWORD:-}" ] && [ -f "$SECRET" ] && . "$SECRET"
@@ -89,18 +95,15 @@ fi
 PY="$(mktemp /tmp/nmstart.XXXXXX.py)"
 trap 'rm -f "$PY"' EXIT
 
-# Derive the launch classpath + JVM args from the domain's own setDomainEnv --
-# the canonical, version-correct source (it already folds in the memory tuning
-# from setUserOverrides.sh). MBean-mode Node Manager has no start script, so we
-# hand these to nmStart as props; without them NM launches a bare weblogic.Server
-# that dies on ClassNotFoundException SipServerBean. Sourced in a subshell so it
-# can't pollute this script's env or the WLST launch.
-# set +u +e inside the subshell: Oracle's setDomainEnv references many unset vars
-# and would abort under this script's nounset/errexit before we can read CLASSPATH.
-eval "$(set +u +e; cd "$DOMAIN_HOME/bin" 2>/dev/null && . ./setDomainEnv.sh >/dev/null 2>&1; \
-        printf 'SRV_CP=%q\nSRV_ARGS=%q\n' "${CLASSPATH#:}" "${MEM_ARGS} ${JAVA_OPTIONS}")"
-# If the source failed, these stay empty and _nmstart falls back (with a warning).
-: "${SRV_CP:=}" "${SRV_ARGS:=}"
+# The launch ClassPath + Arguments come from config.xml's ServerStart -- the single
+# source of truth (blade.sh's emit_serverstart_block writes them there). We no longer
+# source setDomainEnv/setUserOverrides: the WLST script below readDomain()s and reads
+# the ServerStart of this server (a static server has its own; a dynamic engine's
+# comes from the cluster's ServerTemplate), then hands ClassPath+Arguments to nmStart
+# as start props. NM cannot resolve a dynamic server's ServerStart on its own -- a
+# bare nmStart launches weblogic.Server without the SIP classpath and dies on
+# ClassNotFoundException SipServerBean -- so reading it here and relaying it is the
+# way to keep config.xml the one place these live.
 
 # WLST is Jython 2.x — note the 'except Exception, e' syntax. The generated
 # file must declare an encoding (PEP 263): Jython hard-fails on any non-ASCII
@@ -108,26 +111,51 @@ eval "$(set +u +e; cd "$DOMAIN_HOME/bin" 2>/dev/null && . ./setDomainEnv.sh >/de
 cat > "$PY" <<EOF
 # -*- coding: utf-8 -*-
 from java.util import Properties
-def _nmstart(sv):
-    # MBean-mode NM builds the JVM command from these startup props, NOT config.xml.
-    # ClassPath + Arguments come from the domain's setDomainEnv, so the SIP classpath,
-    # LaunchClassLoader, ClasspathServlet allow-list and -ea are all present -- a bare
-    # nmStart would launch a weblogic.Server that dies on SipServerBean ClassNotFound.
-    cp = '${SRV_CP}'
+
+def _read_serverstart():
+    # config.xml is the single source. Read this server's ServerStart ClassPath +
+    # Arguments: a static server (e.g. AdminServer) has its own /Servers entry; a
+    # dynamic engine is materialized from the cluster's ServerTemplate, so fall back
+    # to that. Done OFFLINE (readDomain) BEFORE nmConnect so the modes never overlap.
+    readDomain('${DOMAIN_HOME}')
+    ss = None
+    for s in cmo.getServers():
+        if s.getName() == '${ADMIN_SERVER}':
+            ss = s.getServerStart()
+            break
+    if ss is None:
+        tmpls = cmo.getServerTemplates()
+        if len(tmpls) > 0:
+            ss = tmpls[0].getServerStart()
+    cp = ''
+    args = ''
+    if ss is not None:
+        if ss.getClassPath() is not None:
+            cp = ss.getClassPath()
+        if ss.getArguments() is not None:
+            args = ss.getArguments()
+    closeDomain()
+    return cp, args
+
+def _nmstart(sv, cp, args):
+    # NM (MBean-mode) can't materialize a dynamic engine's ServerStart itself, so we
+    # relay ClassPath + Arguments (read from config.xml above) as start props. Without
+    # them a bare nmStart launches weblogic.Server with no SIP classpath -> SipServerBean
+    # ClassNotFound. AdminURL is a per-boot coordinate, not config, so it stays a prop.
     if cp == '':
-        print('WARNING: no setDomainEnv classpath derived -- bare nmStart (will fail on OCCAS)')
-        if '${NM_ADMINURL}' != '':
-            nmStart(sv, props=makePropertiesObject('AdminURL=${NM_ADMINURL}'))
-        else:
-            nmStart(sv)
-        return
+        print('WARNING: no ServerStart ClassPath in config.xml for ' + sv + ' -- bare nmStart will fail on OCCAS')
     p = Properties()
-    p.put('ClassPath', cp)
-    p.put('Arguments', '${SRV_ARGS}')
+    if cp != '':
+        p.put('ClassPath', cp)
+    if args != '':
+        p.put('Arguments', args)
     if '${NM_ADMINURL}' != '':
         p.put('AdminURL', '${NM_ADMINURL}')
     nmStart(sv, props=p)
+
 try:
+    (SRV_CP, SRV_ARGS) = _read_serverstart()
+    print('ServerStart from config.xml: ClassPath ' + str(len(SRV_CP)) + ' chars, Arguments ' + str(len(SRV_ARGS)) + ' chars')
     nmConnect('${NM_USER}', '${NM_PASSWORD}', '${NM_HOST}', '${NM_PORT}',
               '${DOMAIN_NAME}', '${DOMAIN_HOME}', '${NM_TYPE}')
     print('Connected to Node Manager at ${NM_HOST}:${NM_PORT}; ${NM_ACTION} ${ADMIN_SERVER}...')
@@ -151,7 +179,7 @@ try:
             if s != 'RUNNING':
                 break
             time.sleep(2)
-        _nmstart('${ADMIN_SERVER}')
+        _nmstart('${ADMIN_SERVER}', SRV_CP, SRV_ARGS)
         print('Status: ' + nmServerStatus('${ADMIN_SERVER}'))
     else:
         # Idempotent: a re-sync run may target an engine (or admin) that's
@@ -160,7 +188,7 @@ try:
         if nmServerStatus('${ADMIN_SERVER}') == 'RUNNING':
             print('${ADMIN_SERVER} already RUNNING — nothing to start')
         else:
-            _nmstart('${ADMIN_SERVER}')
+            _nmstart('${ADMIN_SERVER}', SRV_CP, SRV_ARGS)
         print('Status: ' + nmServerStatus('${ADMIN_SERVER}'))
     nmDisconnect()
 except Exception, e:

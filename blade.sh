@@ -1121,6 +1121,7 @@ build_menu_rows() {
     _row action addm "Add a machine (grows the cluster online)" "$(printf 'next: machine%s → %s%s' "${#H_NAME[@]}" "${prefix:-engine}" "${#H_NAME[@]}")" "-"
     _row action remm "Remove the last machine"                   "$(_sum_lastmachine)" "-"
     _row action E "Re-provision every engine host"               "$(_sum_engines)" "-"
+    _row action verify "Verify the cluster (health-check every node)" "" "-"
     _row action o "Deploy WebLogic Remote Console (/rconsole)" "" "-"
     _row action f "Open firewall ports (firewalld)"              "NM/admin/ssl$([ "${SIP_TLS:-false}" = true ] && printf /sip)" "-"
     _row head ""      "STEP 6 · Deploy settings (build profile, SSH, admin URL)" "" "-"
@@ -1173,6 +1174,7 @@ dispatch_row() {
         o) do_console             || true ;;
         f) do_open_firewall || true ;;
         x) stop_admin  "$MWHOME" "$DOMAIN" "$ADMIN_USER" || true ;;
+        verify) do_verify || true ;;
         k) stop_nm || true ;;
         y) do_deploy_all || true ;;
         l) do_deploy_status || true ;;
@@ -2323,14 +2325,20 @@ do_add_machine() {
         return 1
     fi
 
-    # 2. then the host
+    # 2. persist the profile NOW — the server exists in the domain, so the profile
+    #    must record it even if provisioning fails below. Otherwise the two drift
+    #    (domain has the server, profile doesn't) and the next 'Add a machine'
+    #    mis-numbers because it counts from a short profile. Provisioning is
+    #    independently retryable afterward via 'Re-provision every engine host'.
+    save_profile
+
+    # 3. then the host
     if ! provision_one_host "$n"; then
-        warn "provisioning ${name} failed — it is in the domain but not running; re-run to retry."
+        warn "provisioning ${name} failed — it is in the domain and profile but not"
+        warn "running; fix the host and re-run 'Re-provision every engine host'."
         return 1
     fi
 
-    # 3. the profile, only once both halves worked
-    save_profile
     ok "machine${n} added — ${prefix:-engine}${n} on ${name} (${addr})."
     return 0
 }
@@ -3882,7 +3890,7 @@ emit_serverstart_block() {
         coll="${spec%%:*}"; nm="${spec##*:}"
         cat <<PYSS
 cd('/${coll}/${nm}')
-set('MaxMessageSize', 40000000)
+set('MaxMessageSize', 100000000)
 try:
     create('${nm}','ServerStart')
 except:
@@ -4032,6 +4040,24 @@ get_admin_pw() {
         [ -n "$v" ] || { warn "no password provided."; return 1; }
     fi
     printf '%s' "$v"
+}
+
+# Turn on BLADE's FSMAR as the domain's SIP Application Router. The Config Wizard
+# writes an empty <app-router/> into config/custom/sipserver.xml; the FSMAR is THE
+# router for BLADE (the project is built around it), so default it on — a new domain
+# routes through it out of the box instead of the stock DefaultApplicationRouter.
+# Engines pull blade-fsmar.jar from the AdminServer at AR load (the template's
+# MaxMessageSize covers the >10 MB transfer). Idempotent; stays editable in the
+# Admin Console / Tuning app. The element names match a live sipserver.xml.
+enable_custom_approuter() {
+    local sipxml="${DOMAINS_DIR}/${DOMAIN}/config/custom/sipserver.xml" jar="${1:-blade-fsmar.jar}"
+    as_install_user test -f "$sipxml" || { warn "sipserver.xml not found — FSMAR App Router not enabled."; return 0; }
+    as_install_user grep -q 'use-custom-app-router>true' "$sipxml" && return 0   # already on
+    as_install_user perl -0777 -i -pe \
+        's{<app-router>\s*</app-router>}{<app-router>\n    <use-custom-app-router>true</use-custom-app-router>\n    <custom-app-router-jar-file-name>'"$jar"'</custom-app-router-jar-file-name>\n  </app-router>}s' \
+        "$sipxml" \
+        && ok "FSMAR enabled as the App Router (useCustomAppRouter=true, ${jar})" \
+        || warn "could not enable the FSMAR App Router in sipserver.xml."
 }
 
 # ----------------------------------------------------------------------------
@@ -4197,6 +4223,8 @@ Machine${idx}NodemanagerNMType=${type}"
     # Heap/metaspace for NM-launched servers rides ServerStart.Arguments
     # (emit_serverstart_block above); this hook covers hand-run start scripts.
     write_user_overrides "${DOMAINS_DIR}/${domain}"
+    # Route through the FSMAR out of the box — it is BLADE's App Router.
+    enable_custom_approuter
     # Enroll the new app domain into the standalone Node Manager so it can start
     # the AdminServer/engines. No-op-with-hint if the NM domain isn't built yet.
     register_domain_with_nm "$domain" "${DOMAINS_DIR}/${domain}" || true
@@ -4671,6 +4699,61 @@ start_admin() { nm_admin start "$@"; }
 # Stop the AdminServer (+ any of the domain's servers). nmKill is unreliable with
 # pure-Java Node Manager (NativeVersionEnabled=false, required on aarch64) when a
 # server is script-launched with a child JVM, so we stop at the OS level.
+# Read-only cluster health check. Catches the failure classes that otherwise only
+# show up as a dead boot service: an unresolved JDK, an SELinux-unlabeled domain
+# (block-volume trap), a missing NM log dir, a custom App Router jar larger than the
+# T3 MaxMessageSize, a node whose NM/engine isn't running. Runs each node's checks
+# locally on the admin (index 0) and over ssh elsewhere.
+do_verify() {
+    local sshu="${SSH_USER:-$(id -un)}" domhome="${DOMAINS_DIR}/${DOMAIN}" i ok_n=0 bad_n=0
+    _vok()  { ok "    $1";   ok_n=$((ok_n + 1)); }
+    _vbad() { warn "    $1"; bad_n=$((bad_n + 1)); }
+    # $1 = host index; $2.. = command. Local for the admin (0), ssh otherwise.
+    _vrun() { local idx="$1"; shift
+        if [ "$idx" -eq 0 ]; then bash -c "$*" 2>/dev/null
+        else ssh -o BatchMode=yes -o ConnectTimeout=8 "${sshu}@${H_ADDR[$idx]}" "$*" 2>/dev/null; fi; }
+
+    info "Verifying '${DOMAIN}' across ${#H_NAME[@]} machine(s)…"
+
+    # --- domain/config sanity (config.xml + sipserver.xml on the admin) ---
+    log "  ${C_BOLD}config${C_RESET}"
+    local cfg="${domhome}/config/config.xml" mms=""
+    if as_install_user test -f "$cfg" 2>/dev/null; then
+        mms="$(as_install_user grep -om1 '<max-message-size>[0-9]*' "$cfg" 2>/dev/null | grep -o '[0-9]*' | head -1)"
+        [ -n "$mms" ] && _vok "MaxMessageSize=${mms}" \
+            || _vbad "no <max-message-size> — T3 default 10 MB; a >10 MB App Router jar will fail the fetch"
+        local jar="${domhome}/approuter/blade-fsmar.jar" jsz=""
+        as_install_user test -f "$jar" 2>/dev/null && jsz="$(as_install_user stat -c %s "$jar" 2>/dev/null)"
+        if [ -n "$jsz" ] && [ -n "$mms" ] && [ "$jsz" -ge "$mms" ]; then
+            _vbad "FSMAR jar ${jsz} B >= MaxMessageSize ${mms} B — AR fetch will blow the T3 cap"
+        elif [ -n "$jsz" ]; then _vok "FSMAR jar ${jsz} B fits under MaxMessageSize"; fi
+        as_install_user grep -q 'use-custom-app-router>true' "${domhome}/config/custom/sipserver.xml" 2>/dev/null \
+            && _vok "FSMAR is the active App Router" || _vbad "custom App Router OFF — routing on the DefaultAR"
+    else
+        _vbad "config.xml not found (${cfg}) — domain not built on this host"
+    fi
+
+    # --- per-machine runtime checks ---
+    for i in "${!H_NAME[@]}"; do
+        log "  ${C_BOLD}${H_NAME[$i]}${C_RESET} ${C_DIM}(${H_ADDR[$i]}, ${H_ROLE[$i]})${C_RESET}"
+        if ! _vrun "$i" "true"; then _vbad "unreachable"; continue; fi
+        [ "$(_vrun "$i" "sudo systemctl is-active nodemanager.service")" = active ] \
+            && _vok "Node Manager active" || _vbad "Node Manager NOT active"
+        _vrun "$i" "test -x /opt/oracle/java/current/bin/java && echo y" | grep -qx y \
+            && _vok "JDK link resolves" || _vbad "/opt/oracle/java/current/bin/java missing"
+        _vrun "$i" "test -d ${LOG_DIR:-/var/log/weblogic}/nodemanager && echo y" | grep -qx y \
+            && _vok "NM log dir present" || _vbad "${LOG_DIR:-/var/log/weblogic}/nodemanager missing"
+        case "$(_vrun "$i" "sudo ls -Z ${DOMAINS_DIR}/${NM_DOMAIN}/bin/startNodeManager.sh 2>/dev/null")" in
+            *unlabeled_t*) _vbad "domain scripts SELinux unlabeled_t — run 'restorecon -R'" ;;
+            *:*)           _vok "SELinux label ok" ;;
+        esac
+    done
+    rule
+    [ "$bad_n" -eq 0 ] && ok "verify: ${ok_n} checks passed, no issues." \
+                       || warn "verify: ${bad_n} issue(s) found (${ok_n} ok)."
+    return 0
+}
+
 stop_admin() {
     local oh="$1" dom="$2" auser="${3:-weblogic}"
     local domhome="${DOMAINS_DIR}/${dom}"
