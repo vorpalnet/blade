@@ -4613,13 +4613,35 @@ restart_nm() {
     if [ "$DRY" = "on" ]; then log "${C_DIM}  [dry-run] restart Node Manager (${nmhome})${C_RESET}"; return 0; fi
     local IU_USER; IU_USER="$(iu_owner_user "$nmhome")"   # run as the tree's owner
 
+    # A restart must fully CYCLE the process before returning. The caller
+    # (register_domain_with_nm, inside the AdminServer start) connects to NM the
+    # instant this returns; if the OLD NM is still shutting down, that nmConnect
+    # is severed mid-nmStart ("Unexpected end of stream") and the half-launched
+    # server is left FAILED_NOT_RESTARTABLE. systemd's ExecStop is
+    # stopNodeManager.sh -- a JVM that can take ~10s to land its TERM -- so a bare
+    # `systemctl restart` (or a port check right after it) can report "up" while a
+    # shutdown is still in flight. So: stop, wait for the listener to actually
+    # DROP, then start and wait for it to come back.
     # Prefer the boot service when it's installed and owns this nmdomain: that
     # keeps systemd's idea of the process and ours from diverging.
+    local svc_systemd=0
     if command -v systemctl >/dev/null 2>&1 \
        && grep -qsF -- "$nmhome" /etc/systemd/system/nodemanager.service; then
-        sudo systemctl restart nodemanager.service 2>/dev/null || { warn "systemctl restart nodemanager.service failed."; return 1; }
+        svc_systemd=1
+    fi
+    if [ "$svc_systemd" = 1 ]; then
+        sudo systemctl stop nodemanager.service 2>/dev/null || true
     else
         stop_nm || true
+    fi
+    # Confirm the old NM is GONE (listener released) before starting a new one --
+    # this is the step that closes the race the port check alone missed.
+    local j=0
+    while nm_listening "$port" && [ "$j" -lt 30 ]; do sleep 1; j=$((j + 1)); done
+    nm_listening "$port" && warn "old Node Manager still holding :${port} after 30s — starting anyway."
+    if [ "$svc_systemd" = 1 ]; then
+        sudo systemctl start nodemanager.service 2>/dev/null || { warn "systemctl start nodemanager.service failed."; return 1; }
+    else
         # Match do_nmdomain: NM's .out lives in LOG_DIR (created there when the NM
         # was set up). Fall back under the domain only if that dir isn't present.
         local nmlogdir="${LOG_DIR:-/var/log/weblogic}/nodemanager"
