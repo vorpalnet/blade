@@ -83,8 +83,15 @@ cat > "$PY" <<EOF
 def base(n): return n.split('#')[0]
 def app_map(): return dict((base(a.getName()), a.getName()) for a in cmo.getAppDeployments())
 def lib_map(): return dict((base(l.getName()), l.getName()) for l in cmo.getLibraries())
+# Connect on its own: a connect failure means the AdminServer is unreachable, so
+# EVERY app in a batch would fail identically. Exit with a distinct code (3) so
+# the caller aborts the whole run instead of retrying a fresh WLST per app.
 try:
     connect('${WLS_USER}', '${WLS_PASSWORD}', '${WLS_ADMINURL}')
+except Exception, e:
+    print('CONNECT_FAILED: ' + str(e))
+    exit(exitcode=3)
+try:
     action = '${WLS_ACTION}'
     name   = '${WLS_NAME}'
     isLib  = ${lib}

@@ -5214,9 +5214,16 @@ _deploy_one() {
     # + store.password) only if the BLADE store isn't there.
     local trust="" trustpw=""
     case "$url" in t3s://*)
-        local ksdir="${KEYSTORE_DIR:-/opt/oracle/security}"
-        if [ -f "${ksdir}/blade-trust.p12" ]; then
-            trust="${ksdir}/blade-trust.p12"
+        # The AdminServer presents the BLADE identity, so the client must trust the
+        # BLADE CA. blade-trust.p12 + tls.trust.passphrase now live in the env's
+        # consolidated dir (~/.blade/<env>, or certs.dir); fall back to the legacy
+        # /opt/oracle/security, then the old certs.dir/trust.p12 + store.password.
+        local csd; csd="$(certs_source_dir)"
+        if [ -f "${csd}/blade-trust.p12" ]; then
+            trust="${csd}/blade-trust.p12"
+            trustpw="${BLADE_TRUST_PASSWORD:-}"; [ -z "$trustpw" ] && [ -f "$WLS_SECRET" ] && trustpw="$(read_prop "$WLS_SECRET" tls.trust.passphrase)"
+        elif [ -f "${KEYSTORE_DIR:-/opt/oracle/security}/blade-trust.p12" ]; then
+            trust="${KEYSTORE_DIR:-/opt/oracle/security}/blade-trust.p12"
             trustpw="${BLADE_TRUST_PASSWORD:-}"; [ -z "$trustpw" ] && [ -f "$WLS_SECRET" ] && trustpw="$(read_prop "$WLS_SECRET" tls.trust.passphrase)"
         else
             trust="$(read_prop "$OCCAS_CONF" trust.keystore)"; trust="${trust/#\~/$HOME}"
@@ -5226,13 +5233,23 @@ _deploy_one() {
             fi
             trustpw="${BLADE_STORE_PASSWORD:-}"; [ -z "$trustpw" ] && [ -f "$WLS_SECRET" ] && trustpw="$(read_prop "$WLS_SECRET" store.password)"
         fi
+        [ -n "$trust" ] || warn "no BLADE trust store found (looked in ${csd} and ${KEYSTORE_DIR:-/opt/oracle/security}) — a t3s deploy will fail the SSL handshake; re-run the TLS/cert step."
         ;;
     esac
     MW_HOME="$MWHOME" JAVA_HOME="${JAVA_HOME_VAL:-${JAVA_HOME:-}}" \
         WLS_ADMINURL="$url" WLS_USER="$auser" WLS_PASSWORD="$pw" \
         WLS_TRUSTSTORE="$trust" WLS_TRUSTSTORE_PASSWORD="$trustpw" \
         WLS_ACTION="$action" WLS_NAME="$name" WLS_SOURCE="$source" WLS_TARGETS="$targets" WLS_LIBRARY="$library" \
-        bash "${SCRIPT_DIR}/misc/deploy-wls.sh" || { warn "deploy ${action} ${name} failed"; return 1; }
+        bash "${SCRIPT_DIR}/misc/deploy-wls.sh"
+    local drc=$?
+    case "$drc" in
+        0) return 0 ;;
+        # 3 = could not connect (deploy-wls.sh). The admin is unreachable, so every
+        # other app would fail the same way -- signal the batch to stop, don't warn
+        # per app. The caller prints the one abort message.
+        3) return 3 ;;
+        *) warn "deploy ${action} ${name} failed"; return 1 ;;
+    esac
 }
 
 # Deploy/undeploy every service WAR in dist/services/, one at a time.
@@ -5254,7 +5271,12 @@ _deploy_services() {
     [ ${#wars[@]} -gt 0 ] || { warn "no service WARs in ${src}."; return 1; }
     for war in "${wars[@]}"; do
         app="$(basename "${war%.war}")"
-        _deploy_one "$action" "$app" "$war" "BEA_ENGINE_TIER_CLUST" || rc=1
+        _deploy_one "$action" "$app" "$war" "BEA_ENGINE_TIER_CLUST"
+        case $? in
+            0) ;;
+            3) warn "AdminServer unreachable — aborting; ${#wars[@]} service(s) not attempted."; return 3 ;;
+            *) rc=1 ;;
+        esac
     done
     return "$rc"
 }
@@ -5275,14 +5297,23 @@ do_deploy_tier() {
 # Deploy the whole build in dependency order (library first).
 do_deploy_all() {
     info "Deploying $(basename "$(_dist_dir)") — shared library first, then the EARs."
-    local t rc=0
-    for t in shared admin services test; do do_deploy_tier "$t" deploy || rc=1; done
+    local t rc=0 trc
+    for t in shared admin services test; do
+        do_deploy_tier "$t" deploy; trc=$?
+        # 3 = AdminServer unreachable: the rest of the batch is hopeless, so stop
+        # now instead of spinning a fresh WLST connect (~8s each) through every app.
+        [ "$trc" -eq 3 ] && { warn "aborting the deploy — the AdminServer is unreachable (is it RUNNING? is the t3s trust in place?)."; return 1; }
+        [ "$trc" -eq 0 ] || rc=1
+    done
     [ "$rc" -eq 0 ] && ok "deploy complete." || warn "deploy finished with errors."
     return 0
 }
 do_undeploy_all() {
     local t
-    for t in test services admin shared; do do_deploy_tier "$t" undeploy || true; done
+    for t in test services admin shared; do
+        do_deploy_tier "$t" undeploy
+        [ $? -eq 3 ] && { warn "aborting the undeploy — the AdminServer is unreachable."; return 1; }
+    done
     ok "undeploy complete."
     return 0
 }
