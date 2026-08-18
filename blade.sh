@@ -3753,11 +3753,19 @@ ensure_nm_cert() {
     # nothing from the TLS phase.
     nmpw="${BLADE_NM_KEYSTORE_PASSWORD:-}"
     [ -z "$nmpw" ] && [ -f "$WLS_SECRET" ] && nmpw="$(read_prop "$WLS_SECRET" nm.keystore.passphrase)"
+    local _nm_regen=0
     if [ -z "$nmpw" ]; then
         nmpw="$(gen_pass)"
         write_secret "$WLS_SECRET" nm.keystore.passphrase "$nmpw" \
             || { warn "could not persist nm.keystore.passphrase."; return 1; }
         ok "generated the Node Manager keystore passphrase (saved to the config)"
+        # A freshly minted passphrase can't open a keystore sealed under the old one,
+        # so any existing nm-identity.p12 is orphaned (its passphrase is now lost).
+        # Drop it and everything derived from it so they regenerate to match —
+        # otherwise the export below fails with "could not export nm-cert.pem".
+        # _nm_regen also tells the blade-trust step to swap out the stale blade-nm.
+        _nm_regen=1
+        rm -f "${outdir}/nm-identity.p12" "${outdir}/nm-cert.pem" "${outdir}/nm-trust.p12"
     fi
     jh="$(read_prop "$OCCAS_CONF" java.home)"
     local kt="${jh:+${jh}/bin/}keytool"
@@ -3790,6 +3798,11 @@ ensure_nm_cert() {
     local trpw="${BLADE_TRUST_PASSWORD:-}"
     [ -z "$trpw" ] && [ -f "$WLS_SECRET" ] && trpw="$(read_prop "$WLS_SECRET" tls.trust.passphrase)"
     if [ -f "${outdir}/blade-trust.p12" ] && [ -n "$trpw" ]; then
+        # If the NM cert was regenerated, the blade-nm already in blade-trust.p12
+        # (e.g. carried over by the cert import) is now stale — evict it so the new
+        # cert is re-imported below instead of being skipped as "already present".
+        [ "$_nm_regen" = 1 ] && "$kt" -delete -alias blade-nm \
+            -keystore "${outdir}/blade-trust.p12" -storepass "$trpw" >/dev/null 2>&1 || true
         if ! "$kt" -list -alias blade-nm -keystore "${outdir}/blade-trust.p12" \
                 -storepass "$trpw" >/dev/null 2>&1; then
             if "$kt" -importcert -noprompt -alias blade-nm -file "${outdir}/nm-cert.pem" \
