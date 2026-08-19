@@ -2436,14 +2436,25 @@ if mname:
     print('MACHINE_COMMITTED ' + mname)
 
 # --- phase 2: only now can the cluster reference it --------------------------
+# Idempotent: re-applying an UNCHANGED MachineNameMatchExpression still trips the
+# prepare phase (ArrayIndexOutOfBounds -1 in DynamicServersProcessor.setMachineName),
+# so a re-run against an already-sized cluster fails even though nothing needs to
+# change. Set only what differs, and release the edit without activating when the
+# cluster is already at the target -- reconciling the profile/host is then free.
 edit()
 startEdit()
 cd('/Clusters/BEA_ENGINE_TIER_CLUST')
 ds = cmo.getDynamicServers()
-ds.setMachineNameMatchExpression('${newmatch}')
-ds.setMaximumDynamicServerCount(int('${count}'))
-save()
-activate(block='true')
+_changed = 0
+if ds.getMachineNameMatchExpression() != '${newmatch}':
+    ds.setMachineNameMatchExpression('${newmatch}'); _changed = 1
+if ds.getMaximumDynamicServerCount() != int('${count}'):
+    ds.setMaximumDynamicServerCount(int('${count}')); _changed = 1
+if _changed:
+    save()
+    activate(block='true')
+else:
+    stopEdit('y')
 print('CLUSTER_RESIZED match=${newmatch} count=${count}')
 
 delname = '${delname}'
