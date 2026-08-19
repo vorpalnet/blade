@@ -23,8 +23,9 @@ Then replace the two example `<section class="slide">` blocks. The first slide c
 `class="slide on"`; every other is `class="slide"`. **The slide counter is computed at
 runtime**, so slides can be added or removed with nothing else to update.
 
-Decks live beside the application they describe — `services/webrtc/deck.html` — so a deck
-versions with its code and staleness is a comparison against the README next to it.
+Decks live beside the application they describe and are named for the app itself,
+`<project>.html` — e.g. `services/webrtc/webrtc.html` — so a deck versions with its code and
+staleness is a comparison against the README next to it.
 
 ## Writing the slides
 

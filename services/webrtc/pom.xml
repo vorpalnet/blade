@@ -13,7 +13,7 @@
 
 	<artifactId>vorpal-blade-services-webrtc</artifactId>
 	<packaging>war</packaging>
-	<name>BLADE WebRTC Gateway (proto) — browser endpoints on OCCAS</name>
+	<name>BLADE WebRTC Gateway — browser endpoints on OCCAS</name>
 	<description>Puts a browser on one end of a SIP call: JSON events over a WebSocket to the
 		browser, ordinary SIP to the network, with media anchored on a WebRTC-capable media server
 		that terminates ICE and DTLS-SRTP. The SIP-to-browser translation is a compiled BLADE

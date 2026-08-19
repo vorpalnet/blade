@@ -152,45 +152,39 @@
 
 <!-- 1 -->
 <section class="slide on title-slide" aria-label="Title">
-  <p class="eyebrow">BLADE · proto/webrtc</p>
+  <p class="eyebrow">BLADE · services/webrtc</p>
   <h1>Puts a browser on one end of a SIP call.</h1>
-  <p class="lede" style="max-width:63ch">JSON events over a WebSocket to the browser, ordinary SIP to the network. <strong>Two browsers call each other with no media server at all</strong>; a media server joins when the call reaches a phone, or when something downstream needs the audio.</p>
-  <figure style="margin-top:22px;max-width:660px">
-<pre style="font-size:clamp(9.5px,1.02vw,12px);line-height:1.5">browser ──wss://──&gt; [   <span class="b">webrtc</span>   ] ──SIP──&gt; network
-                     SignalEndpoint
-                     InboundToBrowser   <span class="c">← the SIP↔browser translation, compiled</span>
-                            │
-                            └── <span class="n">JSR-309 (MediaCallflow) — only when anchored</span>
-                                     └── <span class="n">WebRTC leg ⇄ RTP leg</span>
-                                         <span class="n">ICE + DTLS-SRTP terminated here</span></pre>
+  <p class="lede" style="max-width:63ch">On the browser side it speaks a simple JSON protocol over a WebSocket; on the network side it speaks standard SIP. <strong>When two browsers call each other, their audio flows directly between them and no media server is needed.</strong> A media server is brought in only when a call reaches a traditional phone, or when something downstream needs access to the audio.</p>
+  <figure style="margin-top:26px;max-width:640px">
+<pre style="font-size:clamp(11px,1.3vw,16px);line-height:1.7;text-align:center">browser  ⇄  [ <span class="b">WebRTC Gateway</span> ]  ⇄  phone network</pre>
   </figure>
 </section>
 
 <!-- 2 -->
 <section class="slide" aria-label="Why this exists">
   <div class="head">
-    <p class="eyebrow">Why this exists, and why it is shaped this way</p>
-    <h2>Oracle shipped this idea once, as WebRTC Session Controller, and stopped.</h2>
-    <p class="sub">Three things about that drove the design.</p>
+    <p class="eyebrow">Why this matters</p>
+    <h2>Oracle shipped WebRTC Session Controller once, then discontinued it.</h2>
+    <p class="sub">The BLADE gateway brings that capability back on OCCAS — without the three things that made the original hard to live with.</p>
   </div>
   <div class="body">
     <div class="two" style="grid-template-columns:repeat(3,1fr);gap:clamp(14px,2vw,30px);align-items:start">
       <div class="stack">
         <span class="tag"><span class="dot"></span>1 · the translation</span>
-        <p class="pull" style="font-size:clamp(13px,1.36vw,17px)">The customer wrote it.</p>
-        <p class="lede" style="font-size:clamp(11.5px,1.2vw,13.5px)">Every SIP verb in each direction needed a hand-written Groovy criterion, authored and compiled inside a WebLogic console. Turning an inbound <code>INVITE</code> into "a call is arriving" was fifteen lines of scripting each deployment maintained — and revised whenever browsers changed their SDP.</p>
-        <p class="lede" style="font-size:clamp(11.5px,1.2vw,13.5px);color:var(--ink)">Here that layer is <code>InboundToBrowser</code>: compiled, shipped, one copy.</p>
+        <p class="pull" style="font-size:clamp(13px,1.36vw,17px)">No custom scripting.</p>
+        <p class="lede" style="font-size:clamp(11.5px,1.2vw,13.5px)">With WSC, every deployment had to hand-write and maintain the code that translated between the browser and SIP.</p>
+        <p class="lede" style="font-size:clamp(11.5px,1.2vw,13.5px);color:var(--ink)">Here that translation is built into the gateway — written and tested once, the same for everyone.</p>
       </div>
       <div class="stack">
         <span class="tag"><span class="dot"></span>2 · the media plane</span>
-        <p class="pull" style="font-size:clamp(13px,1.36vw,17px)">It was a licensed appliance.</p>
-        <p class="lede" style="font-size:clamp(11.5px,1.2vw,13.5px)">Which media server terminates DTLS is decided on commercial terms rather than technical ones. So the media plane is reached through <b>JSR-309</b> and <b>named nowhere in this WAR</b>.</p>
-        <p class="lede" style="font-size:clamp(11.5px,1.2vw,13.5px);color:var(--ink)">A browser leg is requested with <code>MediaConfigs.WEBRTC</code>; whichever driver is installed honours it or throws.</p>
+        <p class="pull" style="font-size:clamp(13px,1.36vw,17px)">No locked-in media server.</p>
+        <p class="lede" style="font-size:clamp(11.5px,1.2vw,13.5px)">WSC handed the media plane to the ASC, an end-of-life product that took copious, poorly-documented configuration to get working at all.</p>
+        <p class="lede" style="font-size:clamp(11.5px,1.2vw,13.5px);color:var(--ink)">This gateway reaches the media server through a vendor-neutral interface — the choice stays open, and no vendor is named in the product.</p>
       </div>
       <div class="stack">
         <span class="tag"><span class="dot"></span>3 · the client</span>
-        <p class="pull" style="font-size:clamp(13px,1.36vw,17px)">It rotted.</p>
-        <p class="lede" style="font-size:clamp(11.5px,1.2vw,13.5px)">Its JavaScript still feature-detects <code>webkitGetUserMedia</code> and uses <code>URL.createObjectURL(stream)</code> — both long gone from browsers.</p>
+        <p class="pull" style="font-size:clamp(13px,1.36vw,17px)">A current browser client.</p>
+        <p class="lede" style="font-size:clamp(11.5px,1.2vw,13.5px)">The old client was written against browser features that no longer exist. The BLADE softphone is built to today's standards.</p>
       </div>
     </div>
   </div>
@@ -200,36 +194,33 @@
 <section class="slide" aria-label="Signaling is always SIP">
   <div class="head">
     <p class="eyebrow">The central rule</p>
-    <h2>Signaling is always SIP. Only the media varies.</h2>
-    <p class="sub">Every call is a SIP INVITE through the App Router — <b>browser-to-browser included</b>. There is no WebSocket-only shortcut: a call between two tabs on the same engine still traverses FSMAR and the location service, so it is routable, loggable and visible to analytics.</p>
+    <h2>Every call is a real SIP call.</h2>
+    <p class="sub">The signaling always runs over SIP, even when both parties are browsers. A browser-to-browser call gets the <b>same routing, logging, and analytics</b> as any call between two phones — an operator manages it with the tools they already have.</p>
   </div>
   <div class="body">
-    <p class="lede" style="max-width:none">What <code>MediaMode</code> decides (<code>webrtc.json</code>, default <code>AUTO</code>) is <b style="color:var(--ink)">only what SDP that INVITE carries</b>:</p>
+    <p class="lede" style="max-width:none">What varies from one call to the next is the path the audio takes. One setting, <code>mediaMode</code> in <code>webrtc.json</code>, controls it:</p>
     <div class="two" style="grid-template-columns:repeat(3,1fr);gap:clamp(12px,1.8vw,24px);align-items:start">
       <div class="stack">
-        <span class="tag s"><span class="dot"></span>RELAY · pass-through</span>
-        <p class="lede" style="font-size:clamp(11.5px,1.2vw,14px)">The browser's own offer rides the INVITE body untouched and the far answer comes back untouched, so two browsers key DTLS directly to each other and need <b style="color:var(--ink)">no media server at all</b>.</p>
-        <p class="lede" style="font-size:clamp(11.5px,1.2vw,14px);color:var(--ink)">Deploy this WAR on its own and browser-to-browser works.</p>
+        <span class="tag s"><span class="dot"></span>Relay</span>
+        <p class="lede" style="font-size:clamp(11.5px,1.2vw,14px)">The two browsers send audio straight to each other, with <b style="color:var(--ink)">no media server in the middle</b>. This is all a browser-to-browser call needs.</p>
       </div>
       <div class="stack">
-        <span class="tag m"><span class="dot"></span>ANCHOR</span>
-        <p class="lede" style="font-size:clamp(11.5px,1.2vw,14px)">A media server's SDP rides the INVITE. Required the moment one end is not a browser — a phone cannot speak ICE or DTLS-SRTP — or anything else needs the audio.</p>
-        <p class="lede" style="font-size:clamp(11.5px,1.2vw,14px)">Recording, conferencing, transcription, scoring, intercept: <b style="color:var(--ink)">none are features of this gateway.</b> Anchoring is simply what makes a call's media reachable by the service that does provide them.</p>
+        <span class="tag m"><span class="dot"></span>Anchor</span>
+        <p class="lede" style="font-size:clamp(11.5px,1.2vw,14px)">The audio passes through a media server. Required when one end is a regular phone — which cannot handle the browser's encrypted media — or when a system downstream needs the audio for <b style="color:var(--ink)">recording, conferencing, or transcription</b>.</p>
       </div>
       <div class="stack">
-        <span class="tag"><span class="dot"></span>AUTO · default</span>
-        <p class="lede" style="font-size:clamp(11.5px,1.2vw,14px)">Relay when the dialed target is a browser on this node; otherwise anchor when a media server is installed, and relay when none is.</p>
+        <span class="tag"><span class="dot"></span>Auto · default</span>
+        <p class="lede" style="font-size:clamp(11.5px,1.2vw,14px)">The gateway relays when both ends are browsers and anchors when a phone is on the call, deciding for each call on its own.</p>
       </div>
     </div>
-    <p class="lede" style="max-width:none;font-size:clamp(11.5px,1.2vw,14px)"><b style="color:var(--ink)">The caller side resolves that policy blind</b> — it cannot know what will answer. <b style="color:var(--ink)">The answering side needs no policy at all:</b> an arriving offer with a DTLS fingerprint (<code>a=fingerprint:</code>) is from a WebRTC endpoint and passes through; one without is from a phone or trunk and anchors.</p>
   </div>
 </section>
 
 <!-- 4 -->
 <section class="slide" aria-label="Relayed media cannot be reached">
   <div class="head">
-    <p class="eyebrow">The constraint that shapes everything above</p>
-    <h2>A relayed call's media cannot be reached, by anyone.</h2>
+    <p class="eyebrow">End-to-end encryption</p>
+    <h2>Relayed calls are private end to end.</h2>
   </div>
   <div class="body"><div class="two">
     <figure>
@@ -274,7 +265,7 @@
 <section class="slide" aria-label="re-INVITE">
   <div class="head">
     <p class="eyebrow">In-dialog</p>
-    <h2>A re-INVITE is handled, on both paths.</h2>
+    <h2>Re-INVITEs are handled on both media paths.</h2>
     <p class="sub">A far end re-offers for ordinary reasons — hold, unhold, a session refresh, a codec change — and every one is handled. The gateway watches for a re-offer from the moment a call is answered, and <b>keeps watching</b>, because a call is re-offered repeatedly.</p>
   </div>
   <div class="body">
@@ -288,9 +279,9 @@
         </ul>
       </div>
       <div class="stack">
-        <span class="tag s"><span class="dot"></span>Pass-through</span>
+        <span class="tag s"><span class="dot"></span>Relayed</span>
         <ul class="facts">
-          <li>The browser owns both halves, so the SDP goes to it as <code>call.update</code> and its answer becomes the <code>200 OK</code>. <b>This is the path a far-side escalation arrives on.</b></li>
+          <li>The browser owns both halves, so the SDP goes to it as <code>call.update</code> and its answer becomes the <code>200 OK</code>. <b>This is also how a far-side escalation — an upgrade to video — reaches the browser.</b></li>
           <li>A re-INVITE with <b>no</b> SDP is refused <code>488</code> here and only here: it asks this gateway to produce an offer, and without a media server there is nothing to produce one with — a browser cannot be made to offer on demand.</li>
         </ul>
       </div>
@@ -306,12 +297,12 @@
   </div>
   <div class="body"><div class="two">
     <div class="stack">
-      <span class="tag m"><span class="dot"></span>A CANCEL is observed, not answered</span>
+      <span class="tag m"><span class="dot"></span>A caller who hangs up while ringing</span>
       <p class="lede">A caller who gives up while the browser is still ringing arrives as a CANCEL. The gateway <b style="color:var(--ink)">stops the ring, frees the media, tells the browser and records the call as abandoned</b> — and sends nothing back.</p>
       <p class="lede">The container owns that transaction: it answers the CANCEL itself and kills the INVITE with a <code>487</code>. An application that answers as well puts <b style="color:var(--ink)">a second final response on the wire</b>, so the framework drops one if you try.</p>
     </div>
     <div class="stack">
-      <span class="tag s"><span class="dot"></span>DTMF rides the signaling plane</span>
+      <span class="tag s"><span class="dot"></span>DTMF travels over signaling, not audio</span>
       <p class="lede"><code>call.dtmf</code> becomes a SIP <code>INFO</code> carrying <code>application/dtmf-relay</code> toward the far end.</p>
       <figure style="width:100%">
 <pre><span class="k">Content-Type:</span> application/dtmf-relay
@@ -328,7 +319,7 @@
 <section class="slide" aria-label="Not SIP over WebSocket">
   <div class="head">
     <p class="eyebrow">Not SIP over WebSocket</p>
-    <h2>RFC 7118 exists and works. OCCAS 8.1 does not implement it.</h2>
+    <h2>RFC 7118 exists and works. OCCAS does not implement it.</h2>
   </div>
   <div class="body"><div class="two">
     <ul class="facts m">
@@ -438,7 +429,7 @@
       <ul class="facts">
         <li>A browser sends its whole offer or answer after gathering finishes, candidates included, and the gateway forwards SDP whole.</li>
         <li><b>Anchored:</b> because the media server does not advertise inbound trickle.</li>
-        <li><b>Pass-through:</b> because the SDP crosses a SIP fabric whose forks and B2BUA hops have no channel for mid-flight candidates.</li>
+        <li><b>Relayed:</b> because the SDP crosses a SIP fabric whose forks and B2BUA hops have no channel for mid-flight candidates.</li>
         <li>Half-trickle also removes an entire class of ordering bug from the client. The <code>ice.candidate</code> type remains — the gateway may still trickle <i>its</i> candidates browser-ward on anchored calls.</li>
       </ul>
     </div>
@@ -487,7 +478,7 @@
   <div class="body">
     <p class="lede" style="max-width:none">On a successful <code>session.connect</code> the gateway sends a real REGISTER (From = To = the AOR) whose contact is <b style="color:var(--ink)">routable</b> — this engine's own SIP interface carrying the container's targeting parameters:</p>
     <figure>
-<pre style="font-size:clamp(9px,.98vw,11.5px)"><span class="k">Contact:</span> &lt;sip:alice@<span class="b">172.16.32.129:5060</span>;transport=tcp;<span class="s">sipappsessionid</span>=&lt;prefix&gt;:&lt;callId&gt;:webrtc;<span class="s">wlsscid</span>=…&gt;</pre>
+<pre style="font-size:clamp(9px,.98vw,11.5px)"><span class="k">Contact:</span> &lt;sip:alice@<span class="b">…:5060</span>;transport=tcp;<span class="s">sipappsessionid</span>=&lt;prefix&gt;:&lt;callId&gt;:webrtc;<span class="s">wlsscid</span>=…&gt;</pre>
     </figure>
     <div class="two">
       <ul class="facts">
@@ -558,7 +549,7 @@
     </figure>
     <ul class="facts m">
       <li>This is <b>the one path where <code>call.established</code> and <code>call.connected</code> are genuinely far apart</b>, and the only one where the ACK can arrive owing an answer it does not carry — hence <code>negotiated: false</code>.</li>
-      <li><b>Late media always anchors, and cannot be made to work without a media server.</b> Having the browser offer instead was considered and rejected: late media is a pattern browsers never originate, so the caller is a phone or a trunk, and the answer coming back in the <code>ACK</code> is plain RTP with no <code>a=fingerprint</code> — which a browser will not complete media against.</li>
+      <li><b>Late media always anchors, and cannot be made to work without a media server.</b> Having the browser offer instead was considered and rejected: late media is a pattern browsers never originate, so the caller is a phone or a trunk, and the answer coming back in the <code>ACK</code> is plain RTP with no DTLS fingerprint — which a browser will not complete media against.</li>
       <li>On this call shape <b>the media server is the only party present that can speak to both ends.</b> Without a driver the gateway refuses with <code>503</code> and says so by name in the log.</li>
     </ul>
   </div></div>
@@ -612,34 +603,19 @@
 </section>
 
 <!-- 18 -->
-<section class="slide" aria-label="Status">
+<section class="slide" aria-label="The browser client is a separate app">
   <div class="head">
-    <p class="eyebrow">Status</p>
-    <h2>Not yet built: nothing.</h2>
+    <p class="eyebrow">The browser client is a separate app</p>
+    <h2>The gateway ships no client — so you can build your own.</h2>
   </div>
-  <div class="body"><div class="two l">
+  <div class="body"><div class="two">
     <ul class="facts">
-      <li><b>A re-INVITE is supported in both directions</b>, which is all this gateway needs to take part in a mid-call media change. What the call is re-INVITEd to, and what decides, <b>belongs to whatever application is driving — not here.</b></li>
-      <li><b>This WAR is Java only.</b> It serves no page and ships no script: the browser side — the client library and the softphone UI — is <code>admin/phone</code>, a separate static app on the admin tier that connects here at <code>/webrtc/signal</code>.</li>
-      <li><b>The split is the point.</b> A gateway that served its own client would keep a second copy of the protocol in step with this one, and would pin the UI to the engine tier. The UI is a static page; it can be hosted anywhere.</li>
+      <li><b>This WAR is Java only</b> — it serves no page and ships no script. The browser side, both the client library and the softphone UI, is <code>admin/phone</code>: a separate static app on the admin tier that connects here at <code>/webrtc/signal</code>.</li>
+      <li><b>Keeping them apart is deliberate.</b> A gateway that served its own client would carry a second copy of the protocol to keep in sync, and would tie the UI to the engine tier. As a static page, the softphone can be hosted anywhere.</li>
     </ul>
-    <div class="stack" style="width:100%">
-      <p class="lede" style="color:var(--ink);font-weight:640">Built and unit-tested</p>
-      <div class="scroll" style="width:100%">
-        <table><tbody>
-          <tr><td class="ev">SignalProtocol</td><td class="df">the event vocabulary</td></tr>
-          <tr><td class="ev">SignalEndpoint</td><td class="df">registration, event dispatch</td></tr>
-          <tr><td class="ev">BrowserRegistry</td><td class="df">node-local socket table</td></tr>
-          <tr><td class="ev">BrowserSignals</td><td class="df">event → callflow continuation</td></tr>
-          <tr><td class="ev">InboundToBrowser</td><td class="df">both SDP directions</td></tr>
-          <tr><td class="ev">OutboundFromBrowser</td><td class="df">browser calls the network (3PCC)</td></tr>
-          <tr><td class="ev">WebrtcCallflow</td><td class="df">DTMF and re-INVITE, both directions</td></tr>
-          <tr><td class="ev">MediaMode</td><td class="df">media policy, wired to webrtc.json</td></tr>
-          <tr><td class="ev">BrowserAuthenticator</td><td class="df">who may claim which address</td></tr>
-          <tr><td class="ev">BrowserRegistration</td><td class="df">REGISTER on the browser's behalf</td></tr>
-          <tr><td class="ev">CallEvents</td><td class="df">the six call facts, with leg</td></tr>
-        </tbody></table>
-      </div>
+    <div class="stack">
+      <p class="pull">The bundled phone app is <span class="hs">one worked example</span> of a WebRTC client — not the only way to build one.</p>
+      <p class="lede">The protocol is plain JSON over a WebSocket, so a customer can build their own client against it — in <b style="color:var(--ink)">JavaScript</b> for the browser, or natively for <b style="color:var(--ink)">iOS</b> or <b style="color:var(--ink)">Android</b>.</p>
     </div>
   </div></div>
 </section>
@@ -660,7 +636,7 @@
     </g>
   </g></svg>
     <span class="brand-lines">
-      <span><b>BLADE</b> · proto/webrtc</span>
+      <span><b>BLADE</b> · services/webrtc</span>
       <span class="copy">© 2026 Vorpal Networks, LLC</span>
     </span>
   </div>
