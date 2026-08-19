@@ -353,9 +353,11 @@ load_profile() {
     INV_LOC="$(d inventory.loc "$(dirname "${OCCAS_BASE:-/opt/oracle/occas}")/oraInventory")"
     INV_GRP="$(d inventory.group oinstall)"
     INSTALL_USER="$(d install.user oracle)"
-    # Optional numeric IDs — empty means "let the OS pick". See phase_occas.
-    INSTALL_UID="$(d install.uid "")"
-    INSTALL_GID="$(d install.gid "")"
+    # Numeric IDs default to Oracle's long-standing convention (oracle=54321,
+    # oinstall=54321) — the ids Oracle's preinstall RPMs and container images use.
+    # Override via install.uid/gid. See phase_occas.
+    INSTALL_UID="$(d install.uid 54321)"
+    INSTALL_GID="$(d install.gid 54321)"
     INSTALL_TYPE="$(d install.type 'Complete with Examples')"
     JAVA_HOME_VAL="$(d java.home "${JAVA_HOME:-}")"
     JAVA_BUILD_VAL="$(d java.build.home "")"   # the 23+ JDK for ./build.sh
@@ -533,23 +535,22 @@ EOF
     # 2. The OS user + group that will own OCCAS (the 'u' step creates them).
     ask INSTALL_USER "Install OS user (owns the OCCAS install)" "$INSTALL_USER"
     ask INV_GRP      "Install OS group"                         "$INV_GRP"
-    if [ "${#H_NAME[@]}" -gt 1 ] || [ -n "$INSTALL_UID" ] || [ -n "$INSTALL_GID" ]; then
+    if [ "${#H_NAME[@]}" -gt 1 ]; then
         help <<'EOF'
-On a multi-host cluster you can pin the numeric IDs so every box agrees.
+The numeric IDs default to Oracle's convention: oracle=54321, oinstall=54321
+(the ids Oracle's preinstall RPMs and container images use). Enter to accept
+them, or override if those numbers are already taken on any host.
 
 Engine provisioning rsyncs as an ordinary ssh user, which cannot chown, so the
 copied files simply end up owned by that user on the far side — names match and
-the numbers do not have to. Pinning matters in two cases:
+the numbers do not have to. Agreeing on the numbers still matters in two cases:
 
   - MW_HOME on shared storage (NFS): the server checks NUMBERS, not names, so
-    'oracle' as 1001 here and 1002 there is a genuine permission failure.
+    'oracle' as 54321 here and 1002 there is a genuine permission failure.
   - anything that copies as root, which does preserve numeric uid/gid.
-
-Enter to leave blank and let the OS choose. That is the right answer for a
-single host, and for the ordinary non-shared multi-host case too.
 EOF
-        ask INSTALL_UID "Numeric uid for ${INSTALL_USER} (blank = OS picks)" "$INSTALL_UID"
-        ask INSTALL_GID "Numeric gid for ${INV_GRP} (blank = OS picks)"      "$INSTALL_GID"
+        ask INSTALL_UID "Numeric uid for ${INSTALL_USER} (Oracle standard 54321)" "$INSTALL_UID"
+        ask INSTALL_GID "Numeric gid for ${INV_GRP} (Oracle standard 54321)"      "$INSTALL_GID"
     fi
 
     # 3. Where OCCAS is / will be installed.
@@ -1610,7 +1611,7 @@ owner_of_path() {
     local path="$1" host="${2:-}" out=""
     if [ -n "$host" ]; then
         out="$(ssh -o BatchMode=yes -o ConnectTimeout=8 "$host" \
-                   "stat -c '%U:%G' '${path}' 2>/dev/null" 2>/dev/null)"
+                   "stat -L -c '%U:%G' '${path}' 2>/dev/null" 2>/dev/null)"
     else
         out="$(xfer_owner_of "$path")"
     fi
@@ -3279,9 +3280,10 @@ link_jdk() {
 # ----------------------------------------------------------------------------
 do_makeuser() {
     local user="${INSTALL_USER:-oracle}" grp="${INV_GRP:-oinstall}"
-    local uid="${INSTALL_UID:-}" gid="${INSTALL_GID:-}"
+    local uid="${INSTALL_UID:-54321}" gid="${INSTALL_GID:-54321}"
     # install.uid/gid pin the NUMERIC ids so every host in the cluster agrees --
-    # rsync -a carries numbers, not names (see phase_occas). Blank = OS picks.
+    # rsync -a carries numbers, not names (see phase_occas). Default 54321 is
+    # Oracle's standard oracle/oinstall id; blank in the conf falls back to it.
     local gflag="" uflag=""
     [ -n "$gid" ] && gflag="-g ${gid}"
     [ -n "$uid" ] && uflag="-u ${uid}"

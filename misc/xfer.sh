@@ -12,8 +12,12 @@
 
 # Owner of a path as "user:group"; empty when the path doesn't exist.
 # (GNU stat first, then BSD/macOS — the scripts dry-run on a Mac.)
+# -L follows symlinks: ORACLE_HOME is the '<base>/current' link, and the link
+# itself is root-owned while the install tree it points at is the install user's.
+# Without -L this reports root:root and provisioning replicates root, never the
+# install user (no oracle account, root-owned OCCAS on the engine hosts).
 xfer_owner_of() {
-    stat -c '%U:%G' "$1" 2>/dev/null || stat -f '%Su:%Sg' "$1" 2>/dev/null || true
+    stat -L -c '%U:%G' "$1" 2>/dev/null || stat -L -f '%Su:%Sg' "$1" 2>/dev/null || true
 }
 
 # Run a command as <user>: plain when we already are them, else sudo. -H so
