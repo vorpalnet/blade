@@ -2368,7 +2368,7 @@ do_remove_machine() {
     # Domain first: stop targeting the machine before tearing the host down.
     local newmatch="" i
     for i in $(seq 0 $((n - 1))); do newmatch="${newmatch:+${newmatch},}${H_NAME[$i]}"; done
-    cluster_resize "" "" "$newmatch" "$n" || warn "domain not updated — continuing with host teardown."
+    cluster_resize "" "" "$newmatch" "$n" "$name" || warn "domain not updated — continuing with host teardown."
 
     # Host: reuse the guarded teardown, which stops running servers first.
     local keep_name=("${H_NAME[@]}") keep_addr=("${H_ADDR[@]}") keep_role=("${H_ROLE[@]}")
@@ -2397,10 +2397,11 @@ do_remove_machine() {
 # Also: any STALE server JVM from a previous config will hang the second
 # activation in STATE_DISTRIBUTING until it times out. Stop dead servers first.
 cluster_resize() {
-    local mname="$1" maddr="$2" newmatch="$3" count="$4"
+    local mname="$1" maddr="$2" newmatch="$3" count="$4" delname="${5:-}"
     if [ "$DRY" = "on" ]; then
-        log "${C_DIM}  [dry-run] online WLST, phase 1: ${mname:+create Machine ${mname} (${maddr}) + activate}${C_RESET}"
+        log "${C_DIM}  [dry-run] online WLST, phase 1: ${mname:+create/reuse Machine ${mname} (${maddr}) + activate}${C_RESET}"
         log "${C_DIM}  [dry-run] online WLST, phase 2: match=${newmatch}; count=${count} + activate${C_RESET}"
+        [ -n "$delname" ] && log "${C_DIM}  [dry-run] online WLST, phase 3: drop Machine ${delname} + activate${C_RESET}"
         return 0
     fi
     local pw; pw="$(get_admin_pw)" || return 1
@@ -2418,11 +2419,14 @@ mname = '${mname}'
 # --- phase 1: the Machine, committed on its own -----------------------------
 if mname:
     startEdit()
-    try:
-        cd('/')
+    cd('/')
+    # Reuse an existing Machine rather than re-create it. A prior 'remove' that
+    # left the Machine behind (or any stale one) makes createUnixMachine throw
+    # BeanAlreadyExists; catching that Python error does NOT untaint the JMX edit
+    # session, so the following activate() dies with [Management:141191]. Checking
+    # first keeps the edit clean and just refreshes the NodeManager address below.
+    if mname not in [m.getName() for m in cmo.getMachines()]:
         cmo.createUnixMachine(mname)
-    except:
-        pass                      # already there is fine
     cd('/Machines/' + mname + '/NodeManager/' + mname)
     cmo.setListenAddress('${maddr}')
     cmo.setListenPort(int('${NM_PORT:-5556}'))
@@ -2441,12 +2445,26 @@ ds.setMaximumDynamicServerCount(int('${count}'))
 save()
 activate(block='true')
 print('CLUSTER_RESIZED match=${newmatch} count=${count}')
+
+delname = '${delname}'
+# --- phase 3: drop a removed Machine, only AFTER the cluster stopped ---------
+# referencing it (phase 2 shrank the match expression). Leaving it behind is
+# what makes the next 'Add a machine' collide on BeanAlreadyExists.
+if delname:
+    edit()
+    startEdit()
+    cd('/')
+    if delname in [m.getName() for m in cmo.getMachines()]:
+        delete(delname, 'Machine')
+    save()
+    activate(block='true')
+    print('MACHINE_DROPPED ' + delname)
 PYEOF
     chmod 600 "${work}/resize.py"
     local out
     out="$("${MWHOME}/oracle_common/common/bin/wlst.sh" "${work}/resize.py" 2>&1)"
     rm -rf "$work"
-    printf '%s\n' "$out" | grep -E "MACHINE_COMMITTED|CLUSTER_RESIZED" | sed 's/^/  /'
+    printf '%s\n' "$out" | grep -E "MACHINE_COMMITTED|CLUSTER_RESIZED|MACHINE_DROPPED" | sed 's/^/  /'
     # Report the real result -- returning 0 unconditionally is how a failed
     # resize once got masked and provisioning charged ahead regardless.
     if printf '%s' "$out" | grep -q "CLUSTER_RESIZED"; then
