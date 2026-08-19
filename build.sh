@@ -365,6 +365,11 @@ copy_all_to_dist() {
     # its folder.
     local eardir earf
     for eardir in "${SCRIPT_DIR}"/apps/*/; do
+        # Only the shippable tiers (admin/services/test) have a whole-tier EAR;
+        # proto has none. A stale apps/proto/target/blade-proto.ear from an old
+        # 'full' build would otherwise be swept into every later dist, because
+        # 'clean' only touches the active profile's reactor, not proto's target/.
+        case "$eardir" in */proto/) continue ;; esac
         [ -d "${eardir}target" ] || continue
         for earf in "${eardir}target"/*.ear; do
             [ -f "$earf" ] || continue
