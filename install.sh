@@ -2425,14 +2425,24 @@ if mname:
     # BeanAlreadyExists; catching that Python error does NOT untaint the JMX edit
     # session, so the following activate() dies with [Management:141191]. Checking
     # first keeps the edit clean and just refreshes the NodeManager address below.
-    if mname not in [m.getName() for m in cmo.getMachines()]:
+    created = mname not in [m.getName() for m in cmo.getMachines()]
+    if created:
         cmo.createUnixMachine(mname)
     cd('/Machines/' + mname + '/NodeManager/' + mname)
-    cmo.setListenAddress('${maddr}')
-    cmo.setListenPort(int('${NM_PORT:-5556}'))
-    cmo.setNMType('${NM_TYPE:-ssl}')
-    save()
-    activate(block='true')
+    _ch = created
+    if cmo.getListenAddress() != '${maddr}':
+        cmo.setListenAddress('${maddr}'); _ch = 1
+    if cmo.getListenPort() != int('${NM_PORT:-5556}'):
+        cmo.setListenPort(int('${NM_PORT:-5556}')); _ch = 1
+    if cmo.getNMType() != '${NM_TYPE:-ssl}':
+        cmo.setNMType('${NM_TYPE:-ssl}'); _ch = 1
+    # Same idempotency as phase 2: an unchanged Machine must not activate, or the
+    # push to a running engine can trip the dynamic-server -1 for no reason.
+    if _ch:
+        save()
+        activate(block='true')
+    else:
+        stopEdit('y')
     print('MACHINE_COMMITTED ' + mname)
 
 # --- phase 2: only now can the cluster reference it --------------------------
