@@ -256,6 +256,82 @@ set_paths() {
         fi
     fi
 }
+# Every ~/.blade profile name — new layout first (~/.blade/<name>/profile.conf),
+# then legacy flat (~/.blade/<name>.conf) and the ancient .conf/<name>/. Deduped.
+list_profile_names() {
+    local seen=" " p d c
+    if [ -d "$BLADE_HOME" ]; then
+        for d in "$BLADE_HOME"/*/; do
+            [ -f "${d}profile.conf" ] || continue
+            p="$(basename "$d")"; case "$seen" in *" $p "*) ;; *) echo "$p"; seen="${seen}${p} " ;; esac
+        done
+        for c in "$BLADE_HOME"/*.conf; do
+            [ -f "$c" ] || continue
+            p="$(basename "${c%.conf}")"; case "$seen" in *" $p "*) ;; *) echo "$p"; seen="${seen}${p} " ;; esac
+        done
+    fi
+    if [ -d "$CONF_BASE" ]; then
+        for d in "$CONF_BASE"/*/; do
+            [ -f "${d}occas.conf" ] || continue
+            p="$(basename "$d")"; case "$seen" in *" $p "*) ;; *) echo "$p"; seen="${seen}${p} " ;; esac
+        done
+    fi
+}
+
+# True if <name> already has a profile (either layout).
+_profile_exists() { [ -f "${BLADE_HOME}/$1/profile.conf" ] || [ -f "${BLADE_HOME}/$1.conf" ]; }
+
+# Save the loaded profile under a NEW environment name (clone), then switch to it
+# so its values are offered for editing. Config is copied; SECRETS (ENC(...)) and
+# CERTS are NOT — the new environment sets its own password and regenerates certs
+# (different SANs anyway). Edit its domain, machine addresses and admin URL after.
+do_clone_profile() {
+    [ -n "$NAME" ] && [ -f "$OCCAS_CONF" ] || { warn "no profile loaded to clone."; return 1; }
+    local newname=""
+    ask newname "  Save as a new environment named" ""
+    [ -n "$newname" ] || { warn "cancelled."; return 0; }
+    case "$newname" in
+        "$NAME")          warn "that is the current name."; return 1 ;;
+        *[!A-Za-z0-9_-]*) warn "use letters, digits, - or _ only."; return 1 ;;
+    esac
+    _profile_exists "$newname" && { warn "'${newname}' already exists."; return 1; }
+    local newdir="${BLADE_HOME}/${newname}" newconf="${BLADE_HOME}/${newname}/profile.conf"
+    mkdir -p "$newdir" || { warn "could not create ~/.blade/${newname}."; return 1; }
+    ( umask 077; grep -vE '^[a-zA-Z0-9._]+=ENC\(' "$OCCAS_CONF" > "$newconf" )
+    chmod 600 "$newconf" 2>/dev/null || true
+    ok "cloned '${NAME}' → '${newname}' (secrets & certs NOT copied)."
+    log "  Edit its domain name, machine addresses and admin URL for the new environment,"
+    log "  then generate its certificate (STEP 4) and set its admin password."
+    NAME="$newname"; set_paths; load_profile
+}
+
+# Rename this environment's ~/.blade profile directory — a typo fix. Does NOT
+# touch the running server or its domain; only the ~/.blade/<name>/ folder moves.
+do_rename_profile() {
+    [ -n "$NAME" ] || { warn "no profile loaded."; return 1; }
+    local newname=""
+    ask newname "  Rename '${NAME}' to" "$NAME"
+    { [ -n "$newname" ] && [ "$newname" != "$NAME" ]; } || { warn "cancelled."; return 0; }
+    case "$newname" in *[!A-Za-z0-9_-]*) warn "use letters, digits, - or _ only."; return 1 ;; esac
+    _profile_exists "$newname" && { warn "'${newname}' already exists."; return 1; }
+    blade_migrate_profile "$NAME"                       # ensure new layout before moving
+    mv "${BLADE_HOME}/${NAME}" "${BLADE_HOME}/${newname}" || { warn "rename failed."; return 1; }
+    [ -f "${BLADE_HOME}/${newname}/${NAME}.log" ]  && mv "${BLADE_HOME}/${newname}/${NAME}.log"  "${BLADE_HOME}/${newname}/${newname}.log"  2>/dev/null || true
+    [ -f "${BLADE_HOME}/${newname}/${NAME}.urls" ] && mv "${BLADE_HOME}/${newname}/${NAME}.urls" "${BLADE_HOME}/${newname}/${newname}.urls" 2>/dev/null || true
+    ok "renamed '${NAME}' → '${newname}'."
+    NAME="$newname"; set_paths; load_profile
+}
+
+# Delete this environment's ~/.blade profile (config + certs). Does NOT touch the
+# running server — use the UNINSTALL rows for that. Confirms first.
+do_delete_profile() {
+    [ -n "$NAME" ] || { warn "no profile loaded."; return 1; }
+    yesno "Delete the ~/.blade profile for '${NAME}' (config + certs)? The running server is NOT touched." "N" || return 0
+    rm -rf "${BLADE_HOME:?}/${NAME}" "${BLADE_HOME:?}/${NAME}.conf"
+    ok "deleted ~/.blade profile '${NAME}'."
+    PROFILE_GONE=1   # the dashboard loop drops out (the profile is gone)
+}
+
 # exget <key>  — value from an existing conf (for edit defaults), else "".
 exget() {
     local v=""
@@ -1170,6 +1246,10 @@ build_menu_rows() {
     _row action md "Remove install dirs (MW_HOME + inventory)"     "${MWHOME:-?}" "$a_m"
     _row action ug "Remove install user & group"                   "${INSTALL_USER:-oracle}:${INV_GRP:-oinstall}" "$a_u"
     _row action repo "Delete local BLADE repo clone (NOT GitHub)"  "${SCRIPT_DIR}" "$a_repo"
+    _row head ""        "PROFILE · this environment's ~/.blade profile"            "" "-"
+    _row action clonep  "Save as a NEW environment (clone; drops secrets & certs)" "${NAME:+from ${NAME}}" "-"
+    _row action renamep "Rename this environment"                                  "${NAME:-—}" "-"
+    _row action delp    "Delete this profile (config + certs; NOT the server)"     "${NAME:-—}" "-"
     unset -f _row
 }
 
@@ -1213,6 +1293,9 @@ dispatch_row() {
         md)   do_remove_dirs   || true ;;
         ug)   do_remove_usergrp || true ;;
         repo) do_remove_repo   || true ;;
+        clonep)  do_clone_profile  || true ;;
+        renamep) do_rename_profile || true ;;
+        delp)    do_delete_profile || true ;;
         g)   do_cert_generate || true ;;
         sup) do_cert_supply   || true ;;
         *) warn "unknown row: $1" ;;
@@ -5471,19 +5554,9 @@ do_open_firewall() {
 if [ "${BASH_SOURCE[0]}" != "${0}" ]; then return 0 2>/dev/null || true; fi
 
 if [ -z "$NAME" ]; then
-    # No name given: list profiles, let the user pick or create.
+    # No name given: list every profile (new + legacy layout), pick or create.
     profiles=()
-    if [ -d "$BLADE_HOME" ]; then
-        for cpath in "$BLADE_HOME"/*.conf; do
-            [ -f "$cpath" ] && profiles+=("$(basename "${cpath%.conf}")")
-        done
-    fi
-    # Legacy .conf/<name>/ profiles still show (they migrate on first load).
-    if [ -d "$CONF_BASE" ]; then
-        for dpath in "$CONF_BASE"/*/; do
-            [ -f "${dpath}occas.conf" ] && case " ${profiles[*]:-} " in *" $(basename "$dpath") "*) : ;; *) profiles+=("$(basename "$dpath")") ;; esac
-        done
-    fi
+    while IFS= read -r _p; do [ -n "$_p" ] && profiles+=("$_p"); done < <(list_profile_names)
     if [ "${#profiles[@]}" -eq 0 ]; then
         info "No profiles yet — name one and fill in the phases."
         NAME=""
