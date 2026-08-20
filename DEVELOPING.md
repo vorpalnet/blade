@@ -5,7 +5,7 @@ How to write a BLADE application.
 This guide is for two readers: the developer who knows Java but not SIP, and the
 network engineer who knows SIP but not Java. Each chapter introduces one part of
 the framework and links to a README that goes deeper. Building and deploying are
-covered separately in [DEPLOYMENT.md](DEPLOYMENT.md).
+covered separately in [BUILDING.md](BUILDING.md) and [DEPLOYING.md](DEPLOYING.md).
 
 ## Contents
 
@@ -395,4 +395,4 @@ configuration — names the event types and decides where each is delivered.
 ---
 
 *Packaging, building, and deploying a finished service — WAR layout, naming
-rules, build profiles — are covered in [DEPLOYMENT.md](DEPLOYMENT.md).*
+rules, dev/prod modes — are covered in [BUILDING.md](BUILDING.md) and [DEPLOYING.md](DEPLOYING.md).*

@@ -22,7 +22,11 @@ running. This guide covers the first — standing up the server.
 
 `install.sh` is a re-runnable dashboard driven by a named **profile**. One profile
 describes one deployment — where OCCAS lives, the domain name, the machines, the
-certificate — and every tool reads the same profile from `~/.blade/<name>.conf`.
+certificate — and install.sh, build.sh and deploy.sh all read the same profile at
+`~/.blade/<name>/profile.conf`, its keystores beside it in `certs/`. The dashboard's
+PROFILE rows load, clone, rename or delete an environment — clone prod to stand up
+staging from the same settings, then edit what differs (its secrets and certs are
+not carried; the new environment sets its own).
 Re-runnable matters: every step is idempotent, so the dashboard is equally the way
 you build a cluster the first time and the way you repair or grow one later.
 
@@ -92,7 +96,7 @@ OCCAS installs under a **versioned home** reached through a `current` symlink, a
 /opt/oracle/occas/8.3          the real product home
 /opt/oracle/occas/current  ->  the active version (oracle.home points HERE)
 /opt/oracle/domains/<name>     domains    — OUTSIDE the home
-/opt/oracle/security/*.p12     keystores  — OUTSIDE the home   (or ~/.blade/<name>/)
+/opt/oracle/security/*.p12     keystores  — OUTSIDE the home   (or ~/.blade/<name>/certs/)
 /opt/oracle/java/current       runtime JDK link
 /opt/oracle/java/build         build JDK link
 ```
@@ -200,7 +204,7 @@ demo certificate on a live TLS port.
    This step also grows/shrinks the cluster, re-provisions engine hosts, verifies
    the cluster, deploys the WebLogic Remote Console, and opens firewall ports.
 
-**STEP 6 — Deploy settings.** The build profile, SSH user, and the admin URL that
+**STEP 6 — Deploy settings.** The build mode (dev or prod), SSH user, and the admin URL that
 `deploy.sh` will use. `install.sh` computes the admin URL from the live domain
 (preferring `t3s` when SSL is on) and writes it, plus the WebLogic target names,
 into the profile.
@@ -270,7 +274,7 @@ The pieces that make the boot path both self-contained and secure:
 BLADE runs TLS everywhere and never uses the WebLogic demo certificate on a live
 port. At STEP 4 you either supply a certificate or generate a self-signed internal
 CA; the identity and trust keystores are PKCS12, kept outside the versioned home
-(default `~/.blade/<name>/`). The identity SAN covers every host, FQDN, and IP in
+(default `~/.blade/<name>/certs/`). The identity SAN covers every host, FQDN, and IP in
 the profile, so one certificate satisfies hostname verification across the tier.
 
 Changing the certificate is a first-class action, not a reinstall: run "Supply your

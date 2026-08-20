@@ -87,8 +87,8 @@ Each WAR is self-contained exactly as it deploys standalone: framework JAR insid
 ## Quick start
 
 ```bash
-./build.sh default              # produces dist/<ver>-<build>/
-./deploy.sh production           # no profile yet? deploy.sh builds ~/.blade/production.conf interactively
+./build.sh                     # dev build -> flat dist/  (--prod -> dist/<rev>-<build>/)
+./deploy.sh production           # no profile yet? deploy.sh builds ~/.blade/production/profile.conf interactively
 ./deploy.sh production --all     # deploy the whole build, in dependency order
 ```
 
@@ -119,7 +119,7 @@ the App Router from the admin.
 ./deploy.sh <env> [<file> [target]] [action] [--all] [--library|--approuter] [--name NAME] [--build VER] [--dry-run]
 ```
 
-`<env>` is a conf name (→ `~/.blade/<env>.conf`, or `build-profiles/deploy/<env>.conf`)
+`<env>` is a conf name (→ `~/.blade/<env>/profile.conf`, or `build-profiles/deploy/<env>.conf`)
 or a path; with no profile there yet, `deploy.sh` builds one interactively, and
 `./deploy.sh <env>` with no file just builds or updates it. `<file>` is the exact
 artifact — a path, or a bare filename found in the newest `dist/<ver>/` tree
@@ -155,7 +155,7 @@ unchanged by the WAR name — `blade-configurator.war` still deploys at
 
 ### Deploy profiles
 
-One file per environment, `~/.blade/<env>.conf`, shared with `install.sh` — it holds
+One file per environment, `~/.blade/<env>/profile.conf`, shared with `install.sh` and `build.sh` — it holds
 the connection and the (encrypted) secrets. `deploy.sh` builds it interactively when
 it doesn't exist yet.
 
@@ -180,7 +180,7 @@ repo) is fine. Password priority (highest wins): `BLADE_WLS_PASSWORD` env var �
 
 This is the one tier that isn't a WebLogic deployment, so it's worth spelling out.
 
-1. Build: `./build.sh default` produces the fat JAR in `dist/<ver>-<build>/`:
+1. Build: `./build.sh` produces the fat JAR in `dist/` (dev) or `dist/<rev>-<build>/` (prod):
    - `blade-fsmar.jar` — FSMAR (the App Router)
 2. Put the JAR in the OCCAS domain's `approuter/` directory on every engine-tier host:
    ```

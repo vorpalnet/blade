@@ -193,7 +193,7 @@ Both scripts read `$MW_HOME/inventory/registry.xml` to derive the OCCAS and WebL
 To switch OCCAS versions, point `$MW_HOME` at a different install — no edits to build configs
 required. You can keep multiple installs side-by-side (e.g. `/Users/jeff/Oracle/occas-8.1`,
 `.../occas-8.3`). For a one-off build against a different version, pass the platform on the
-command line instead of re-exporting: `./build.sh default occas-8.1 …` overrides `$MW_HOME` for that run.
+command line instead of re-exporting: `./build.sh occas-8.1 …` overrides `$MW_HOME` for that run.
 
 > **Whichever way you switch, add `clean`.** Bytecode target is invisible to Maven's up-to-date
 > check, so an incremental build after a switch silently ships classes compiled for the old
@@ -219,18 +219,14 @@ This only needs to be run once per OCCAS version. The artifacts are installed in
 
 ## Build
 
-A build **requires a profile** — BLADE is a development framework, so you name
-what to build rather than always building everything:
+A build is the **whole shippable set** — no module to pick, just a mode:
 
 ```bash
-./build.sh default        # the base set: every admin app + service, no proto/ incubator
+./build.sh                # dev build → flat dist/  (--prod → dist/<rev>-<build>/)
 ```
 
-Run `./build.sh` with no profile on a terminal and it lists the profiles and
-offers to build a new one; without a terminal (CI, another build script) it
-exits non-zero naming the choices. `./build.sh --list` shows them; `./build.sh
---init` builds a custom profile interactively (saved under `.conf/`, gitignored).
-See **[Build Profiles](#build-profiles)** below. (Clean-only runs need no
+To iterate on one module, run Maven directly (`./mvnw -pl services/hold package`).
+See **[Building](#building)** below. (Clean-only runs need no
 profile: `./build.sh clean`.)
 
 ### Building Individual Modules
@@ -294,8 +290,8 @@ directory is the authoritative per-artifact tier/target listing for the build yo
 
 Admin-tier WARs are named `blade-<app>.war` so their WebLogic app names never collide with the like-named services-tier WARs (e.g. admin `blade-crud.war` vs. a service `crud.war`); `blade-configurator.war` still deploys at `/blade/configurator` because the WAR filename and the `<wls:context-root>` are independent. **A SIP servlet application is always named for its context root** — `<finalName>` equals `<wls:context-root>`, with no prefix (`hold.war` → `/hold`, `gateway.war` → `/gateway`). That name is what the container reports to the App Router, so it is the name FSMAR configs target; a prefixed WAR would deploy under a name no FSMAR `next` could resolve. The `blade-` prefix belongs to admin-tier WARs only, and there it doesn't always equal the context — `blade-crud.war` → `/blade/crud-editor`, `blade-analytics.war` → `/blade/analytics`, `blade-test.war` → `/blade/test-console` — those three are deliberately shortened.
 
-- The dist contents are driven by the active build profile (`build-profiles/*.conf`). Stale artifacts from previous builds in unrelated `target/` directories do **not** leak in — only modules listed in the active conf are copied.
-- **Dist layout — whole-tier EARs at the root, loose WARs in folders.** The three shippable tiers each produce a whole-tier EAR at the `dist/<ver>-<build>/` root (`blade-admin.ear`, `blade-services.ear`, `blade-test.ear`); the same apps ship loose in per-tier folders (`lib/ admin/ services/ test/ proto/`). Deploy an EAR for the whole tier in one step, or a loose WAR for per-service control — Remote Console can't see inside an EAR, so the loose WARs remain the way to get per-service state, start/stop and targeting. The EARs build automatically from whichever WARs the profile selected; they aren't `--init`-selectable modules. **`proto/` has no EAR** — it's a grab-bag of admin- and service-shaped apps, so its WARs deploy ad-hoc.
+- The dist holds every built module — `build.sh` copies each module's declared `<finalName>` artifact, so a stale WAR from an earlier build under a different name does **not** leak in.
+- **Dist layout — whole-tier EARs and loose WARs both ship.** `dev` writes flat into `dist/`; `prod` nests each release in `dist/<rev>-<build>/`. Either way: the three tier EARs (`blade-admin.ear`, `blade-services.ear`, `blade-test.ear`) at the root, plus the same apps loose in per-tier folders (`lib/ admin/ services/ test/ proto/`). Deploy an EAR for the whole tier in one step, or a loose WAR for per-service **lifecycle** — start/stop/target/redeploy one service. (The Remote Console GUI collapses an EAR to a single row; WLST reads per-module status either way.) **`proto/` has no EAR** — a grab-bag of admin- and service-shaped apps, deployed ad-hoc.
 - **FSMAR JAR** must be installed manually into the OCCAS approuter folder (`./deploy.sh <env> blade-fsmar.jar --approuter`).
 - **Admin WARs** are skinny like service WARs — `WEB-INF/lib` carries only the framework jar; 3rd-party JARs come from the `blade-shared` shared library. They deploy to AdminServer (as `blade-admin.ear`, or individually).
 - On a failed build, the current build's `dist/` directory is deleted to prevent incomplete artifacts.
@@ -305,18 +301,18 @@ Admin-tier WARs are named `blade-<app>.war` so their WebLogic app names never co
 The dist copy can get noisy during fast inner-loop development. Two ways to skip it:
 
 ```bash
-./build.sh default --no-dist     # one-off
+./build.sh --no-dist             # one-off
 export BLADE_SKIP_DIST=1         # sticky for the current shell
 ```
 
-`--no-dist` on the CLI always wins, so you can opt back in for a single build even with the env var set: just don't pass `--no-dist`. (To force the env var off temporarily, run `BLADE_SKIP_DIST=0 ./build.sh default ...`.)
+`--no-dist` on the CLI always wins, so you can opt back in for a single build even with the env var set: just don't pass `--no-dist`. (To force the env var off temporarily, run `BLADE_SKIP_DIST=0 ./build.sh ...`.)
 
 ### Deployment
 
-`./deploy.sh` is the single deploy authority. It deploys the whole build in dependency order with `--all` (shared library → admin EAR → services → test), or **one named artifact to one target** when you name the file. It builds the `~/.blade/<env>.conf` profile interactively when it doesn't exist, and runs the deploy through the OCCAS install's own `wlst.sh` (so it works on the AdminServer host, which has no Maven) or the WebLogic Maven plugin. See **[DEPLOYING.md](DEPLOYING.md)** for the full guide. The short version:
+`./deploy.sh` is the single deploy authority. It deploys the whole build in dependency order with `--all` (shared library → admin EAR → services → test), or **one named artifact to one target** when you name the file. It builds the `~/.blade/<env>/profile.conf` profile interactively when it doesn't exist, and runs the deploy through the OCCAS install's own `wlst.sh` (so it works on the AdminServer host, which has no Maven) or the WebLogic Maven plugin. See **[DEPLOYING.md](DEPLOYING.md)** for the full guide. The short version:
 
 ```bash
-./build.sh default                    # dist/<ver>-<build>/ with per-tier dirs: lib/ admin/ services/ test/ proto/
+./build.sh                             # dev: flat dist/ (or --prod: dist/<rev>-<build>/) with per-tier dirs: lib/ admin/ services/ test/ proto/
 ./deploy.sh production --all           # deploy the whole build, in dependency order
 
 # or one artifact at a time:
@@ -330,32 +326,30 @@ export BLADE_SKIP_DIST=1         # sticky for the current shell
 
 Each `./build.sh` invocation auto-increments a build number stored in `build.number` (git-ignored). The number is embedded in every artifact's `MANIFEST.MF` as `Implementation-Version: <version>-<build>` (e.g. `3.0.4-848`). This ensures WebLogic sees a change on every build, enabling graceful redeployment even when the version hasn't changed.
 
-## Build Profiles
+## Building
 
-The `build.sh` script takes exactly one **module profile** (which apps to build — required for any build), an optional **platform** (which OCCAS/Java version to target), and optional Maven arguments.
+`build.sh` builds the **whole shippable set** in one Maven reactor — the framework,
+the shared library, every admin/service/test/proto WAR, and the three whole-tier
+EARs. There is no module to pick; to iterate on one module, run Maven directly
+(`./mvnw -pl services/hold package`). What you choose is the **mode**:
 
-A profile decides which modules are built, and therefore what lands in `dist/`: the admin tier as `blade-admin.ear`, the test tier as `blade-test.ear`, and each service as its own WAR under `dist/<ver>-<build>/services/`. The canonical profiles are:
+| Mode | App version | Dist | Javadoc |
+|---|---|---|---|
+| `dev` (default) | `<rev>` — redeploys in place | flat `dist/` (cleaned first) | skipped (fast loop) |
+| `prod` (`--prod`) | `<rev>-<build>` — traceable | `dist/<rev>-<build>/` | built |
 
-| Profile | Builds |
-|---|---|
-| `default` | The base set — every admin app + service, but **not** the `proto/` incubator apps. |
-| `full`    | `default` **plus** the `proto/` incubator apps (built standalone into `dist/proto/`). |
-| `minimal` | Core routing only (framework + shared + proxy-registrar). |
-
-Need a different subset? `./build.sh --init` builds one interactively and saves it under `.conf/` (gitignored, yours alone); rebuild it any time by name. `./build.sh --list` shows every profile, canonical and local.
+An optional **platform** (which OCCAS/Java version to target) and plain Maven
+arguments follow. Naming an environment reads its mode from the shared profile
+(`~/.blade/<env>/profile.conf`).
 
 ```bash
-./build.sh default                      # base set, platform from $MW_HOME
-./build.sh default occas-8.2            # base set, OCCAS 8.2 (overrides $MW_HOME)
-./build.sh minimal occas-8.3            # core routing, OCCAS 8.3 (overrides $MW_HOME)
-./build.sh full                         # base set + proto/ incubator apps
-./build.sh default clean package        # with explicit Maven goals
-./build.sh default occas-8.1 clean package   # REQUIRED shape when switching platforms
-./build.sh minimal                      # a profile without javadoc → no docs (fast dev loop)
-./build.sh default -- -Dfoo=bar         # extra Maven flags
+./build.sh                              # dev build, platform from $MW_HOME
+./build.sh --prod                       # release build (versioned dist + app version)
+./build.sh occas-8.2                    # target OCCAS 8.2 (overrides $MW_HOME)
+./build.sh ashburn                      # build in ashburn's recorded mode
+./build.sh occas-8.1 clean package      # REQUIRED shape when switching platforms
+./build.sh -- -Dfoo=bar                 # extra Maven flags
 ```
-
-One profile per invocation: each build is one Maven reactor and produces one `blade-admin.ear` whose contents match that profile, so profiles can't be combined.
 
 ### Platform auto-detection
 
@@ -378,18 +372,9 @@ If `$MW_HOME` is unset (or points somewhere invalid) **and** you didn't pass a p
 
 A CLI platform always wins. This is intentional — useful for one-off cross-builds (e.g. you're pointed at OCCAS 8.3 but want to build for 8.1 without re-exporting).
 
-Module profiles (`build-profiles/*.conf`):
-
-| Profile | Description |
-| --- | --- |
-| `default` | Used when no profile is specified. Builds `framework`, `shared`, `fsmar`, the admin tier, most services, test apps |
-| `full` | Every library, admin, service and test module, plus the `proto/` incubator apps |
-| `production` | All libraries + admin apps + services (no test apps) |
-| `minimal` | `framework` + `shared` + core routing |
-
-Each conf file is a flat list of module directory names. Anything **not** listed is excluded with `-Dskip.<name>`. The four module categories — `libs/`, `admin/`, `services/`, `test/` — are all treated uniformly: any of them can be opted in or out.
-
-> **Note**: most WARs depend on `framework` and `shared` at compile time. If you skip them in a build profile, they must already be installed in your local `~/.m2` from a prior build, or compilation will fail.
+Module selection is retired — `build.sh` builds every discovered module (`libs/`,
+`admin/`, `services/`, `test/`, `proto/`) plus the three tier EARs. To work on one
+module in isolation, run Maven directly: `./mvnw -pl services/hold package`.
 
 Platform profiles (`build-profiles/platforms/*.conf`):
 
@@ -411,7 +396,7 @@ see `copy_all_to_dist`), so after switching platforms it recompiles only the sou
 you edited and repackages every untouched class at the *previous* target.
 
 ```bash
-./build.sh default occas-8.1 clean package     # switching from 8.3 to 8.1
+./build.sh occas-8.1 clean package             # switching from 8.3 to 8.1
 ```
 
 The build summary is not a safety net here: `Target: Java 11 bytecode` describes what
@@ -432,8 +417,6 @@ unzip -p /tmp/f.war WEB-INF/classes/org/vorpal/blade/applications/console/mxgrap
   | head -c 8 | xxd -s 6 -l 2      # 0037 = 55 = Java 11; 0041 = 65 = Java 21
 ```
 
-To create a custom module profile, copy an existing `build-profiles/*.conf` file and edit it. Add or remove project directory names to control which modules are included.
-
 ## Javadocs
 
 Javadocs are generated **automatically** whenever the build JDK is **23 or newer** — BLADE's
@@ -441,22 +424,21 @@ source uses Java 23+ Markdown `///` doc comments ([JEP 467](https://openjdk.org/
 the javadoc tool has to come from a JDK that understands them. This is independent of the
 bytecode target: docs generate on JDK 23+ while `--release` still compiles to Java 11.
 
-**Javadoc is a normal profile module.** It builds when the active profile lists `javadoc`
-(`default` and `full` do) and not otherwise — there is no `--no-javadoc` flag. To skip it (fast
-dev loops — the javadoc WAR is ~150 MB and the slowest part of the build), use a profile that
-omits `javadoc` (e.g. `minimal`, or a `--init` profile without it). Omitting it means the admin
-EAR assembles **without** `blade-javadoc.war`, so `/blade/javadoc` 404s on that deployment.
+**Javadoc keys off the mode.** It is the slow part (the javadoc WAR is ~150 MB), so a
+`--prod` release builds it and a `dev` build **skips** it — no `--no-javadoc` flag, just
+the mode. Skipping it means the admin EAR assembles **without** `blade-javadoc.war`, so
+`/blade/javadoc` 404s on a dev deployment.
 
-Because the javadoc app aggregates **every** module's apidocs, it must build after all of them.
-`build.sh` guarantees that structurally: when `javadoc` is selected it runs a **two-pass** build —
-first the whole project (each module generates its apidocs), then `admin/javadoc` + the admin EAR
-alone, over the now-complete set. So the WAR is never missing a module, regardless of reactor
-order. On a build JDK older than 23 the docs are dropped with a warning and the build is
-otherwise fine. The summary line says which happened:
+Because the javadoc app aggregates **every** module's apidocs, it must build after all of
+them. `build.sh` guarantees that structurally: a prod build runs a **two-pass** reactor —
+first the whole project (each module generates its apidocs), then `admin/javadoc` + the admin
+EAR alone, over the now-complete set. So the WAR is never missing a module, regardless of
+reactor order. On a build JDK older than 23 the docs are dropped with a warning and the build
+is otherwise fine. The summary line says which happened:
 
 ```
 Javadocs:      generating (final pass → admin/javadoc → blade-javadoc.war)
-Javadocs:      SKIPPED — javadoc is in default but needs JDK 23+ (build JDK is 21); admin EAR built without blade-javadoc.war
+Javadocs:      skipped (dev build — javadoc is built for --prod releases)
 ```
 
 This uses the [UML Doclet](https://github.com/talsma-ict/umldoclet) to generate class diagrams (SVG) alongside the standard Javadoc HTML, with Vorpal purple branding. All module javadocs are bundled into `blade-javadoc.war`, which ships **inside the admin EAR** — admin WARs are not copied to `dist/` individually:

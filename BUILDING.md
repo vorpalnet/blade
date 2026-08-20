@@ -10,9 +10,11 @@ stages — see [INSTALLING.md](INSTALLING.md) for standing up the server and
 | **`./build.sh`** | Compile the **artifacts** into `dist/`. |
 | `./deploy.sh` | Push the artifacts to a running server. |
 
-A build always names a **profile** — there is no build-everything default. BLADE is
-a development framework; not every module needs building, so naming the set is a
-deliberate choice.
+One command builds everything shippable — the framework, the shared library, every
+admin/service/test/proto WAR, and the three whole-tier EARs — in one Maven reactor.
+There is no module to pick: to iterate on a single module, run Maven directly
+(`./mvnw -pl services/hold package`). What you *do* choose is the **mode**: a fast
+`dev` loop or a traceable `prod` release.
 
 ---
 
@@ -32,35 +34,53 @@ deliberate choice.
 ## 2. Quick start
 
 ```bash
-./build.sh default        # the base set — everything but proto/
-./build.sh --list         # the profiles available
-./build.sh --init         # create a profile interactively, then build it
-./build.sh clean          # clean only (no profile); purges org.vorpal.blade from ~/.m2
+./build.sh                # dev build: the full set → flat dist/
+./build.sh --prod         # release build: the full set → dist/<rev>-<build>/
+./build.sh clean          # clean only; purges org.vorpal.blade from ~/.m2
 ./build.sh cleanAll       # clean, and delete the whole dist/ tree
 ```
 
-With no profile on a terminal you get a picker (existing profiles, or create one);
-without a terminal you get a non-zero error naming the profiles. Clean-only runs
-need no profile.
+No arguments needed — a build is always the whole shippable set. Add a platform to
+target a specific OCCAS version (§4), or plain Maven goals (`clean package`).
 
 ---
 
-## 3. Profiles
+## 3. Dev and prod
 
-A profile names the module set. Three are committed in `build-profiles/*.conf`:
+The one dial that matters is the mode, because WebLogic's side-by-side versioning
+keys off the application version:
 
-| Profile | Builds |
-|---|---|
-| `default` | everything but `proto/` — the base set, and it includes `javadoc` |
-| `full` | `default` plus the `proto/` incubator apps |
-| `minimal` | core routing only |
+- **`dev` (default)** keeps the app version stable (e.g. `3.0.6`), so OCCAS replaces
+  the app in place on redeploy — the fast edit/build/redeploy loop. Output lands
+  **flat in `dist/`** (cleaned first each build), and the slow Javadoc pass is
+  skipped.
+- **`--prod`** appends the build number (`3.0.6-<build>`), minting a new, traceable
+  version each build — the previous one stays registered until undeployed by name.
+  Output lands in its own **`dist/<rev>-<build>/`** release directory, and the
+  Javadoc is built.
 
-`--init` writes a **local** profile into `.conf/` (gitignored), so an experiment
-never has to touch the committed set.
+`BLADE_MODE=prod` in the environment sets the default; an explicit `--dev`/`--prod`
+always wins.
 
 ---
 
-## 4. Platforms
+## 4. Building for a named environment
+
+A deployment's profile carries its mode. `install.sh` and `deploy.sh` share one
+profile per environment, `~/.blade/<env>/profile.conf`; naming it on the build reads
+that environment's `build.mode`:
+
+```bash
+./build.sh ashburn        # builds in the mode ashburn's profile records
+./build.sh ashburn --prod # …unless you override it on the command line
+```
+
+So `build.sh`, `install.sh` and `deploy.sh` all speak of the same environment by
+name. (`build.sh` reads only the mode; it needs nothing else from the profile.)
+
+---
+
+## 5. Platforms
 
 The platform names the OCCAS/WebLogic target the run compiles for
 (`build-profiles/platforms/occas-*.conf`, e.g. `occas-8.1`, `occas-8.2`,
@@ -74,53 +94,43 @@ The chosen source is shown in the build header — `Platform: occas-8.3 ($MW_HOM
 Name it explicitly to be sure the run targets what you'll deploy to:
 
 ```bash
-./build.sh default occas-8.1        # platform is a positional arg; header shows (cli)
+./build.sh occas-8.1        # platform is a positional arg; header shows (cli)
 ```
 
 ---
 
-## 5. What a build produces
+## 6. What a build produces
 
-Everything built during the run is copied to `dist/<ver>-<build>/`:
+Both EARs **and** loose WARs ship, so an operator deploys whichever suits — a
+whole-tier EAR in one step, or a loose WAR for per-service start/stop/target. `dev`
+writes flat into `dist/`; `prod` nests each release in `dist/<rev>-<build>/`. Either
+way the layout under `<dist>` is:
 
 ```
-dist/<ver>-<build>/            blade-admin.ear, blade-services.ear, blade-test.ear
-                               + the active conf files + build.log
-             /lib/             blade-framework.jar, blade-shared.war, blade-fsmar.jar
-             /admin/           loose admin WARs (same apps as blade-admin.ear)
-             /services/        loose service WARs
-             /test/            loose test WARs
-             /proto/           incubator WARs (full profile; no EAR)
+<dist>/            blade-admin.ear, blade-services.ear, blade-test.ear  + build.log
+      /lib/        blade-framework.jar, blade-shared.war, blade-fsmar.jar
+      /admin/      loose admin WARs (same apps as blade-admin.ear)
+      /services/   loose service WARs
+      /test/       loose test WARs
+      /proto/      incubator WARs (no EAR — proto/ is a grab-bag, deployed ad-hoc)
 ```
 
-Each shippable tier builds a **whole-tier EAR and** its loose WARs — deploy
-whichever suits. The confs and `build.log` travel with the dist for traceability.
-On a failed build, that build's `dist/` directory is deleted (the terminal still
-shows the output). Skip the copy in tight dev loops with `--no-dist` (one-off) or
+`build.log` (the full build console) travels with the dist so a build can be
+reviewed after the fact. A failed **prod** build removes its release directory; a
+failed **dev** build leaves the prior flat output in place — `dist/` is never
+deleted wholesale. Skip the copy in tight dev loops with `--no-dist` (one-off) or
 `export BLADE_SKIP_DIST=1` (sticky).
-
----
-
-## 6. Dev vs prod versioning
-
-WebLogic's side-by-side versioning keys off the application version, so the build
-number matters:
-
-- **Default (dev)** keeps the version stable (e.g. `3.0.4`), so OCCAS replaces the
-  app in place on redeploy.
-- **`--prod`** appends the build number (`3.0.4-<build>`), minting a new, traceable
-  version each build — the previous one stays registered until undeployed by name.
 
 ---
 
 ## 7. Javadoc
 
-`javadoc` is a normal profile module: it builds when the active profile lists it
-(`default` and `full` do) and not otherwise — there is no separate flag, and no
-`--no-javadoc`. It aggregates every module's apidocs into `blade-javadoc.war`,
-bundled in the admin EAR, and `build.sh` builds it in a final pass so the docs are
-complete regardless of reactor order. On a build JDK older than 23 a
-javadoc-listing profile still builds, but the docs are dropped with a warning.
+The javadoc app aggregates every module's apidocs into `blade-javadoc.war`, bundled
+in the admin EAR. It is the slow part, so it is **built for a `--prod` release** and
+**skipped in `dev`** for a fast loop. Because it must run after every module has
+generated its apidocs, a prod build does it in a final pass, so the docs are
+complete regardless of reactor order. On a build JDK older than 23 the docs are
+dropped with a warning (bytecode still targets Java 11).
 
 ---
 
