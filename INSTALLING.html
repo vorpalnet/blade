@@ -162,12 +162,31 @@
 <section class="slide on title-slide" aria-label="Title">
   <p class="eyebrow">BLADE · Installation</p>
   <h1>Installing BLADE</h1>
-  <p class="lede" style="max-width:63ch">Stand up the server — OCCAS, the domain and cluster, Node Manager, TLS, and boot services — from one re-runnable dashboard driven by a named profile.</p>
+  <p class="lede" style="max-width:64ch">One re-runnable installer turns a base OCCAS install into a converged SIP cluster — dynamic, TLS end to end, self-restarting, and patched atomically. For the engineer who has to stand it up, demo it, and defend it in the room.</p>
   <div class="meta">
     <span class="tag s"><span class="dot"></span>install.sh — the server</span>
     <span class="tag">build.sh</span>
     <span class="tag">deploy.sh</span>
   </div>
+</section>
+
+<section class="slide" aria-label="What you are standing up">
+  <div class="head">
+    <p class="eyebrow">What you are standing up</p>
+    <h2>A dynamic cluster whose calls survive a node dropping.</h2>
+    <p class="sub">The shape the customer's architect cares about — five properties the installer delivers.</p>
+  </div>
+  <div class="body"><div class="two">
+    <ul class="facts">
+      <li><b>A dynamic cluster.</b> Every engine is materialized from one server template — the tenth engine is the same action as the second, with nothing to drift.</li>
+      <li><b>Structural failover.</b> SIP session state serializes and replicates across the tier; a dropped node's in-progress call is picked up elsewhere.</li>
+      <li><b>Self-restarting.</b> Servers start through Node Manager as systemd units — a reboot runs the exact path provisioning did.</li>
+    </ul>
+    <ul class="facts">
+      <li><b>TLS end to end.</b> Admin, Node Manager, and SIP all run TLS from a certificate you control — never WebLogic's demo cert on a live port.</li>
+      <li><b>Atomic patching.</b> A patch installs a new home and flips a symlink; domains and keystores live outside it, so nothing silently reverts.</li>
+    </ul>
+  </div></div>
 </section>
 
 <section class="slide" aria-label="Three tools">
@@ -199,7 +218,7 @@
       <li><b>Two JDKs.</b> Runtime = the certified major (<b>JDK 21</b> for 8.3): the server runs on it, and so must <code>opatch</code> — on the build JDK (25) it fails to parse a patch's XML, so <b>patching requires JDK 21</b>. Build = <b>23+</b> (25 works) for <code>./build.sh</code>.</li>
     </ul>
     <ul class="facts">
-      <li><b>sudo</b> on the targets, and a dedicated install user (default <code>oracle:oinstall</code>).</li>
+      <li><b>Key-based ssh + passwordless sudo</b> to every target — to create the install user, lay down the product, and register boot services. A host missing either is skipped with a warning, retried next run.</li>
       <li>Admin console <code>7001</code>/<code>7002</code>, Node Manager <code>5556</code>, SIP <code>5060</code>/<code>5061</code> — reachable as configured.</li>
     </ul>
   </div></div>
@@ -229,6 +248,23 @@
   </div></div>
 </section>
 
+<section class="slide" aria-label="The install user">
+  <div class="head">
+    <p class="eyebrow">The install user</p>
+    <h2>Owned by <code>oracle:oinstall</code> — by name, across every host.</h2>
+  </div>
+  <div class="body"><div class="two l">
+    <ul class="facts">
+      <li>The numeric ids default to Oracle's convention — <b>uid/gid 54321</b>, the same as Oracle's preinstall RPMs and images. Override with <code>install.uid</code>/<code>install.gid</code>.</li>
+      <li><b>Ownership travels by name.</b> Provisioning recreates the user on each host and copies with <code>--chown</code> by name — a differing uid is cosmetic, except on shared NFS where the kernel checks numbers.</li>
+      <li>The <b>boot services run as this user</b> — that is what lets them read the owner-only keystores the servers need.</li>
+    </ul>
+    <figure>
+      <p class="pull">A boot unit left running as the login user <span class="hs">cannot open</span> the owner-only trust store the server needs to start.</p>
+    </figure>
+  </div></div>
+</section>
+
 <section class="slide" aria-label="Quick start">
   <div class="head">
     <p class="eyebrow">Quick start</p>
@@ -236,7 +272,7 @@
   </div>
   <div class="body"><div class="two r">
     <ul class="facts">
-      <li>Move with <b>↑/↓</b>, press <b>1–8</b> to jump to a step, <b>space</b> to tick rows for a batch, <b>enter</b> to run, <b>d</b> for dry-run.</li>
+      <li>Move with <b>↑/↓</b>, press <b>1–8</b> to jump to a step, <b>space</b> to tick rows for a batch, <b>enter</b> to run, <b>d</b> for dry-run. Rows are chosen by label — no per-letter shortcuts.</li>
       <li>A green <b>✓</b> means a step is done; the right column shows live state — <code>nmdomain — running</code>, <code>AdminServer — running</code>.</li>
     </ul>
     <figure>
@@ -247,7 +283,7 @@
 <span class="s">./install.sh</span> myenv <span class="b">install</span>
 <span class="s">./install.sh</span> myenv <span class="b">status</span>
 <span class="s">./install.sh</span> myenv <span class="b">uninstall</span></pre>
-      <figcaption>Add <code>--dry-run</code> to any run to preview it.</figcaption>
+      <figcaption>Add <code>--dry-run</code> to any run — the demo-safe way to walk a customer through it.</figcaption>
     </figure>
   </div></div>
 </section>
@@ -299,33 +335,49 @@
   </div></div>
 </section>
 
-<section class="slide" aria-label="Node Manager and boot services">
+<section class="slide" aria-label="Engine hosts">
   <div class="head">
-    <p class="eyebrow">Node Manager</p>
-    <h2>Node Manager runs in its own domain.</h2>
+    <p class="eyebrow">Engine hosts</p>
+    <h2>A node joins by replication, not a second install.</h2>
+  </div>
+  <div class="body"><div class="two r">
+    <ul class="facts">
+      <li>Provisioning <b>rsyncs</b> the versioned OCCAS home, both domains, the runtime JDK, and the TLS keystores to the same absolute paths — then creates the install user and boot services over ssh.</li>
+      <li><b>An engine never runs opatch.</b> It receives a home patched and validated once on the admin box — patch one host, ship it.</li>
+      <li><b>A reboot is the boot path, tested.</b> systemd → Node Manager → <code>nmStart</code> is exactly what provisioning just ran.</li>
+    </ul>
+    <figure>
+      <p class="pull"><span class="hs">Re-provision every engine host</span> re-renders a host's units, scripts, env and TLS consistently — reach for it instead of hand-patching a unit.</p>
+    </figure>
+  </div></div>
+</section>
+
+<section class="slide" aria-label="Node Manager and the trust chain">
+  <div class="head">
+    <p class="eyebrow">Node Manager · trust</p>
+    <h2>Its own domain, mutual TLS, and a trust chain that self-heals.</h2>
   </div>
   <div class="body">
     <ul class="facts">
-      <li>A <b>separate domain</b> (<code>nmdomain</code>), MBean mode over SSL — so it outlives any single server restart and serves every domain enrolled into it.</li>
-      <li>The systemd units are <b>generated from the live domain paths</b> at install time.</li>
-      <li>The helper scripts are staged into <code>$DOMAIN/bin/</code> so they travel with the domain — a unit must never point into the repo clone, which engine hosts don't have.</li>
-      <li>The unit's <code>User</code>/<code>Group</code> come from the domain's real owner; that group must exist on every engine host.</li>
+      <li>Node Manager runs in a <b>separate domain</b> (<code>nmdomain</code>), MBean mode over <b>mutual TLS</b> — so it outlives any single server restart, including the AdminServer.</li>
+      <li>Units are generated from the live domain paths; helper scripts are staged into <code>$DOMAIN/bin/</code> so they travel with the domain — a unit never points into a repo clone engine hosts don't have.</li>
+      <li>A <b>per-cluster trust store</b> (<code>nm-trust.p12</code>) validates NM's certificate; its passphrase rides a <code>0600</code> boot env read only by systemd, as the install user.</li>
+      <li>Rotate the certificate and the installer <b>re-pushes that passphrase to every host</b> on the next Node Manager run — a rotation can't strand a node's next start.</li>
     </ul>
   </div>
 </section>
 
-<section class="slide" aria-label="The cluster">
+<section class="slide" aria-label="Growing the cluster">
   <div class="head">
     <p class="eyebrow">The cluster</p>
-    <h2>The cluster grows online.</h2>
-    <p class="sub">The engine tier is a dynamic cluster — engines are materialized from a server template, so there is no per-engine entry to edit.</p>
+    <h2>Grows online — with two truths a live resize turns up.</h2>
+    <p class="sub"><code>engine0</code> runs on the install host; <b>Add a machine</b> grows the tier with no restart of what's already running, <b>Remove the last machine</b> shrinks it.</p>
   </div>
   <div class="body">
     <ul class="facts">
-      <li><code>engine0</code> runs on the install host — a fresh install is already a complete deployment.</li>
-      <li><b>Add a machine</b> grows the cluster with no restart of what's already running.</li>
-      <li><b>Remove the last machine</b> shrinks it (highest-numbered only — server index N maps to the Nth machine).</li>
-      <li><b>Re-provision every engine host</b> re-renders a host's units, scripts, env and TLS consistently — reach for it instead of hand-patching a unit.</li>
+      <li><b>The config commits; running members consume it on their next restart.</b> Growing past a running node is an online edit plus a rolling bounce, not one atomic event.</li>
+      <li><b>One editor at a time.</b> If a resize won't activate, an open <b>Remote Console edit session</b> is usually holding the lock — release it there. The installer won't steal another admin's lock.</li>
+      <li>Shrink removes the highest-numbered machine only — server index N maps to the Nth machine, so removing from the middle would re-home every engine after it.</li>
     </ul>
   </div>
 </section>
@@ -359,6 +411,8 @@
       <thead><tr><th>Symptom</th><th>Cause and fix</th></tr></thead>
       <tbody>
         <tr><td class="ev">203/EXEC, no app log</td><td class="df">SELinux <code>unlabeled_t</code> files (after moving <code>/opt/oracle</code>). <code>sudo restorecon -Rv /opt/oracle/domains/&lt;domain&gt;</code>.</td></tr>
+        <tr><td class="ev">ADMIN, not RUNNING</td><td class="df">An app failed to deploy at boot (<code>BEA-149259</code>) — usually the same web app deployed twice to one target (a tier EAR <b>and</b> its loose WARs). Deploy either, not both.</td></tr>
+        <tr><td class="ev">trustAnchors non-empty</td><td class="df">The boot WLST client loaded an empty NM trust store: the unit isn't the install user, or the passphrase went stale after a rotation. Run as the install user; re-run Node Manager.</td></tr>
         <tr><td class="ev">OOM: Metaspace</td><td class="df">Dev-default MaxMetaspaceSize is too small for the admin EAR. BLADE sets it to <code>2g</code>.</td></tr>
         <tr><td class="ev">MaxMessageSizeExceeded</td><td class="df">The App Router jar exceeds the 10 MB T3 cap on its fetch. BLADE raises <code>max-message-size</code> to 100 MB.</td></tr>
         <tr><td class="ev">PKIX path building failed</td><td class="df">The per-domain demo CA isn't in the shipped DemoTrust. Use CustomTrust on the domain's own store — or BLADE's generated CA.</td></tr>
