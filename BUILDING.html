@@ -162,7 +162,7 @@
 <section class="slide on title-slide" aria-label="Title">
   <p class="eyebrow">BLADE · Building</p>
   <h1>Building BLADE</h1>
-  <p class="lede" style="max-width:63ch">Maven, wrapped by <code>./build.sh</code>. A build always names a profile — there is no build-everything default — and lands its artifacts in <code>dist/</code>.</p>
+  <p class="lede" style="max-width:63ch">Maven, wrapped by <code>./build.sh</code>. One command builds the whole shippable set; the one dial is the <b>mode</b> — a fast <code>dev</code> loop or a traceable <code>--prod</code> release.</p>
   <div class="meta">
     <span class="tag">install.sh</span>
     <span class="tag s"><span class="dot"></span>build.sh — the artifacts</span>
@@ -187,39 +187,38 @@
 <section class="slide" aria-label="Quick start">
   <div class="head">
     <p class="eyebrow">Quick start</p>
-    <h2>A build always names a profile.</h2>
-    <p class="sub">No profile on a terminal → a picker; no terminal → an error naming the profiles.</p>
+    <h2>No module to pick — just a mode.</h2>
+    <p class="sub">A build is always the whole shippable set. To iterate on one module, run Maven directly (<code>./mvnw -pl services/hold package</code>).</p>
   </div>
   <div class="body"><div class="two r">
     <ul class="facts">
-      <li>Clean-only runs need no profile.</li>
+      <li>Add a platform to target an OCCAS version, or plain Maven goals.</li>
       <li><code>cleanAll</code> also deletes the whole <code>dist/</code> tree.</li>
     </ul>
     <figure>
-<pre><span class="s">./build.sh</span> default      <span class="c"># base set, all but proto/</span>
-<span class="s">./build.sh</span> <span class="k">--list</span>       <span class="c"># profiles available</span>
-<span class="s">./build.sh</span> <span class="k">--init</span>       <span class="c"># create one, then build it</span>
-<span class="s">./build.sh</span> <span class="b">clean</span>        <span class="c"># purge org.vorpal.blade from ~/.m2</span></pre>
-      <figcaption>The wrapper drives Maven; you name the set.</figcaption>
+<pre><span class="s">./build.sh</span>             <span class="c"># dev → flat dist/</span>
+<span class="s">./build.sh</span> <span class="k">--prod</span>      <span class="c"># release → dist/&lt;rev&gt;-&lt;build&gt;/</span>
+<span class="s">./build.sh</span> <span class="b">clean</span>       <span class="c"># purge org.vorpal.blade from ~/.m2</span></pre>
+      <figcaption>The wrapper drives Maven; you pick the mode.</figcaption>
     </figure>
   </div></div>
 </section>
 
-<section class="slide" aria-label="Profiles">
+<section class="slide" aria-label="Dev and prod">
   <div class="head">
-    <p class="eyebrow">Profiles</p>
-    <h2>A profile names the module set.</h2>
-    <p class="sub">Three are committed in <code>build-profiles/*.conf</code>; <code>--init</code> writes a local one into <code>.conf/</code> (gitignored).</p>
+    <p class="eyebrow">Modes</p>
+    <h2>Dev is the fast loop; prod is the traceable release.</h2>
+    <p class="sub">WebLogic's side-by-side versioning keys off the application version, so the mode is the one dial that matters.</p>
   </div>
   <div class="body">
     <table>
-      <thead><tr><th>Profile</th><th>Builds</th></tr></thead>
+      <thead><tr><th>Mode</th><th>App version</th><th>Dist</th><th>Javadoc</th></tr></thead>
       <tbody>
-        <tr><td class="ev">default</td><td class="df">Everything but <code>proto/</code> — the base set, and it includes <code>javadoc</code>.</td></tr>
-        <tr><td class="ev">full</td><td class="df"><code>default</code> plus the <code>proto/</code> incubator apps.</td></tr>
-        <tr><td class="ev">minimal</td><td class="df">Core routing only.</td></tr>
+        <tr><td class="ev">dev (default)</td><td class="df"><code>&lt;rev&gt;</code> — redeploys in place</td><td class="df">flat <code>dist/</code> (cleaned first)</td><td class="df">skipped</td></tr>
+        <tr><td class="ev">prod (--prod)</td><td class="df"><code>&lt;rev&gt;-&lt;build&gt;</code> — traceable</td><td class="df"><code>dist/&lt;rev&gt;-&lt;build&gt;/</code></td><td class="df">built</td></tr>
       </tbody>
     </table>
+    <p class="sub" style="margin-top:14px">A named environment reads its mode from the shared profile <code>~/.blade/&lt;env&gt;/profile.conf</code> — <code>./build.sh ashburn</code> builds in ashburn's mode.</p>
   </div>
 </section>
 
@@ -236,7 +235,7 @@
       <li><b>Name it explicitly</b> to be sure the run targets what you'll deploy to.</li>
     </ul>
     <figure>
-<pre><span class="s">./build.sh</span> default <span class="n">occas-8.1</span>
+<pre><span class="s">./build.sh</span> <span class="n">occas-8.1</span>
 <span class="c"># positional; header then shows (cli)</span></pre>
       <figcaption>The platform arg overrides <code>$MW_HOME</code>.</figcaption>
     </figure>
@@ -246,23 +245,22 @@
 <section class="slide" aria-label="What a build produces">
   <div class="head">
     <p class="eyebrow">Output</p>
-    <h2>Every artifact lands in <code>dist/&lt;ver&gt;-&lt;build&gt;/</code>.</h2>
+    <h2>Both EARs and loose WARs ship — flat in dev, versioned in prod.</h2>
   </div>
   <div class="body"><div class="two l">
     <figure>
-<pre>dist/<span class="n">&lt;ver&gt;-&lt;build&gt;</span>/     <span class="c">the whole-tier EARs</span>
-                    <span class="c">+ confs + build.log</span>
+<pre><span class="n">&lt;dist&gt;</span>/         <span class="c">the whole-tier EARs + build.log</span>
       /lib/         <span class="c">framework.jar, blade-shared.war,</span>
                     <span class="c">blade-fsmar.jar</span>
       /admin/       <span class="c">loose admin WARs</span>
       /services/    <span class="c">loose service WARs</span>
       /test/        <span class="c">loose test WARs</span>
-      /proto/       <span class="c">incubator WARs (full)</span></pre>
-      <figcaption>A failed build deletes its own <code>dist/</code> directory.</figcaption>
+      /proto/       <span class="c">incubator WARs (no EAR)</span></pre>
+      <figcaption>dev writes flat into <code>dist/</code>; prod nests each release in <code>dist/&lt;rev&gt;-&lt;build&gt;/</code>.</figcaption>
     </figure>
     <ul class="facts">
-      <li>Each shippable tier builds a <b>whole-tier EAR and</b> its loose WARs — deploy whichever suits.</li>
-      <li>The confs and <code>build.log</code> travel with the dist for traceability.</li>
+      <li>Deploy a <b>whole-tier EAR</b> in one step, or a <b>loose WAR</b> for per-service start/stop/target.</li>
+      <li><code>build.log</code> travels with the dist for traceability. On failure a prod release dir is removed; dev leaves the prior output.</li>
       <li><code>--no-dist</code> (or <code>BLADE_SKIP_DIST=1</code>) skips the copy for tight dev loops.</li>
     </ul>
   </div></div>
@@ -285,13 +283,13 @@
 <section class="slide" aria-label="Javadoc">
   <div class="head">
     <p class="eyebrow">Javadoc</p>
-    <h2>Javadoc is a profile module, not a flag.</h2>
+    <h2>Javadoc: built for a release, skipped in dev.</h2>
   </div>
   <div class="body">
     <ul class="facts">
-      <li>It builds when the active profile lists it (<code>default</code> and <code>full</code> do) and not otherwise — there is no <code>--no-javadoc</code>.</li>
+      <li>It is the slow part, so <code>--prod</code> builds it and <code>dev</code> skips it — no <code>--no-javadoc</code> flag, just the mode.</li>
       <li>It aggregates every module's apidocs into <code>blade-javadoc.war</code>, bundled in the admin EAR, built in a <b>final pass</b> so the docs are complete regardless of reactor order.</li>
-      <li>On a build JDK older than 23 a javadoc-listing profile still builds — the docs are dropped with a warning.</li>
+      <li>On a build JDK older than 23 the docs are dropped with a warning; the build is otherwise fine.</li>
     </ul>
   </div>
 </section>
@@ -317,12 +315,12 @@
 <section class="slide" aria-label="Wrap-up">
   <div class="head">
     <p class="eyebrow">Wrap-up</p>
-    <h2>Name a profile, name the platform, ship the dist.</h2>
+    <h2>Pick the mode, name the platform, ship the dist.</h2>
   </div>
   <div class="body"><div class="two l">
     <ul class="facts">
-      <li><code>./build.sh default occas-8.1</code> — the base set for a known target.</li>
-      <li>Artifacts in <code>dist/&lt;ver&gt;-&lt;build&gt;/</code>; deploy the EAR or the loose WARs.</li>
+      <li><code>./build.sh --prod occas-8.1</code> — a versioned release for a known target.</li>
+      <li>Artifacts in <code>dist/</code> (dev) or <code>dist/&lt;rev&gt;-&lt;build&gt;/</code> (prod); deploy the EAR or the loose WARs.</li>
       <li>Then <code>./deploy.sh &lt;name&gt; --all</code>.</li>
     </ul>
     <figure>

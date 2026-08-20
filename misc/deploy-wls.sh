@@ -98,7 +98,13 @@ try:
     if action == 'status':
         print('--- deployments on ${WLS_ADMINURL} ---')
         for l in cmo.getLibraries():       print('  [lib] ' + l.getName())
-        for a in cmo.getAppDeployments():  print('  [app] ' + a.getName())
+        for a in cmo.getAppDeployments():
+            # Append the app's targets (server/cluster names) so a caller can tell
+            # WHERE each app runs — a context-root collision is per-target, so the
+            # deploy.sh pre-deploy collision guard needs this to scope its check.
+            try:    tg = ','.join([t.getName() for t in a.getTargets()])
+            except: tg = ''
+            print('  [app] ' + a.getName() + ' @ ' + tg)
         print('DEPLOY_OK')
     elif action == 'undeploy':
         m = lib_map() if isLib else app_map()

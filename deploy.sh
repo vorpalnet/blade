@@ -25,6 +25,14 @@
 #   --name NAME      deployment name (default: filename without extension)
 #   --build VER      take <file> from dist/<VER>/ instead of the newest build
 #   --dry-run        print what would run; change nothing
+#   --force          skip the EAR/loose-WAR collision pre-check (see below)
+#
+# Collision guard: a tier ships BOTH ways — the whole-tier EAR (blade-admin.ear)
+# AND its loose member WARs (dist/admin/*.war). Deploying both to the SAME target
+# collides their context roots and drops the tier into ADMIN mode (engines never
+# reach RUNNING). Before a single EAR- or member-WAR deploy, deploy.sh queries the
+# domain and refuses if the other representation is already on an overlapping
+# target. --force overrides it; a status query that can't run degrades to a warning.
 #
 # Password priority (highest wins):
 #   1. BLADE_WLS_PASSWORD environment variable
@@ -74,7 +82,7 @@ err()  { printf '%s\xe2\x9c\x97%s %s\n'   "$C_RED" "$C_RESET" "$*" >&2; }
 die()  { err "$*"; exit 1; }
 
 show_usage() {
-    sed -n '2,45p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '2,50p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
     exit "${1:-0}"
 }
 
@@ -90,6 +98,7 @@ NAME_OVERRIDE=""
 BUILD_VER=""
 DRY_RUN=false
 DEPLOY_ALL=false
+FORCE=false
 
 POSITIONAL=()
 while [ $# -gt 0 ]; do
@@ -103,6 +112,7 @@ while [ $# -gt 0 ]; do
         --build=*)   BUILD_VER="${1#--build=}" ;;
         --dry-run)   DRY_RUN=true ;;
         --all)       DEPLOY_ALL=true ;;
+        --force)     FORCE=true ;;
         -*)          die "Unknown option: $1" ;;
         *)           POSITIONAL+=("$1") ;;
     esac
@@ -544,6 +554,103 @@ esac
 log "  action:       ${ACTION}"
 [ "$DRY_RUN" = true ] && log "  ${C_YELLOW}** DRY RUN — no changes will be made **${C_RESET}"
 log ""
+
+# --- EAR / loose-WAR collision pre-check -----------------------------------
+# A tier ships both ways: the whole-tier EAR (blade-admin.ear) AND its loose
+# member WARs (dist/admin/*.war). Both on the same target collide their context
+# roots and drop the tier to ADMIN mode — the ashburn engine1 failure. Before a
+# single EAR- or member-WAR deploy, check the domain for the OTHER representation
+# on an overlapping target and refuse. --force overrides; an unreadable status
+# degrades to a warning (never block a deploy because the check couldn't run).
+
+# Capture the domain's deployment listing (engine-native), stdout+stderr.
+query_deploy_status() {
+    if [ "$ENGINE" = wlst ]; then
+        MW_HOME="$OCCAS_HOME" JAVA_HOME="$DEPLOY_JAVA_HOME" JAVA_VENDOR=Oracle \
+            WLS_ADMINURL="$WLS_ADMINURL" WLS_USER="$WLS_USER" WLS_PASSWORD="$WLS_PASSWORD" \
+            WLS_TRUSTSTORE="${WLS_TRUSTSTORE:-}" WLS_TRUSTSTORE_TYPE="${WLS_TRUSTSTORE_TYPE:-PKCS12}" WLS_TRUSTSTORE_PASSWORD="${TRUST_PW:-}" \
+            WLS_ACTION=status \
+            bash "${SCRIPT_DIR}/misc/deploy-wls.sh" 2>&1
+    else
+        "$MVNW" -q "${WLS_PLUGIN}:list-apps" -Dadminurl="$WLS_ADMINURL" -Duser="$WLS_USER" -Dpassword="$WLS_PASSWORD" 2>&1
+    fi
+}
+
+# Deployment names that would collide with APP_NAME on a shared target. A tier EAR
+# conflicts with its loose member WARs, and a member WAR conflicts with its EAR.
+# Derived from the dist tree: dist/<tier>/*.war are the members bundled in
+# blade-<tier>.ear. Echoes conflicting deployment names, one per line.
+conflict_names() {
+    local tier=""
+    case "$APP_NAME" in
+        blade-admin)    tier=admin ;;
+        blade-services) tier=services ;;
+        blade-test)     tier=test ;;
+        *)
+            case "$ART" in
+                */admin/*.war)    echo "blade-admin" ;;
+                */services/*.war) echo "blade-services" ;;
+                */test/*.war)     echo "blade-test" ;;
+            esac
+            return ;;
+    esac
+    [ -n "$DIST_DIR" ] && [ -d "${DIST_DIR}/${tier}" ] || return
+    local w; shopt -s nullglob
+    for w in "${DIST_DIR}/${tier}"/*.war; do basename "${w%.war}"; done
+    shopt -u nullglob
+}
+
+# Do the deployed targets (csv) and the requested target(s) (csv) share a name?
+targets_overlap() {
+    local a b oldifs="$IFS"; IFS=,
+    for a in $1; do a="${a// /}"; [ -n "$a" ] || continue
+        for b in $2; do b="${b// /}"; [ "$a" = "$b" ] && { IFS="$oldifs"; return 0; }; done
+    done
+    IFS="$oldifs"; return 1
+}
+
+collision_precheck() {
+    [ "$MODE" = app ] && [ "$ACTION" = deploy ] && [ "$DRY_RUN" = false ] || return 0
+    if [ "$FORCE" = true ]; then warn "EAR/loose-WAR collision pre-check skipped (--force)."; return 0; fi
+
+    local -a conflicts=(); local n
+    while IFS= read -r n; do [ -n "$n" ] && conflicts+=("$n"); done < <(conflict_names)
+    [ "${#conflicts[@]}" -gt 0 ] || return 0
+
+    info "checking ${WLS_ADMINURL} for a conflicting deployment ..."
+    local out rc=0; out="$(query_deploy_status)" || rc=$?
+    if [ "$rc" -ne 0 ] || ! printf '%s\n' "$out" | grep -q 'DEPLOY_OK'; then
+        warn "could not read current deployments — proceeding without the collision check."
+        warn "if the ${APP_NAME} tier drops to ADMIN mode, undeploy the other representation and retry."
+        return 0
+    fi
+
+    local -a hits=(); local line dep_name dep_tg have_tg
+    while IFS= read -r line; do
+        case "$line" in *'[app] '*) ;; *) continue ;; esac
+        dep_name="${line#*'[app] '}"; dep_tg=""; have_tg=0
+        case "$dep_name" in *' @ '*) dep_tg="${dep_name#* @ }"; dep_name="${dep_name%% @ *}"; have_tg=1 ;; esac
+        dep_name="${dep_name%"${dep_name##*[![:space:]]}"}"   # rstrip
+        for n in "${conflicts[@]}"; do
+            [ "$dep_name" = "$n" ] || continue
+            if [ "$have_tg" = 1 ] && [ -n "$dep_tg" ] && [ -n "$TARGET" ]; then
+                targets_overlap "$dep_tg" "$TARGET" || continue
+            fi
+            hits+=("${dep_name}${dep_tg:+ @ ${dep_tg}}")
+        done
+    done < <(printf '%s\n' "$out")
+
+    [ "${#hits[@]}" -gt 0 ] || return 0
+    err "Deploy refused: ${APP_NAME} collides with an already-deployed representation of the same tier:"
+    for line in "${hits[@]}"; do err "    already deployed: ${line}"; done
+    err "  A tier's EAR and its loose member WARs share context roots; both on one"
+    err "  target drops the tier to ADMIN mode. Deploy ONE representation per target:"
+    err "    - undeploy the conflicting app(s) above, then retry, or"
+    err "    - deploy the other representation instead."
+    err "  Override with --force if the targets don't actually overlap."
+    exit 1
+}
+collision_precheck
 
 # --- Do it ---
 rc=0
