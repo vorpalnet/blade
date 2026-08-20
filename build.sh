@@ -129,7 +129,7 @@ finalize_build_log() {
     # failed Maven run has already had its DISTDIR removed by cleanup.
     if [ "${SKIP_DIST:-true}" != true ] && [ -n "${DISTDIR:-}" ] && [ -d "${DISTDIR:-}" ]; then
         cp -f "$BUILD_LOG" "${DISTDIR}/build.log" 2>/dev/null \
-            && echo "Wrote dist/${REVISION}-${BUILD_NUM}/build.log" >&3
+            && echo "Wrote ${DIST_REL:-dist}/build.log" >&3
     fi
     rm -f "$BUILD_LOG" 2>/dev/null || true
 }
@@ -242,9 +242,13 @@ compute_skip_flags() {
 
 # --- Remove the current build's dist directory on failure ---
 cleanup_failed_dist() {
-    if [ -d "$DISTDIR" ]; then
+    # Only a production build owns a whole versioned directory to discard. A dev
+    # build writes flat into dist/, so its failure must never rm the shared dist/
+    # root (which also holds prod dist/<rev>-<build>/ releases) — leave the prior
+    # flat output in place instead.
+    if [ "${DISTDIR:-}" != "${SCRIPT_DIR}/dist" ] && [ -d "${DISTDIR:-}" ]; then
         rm -rf "$DISTDIR"
-        echo "Build failed — removed dist/${REVISION}-${BUILD_NUM}/"
+        echo "Build failed — removed ${DIST_REL:-dist}/"
     fi
 }
 
@@ -304,6 +308,15 @@ dist_subdir_for() {
 # profile and platform conf files to the dist root for traceability.
 copy_all_to_dist() {
     [ "$SKIP_DIST" = true ] && return 0
+    # A development build writes flat into dist/; clear the previous flat output
+    # first so stale artifacts (a WAR from a module since removed, an old EAR)
+    # don't accrue at the stable path. Only the flat surface is cleared — the
+    # prod dist/<rev>-<build>/ release directories are left untouched.
+    if [ "$DISTDIR" = "${SCRIPT_DIR}/dist" ]; then
+        rm -rf "$DISTDIR"/lib "$DISTDIR"/admin "$DISTDIR"/services "$DISTDIR"/test "$DISTDIR"/proto
+        rm -f "$DISTDIR"/*.ear "$DISTDIR"/*.war "$DISTDIR"/*.jar \
+              "$DISTDIR"/DEPLOYMENT.txt "$DISTDIR"/build.log "$DISTDIR"/*.conf 2>/dev/null || true
+    fi
     mkdir -p "$DISTDIR"
     local copied=0 missing=0
     local mod mdir target f produced subdir destdir final_name
@@ -381,7 +394,7 @@ copy_all_to_dist() {
     [ -n "$CONF_FILE" ] && cp -f "$CONF_FILE" "$DISTDIR/" 2>/dev/null && copied=$((copied + 1))
     cp -f "${PLATFORMS_DIR}/${PLATFORM}.conf" "$DISTDIR/" 2>/dev/null && copied=$((copied + 1))
 
-    echo "Copied ${copied} artifacts to dist/${REVISION}-${BUILD_NUM}/"
+    echo "Copied ${copied} artifacts to ${DIST_REL}/"
     if [ $missing -gt 0 ]; then
         echo "  (${missing} modules in ${PROFILE}.conf produced no artifact — first build, or build failure)"
     fi
@@ -498,7 +511,7 @@ write_deployment_manifest() {
 
     {
         echo "BLADE ${REVISION}-${BUILD_NUM} deployment manifest"
-        echo "See DEPLOYMENT.md for the deployment model (whole-tier EARs at root; loose WARs in folders)."
+        echo "See DEPLOYING.md for the deployment model (whole-tier EARs at root; loose WARs in folders)."
         echo ""
         # Which app version the artifacts actually carry. In dev the build number is
         # deliberately NOT in the app version, so OCCAS redeploys in place instead of
@@ -1065,7 +1078,18 @@ build.number=${BUILD_NUM}
 EOB
 
 # --- Dist directory for this build ---
-DISTDIR="${SCRIPT_DIR}/dist/${REVISION}-${BUILD_NUM}"
+# Production is archival: each build lands in its own dist/<rev>-<build>/ so
+# releases sit side by side and nothing is ever overwritten. Development is a
+# scratch surface: it writes straight into dist/ (flat, cleaned first), so the
+# path is stable for a fast edit/deploy loop and stale artifacts don't pile up.
+# DIST_REL is the same path, relative, for display and the deploy hand-off.
+if [ "$BLADE_MODE" = prod ]; then
+    DISTDIR="${SCRIPT_DIR}/dist/${REVISION}-${BUILD_NUM}"
+    DIST_REL="dist/${REVISION}-${BUILD_NUM}"
+else
+    DISTDIR="${SCRIPT_DIR}/dist"
+    DIST_REL="dist"
+fi
 
 # --- Always install ---
 # Downstream repos (optum, connect) resolve BLADE artifacts via Maven version
@@ -1331,7 +1355,7 @@ if [ "$HAS_BUILD_GOAL" = false ]; then
 elif [ "$SKIP_DIST" = true ]; then
     DIST_MSG="SKIPPED (--no-dist or BLADE_SKIP_DIST set)"
 else
-    DIST_MSG="dist/${REVISION}-${BUILD_NUM}/"
+    DIST_MSG="${DIST_REL}/"
 fi
 echo "Dist:    ${DIST_MSG}"
 

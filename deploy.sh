@@ -331,10 +331,33 @@ if [ -n "$BUILD_VER" ]; then
     DIST_DIR="${DIST_ROOT}/${BUILD_VER}"
     [ -d "$DIST_DIR" ] || die "dist/${BUILD_VER}/ not found."
 elif [ -d "$DIST_ROOT" ]; then
-    DIST_DIR=$(ls -1t "$DIST_ROOT" 2>/dev/null | while read -r d; do
-        [ -d "$DIST_ROOT/$d" ] && echo "$DIST_ROOT/$d" && break
-    done)
+    # A development build writes flat into dist/ (EARs/WARs at the root); a
+    # production build nests each release in dist/<rev>-<build>/. Prefer the flat
+    # dev tree when present, otherwise take the newest versioned release directory.
+    if ls "$DIST_ROOT"/*.ear "$DIST_ROOT"/*.war >/dev/null 2>&1; then
+        DIST_DIR="$DIST_ROOT"
+    else
+        DIST_DIR=$(ls -1t "$DIST_ROOT" 2>/dev/null | while read -r d; do
+            [ -d "$DIST_ROOT/$d" ] && echo "$DIST_ROOT/$d" && break
+        done)
+    fi
 fi
+
+# Tier-aware artifact search within the resolved dist tree. On the flat dev tree
+# (DIST_DIR == dist/) search only the root + tier folders, so a bare filename can
+# never match an artifact inside a prod dist/<rev>-<build>/ release; a versioned
+# tree has no nested releases, so maxdepth 2 (root + tier subdirs) is right there.
+find_in_dist() {   # $1 = -name pattern
+    if [ "$DIST_DIR" = "$DIST_ROOT" ]; then
+        find "$DIST_DIR" -maxdepth 1 -type f -name "$1" 2>/dev/null
+        local t
+        for t in lib admin services test proto; do
+            [ -d "$DIST_DIR/$t" ] && find "$DIST_DIR/$t" -maxdepth 1 -type f -name "$1" 2>/dev/null
+        done
+    else
+        find "$DIST_DIR" -maxdepth 2 -type f -name "$1" 2>/dev/null
+    fi
+}
 
 # --- Deploy engine ---------------------------------------------------------
 # wlst.sh (self-contained; runs on the admin box, which has no Maven) when an
@@ -484,10 +507,10 @@ elif [[ "$FILE_ARG" == */* ]]; then
     die "File not found: ${FILE_ARG}"
 else
     [ -n "$DIST_DIR" ] && [ -d "$DIST_DIR" ] || die "No dist/ to search for '${FILE_ARG}'. Run ./build.sh first, give a path, or pass --build VER."
-    # Search root + tier subdirs for an exact filename match.
-    ART=$(find "$DIST_DIR" -maxdepth 2 -type f -name "$FILE_ARG" 2>/dev/null | head -1)
+    # Tier-aware search (see find_in_dist): the flat dev tree stays out of prod releases.
+    ART=$(find_in_dist "$FILE_ARG" | head -1)
     [ -n "$ART" ] || die "No artifact named '${FILE_ARG}' under ${DIST_DIR}. Available:
-$(find "$DIST_DIR" -maxdepth 2 -type f \( -name '*.war' -o -name '*.ear' -o -name '*.jar' \) -exec basename {} \; 2>/dev/null | sort | sed 's/^/  /')"
+$(find_in_dist '*' | while read -r f; do basename "$f"; done | grep -E '\.(war|ear|jar)$' | sort | sed 's/^/  /')"
 fi
 ART_BASE=$(basename "$ART")
 
