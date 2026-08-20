@@ -153,15 +153,27 @@
 <!-- 1 -->
 <section class="slide on title-slide" aria-label="Title">
   <p class="eyebrow">BLADE · services/webrtc</p>
-  <h1>Puts a browser on one end of a SIP call.</h1>
-  <p class="lede" style="max-width:63ch">On the browser side it speaks a simple JSON protocol over a WebSocket; on the network side it speaks standard SIP. <strong>When two browsers call each other, their audio flows directly between them and no media server is needed.</strong> A media server is brought in only when a call reaches a traditional phone, or when something downstream needs access to the audio.</p>
-  <figure style="margin-top:26px;max-width:640px">
-<pre style="font-size:clamp(11px,1.3vw,16px);line-height:1.7;text-align:center">browser  ⇄  [ <span class="b">WebRTC Gateway</span> ]  ⇄  phone network</pre>
+  <h1>Browser-to-SIP communication.</h1>
+  <p class="lede" style="max-width:63ch">On the browser side, the gateway speaks a simple JSON protocol over a WebSocket; on the network side, standard SIP. It sits in the middle and translates between the two. <strong>When two browsers call each other, their audio flows directly between them and no media server is needed.</strong> A media server joins only when a call reaches a traditional phone, or when something downstream needs access to the audio.</p>
+  <figure style="margin-top:24px;max-width:640px;margin-left:auto;margin-right:auto">
+    <svg viewBox="0 0 640 128" role="img" aria-label="A browser speaks JSON over a WebSocket to the WebRTC Gateway, which speaks SIP to the phone network." style="width:100%;height:auto">
+      <rect x="14" y="42" width="120" height="50" rx="10" fill="var(--sig-bg)" stroke="var(--sig)"/>
+      <text x="74" y="72" text-anchor="middle" font-size="13" font-weight="660" fill="var(--sig)">Browser</text>
+      <rect x="246" y="42" width="164" height="50" rx="10" fill="var(--surface)" stroke="var(--ink)"/>
+      <text x="328" y="72" text-anchor="middle" font-size="13" font-weight="700">WebRTC Gateway</text>
+      <rect x="520" y="42" width="120" height="50" rx="10" fill="var(--sunk)" stroke="var(--muted)"/>
+      <text x="580" y="72" text-anchor="middle" font-size="13" font-weight="660" fill="var(--muted)">Phone network</text>
+      <line x1="134" y1="67" x2="246" y2="67" stroke="var(--sig)" stroke-width="2.6"/>
+      <text x="190" y="33" text-anchor="middle" class="lm" fill="var(--sig)">JSON / WebSocket</text>
+      <line x1="410" y1="67" x2="520" y2="67" stroke="var(--med)" stroke-width="2.6"/>
+      <text x="465" y="33" text-anchor="middle" class="lm" fill="var(--med)">SIP</text>
+    </svg>
+    <figcaption>Two browsers can call each other with no media server at all; one joins when a call reaches a phone.</figcaption>
   </figure>
 </section>
 
 <!-- 2 -->
-<section class="slide" aria-label="Why this exists">
+<section class="slide" aria-label="Why this matters">
   <div class="head">
     <p class="eyebrow">Why this matters</p>
     <h2>Oracle shipped WebRTC Session Controller once, then discontinued it.</h2>
@@ -191,29 +203,47 @@
 </section>
 
 <!-- 3 -->
-<section class="slide" aria-label="Signaling is always SIP">
+<section class="slide" aria-label="Every call is a real SIP call">
   <div class="head">
     <p class="eyebrow">The central rule</p>
     <h2>Every call is a real SIP call.</h2>
     <p class="sub">The signaling always runs over SIP, even when both parties are browsers. A browser-to-browser call gets the <b>same routing, logging, and analytics</b> as any call between two phones — an operator manages it with the tools they already have.</p>
   </div>
-  <div class="body">
-    <p class="lede" style="max-width:none">What varies from one call to the next is the path the audio takes. One setting, <code>mediaMode</code> in <code>webrtc.json</code>, controls it:</p>
-    <div class="two" style="grid-template-columns:repeat(3,1fr);gap:clamp(12px,1.8vw,24px);align-items:start">
-      <div class="stack">
-        <span class="tag s"><span class="dot"></span>Relay</span>
-        <p class="lede" style="font-size:clamp(11.5px,1.2vw,14px)">The two browsers send audio straight to each other, with <b style="color:var(--ink)">no media server in the middle</b>. This is all a browser-to-browser call needs.</p>
-      </div>
-      <div class="stack">
-        <span class="tag m"><span class="dot"></span>Anchor</span>
-        <p class="lede" style="font-size:clamp(11.5px,1.2vw,14px)">The audio passes through a media server. Required when one end is a regular phone — which cannot handle the browser's encrypted media — or when a system downstream needs the audio for <b style="color:var(--ink)">recording, conferencing, or transcription</b>.</p>
-      </div>
-      <div class="stack">
-        <span class="tag"><span class="dot"></span>Auto · default</span>
-        <p class="lede" style="font-size:clamp(11.5px,1.2vw,14px)">The gateway relays when both ends are browsers and anchors when a phone is on the call, deciding for each call on its own.</p>
-      </div>
+  <div class="body"><div class="two">
+    <figure>
+      <svg viewBox="0 0 300 232" role="img" aria-label="Relay sends audio directly between two browsers with no media server. Anchor routes audio through a media server, required for a phone. Auto chooses per call." style="width:100%;height:auto;max-width:320px;display:block;margin:0 auto">
+        <text x="4" y="14" font-size="10" font-weight="700" letter-spacing=".08em" fill="var(--sig)">RELAY</text>
+        <rect x="6" y="22" width="86" height="38" rx="8" fill="var(--sig-bg)" stroke="var(--sig)"/>
+        <text x="49" y="45" text-anchor="middle" font-size="11" font-weight="640" fill="var(--sig)">Browser</text>
+        <rect x="208" y="22" width="86" height="38" rx="8" fill="var(--sig-bg)" stroke="var(--sig)"/>
+        <text x="251" y="45" text-anchor="middle" font-size="11" font-weight="640" fill="var(--sig)">Browser</text>
+        <line x1="92" y1="41" x2="208" y2="41" stroke="var(--sig)" stroke-width="2.2"/>
+        <text x="150" y="35" text-anchor="middle" class="lm" fill="var(--sig)">audio direct</text>
+        <text x="4" y="92" font-size="10" font-weight="700" letter-spacing=".08em" fill="var(--med)">ANCHOR</text>
+        <rect x="6" y="100" width="80" height="38" rx="8" fill="var(--sig-bg)" stroke="var(--sig)"/>
+        <text x="46" y="123" text-anchor="middle" font-size="10.5" font-weight="640" fill="var(--sig)">Browser</text>
+        <rect x="110" y="100" width="80" height="38" rx="8" fill="var(--med-bg)" stroke="var(--med)"/>
+        <text x="150" y="116" text-anchor="middle" font-size="9.5" font-weight="700" fill="var(--med)">media</text>
+        <text x="150" y="128" text-anchor="middle" font-size="9.5" font-weight="700" fill="var(--med)">server</text>
+        <rect x="214" y="100" width="80" height="38" rx="8" fill="var(--sunk)" stroke="var(--muted)"/>
+        <text x="254" y="123" text-anchor="middle" font-size="10.5" font-weight="640" fill="var(--muted)">Phone</text>
+        <line x1="86" y1="119" x2="110" y2="119" stroke="var(--med)" stroke-width="2.2"/>
+        <line x1="190" y1="119" x2="214" y2="119" stroke="var(--med)" stroke-width="2.2"/>
+        <text x="4" y="170" font-size="10" font-weight="700" letter-spacing=".08em">AUTO</text>
+        <rect x="6" y="178" width="288" height="46" rx="8" fill="var(--sunk)" stroke="var(--hair)"/>
+        <text x="150" y="199" text-anchor="middle" font-size="10.5" fill="var(--muted)">Relay between two browsers;</text>
+        <text x="150" y="213" text-anchor="middle" font-size="10.5" fill="var(--muted)">anchor when a phone is on the call.</text>
+      </svg>
+    </figure>
+    <div>
+      <p class="lede" style="max-width:none;margin-bottom:14px">What varies from one call to the next is the path the audio takes. One setting, <code>mediaMode</code> in <code>webrtc.json</code>, controls it:</p>
+      <ul class="facts">
+        <li><b>Relay</b> — the two browsers send audio straight to each other, with no media server in the middle. All a browser-to-browser call needs.</li>
+        <li><b>Anchor</b> — the audio passes through a media server. Required when one end is a regular phone, or when a system downstream needs the audio for recording, conferencing, or transcription.</li>
+        <li><b>Auto</b> (the default) — relay between browsers, anchor when a phone is on the call, decided per call.</li>
+      </ul>
     </div>
-  </div>
+  </div></div>
 </section>
 
 <!-- 4 -->
@@ -252,7 +282,7 @@
     </figure>
     <ul class="facts">
       <li>The two browsers complete a DTLS handshake <b>directly with each other</b> and derive their SRTP keys from a master secret the signaling path never sees. The gateway forwarded fingerprints and nothing more, <b>so it cannot decrypt a single packet.</b></li>
-      <li><b>That applies to everything downstream too.</b> Recording, transcription, conferencing and scoring each belong to a service of its own — but no such service can reach a relayed call either, because the audio never leaves the two endpoints.</li>
+      <li><b>The same is true for anything downstream.</b> Recording, transcription, and monitoring each belong to a separate service — but none can reach a relayed call either, because the audio never leaves the two browsers.</li>
       <li>Anchoring is the only thing that puts a call's media somewhere another system can use, <b>which is why the choice lives here even though the features do not.</b></li>
       <li>A relayed call can still be moved onto a media server afterwards, by re-INVITE. It costs an ICE restart and a fresh DTLS handshake, so there is a brief audible gap. Anchoring from the start avoids that and pays for a media server on every call — <b>that trade is the whole reason the setting exists.</b></li>
     </ul>
@@ -269,7 +299,7 @@
     <p class="sub">A far end re-offers for ordinary reasons — hold, unhold, a session refresh, a codec change — and every one is handled. The gateway watches for a re-offer from the moment a call is answered, and <b>keeps watching</b>, because a call is re-offered repeatedly.</p>
   </div>
   <div class="body">
-    <p class="lede" style="max-width:none">What happens depends on the media path, and the split is the same one everything else in this application turns on:</p>
+    <p class="lede" style="max-width:none">How the gateway responds depends on which media path the call is using:</p>
     <div class="two">
       <div class="stack">
         <span class="tag m"><span class="dot"></span>Anchored</span>
@@ -298,8 +328,8 @@
   <div class="body"><div class="two">
     <div class="stack">
       <span class="tag m"><span class="dot"></span>A caller who hangs up while ringing</span>
-      <p class="lede">A caller who gives up while the browser is still ringing arrives as a CANCEL. The gateway <b style="color:var(--ink)">stops the ring, frees the media, tells the browser and records the call as abandoned</b> — and sends nothing back.</p>
-      <p class="lede">The container owns that transaction: it answers the CANCEL itself and kills the INVITE with a <code>487</code>. An application that answers as well puts <b style="color:var(--ink)">a second final response on the wire</b>, so the framework drops one if you try.</p>
+      <p class="lede">If the caller gives up while the browser is still ringing, the call arrives as a SIP CANCEL. The gateway <b style="color:var(--ink)">stops the ringing, releases any media, notifies the browser, and records the call as abandoned</b> — but sends no response of its own.</p>
+      <p class="lede">The container handles that transaction itself: it answers the CANCEL and terminates the original INVITE with a <code>487</code>. Were the application to answer as well, <b style="color:var(--ink)">a second final response would go out on the wire</b>, so the framework suppresses the duplicate.</p>
     </div>
     <div class="stack">
       <span class="tag s"><span class="dot"></span>DTMF travels over signaling, not audio</span>
@@ -310,7 +340,7 @@
 <span class="n">Signal</span>=5
 <span class="n">Duration</span>=250</pre>
       </figure>
-      <p class="lede"><b style="color:var(--ink)">Not a preference:</b> no JSR-309 driver behind this framework implements tone generation, so a digit cannot be injected into the media stream at all. That is also why DTMF works the same on both media paths — a relayed call has no media session to inject into, and the INFO rides the dialog either way.</p>
+      <p class="lede">It does not inject a tone into the audio stream — <b style="color:var(--ink)">no JSR-309 media driver behind the framework generates tones</b>, so that route isn't available. Carrying the digit over signaling works the same on both media paths: a relayed call has no media session to inject into, and the INFO rides the SIP dialog either way.</p>
     </div>
   </div></div>
 </section>
@@ -328,7 +358,7 @@
       <li>So a browser cannot register as a SIP UA against this server <b>regardless of how the application is written.</b></li>
     </ul>
     <div class="stack">
-      <p class="pull">That settles it — and it is also <span class="hs">the design we would pick.</span></p>
+      <p class="pull">And it happens to match <span class="hs">the design we would have chosen anyway.</span></p>
       <p class="lede">A browser answering <i>"a call is arriving, do you want it?"</i> has no need to own dialogs, Via headers, registration refreshes or transaction state.</p>
     </div>
   </div></div>
@@ -367,7 +397,7 @@
       </tbody></table>
     </div>
   </div>
-  <p class="lede" style="max-width:none;font-size:clamp(12px,1.24vw,14.5px)"><b style="color:var(--ink)">Every type names its scope, then its verb</b> — <code>&lt;scope&gt;.&lt;verb&gt;</code>, lower case. <code>signal.error</code> is neither <code>session.</code> nor <code>call.</code> because it is both: the <code>subject</code> says which one an error is about, set for a call and absent for the socket itself.</p>
+  <p class="lede" style="max-width:none;font-size:clamp(12px,1.24vw,14.5px)"><b style="color:var(--ink)">Every type is named <code>scope.verb</code></b>, in lower case. <code>signal.error</code> is the exception to the two scopes — an error can belong either to a call or to the session as a whole, and its <code>subject</code> says which: set for a call, absent for the socket itself.</p>
   </div>
 </section>
 
@@ -375,7 +405,7 @@
 <section class="slide" aria-label="Two verbs removed">
   <div class="head">
     <p class="eyebrow">The protocol</p>
-    <h2>Two verbs were declared once and are deliberately gone.</h2>
+    <h2>Two verbs were defined early and then deliberately removed.</h2>
   </div>
   <div class="body"><div class="two">
     <div class="stack">
@@ -404,8 +434,25 @@
       <p class="pull"><code style="font-size:.8em">call.established</code> is the <span class="hs">200 OK</span>. <code style="font-size:.8em">call.connected</code> is the <span class="hm">ACK</span> that completes the handshake, and <b>never arrives before it.</b></p>
       <p class="lede">The split follows the framework's own call lifecycle — <code>CALL_ANSWERED</code> then <code>CALL_CONNECTED</code> — and it exists because <b style="color:var(--ink)">the third message carries information</b>.</p>
       <figure style="width:100%">
-<pre><span class="p">{</span> <span class="k">"type"</span><span class="p">:</span> <span class="b">"call.connected"</span><span class="p">,</span>
-  <span class="k">"data"</span><span class="p">:</span> <span class="p">{</span> <span class="k">"negotiated"</span><span class="p">:</span> <span class="n">false</span> <span class="p">}</span> <span class="p">}</span></pre>
+        <svg viewBox="0 0 300 168" role="img" aria-label="SIP answers a call in three messages: INVITE, then 200 OK which is call.established, then ACK which is call.connected." style="width:100%;height:auto;max-width:300px;display:block;margin:0 auto">
+          <text x="60" y="14" text-anchor="middle" font-size="10.5" font-weight="700" fill="var(--muted)">Caller</text>
+          <text x="240" y="14" text-anchor="middle" font-size="10.5" font-weight="700">Gateway</text>
+          <line x1="60" y1="22" x2="60" y2="158" stroke="var(--line)"/>
+          <line x1="240" y1="22" x2="240" y2="158" stroke="var(--line)"/>
+          <line x1="60" y1="48" x2="236" y2="48" stroke="var(--muted)" stroke-width="2" marker-end="url(#l10a)"/>
+          <text x="64" y="41" class="lm">INVITE</text>
+          <line x1="240" y1="92" x2="64" y2="92" stroke="var(--sig)" stroke-width="2.2" marker-end="url(#l10b)"/>
+          <text x="236" y="85" text-anchor="end" class="lm" fill="var(--sig)">200 OK</text>
+          <text x="236" y="107" text-anchor="end" class="lm" fill="var(--sig)">call.established</text>
+          <line x1="60" y1="140" x2="236" y2="140" stroke="var(--med)" stroke-width="2.2" marker-end="url(#l10c)"/>
+          <text x="64" y="133" class="lm" fill="var(--med)">ACK</text>
+          <text x="236" y="133" text-anchor="end" class="lm" fill="var(--med)">call.connected</text>
+          <defs>
+            <marker id="l10a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><polygon points="0,0 8,4 0,8" fill="var(--muted)"/></marker>
+            <marker id="l10b" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><polygon points="0,0 8,4 0,8" fill="var(--sig)"/></marker>
+            <marker id="l10c" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><polygon points="0,0 8,4 0,8" fill="var(--med)"/></marker>
+          </defs>
+        </svg>
       </figure>
     </div>
     <ul class="facts">
@@ -430,7 +477,7 @@
         <li>A browser sends its whole offer or answer after gathering finishes, candidates included, and the gateway forwards SDP whole.</li>
         <li><b>Anchored:</b> because the media server does not advertise inbound trickle.</li>
         <li><b>Relayed:</b> because the SDP crosses a SIP fabric whose forks and B2BUA hops have no channel for mid-flight candidates.</li>
-        <li>Half-trickle also removes an entire class of ordering bug from the client. The <code>ice.candidate</code> type remains — the gateway may still trickle <i>its</i> candidates browser-ward on anchored calls.</li>
+        <li>Sending complete SDP also removes a class of ordering bugs from the client. The <code>ice.candidate</code> type remains — the gateway may still trickle <i>its own</i> candidates toward the browser on anchored calls.</li>
       </ul>
     </div>
     <div class="stack">
@@ -438,7 +485,7 @@
       <ul class="facts m">
         <li>On an anchored outbound call <code>call.progress</code> carries the gateway's SDP answer, so <b>the browser has a media path while the far end is still ringing.</b></li>
         <li>Deferring it to <code>call.established</code> would mean no ringback and no carrier early media.</li>
-        <li>On the pass-through path there is no local answer to give early: SDP is forwarded as the far end produces it — on <code>call.progress</code> when an 18x carries it, else on <code>call.established</code> — and <b>exactly once</b>, because a browser cannot apply a second answer.</li>
+        <li>On the relayed path there is no local answer to give early: the far end's SDP is forwarded as it arrives — on <code>call.progress</code> when an 18x carries it, else on <code>call.established</code> — and <b>exactly once</b>, because a browser cannot apply a second answer.</li>
       </ul>
     </div>
   </div></div>
@@ -449,20 +496,33 @@
   <div class="head">
     <p class="eyebrow">Authenticating a browser</p>
     <h2>A socket arriving here says nothing about who is on the other end.</h2>
-    <p class="sub">It came from a page served by a different server on a different port, so no admin session cookie reaches this tier, and the browser WebSocket API cannot attach an <code>Authorization</code> header to a handshake. Left alone, "who are you" is answered by whatever the client typed.</p>
+    <p class="sub">It comes from a page on a different server and port, so no admin cookie reaches this tier and the WebSocket handshake carries no <code>Authorization</code> header. Left alone, "who are you?" is answered by whatever the client claims — so <code>session.connect</code> carries a signed token, and <code>BrowserAuthenticator</code> decides.</p>
   </div>
   <div class="body"><div class="two">
-    <ul class="facts">
-      <li>So <code>session.connect</code> carries a <b>signed token beside the address</b>. Configuration is an ordinary <code>JwtAuthConfig</code> — the same fields that would describe Okta or Entra.</li>
-      <li>Pointing it at a corporate IdP instead of the bundled phone app is <b>a configuration change with no code behind it.</b></li>
-      <li><b>The address comes from the token, not from the request.</b> A browser asking for a different one is refused rather than quietly corrected — checking only the signature would leave every signed-in employee able to register as a colleague and take their calls, a hijack performed by a fully authenticated user.</li>
-    </ul>
+    <figure>
+      <svg viewBox="0 0 440 196" role="img" aria-label="The browser sends session.connect with its address and a signed token. The gateway checks the signature and that the token names the requested address, then accepts with session.ready or refuses with signal.error." style="width:100%;height:auto;max-width:420px;display:block;margin:0 auto">
+        <rect x="8" y="66" width="118" height="56" rx="9" fill="var(--sig-bg)" stroke="var(--sig)"/>
+        <text x="67" y="90" text-anchor="middle" font-size="12" font-weight="640" fill="var(--sig)">Browser</text>
+        <text x="67" y="107" text-anchor="middle" font-size="8.5" fill="var(--sig)">+ signed token</text>
+        <line x1="126" y1="94" x2="196" y2="94" stroke="var(--muted)" stroke-width="2" marker-end="url(#a12)"/>
+        <text x="161" y="86" text-anchor="middle" font-size="8" fill="var(--muted)" font-family="ui-monospace,Menlo,monospace">session.connect</text>
+        <rect x="196" y="52" width="182" height="82" rx="9" fill="var(--surface)" stroke="var(--ink)"/>
+        <text x="287" y="72" text-anchor="middle" font-size="10.5" font-weight="700">BrowserAuthenticator</text>
+        <text x="287" y="92" text-anchor="middle" font-size="8.5" fill="var(--muted)" font-family="ui-monospace,Menlo,monospace">1 · signature valid?</text>
+        <text x="287" y="110" text-anchor="middle" font-size="8.5" fill="var(--muted)" font-family="ui-monospace,Menlo,monospace">2 · token = the requested address?</text>
+        <line x1="287" y1="134" x2="287" y2="152" stroke="var(--line)"/>
+        <text x="196" y="170" font-size="9" fill="var(--ok)" font-family="ui-monospace,Menlo,monospace">✓ session.ready</text>
+        <text x="378" y="170" text-anchor="end" font-size="9" fill="var(--med)" font-family="ui-monospace,Menlo,monospace">✗ signal.error</text>
+        <defs><marker id="a12" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><polygon points="0,0 7,3.5 0,7" fill="var(--muted)"/></marker></defs>
+      </svg>
+      <figcaption>The token names the one address its holder may bind — a mismatch is refused, not corrected. Configuration is an ordinary <code>JwtAuthConfig</code>: point it at Okta or Entra with no code.</figcaption>
+    </figure>
     <div class="stack">
-      <p class="pull"><span class="hm">It fails closed.</span></p>
+      <p class="pull"><span class="hm">Authentication fails closed.</span></p>
       <ul class="facts m">
-        <li>No configuration, or configuration that cannot be used — a blank or unreachable <code>jwksUri</code> — refuses the browser and names the setting to fix. <b>"We could not read the rule" must never mean "there is no rule".</b></li>
-        <li>The one open path is explicit: <code>jwt.enabled = false</code> lets any browser claim any address, and when set the service logs SEVERE at startup <i>and</i> reports <code>authenticated: false</code> in <code>session.ready</code>, so the phone shows it on screen rather than only in a log.</li>
-        <li>The shipped sample has <code>enabled = true</code> and a blank <code>jwksUri</code>, so <b>a half-configured deployment gets a gateway that does not work rather than one that works and is open.</b></li>
+        <li>Missing or unusable configuration — a blank or unreachable <code>jwksUri</code> — <b>refuses the browser</b> and names the setting to fix. "We could not read the rule" must never mean "there is no rule."</li>
+        <li>The only open path is explicit: <code>jwt.enabled = false</code> lets any browser claim any address, logs SEVERE at startup, and reports <code>authenticated: false</code> in <code>session.ready</code>.</li>
+        <li>The shipped sample pairs <code>enabled = true</code> with a blank <code>jwksUri</code>, so a half-configured deployment <b>refuses to work rather than running open</b>.</li>
       </ul>
     </div>
   </div></div>
@@ -473,26 +533,44 @@
   <div class="head">
     <p class="eyebrow">Location service</p>
     <h2>The gateway REGISTERs on the browser's behalf.</h2>
-    <p class="sub"><code>BrowserRegistry</code> is only the socket table — which browsers hold a live WebSocket on <i>this node</i>. The network's location service is <code>proxy-registrar</code>, and browsers appear in it because this gateway speaks SIP for them: the SBC arrangement.</p>
+    <p class="sub"><code>BrowserRegistry</code> is only the socket table — which browsers hold a live WebSocket on <i>this node</i>. The network's location service is <code>proxy-registrar</code>, and browsers appear in it because the gateway speaks SIP for them — the same arrangement a session border controller uses.</p>
   </div>
-  <div class="body">
-    <p class="lede" style="max-width:none">On a successful <code>session.connect</code> the gateway sends a real REGISTER (From = To = the AOR) whose contact is <b style="color:var(--ink)">routable</b> — this engine's own SIP interface carrying the container's targeting parameters:</p>
+  <div class="body"><div class="two">
     <figure>
-<pre style="font-size:clamp(9px,.98vw,11.5px)"><span class="k">Contact:</span> &lt;sip:alice@<span class="b">…:5060</span>;transport=tcp;<span class="s">sipappsessionid</span>=&lt;prefix&gt;:&lt;callId&gt;:webrtc;<span class="s">wlsscid</span>=…&gt;</pre>
+      <svg viewBox="0 0 440 224" role="img" aria-label="An inbound call reaches the registrar, which forks it using the stored contact to the engine that holds the browser's WebSocket, not the other engine." style="width:100%;height:auto;max-width:420px;display:block;margin:0 auto">
+        <text x="10" y="32" font-size="9.5" fill="var(--muted)">INVITE</text>
+        <line x1="58" y1="28" x2="166" y2="28" stroke="var(--muted)" stroke-width="2" marker-end="url(#c13a)"/>
+        <rect x="166" y="10" width="108" height="38" rx="8" fill="var(--surface)" stroke="var(--ink)"/>
+        <text x="220" y="34" text-anchor="middle" font-size="10.5" font-weight="700">registrar</text>
+        <rect x="22" y="130" width="150" height="44" rx="8" fill="var(--sunk)" stroke="var(--line)"/>
+        <text x="97" y="157" text-anchor="middle" font-size="10.5" font-weight="640" fill="var(--faint)">Engine 1</text>
+        <rect x="268" y="130" width="150" height="44" rx="8" fill="var(--surface)" stroke="var(--sig)"/>
+        <text x="343" y="157" text-anchor="middle" font-size="10.5" font-weight="700" fill="var(--sig)">Engine 2</text>
+        <line x1="200" y1="48" x2="110" y2="130" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="4 3"/>
+        <text x="150" y="90" text-anchor="end" font-size="8.5" fill="var(--faint)">no socket</text>
+        <line x1="240" y1="48" x2="330" y2="130" stroke="var(--sig)" stroke-width="2.2" marker-end="url(#c13b)"/>
+        <text x="300" y="90" font-size="8.5" fill="var(--sig)">contact → this node</text>
+        <rect x="288" y="188" width="110" height="30" rx="8" fill="var(--sig-bg)" stroke="var(--sig)"/>
+        <text x="343" y="207" text-anchor="middle" font-size="9.5" font-weight="640" fill="var(--sig)">Browser (WS)</text>
+        <line x1="343" y1="174" x2="343" y2="188" stroke="var(--sig)" stroke-width="1.8"/>
+        <defs>
+          <marker id="c13a" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><polygon points="0,0 7,3.5 0,7" fill="var(--muted)"/></marker>
+          <marker id="c13b" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><polygon points="0,0 7,3.5 0,7" fill="var(--sig)"/></marker>
+        </defs>
+      </svg>
+      <figcaption>The fork lands on the node holding the socket — the call arrives where it can be answered.</figcaption>
     </figure>
-    <div class="two">
+    <div class="stack" style="width:100%">
+      <figure style="width:100%">
+<pre style="font-size:clamp(8px,.92vw,10.5px)"><span class="k">Contact:</span> &lt;sip:alice@<span class="b">…:5060</span>;transport=tcp;<span class="s">sipappsessionid</span>=…:webrtc;<span class="s">wlsscid</span>=…&gt;</pre>
+      </figure>
       <ul class="facts">
-        <li><b>That header is the whole inbound routing story.</b> The registrar stores it verbatim and forks an inbound INVITE with it as the Request-URI.</li>
-        <li>The container recognizes its own targeting parameters and dispatches the fork into the registration's session <b>before the router's state machine runs</b>.</li>
-        <li><b>No FSMAR transition names this application for inbound calls</b> — the REGISTER said everything, which is what a registrar's contact is for.</li>
-      </ul>
-      <ul class="facts m">
-        <li>Because the contact names the registering engine, <b>a fork in a cluster is delivered to the node holding the WebSocket.</b> The contact routes to the node.</li>
-        <li>So <code>BrowserRegistry</code> being node-local is not a cluster limitation, and there is nothing to fan out: the call, its dialog and its media all arrive where the socket already is.</li>
-        <li>The <code>480</code> answered when the socket is not here means <b>the binding is stale</b> — and until the browser re-registers it is unreachable from every engine, not just this one.</li>
+        <li><b>That contact is the whole inbound routing story.</b> The registrar stores it verbatim and forks the INVITE to it; the container dispatches the call into the registration's session <b>before the router runs</b>.</li>
+        <li><b>No FSMAR rule names this app for inbound calls</b> — the REGISTER said everything.</li>
+        <li>So <code>BrowserRegistry</code> being node-local is not a cluster limitation. A <code>480</code> means the binding is stale — the browser has not re-registered yet.</li>
       </ul>
     </div>
-  </div>
+  </div></div>
 </section>
 
 <!-- 14 -->
@@ -518,7 +596,7 @@
 <section class="slide" aria-label="Late media">
   <div class="head">
     <p class="eyebrow">Late media</p>
-    <h2>An INVITE with no SDP — the case the prior art dropped.</h2>
+    <h2>An INVITE with no SDP — the case the earlier product dropped.</h2>
   </div>
   <div class="body"><div class="two">
     <figure>
@@ -549,7 +627,7 @@
     </figure>
     <ul class="facts m">
       <li>This is <b>the one path where <code>call.established</code> and <code>call.connected</code> are genuinely far apart</b>, and the only one where the ACK can arrive owing an answer it does not carry — hence <code>negotiated: false</code>.</li>
-      <li><b>Late media always anchors, and cannot be made to work without a media server.</b> Having the browser offer instead was considered and rejected: late media is a pattern browsers never originate, so the caller is a phone or a trunk, and the answer coming back in the <code>ACK</code> is plain RTP with no DTLS fingerprint — which a browser will not complete media against.</li>
+      <li><b>Late media always anchors, and cannot be made to work without a media server.</b> Having the browser offer instead was considered and rejected: late media is a pattern browsers never originate, so the caller is a phone or a trunk, and the answer coming back in the <code>ACK</code> is plain RTP with no DTLS fingerprint — which a browser will not set up media against.</li>
       <li>On this call shape <b>the media server is the only party present that can speak to both ends.</b> Without a driver the gateway refuses with <code>503</code> and says so by name in the log.</li>
     </ul>
   </div></div>
@@ -558,7 +636,7 @@
 <!-- 16 -->
 <section class="slide" aria-label="Event bus">
   <div class="head">
-    <p class="eyebrow">What a call puts on the event bus</p>
+    <p class="eyebrow">What a call reports to analytics</p>
     <h2>A browser call is a call, to everything downstream.</h2>
     <p class="sub">A WebRTC call used to be invisible to analytics — none of the framework's own publishers ever ran for it, and a browser call left no trace in any report.</p>
   </div>
