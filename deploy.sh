@@ -347,7 +347,7 @@ elif [ -d "$DIST_ROOT" ]; then
     # A development build writes flat into dist/ (EARs/WARs at the root); a
     # production build nests each release in dist/<rev>-<build>/. Prefer the flat
     # dev tree when present, otherwise take the newest versioned release directory.
-    if ls "$DIST_ROOT"/*.ear "$DIST_ROOT"/*.war >/dev/null 2>&1; then
+    if ls "$DIST_ROOT"/*.ear >/dev/null 2>&1 || ls "$DIST_ROOT"/*.war >/dev/null 2>&1; then
         DIST_DIR="$DIST_ROOT"
     else
         DIST_DIR=$(ls -1t "$DIST_ROOT" 2>/dev/null | while read -r d; do

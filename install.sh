@@ -1722,6 +1722,25 @@ owner_of_path() {
     esac
 }
 
+# User:Group for a systemd BOOT unit — owner_of_path, but NEVER root. A WebLogic
+# Node Manager or managed server must not run as root: root-owning a domain is a
+# defect (a step ran as root instead of the install user), and a unit that bakes
+# User=root cements it — Node Manager launches every server AS ITSELF, so one
+# root NM turns the whole tier root (and an oracle-run stop can no longer signal
+# them). Fall back to the install user and flag the ownership to be chown'd,
+# rather than perpetuating root. The warn goes to stderr so it never lands in the
+# user:grp this is captured for. owner_of_path stays as-is for OPERATIONAL
+# retargeting (iu_owner_user) — only the unit files reject root.
+unit_owner_of_path() {
+    local og; og="$(owner_of_path "$1" "${2:-}")"
+    case "$og" in
+        root:*|root)
+            warn "${1} is owned by root — WebLogic must not run as root. Rendering the unit as ${INSTALL_USER:-oracle}:${INV_GRP:-oinstall}; chown the domain to that owner so it can read it at boot." >&2
+            printf '%s:%s' "${INSTALL_USER:-oracle}" "${INV_GRP:-oinstall}" ;;
+        *) printf '%s' "$og" ;;
+    esac
+}
+
 # --- install-user identity ---------------------------------------------------
 # STEP 1 ('u'/'m') hands the whole install to install.user, so every step that
 # writes into it must RUN as that user — while the invoker stays whoever the
@@ -1874,6 +1893,11 @@ java_home_stable() {
         local lreal; lreal="$(readlink -f "$link" 2>/dev/null || true)"
         [ -n "$lreal" ] && [ "$lreal" = "$(readlink -f "$jh" 2>/dev/null)" ] && jh="$link"
     fi
+    # Self-heal a DEAD pin: if jh points at a JDK that no longer exists (a patch
+    # removed jdk-21.0.11) but the stable link IS a valid JDK, use the link. This
+    # only fires when the pin is broken — a deliberate, still-valid pin (java is
+    # runnable there) is left exactly as chosen, so it never fights an intended pin.
+    if [ ! -x "${jh}/bin/java" ] && [ -x "${link}/bin/java" ]; then jh="$link"; fi
     printf '%s' "$jh"
 }
 
@@ -2078,7 +2102,7 @@ write_nm_envfile() {
 refresh_boot_envs() {
     [ -n "$DOMAIN" ] || return 0
     local domhome="${DOMAINS_DIR}/${DOMAIN}" envfile="${DOMAINS_DIR}/${DOMAIN}/.blade-nm.env"
-    local user grp; IFS=: read -r user grp <<< "$(owner_of_path "$domhome")"
+    local user grp; IFS=: read -r user grp <<< "$(unit_owner_of_path "$domhome")"
     local pw="${BLADE_WLS_PASSWORD:-}"
     [ -z "$pw" ] && [ -f "$WLS_SECRET" ] && pw="$(read_prop "$WLS_SECRET" admin.password)"
     local sshu="${SSH_USER:-$(id -un)}" i name addr tgt did=0
@@ -2108,7 +2132,7 @@ do_install_nm_service() {
     [ -n "$nmdom" ] || { warn "no nm.domain.name."; return 1; }
     local nmhome="${DOMAINS_DIR}/${nmdom}"
     [ "$DRY" = "on" ] || [ -d "$nmhome" ] || { warn "nmdomain not found: ${nmhome} — create the Node Manager domain first."; return 1; }
-    local user grp; IFS=: read -r user grp <<< "$(owner_of_path "$nmhome")"
+    local user grp; IFS=: read -r user grp <<< "$(unit_owner_of_path "$nmhome")"
     local text
     text="$(render_systemd_unit "WebLogic Node Manager (BLADE ${nmdom})" \
         "$nmhome" "${nmhome}/bin/startNodeManager.sh" "${nmhome}/bin/stopNodeManager.sh" \
@@ -2126,7 +2150,7 @@ do_install_wls_service() {
     [ -n "$dom" ] || { warn "no domain name."; return 1; }
     local domhome="${DOMAINS_DIR}/${dom}"
     [ "$DRY" = "on" ] || [ -d "$domhome" ] || { warn "app domain not found: ${domhome} — create the cluster domain first (configure)."; return 1; }
-    local user grp; IFS=: read -r user grp <<< "$(owner_of_path "$domhome")"
+    local user grp; IFS=: read -r user grp <<< "$(unit_owner_of_path "$domhome")"
     # Boot start is nmConnect/nmStart, so the domain must be enrolled in NM. Warn
     # (don't fail) if it isn't yet — 'c' or a first 's' enrolls it persistently.
     local nmfile="${DOMAINS_DIR}/${NM_DOMAIN}/nodemanager/nodemanager.domains"
@@ -2255,7 +2279,7 @@ provision_one_host() {
     local adminurl="${ADMINURL:-t3://${H_ADDR[0]}:7001}"
     local pw; pw="${BLADE_WLS_PASSWORD:-}"
     [ -z "$pw" ] && [ -f "$WLS_SECRET" ] && pw="$(read_prop "$WLS_SECRET" admin.password)"
-    local user grp; IFS=: read -r user grp <<< "$(owner_of_path "$mw")"
+    local user grp; IFS=: read -r user grp <<< "$(unit_owner_of_path "$mw")"
 
     # Stage the boot helpers into the domain BEFORE the rsync, so each engine
     # receives them as part of the domain copy rather than needing a repo clone.
