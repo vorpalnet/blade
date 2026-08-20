@@ -74,10 +74,11 @@ done
 # One config file per env holds config + secrets: ~/.blade/<env>.conf (legacy
 # build-profiles path is a fallback). Secrets are keys in the same file.
 BLADE_HOME="${BLADE_HOME:-$HOME/.blade}"
+. "$(dirname "${BASH_SOURCE[0]}")/../misc/blade-paths.sh"
 if [ -f "$ENV_ARG" ]; then
-    CONF_FILE="$ENV_ARG"; ENV_NAME="$(basename "${ENV_ARG%.conf}")"
+    CONF_FILE="$ENV_ARG"; ENV_NAME="$(blade_name_for_conf "$ENV_ARG")"
 else
-    ENV_NAME="$ENV_ARG"; CONF_FILE="${BLADE_HOME}/${ENV_NAME}.conf"
+    ENV_NAME="$ENV_ARG"; CONF_FILE="$(blade_profile_conf "$ENV_NAME")"
     [ -f "$CONF_FILE" ] || CONF_FILE="${DEPLOY_DIR}/${ENV_NAME}.conf"
 fi
 SECRET_FILE="$CONF_FILE"
@@ -135,7 +136,7 @@ fi
 # Output beside the config under ~/.blade (default), not scattered in the repo.
 # certs.dir in the conf overrides. Kept in step with certs.sh and install.sh.
 OUTDIR="$(read_prop "$CONF_FILE" "certs.dir")"; OUTDIR="${OUTDIR/#\~/$HOME}"
-[ -z "$OUTDIR" ] && OUTDIR="${BLADE_HOME}/${ENV_NAME}"
+[ -z "$OUTDIR" ] && OUTDIR="$(blade_certs_dir_for_conf "$CONF_FILE")"
 mkdir -p "$OUTDIR"
 CA_P12="${OUTDIR}/blade-ca.p12"
 CA_PEM="${OUTDIR}/blade-ca.pem"

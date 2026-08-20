@@ -98,10 +98,11 @@ done
 # One config file per env holds config + secrets: ~/.blade/<env>.conf (legacy
 # build-profiles path is a fallback). Secrets are keys in the same file.
 BLADE_HOME="${BLADE_HOME:-$HOME/.blade}"
+. "$(dirname "${BASH_SOURCE[0]}")/../misc/blade-paths.sh"
 if [ -f "$ENV_ARG" ]; then
-    CONF_FILE="$ENV_ARG"; ENV_NAME="$(basename "${ENV_ARG%.conf}")"
+    CONF_FILE="$ENV_ARG"; ENV_NAME="$(blade_name_for_conf "$ENV_ARG")"
 else
-    ENV_NAME="$ENV_ARG"; CONF_FILE="${BLADE_HOME}/${ENV_NAME}.conf"
+    ENV_NAME="$ENV_ARG"; CONF_FILE="$(blade_profile_conf "$ENV_NAME")"
     [ -f "$CONF_FILE" ] || CONF_FILE="${DEPLOY_DIR}/${ENV_NAME}.conf"
 fi
 SECRET_FILE="$CONF_FILE"
@@ -147,7 +148,7 @@ ENGINE_NODES=()
 # Cert source: ~/.blade/<env> by default (certs.dir overrides) — in step with
 # certs.sh / make-certs.sh / install.sh, not the repo checkout.
 OUTDIR="$(read_prop "$CONF_FILE" "certs.dir")"; OUTDIR="${OUTDIR/#\~/$HOME}"
-[ -z "$OUTDIR" ] && OUTDIR="${BLADE_HOME}/${ENV_NAME}"
+[ -z "$OUTDIR" ] && OUTDIR="$(blade_certs_dir_for_conf "$CONF_FILE")"
 ID_P12="${OUTDIR}/blade-identity.p12"
 TRUST_P12="${OUTDIR}/blade-trust.p12"
 ID_BASENAME="$(basename "$ID_P12")"

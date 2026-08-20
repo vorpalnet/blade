@@ -88,10 +88,11 @@ case "$MODE" in generate|import|show) ;; *) die "Unknown mode: ${MODE}" ;; esac
 # One config file per env holds config + secrets: ~/.blade/<env>.conf (legacy
 # build-profiles path is a fallback). Secrets are keys in the same file.
 BLADE_HOME="${BLADE_HOME:-$HOME/.blade}"
+. "$(dirname "${BASH_SOURCE[0]}")/misc/blade-paths.sh"
 if [ -f "$ENV_ARG" ]; then
-    CONF_FILE="$ENV_ARG"; ENV_NAME="$(basename "${ENV_ARG%.conf}")"
+    CONF_FILE="$ENV_ARG"; ENV_NAME="$(blade_name_for_conf "$ENV_ARG")"
 else
-    ENV_NAME="$ENV_ARG"; CONF_FILE="${BLADE_HOME}/${ENV_NAME}.conf"
+    ENV_NAME="$ENV_ARG"; CONF_FILE="$(blade_profile_conf "$ENV_NAME")"
     [ -f "$CONF_FILE" ] || CONF_FILE="${OCCAS_DIR}/${ENV_NAME}.conf"
 fi
 SECRET_FILE="$CONF_FILE"
@@ -107,7 +108,7 @@ read_prop() {
 # ~/.blade/<env>, beside the config, so keys live in one place off in the
 # user's home rather than scattered in the repo checkout. certs.dir overrides.
 CERTS_DIR="$(read_prop "$CONF_FILE" "certs.dir")"; CERTS_DIR="${CERTS_DIR/#\~/$HOME}"
-[ -z "$CERTS_DIR" ] && CERTS_DIR="${BLADE_HOME}/${ENV_NAME}"
+[ -z "$CERTS_DIR" ] && CERTS_DIR="$(blade_certs_dir_for_conf "$CONF_FILE")"
 case "$CERTS_DIR" in
     "${SCRIPT_DIR}/tls/out"/*) ;;                                   # gitignored in-repo path — allowed for back-compat
     "$SCRIPT_DIR"/*) die "certs.dir is inside the repo (${CERTS_DIR}) but not under tls/out — keys must not be committable. Use ~/.blade/${ENV_NAME} (the default) or another path outside the repo." ;;

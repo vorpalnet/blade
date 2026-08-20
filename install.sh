@@ -173,6 +173,11 @@ set_conf_prop() {
 # with sync-occas.sh and tls/install-ssl.sh.
 # shellcheck source=misc/xfer.sh
 . "${SCRIPT_DIR}/misc/xfer.sh"
+# Shared profile-path resolution + legacy ~/.blade migration (one profile per env:
+# ~/.blade/<name>/profile.conf + certs/). The same file certs.sh, make-certs.sh and
+# deploy.sh source, so every tool migrates and resolves identically.
+# shellcheck source=misc/blade-paths.sh
+. "${SCRIPT_DIR}/misc/blade-paths.sh"
 
 # --- args ---------------------------------------------------------------------
 # Version tracks pom.xml's <revision>, so a dev's bug report pins to a build.
@@ -217,17 +222,22 @@ PROFILE_GONE=0
 # included): the dashboard loops drop out so we exit before the tree disappears.
 REPO_GONE=0
 set_paths() {
-    # ONE file per env holds config + secrets: ~/.blade/<env>.conf. The three var
-    # names all alias it, so every existing read/write just targets the one file.
-    BLADE_CONF="${BLADE_HOME}/${NAME}.conf"
+    if [ -z "$NAME" ]; then
+        BLADE_CONF="${BLADE_HOME}/.conf"
+        OCCAS_CONF="$BLADE_CONF"; DEPLOY_CONF="$BLADE_CONF"; WLS_SECRET="$BLADE_CONF"
+        PROFILE_DIR="$BLADE_HOME"; BLADE_LOG=""; URLS_FILE=""
+        return 0
+    fi
+    # ONE file per env holds config + secrets, at ~/.blade/<env>/profile.conf. The
+    # three var names all alias it. blade_profile_conf migrates a legacy
+    # ~/.blade/<env>.conf (+ its loose certs) into the new layout on first touch.
+    BLADE_CONF="$(blade_profile_conf "$NAME")"
     OCCAS_CONF="$BLADE_CONF"; DEPLOY_CONF="$BLADE_CONF"; WLS_SECRET="$BLADE_CONF"
-    # Every GENERATED artifact for this env lives in one per-env folder,
-    # ~/.blade/<env>/ — TLS keystores, the log, the URL list. The authored config
-    # stays the ~/.blade/<env>.conf file beside it (it is input, not output).
+    # Every GENERATED artifact for this env lives in its per-env folder,
+    # ~/.blade/<env>/ — profile.conf, certs/, the log, the URL list.
     PROFILE_DIR="${BLADE_HOME}/${NAME}"
     BLADE_LOG="${PROFILE_DIR}/${NAME}.log"
     URLS_FILE="${PROFILE_DIR}/${NAME}.urls"
-    [ -n "$NAME" ] || return 0
     mkdir -p "$PROFILE_DIR" 2>/dev/null || true
     # One-time migration: fold a legacy .conf/<name>/{occas,deploy}.conf + its
     # secrets into ~/.blade/<name>.conf. Config keys stay plain; secret keys are
@@ -2147,7 +2157,7 @@ provision_one_host() {
     fi
 
     local cdir; cdir="$(read_prop "$OCCAS_CONF" certs.dir)"
-    cdir="${cdir/#\~/$HOME}"; cdir="${cdir:-${HOME}/.blade/${NAME}}"
+    cdir="${cdir/#\~/$HOME}"; cdir="${cdir:-$(blade_certs_dir_for_conf "$OCCAS_CONF")}"
     local domhome="${DOMAINS_DIR}/${dom}"
     local nmhome="${DOMAINS_DIR}/${nmdom}"
     local jdk; jdk="$(java_home_stable)"   # the link when it matches java.home
@@ -3814,7 +3824,7 @@ EOF
 certs_source_dir() {
     local d; d="$(read_prop "$OCCAS_CONF" certs.dir 2>/dev/null)"; d="${d/#\~/$HOME}"
     [ -n "$d" ] && { printf '%s' "$d"; return 0; }
-    printf '%s/%s' "$BLADE_HOME" "$(basename "${DEPLOY_CONF%.conf}")"
+    blade_certs_dir_for_conf "$DEPLOY_CONF"
 }
 
 # Generate (or import) the env's TLS source keystores into ~/.blade/<env> and

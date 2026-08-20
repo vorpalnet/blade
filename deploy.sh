@@ -131,14 +131,17 @@ if [ "$DEPLOY_ALL" = true ]; then
 fi
 
 # --- Resolve <env> to its ONE config file (path or name). Config + secrets live
-# together in ~/.blade/<env>.conf; the build-profiles/deploy path is a fallback. ---
+# together in ~/.blade/<env>/profile.conf; the build-profiles/deploy path is a
+# fallback. blade_profile_conf migrates a legacy ~/.blade/<env>.conf in place. ---
 BLADE_HOME="${BLADE_HOME:-$HOME/.blade}"
+# shellcheck source=misc/blade-paths.sh
+. "${SCRIPT_DIR}/misc/blade-paths.sh"
 if [ -f "$ENV_ARG" ]; then
     CONF_FILE="$ENV_ARG"
-    ENV_NAME="$(basename "${ENV_ARG%.conf}")"
+    ENV_NAME="$(blade_name_for_conf "$ENV_ARG")"
 else
     ENV_NAME="$ENV_ARG"
-    CONF_FILE="${BLADE_HOME}/${ENV_NAME}.conf"
+    CONF_FILE="$(blade_profile_conf "$ENV_NAME")"
     [ -f "$CONF_FILE" ] || CONF_FILE="${DEPLOY_DIR}/${ENV_NAME}.conf"
 fi
 SECRET_FILE="$CONF_FILE"
