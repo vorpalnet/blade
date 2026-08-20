@@ -1,41 +1,37 @@
 #!/usr/bin/env bash
 # ============================================================================
-# build.sh - Profile-driven build wrapper for BLADE
+# build.sh - Build wrapper for BLADE
 #
-# A build REQUIRES a profile — there is no "build everything" default. BLADE is a
-# development framework; not every module needs building or deploying, so naming a
-# profile is a deliberate choice. With no profile on an interactive terminal you
-# get a picker (existing profiles, or create one); without a terminal you get a
-# non-zero error naming the available profiles. Clean-only runs need no profile.
+# build.sh builds the whole shippable set — every module (libs/admin/services/
+# test/proto) plus the per-tier EARs — in one Maven reactor. There is no module
+# selection: to iterate on one module, run Maven directly (e.g.
+# ./mvnw -pl services/hold package). A leading profile name is still accepted for
+# back-compat (superprojects invoke `./build.sh default`) but has no effect.
+#
+# Two output modes:
+#   dev  (default)  flat dist/               + app version <revision>          (redeploys in place)
+#   prod (--prod)   dist/<revision>-<build>/ + app version <revision>-<build>  (traceable release)
 #
 # Usage:
-#   ./build.sh <profile> [platform] [--dev|--prod] [--no-dist] [maven-args...]
-#   ./build.sh --init                       # build a new profile interactively, then build it
-#   ./build.sh --list                       # list available profiles and exit
+#   ./build.sh [platform] [--dev|--prod] [--no-dist] [maven-args...]
 #
 # Examples:
-#   ./build.sh default                      # the base set (all but proto/), auto-detected platform
-#   ./build.sh default occas-8.2            # base set, OCCAS 8.2
-#   ./build.sh minimal occas-8.3            # core routing, OCCAS 8.3
-#   ./build.sh full                         # base set PLUS the proto/ incubator apps
-#   ./build.sh default clean package        # with explicit Maven goals
-#   ./build.sh clean                        # clean-only (no profile needed); purges org.vorpal.blade from ~/.m2
+#   ./build.sh                              # dev build: full set → flat dist/
+#   ./build.sh --prod                       # release build: full set → dist/<rev>-<build>/
+#   ./build.sh occas-8.2                    # full set, OCCAS 8.2 platform
+#   ./build.sh clean package                # explicit Maven goals
+#   ./build.sh clean                        # clean-only (purges org.vorpal.blade from ~/.m2)
 #   ./build.sh cleanAll                     # clean + delete the entire dist/ tree
-#   ./build.sh default --no-dist            # skip dist/ copy
-#   ./build.sh minimal                      # a profile without javadoc → no docs, faster
-#   ./build.sh default                      # dev versioning (default): app version 3.0.4
-#   ./build.sh default --prod               # release versioning: app version 3.0.4-<build>
+#   ./build.sh --no-dist                    # skip the dist/ copy
 #
 # Dev vs prod versioning: WebLogic side-by-side versioning keys off
 # WebLogic-Application-Version, so a build number that moves every build mints a NEW
 # application version -- the previous one stays registered and blocks an in-place
 # redeploy until undeployed by name. dev keeps the version stable (3.0.4) so OCCAS
 # replaces the app on redeploy; prod appends the build number for traceable releases.
-#   ./build.sh default -- -Pfoo             # build with extra Maven flags
+#   ./build.sh -- -Pfoo                     # build with extra Maven flags
 #
-# Module profiles:   build-profiles/*.conf   (canonical, committed: default, full, minimal)
-#                    .conf/*.conf            (local, gitignored — written by --init)
-# Platform profiles: build-profiles/platforms/*.conf
+# Platform profiles: build-profiles/platforms/*.conf  (the only conf files left)
 #
 # Default platform resolution (when none given on the command line):
 #   1. $MW_HOME env var → parse inventory/registry.xml for the active install
@@ -46,33 +42,29 @@
 # The chosen source is shown in parentheses next to "Platform:" in the build
 # header (e.g. "Platform: occas-8.3 ($MW_HOME)").
 #
-# Per-tier EARs (automatic; contents track the profile):
+# Per-tier EARs (automatic):
 #   Each SHIPPABLE tier builds a per-tier EAR from apps/<tier> — blade-admin.ear,
 #   blade-services.ear, blade-test.ear (no proto EAR — proto/ is a grab-bag,
-#   deployed ad-hoc as loose WARs). Each component WAR is
-#   contributed by an ear-<name> Maven profile activated by !skip.<name> — the same
-#   flags this script derives from the conf — so an EAR shrinks to match a trimmed
-#   profile. The EAR modules are NOT discovered/selectable (see discover_modules),
-#   so they always build. The javadoc WAR rides the `javadocs` profile id: the
-#   admin EAR carries blade-javadoc.war when docs are generated.
-#   Both the loose WARs and the EAR land in dist/<tier>/ — deploy whichever suits.
+#   deployed ad-hoc as loose WARs). Each component WAR is contributed by an
+#   ear-<name> Maven profile; the whole set builds, so each EAR is complete. Both
+#   the loose WARs AND the EAR ship — deploy whichever suits (an EAR for a one-shot
+#   whole-tier deploy; loose WARs for per-service start/stop/target). The admin EAR
+#   carries blade-javadoc.war on a --prod build (see Javadoc).
 #
 # Dist management:
-#   Every WAR/JAR built during the run is copied to dist/<ver>-<build>/:
-#     dist/<ver>-<build>/            the whole-tier EARs (blade-admin/services/
-#                                    test.ear) + conf files + build.log
-#     dist/<ver>-<build>/lib/        blade-framework.jar, blade-shared.war, blade-fsmar.jar
-#     dist/<ver>-<build>/admin/      loose admin WARs (the same apps as blade-admin.ear)
-#     dist/<ver>-<build>/services/   loose service WARs
-#     dist/<ver>-<build>/test/       loose test WARs
-#     dist/<ver>-<build>/proto/      loose incubator WARs (full profile; no EAR)
-#   Deploy a whole-tier EAR from the root, or a loose WAR from its folder.
-#   Plus the active build profile + platform conf files at the root for
-#   traceability, and build.log — the full build console (Maven output +
-#   summary) so administrators can see how the build went after the fact.
-#   On failure: the current build's dist directory is deleted (so build.log is
-#   retained only for builds that produced a dist — the terminal still shows a
-#   failed run's output).
+#   The dist tree depends on the mode. Development writes flat into dist/ (cleaned
+#   first each build); production nests each release in dist/<rev>-<build>/. Either
+#   way the layout under <dist> is:
+#     <dist>/            the whole-tier EARs (blade-admin/services/test.ear) + build.log
+#     <dist>/lib/        blade-framework.jar, blade-shared.war, blade-fsmar.jar
+#     <dist>/admin/      loose admin WARs (the same apps as blade-admin.ear)
+#     <dist>/services/   loose service WARs
+#     <dist>/test/       loose test WARs
+#     <dist>/proto/      loose incubator WARs (no EAR)
+#   Deploy a whole-tier EAR from the root, or a loose WAR from its folder. build.log
+#   (the full build console) lands in <dist> so a build can be reviewed after the
+#   fact. On failure a prod build's release directory is removed; a dev build leaves
+#   the prior flat output in place (dist/ is never wholesale deleted).
 #
 #   To skip the copy entirely (useful in local dev loops where you don't need
 #   the dist/ folder rewritten on every build):
@@ -82,15 +74,13 @@
 #   --no-dist on the CLI overrides BLADE_SKIP_DIST=0 from the environment.
 #
 # Javadoc:
-#   `javadoc` is a normal profile module — it builds when the active build
-#   profile lists it (default/full do), and not otherwise. There is no separate
-#   flag; "no javadoc" = a profile that omits it. The javadoc app aggregates every
-#   module's apidocs into blade-javadoc.war, bundled in the admin EAR. Because it
-#   must run AFTER every module has generated its apidocs, build.sh builds it in a
-#   final pass (see the JAVADOC_ON block), so the WAR is always complete regardless
-#   of reactor order. BLADE's ///-Markdown doc comments (JEP 467) need the javadoc
-#   tool from a JDK >= 23; on an older build JDK a javadoc-listing profile still
-#   builds, but the docs are dropped with a warning (bytecode still targets Java 11).
+#   The javadoc app aggregates every module's apidocs into blade-javadoc.war
+#   (bundled in the admin EAR). It is the slow part, so it is built for a --prod
+#   release and SKIPPED in dev for a fast loop. Because it must run AFTER every
+#   module has generated its apidocs, a prod build does it in a final pass (see the
+#   JAVADOC_ON block), so the WAR is complete regardless of reactor order. BLADE's
+#   ///-Markdown doc comments (JEP 467) need the javadoc tool from a JDK >= 23; on
+#   an older build JDK the docs are dropped with a warning (bytecode still Java 11).
 #
 # ============================================================================
 
@@ -895,8 +885,30 @@ REMOVE_ALL_DIST=false
 #   prod (--prod)   WebLogic-Application-Version = <revision>-<build>  e.g. 3.0.4-7
 #                   distinct per build: traceable, side-by-side capable
 #
-# Override the default with BLADE_MODE=prod in the environment.
+# Override the default with BLADE_MODE=prod in the environment. A named
+# deployment profile (below) can also carry the mode via build.mode=; an explicit
+# --dev/--prod on the CLI always wins over the profile.
 BLADE_MODE="${BLADE_MODE:-dev}"
+MODE_EXPLICIT=false
+ENV_PROFILE=""
+BLADE_HOME="${BLADE_HOME:-$HOME/.blade}"
+
+# Read a key=value from a conf file (ENC(...) secrets are unwrapped). Same shape
+# as the helper in install.sh / deploy.sh, so the three tools read one profile.
+read_prop() {
+    local v
+    v="$({ grep "^$2=" "$1" 2>/dev/null || true; } | head -1 | cut -d= -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    case "$v" in ENC\(*\)) v="${v#ENC(}"; v="${v%)}" ;; esac
+    printf '%s' "$v"
+}
+
+# Path to a named deployment profile's conf. The new layout
+# (~/.blade/<name>/profile.conf) wins over the legacy flat file
+# (~/.blade/<name>.conf); empty if neither exists.
+env_profile_conf() {
+    if [ -f "${BLADE_HOME}/$1/profile.conf" ]; then printf '%s' "${BLADE_HOME}/$1/profile.conf"
+    elif [ -f "${BLADE_HOME}/$1.conf" ]; then printf '%s' "${BLADE_HOME}/$1.conf"; fi
+}
 
 for arg in "$@"; do
     if [ "$arg" = "--" ]; then
@@ -904,9 +916,9 @@ for arg in "$@"; do
     elif [ "$arg" = "--no-dist" ]; then
         SKIP_DIST=true
     elif [ "$arg" = "--prod" ]; then
-        BLADE_MODE=prod
+        BLADE_MODE=prod; MODE_EXPLICIT=true
     elif [ "$arg" = "--dev" ]; then
-        BLADE_MODE=dev
+        BLADE_MODE=dev; MODE_EXPLICIT=true
     elif [ "$arg" = "--list" ]; then
         LIST_ONLY=true
     elif [ "$arg" = "--init" ]; then
@@ -916,6 +928,15 @@ for arg in "$@"; do
         MAVEN_ARGS+=("clean")
     elif [[ "$arg" == -* ]]; then
         MAVEN_ARGS+=("$arg")
+    elif [ -n "$(env_profile_conf "$arg")" ]; then
+        # A named deployment profile (~/.blade/<name>[/profile].conf) — the same
+        # profile install.sh/deploy.sh use. Take its build.mode unless the CLI
+        # named one explicitly. build.sh needs nothing else from it.
+        ENV_PROFILE="$arg"
+        case "$(read_prop "$(env_profile_conf "$arg")" build.mode)" in
+            production|prod) [ "$MODE_EXPLICIT" = true ] || BLADE_MODE=prod ;;
+            development|dev) [ "$MODE_EXPLICIT" = true ] || BLADE_MODE=dev ;;
+        esac
     elif [ -n "$(profile_conf_path "$arg")" ]; then
         PROFILES+=("$arg")
     elif [ -z "$PLATFORM" ] && [ -f "${PLATFORMS_DIR}/${arg}.conf" ]; then
@@ -925,17 +946,13 @@ for arg in "$@"; do
     fi
 done
 
-# --list: print what's available and stop, before any build setup.
-if [ "$LIST_ONLY" = true ]; then
-    list_profiles
+# --list / --init are retired along with module profiles: build.sh now always
+# builds the full shippable set, so there is nothing to list or hand-pick.
+if [ "$LIST_ONLY" = true ] || [ "$INIT_REQUESTED" = true ]; then
+    echo "Module profiles are retired — build.sh builds the full shippable set."
+    echo "Just run:  ./build.sh          (development: flat dist/)"
+    echo "           ./build.sh --prod   (release: dist/<rev>-<build>/)"
     exit 0
-fi
-
-# --init: build a new profile interactively now; it sets PROFILES so the build
-# below proceeds with it. (Runs before platform/goal setup — it only needs the
-# module tree.)
-if [ "$INIT_REQUESTED" = true ]; then
-    init_profile
 fi
 
 # Note: the old -Dblade.skip.dist flag (read by services/pom.xml's copy-dist
@@ -1131,33 +1148,8 @@ elif [ "$HAS_INSTALL" = false ] && [ "$HAS_BUILD_GOAL" = true ]; then
     MAVEN_GOALS+=("install")
 fi
 
-# --- Require a profile for any build (clean-only runs are exempt) ---
-# A build compiles/produces artifacts, and the admin EAR's contents are derived
-# from the profile's module set — so a build must name one. A clean-only run
-# (HAS_BUILD_GOAL=false) has no module allowlist and cleans the whole reactor, so
-# it needs no profile: that keeps profile-free callers like `./build.sh clean`
-# working. On a TTY we offer a picker; without one we fail loudly (never hang).
-if [ ${#PROFILES[@]} -eq 0 ] && [ "$HAS_BUILD_GOAL" = true ]; then
-    # Interactive when stdin is a tty AND fd 3 (the pre-tee real stdout — build.sh
-    # redirects fd 1 through tee) is a tty. Testing fd 1 here would always be
-    # false, forcing the non-interactive path even in a real terminal.
-    if [ -t 0 ] && [ -t 3 ]; then
-        pick_profile
-    else
-        # No terminal to prompt at (CI, a wrapping build script). Ask politely,
-        # but still exit non-zero so the caller knows the build didn't run.
-        print_banner >&2
-        echo "" >&2
-        echo "Please name a build profile — BLADE builds what you ask for, not" >&2
-        echo "everything by default." >&2
-        echo "" >&2
-        list_profiles >&2
-        echo "" >&2
-        echo "e.g.  ./build.sh ${BASE_PROFILE}      ( ./build.sh --list to see them," >&2
-        echo "                          ./build.sh --init to make your own )" >&2
-        exit 1
-    fi
-fi
+# No profile gate: build.sh builds the full shippable set. A profile name is
+# accepted but ignored (see the module-selection block below).
 
 # --- Purge installed BLADE artifacts on clean ---
 # `mvn clean` only reaches target/; installed artifacts in ~/.m2 are the
@@ -1226,24 +1218,22 @@ if [ ${#PROFILES[@]} -gt 1 ]; then
     exit 1
 fi
 
-if [ ${#PROFILES[@]} -eq 0 ]; then
-    # Clean-only run with no profile (the only way PROFILES is still empty here —
-    # a build would have required one above). No allowlist, so no -Dskip flags:
-    # the clean reaches the whole reactor. Dist copy is already forced off for
-    # clean-only runs, so PROFILE/CONF_FILE are display-only.
-    PROFILE="(clean-only — no profile)"
-    CONF_FILE=""
+# Module profiles are retired: build.sh always builds the whole shippable set —
+# every discovered module (libs/admin/services/test/proto) plus the per-tier
+# EARs. No -Dskip flags (javadoc excepted, below). A leading profile name is
+# still accepted for back-compat (optum/att-tao invoke `./build.sh default`) but
+# has no effect. Clean-only runs build nothing.
+CONF_FILE=""
+SKIP_FLAGS=()
+if [ "$HAS_BUILD_GOAL" != true ]; then
+    PROFILE="(clean-only)"
     INCLUDED_MODULES=""
-    SKIP_FLAGS=()
 else
-    PROFILE="${PROFILES[0]}"
-    CONF_FILE="$(profile_conf_path "$PROFILE")"
-    INCLUDED_MODULES=$(read_modules "$CONF_FILE")
-
-    SKIP_FLAGS=()
-    while IFS= read -r flag; do
-        [ -n "$flag" ] && SKIP_FLAGS+=("$flag")
-    done < <(compute_skip_flags "$CONF_FILE" "$ALL_MODULES")
+    PROFILE="full set"
+    if [ ${#PROFILES[@]} -gt 0 ]; then
+        echo "Note: module profiles are retired — building the full set (ignoring '${PROFILES[0]}')."
+    fi
+    INCLUDED_MODULES="$ALL_MODULES"
 fi
 
 INCLUDED_COUNT=$(echo "$INCLUDED_MODULES" | wc -l | tr -d ' ')
@@ -1298,24 +1288,29 @@ jdk_ok_for_javadoc=false
 if [ -n "${BUILD_JDK_MAJOR:-}" ] && [ "${BUILD_JDK_MAJOR}" -ge "$JAVADOC_MIN_JDK" ] 2>/dev/null; then
     jdk_ok_for_javadoc=true
 fi
-# Is `javadoc` an included module in the active profile?
+# Javadoc is the slow part (it aggregates every module's apidocs into
+# blade-javadoc.war). It is built for a PRODUCTION release — complete, and it
+# ships to customers — and SKIPPED in development for a fast edit/build loop.
 javadoc_selected=false
-if printf '%s\n' "$INCLUDED_MODULES" | grep -qx javadoc; then
+if [ "$BLADE_MODE" = prod ] && printf '%s\n' "$INCLUDED_MODULES" | grep -qx javadoc; then
     javadoc_selected=true
 fi
 
 if [ "$HAS_BUILD_GOAL" != true ]; then
     JAVADOC_STATUS="n/a (clean-only run)"
+elif [ "$BLADE_MODE" != prod ]; then
+    SKIP_FLAGS+=("-Dskip.javadoc")
+    JAVADOC_STATUS="skipped (dev build — javadoc is built for --prod releases)"
 elif [ "$javadoc_selected" != true ]; then
-    JAVADOC_STATUS="off (javadoc not listed in the ${PROFILE} profile)"
+    JAVADOC_STATUS="off (javadoc not among the built modules)"
 elif [ "$jdk_ok_for_javadoc" = true ]; then
     JAVADOC_ON=true
     JAVADOC_STATUS="generating (final pass → admin/javadoc → blade-javadoc.war)"
 else
-    # Selected, but this JDK can't render ///-Markdown docs — drop it, don't fail.
+    # prod build, but this JDK can't render ///-Markdown docs — drop it, don't fail.
     JAVADOC_OLD_JDK=true
     SKIP_FLAGS+=("-Dskip.javadoc")
-    JAVADOC_STATUS="SKIPPED — javadoc is in ${PROFILE} but needs JDK ${JAVADOC_MIN_JDK}+ (build JDK is ${BUILD_JDK_MAJOR:-unknown}); admin EAR built without blade-javadoc.war"
+    JAVADOC_STATUS="SKIPPED — needs JDK ${JAVADOC_MIN_JDK}+ (build JDK is ${BUILD_JDK_MAJOR:-unknown}); admin EAR built without blade-javadoc.war"
 fi
 
 # Reusable so the same block prints in the header and the post-build summary.
