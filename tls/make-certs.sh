@@ -121,7 +121,22 @@ get_secret() {  # $1=env-var-name $2=secret-key $3=prompt-label
         read -rs -p "$3: " v; echo >&2
         [ -n "$v" ] || { echo "No value for $3" >&2; exit 1; }
     fi
-    [ -z "$from_file" ] && printf '%s=ENC(%s)\n' "$2" "$v" >> "$CONF_FILE"
+    # Persist a freshly supplied secret as an UPSERT, never a blind append: a
+    # duplicate key would let read_prop (first match) report a different value
+    # than the one just used to build a keystore — exactly how a keystore ends up
+    # protected by a passphrase the config no longer reports. Replace an existing
+    # line in place (preserving the file's mode), else append.
+    if [ -z "$from_file" ]; then
+        if grep -q "^${2}=" "$CONF_FILE" 2>/dev/null; then
+            local _tmp; _tmp="$(mktemp)"
+            grep -v "^${2}=" "$CONF_FILE" > "$_tmp"
+            printf '%s=ENC(%s)\n' "$2" "$v" >> "$_tmp"
+            cat "$_tmp" > "$CONF_FILE"; rm -f "$_tmp"
+        else
+            printf '%s=ENC(%s)\n' "$2" "$v" >> "$CONF_FILE"
+        fi
+        chmod 600 "$CONF_FILE" 2>/dev/null || true
+    fi
     printf '%s' "$v"
 }
 CA_PASS=$(get_secret      BLADE_TLS_CA_PASS       "tls.ca.passphrase"       "CA keystore passphrase")

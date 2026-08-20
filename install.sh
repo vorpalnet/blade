@@ -827,16 +827,9 @@ EOF
             SIP_PLAIN=true
         fi
         [ "$SIP_PLAIN" != false ] && ask SIP_PLAIN_PORT "  Plain SIP port" "${SIP_PLAIN_PORT:-5060}"
-        # Generate passphrases once; keep existing ones so re-running TLS is safe.
-        if [ -z "$(read_prop "$WLS_SECRET" tls.ca.passphrase)" ]; then
-            if write_secret "$WLS_SECRET" tls.ca.passphrase "$(gen_pass)"; then
-                write_secret "$WLS_SECRET" tls.keystore.passphrase "$(gen_pass)"
-                write_secret "$WLS_SECRET" tls.trust.passphrase "$(gen_pass)"
-                ok "generated 3 random TLS keystore passphrases (saved to the config)"
-            fi
-        else
-            log "  ${C_DIM}TLS passphrases already present in the config — kept.${C_RESET}"
-        fi
+        # Generate any missing TLS passphrase (per-key, never clobbering an
+        # existing one — see ensure_tls_passphrases). Re-running TLS stays safe.
+        ensure_tls_passphrases
     fi
     return 0
 }
@@ -861,6 +854,7 @@ EOF
     ask ID_CN "  Identity cert common name" "$ID_CN"
     [ "${PAGE_ABORT:-0}" = 1 ] && { warn "cancelled."; return 0; }
     save_profile
+    ensure_tls_passphrases   # certs must be built with the passphrases the config records
     "${SCRIPT_DIR}/tls/make-certs.sh" "$DEPLOY_CONF" || warn "make-certs returned an error"
     # New certs reach Node Manager (and the boot env that must open its trust
     # store) only when the NM domain is re-created — which now refreshes it too.
@@ -936,6 +930,26 @@ write_secret() {
     fi
     set_conf_prop "$file" "$key" "ENC(${val})"   # ENC() marks a secret; decrypt hook lands later
     chmod 600 "$file"
+    return 0
+}
+
+# Ensure the three TLS keystore passphrases exist in the config, generating ONLY
+# the ones that are missing. Per-key and idempotent — this NEVER overwrites a
+# passphrase that already exists, because an existing one may already be
+# protecting a generated keystore (blade-ca/identity/trust). Regenerating it
+# would orphan that keystore: keytool could no longer open it, so install-ssl and
+# the NM-cert import both fail with "password was incorrect". The old code keyed
+# the whole block on tls.ca.passphrase alone, so a run with ca absent but
+# keystore/trust already present regenerated all three and orphaned the certs.
+# make-certs.sh reads these from the same config, so once they are set here the
+# certs it builds always match what the config records.
+ensure_tls_passphrases() {
+    local made=0 k
+    for k in tls.ca.passphrase tls.keystore.passphrase tls.trust.passphrase; do
+        [ -n "$(read_prop "$WLS_SECRET" "$k")" ] && continue
+        write_secret "$WLS_SECRET" "$k" "$(gen_pass)" && made=$((made + 1))
+    done
+    [ "$made" -gt 0 ] && ok "generated ${made} random TLS keystore passphrase(s) (saved to the config)"
     return 0
 }
 
@@ -3950,6 +3964,7 @@ ensure_certs_source() {
             "${SCRIPT_DIR}/certs.sh" "$DEPLOY_CONF" import || warn "certificate import returned an error"
         else
             info "No certificates for '${envname}' yet — generating a self-signed CA (the TLS certificate step) …"
+            ensure_tls_passphrases   # certs must be built with the passphrases the config records
             "${SCRIPT_DIR}/tls/make-certs.sh" "$DEPLOY_CONF" || warn "make-certs returned an error"
         fi
     fi
