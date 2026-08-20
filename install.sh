@@ -776,6 +776,10 @@ EOF
     [ "${PAGE_ABORT:-0}" = 1 ] && { warn "cancelled."; return 0; }
     save_profile
     "${SCRIPT_DIR}/tls/make-certs.sh" "$DEPLOY_CONF" || warn "make-certs returned an error"
+    # New certs reach Node Manager (and the boot env that must open its trust
+    # store) only when the NM domain is re-created — which now refreshes it too.
+    [ "$DRY" = "on" ] || [ ! -d "${DOMAINS_DIR}/${NM_DOMAIN}" ] || \
+        log "  ${C_DIM}Certs changed: re-run 'Create & start Node Manager' to propagate them to NM and the boot env.${C_RESET}"
 }
 
 # ----- TLS certificate: supply your own (the 'sup' page) ---------------------
@@ -811,6 +815,10 @@ EOF
     [ "${PAGE_ABORT:-0}" = 1 ] && { warn "cancelled."; return 0; }
     save_profile
     "${SCRIPT_DIR}/certs.sh" "$DEPLOY_CONF" import || warn "certificate import returned an error"
+    # New certs reach Node Manager (and the boot env that must open its trust
+    # store) only when the NM domain is re-created — which now refreshes it too.
+    [ "$DRY" = "on" ] || [ ! -d "${DOMAINS_DIR}/${NM_DOMAIN}" ] || \
+        log "  ${C_DIM}Certs changed: re-run 'Create & start Node Manager' to propagate them to NM and the boot env.${C_RESET}"
 }
 
 # ----- phase 8: admin password (writes the gitignored secret files) ----------
@@ -1964,6 +1972,43 @@ write_nm_envfile() {
     ok "wrote ${envfile} (NM password for boot, 0600)."
 }
 
+# Re-write the boot NM env (.blade-nm.env) on the admin box and every engine host
+# so a rotated nm.keystore.passphrase (or admin password) reaches the boot path,
+# instead of stranding a node's NEXT start on a stale trust passphrase — the
+# failure mode where a systemd engine start dies with "trustAnchors must be
+# non-empty" because WLST_PROPERTIES names a passphrase that no longer opens
+# nm-trust.p12. Touches only hosts whose env already exists (a no-op before the
+# boot services are installed), so it is safe to call every time. MUST run AFTER
+# the NM keystores are (re)placed, so the passphrase it records matches the
+# keystore it must open. Running servers keep their connection; the new value is
+# read at their next start.
+refresh_boot_envs() {
+    [ -n "$DOMAIN" ] || return 0
+    local domhome="${DOMAINS_DIR}/${DOMAIN}" envfile="${DOMAINS_DIR}/${DOMAIN}/.blade-nm.env"
+    local user grp; IFS=: read -r user grp <<< "$(owner_of_path "$domhome")"
+    local pw="${BLADE_WLS_PASSWORD:-}"
+    [ -z "$pw" ] && [ -f "$WLS_SECRET" ] && pw="$(read_prop "$WLS_SECRET" admin.password)"
+    local sshu="${SSH_USER:-$(id -un)}" i name addr tgt did=0
+    # admin (this host) — only if its boot env already exists
+    if [ -f "$envfile" ] || [ "$DRY" = "on" ]; then
+        write_nm_envfile "$envfile" "$user" "$pw" && did=1
+    fi
+    # engine hosts (index >= 1), only where the env already exists
+    for i in "${!H_NAME[@]}"; do
+        [ "$i" -eq 0 ] && continue
+        [ "${H_ROLE[$i]}" = "engine" ] || continue
+        name="${H_NAME[$i]}"; addr="${H_ADDR[$i]}"; tgt="${sshu}@${addr}"
+        if [ "$DRY" = "on" ]; then
+            log "${C_DIM}  [dry-run] ${name}: refresh ${envfile} if present${C_RESET}"; continue
+        fi
+        if ssh -o BatchMode=yes -o ConnectTimeout=8 "$tgt" "test -f '${envfile}'" 2>/dev/null; then
+            write_nm_envfile_remote "$tgt" "$envfile" "$user" "$pw" && did=1
+        fi
+    done
+    [ "$did" = 1 ] && log "  ${C_DIM}Boot env refreshed — restart engine servers to pick up the new NM trust passphrase.${C_RESET}"
+    return 0
+}
+
 # Install nodemanager.service for our nmdomain (RUN: e).
 do_install_nm_service() {
     local mw="$MWHOME" nmdom="$NM_DOMAIN"
@@ -3079,6 +3124,12 @@ PYEOF
     as_install_user chmod 600 "$nmprops" 2>/dev/null || true
     ok "Node Manager identity: ${ksdir}/nm-identity.p12 (alias blade-nm, permanent); trust: nm-trust.p12"
     ok "Node Manager bind set: ${bind}:${port} (SecureListener=true, native=off)"
+
+    # The passphrase just written into nodemanager.properties is the one the boot
+    # env (WLST_PROPERTIES) must use to open nm-trust.p12. Re-push it to every
+    # host that already has a boot env, so a re-run here after a cert rotation
+    # can't leave a node's next start on a stale passphrase. No-op on first setup.
+    refresh_boot_envs
 
     # 3. Start Node Manager in the background. If it's already up, offer to
     #    restart it — that's how new domain enrollments / prop changes take effect
