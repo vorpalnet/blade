@@ -366,10 +366,18 @@ if [ -n "$BUILD_VER" ]; then
     DIST_DIR="${DIST_ROOT}/${BUILD_VER}"
     [ -d "$DIST_DIR" ] || die "dist/${BUILD_VER}/ not found."
 elif [ -d "$DIST_ROOT" ]; then
-    # A development build writes flat into dist/ (EARs/WARs at the root); a
-    # production build nests each release in dist/<rev>-<build>/. Prefer the flat
-    # dev tree when present, otherwise take the newest versioned release directory.
-    if ls "$DIST_ROOT"/*.ear >/dev/null 2>&1 || ls "$DIST_ROOT"/*.war >/dev/null 2>&1; then
+    # A development build writes flat into dist/, holding the reserved tier subdirs
+    # (lib/admin/services/test/proto) directly; a production build nests each release
+    # in dist/<rev>-<build>/. Detect the flat tree by those tier subdirs — NOT by a
+    # root *.ear/*.war, which a build with all its EAR tiers turned off does not
+    # have (that heuristic then fell through and grabbed a tier folder like dist/test
+    # as if it were the build). A release dir is named <rev>-<build>, never a tier
+    # name, so this is unambiguous. Prefer the flat dev tree; else newest release.
+    _flat=false
+    for _t in lib admin services test proto; do
+        [ -d "$DIST_ROOT/$_t" ] && { _flat=true; break; }
+    done
+    if [ "$_flat" = true ]; then
         DIST_DIR="$DIST_ROOT"
     else
         DIST_DIR=$(ls -1t "$DIST_ROOT" 2>/dev/null | while read -r d; do
@@ -470,7 +478,7 @@ wls_deploy_one() {
 # EAR, service WARs, test EAR. Targets come from the profile (install.sh writes
 # wls.targets.*). A connect failure (engine rc 3) aborts the batch at once.
 do_all() {
-    local action="$1" rc=0
+    local action="$1" rc=0 did=0
     # status is a single listing of what's deployed — no dist, no per-tier loop.
     if [ "$action" = status ]; then
         wls_deploy_one status "" "" "" || rc=$?
@@ -495,6 +503,7 @@ do_all() {
     _one() {  # <name> <file> <target> <islib> ; sets rc / returns 3 to abort
         local n="$1" f="$2" tg="$3" lib="$4" trc=0
         [ -f "$f" ] || { [ "$action" = deploy ] && warn "skip ${n}: not in this build (${f})."; return 0; }
+        did=$((did + 1))
         wls_deploy_one "$action" "$n" "$f" "$tg" "$lib" || trc=$?
         [ "$trc" -eq 3 ] && { warn "aborting — the AdminServer is unreachable (is it RUNNING? is the t3s trust in place?)."; return 3; }
         [ "$trc" -ne 0 ] && rc=1
@@ -525,6 +534,9 @@ do_all() {
         _tier services "$t_cluster" blade-services "$e_services" || return 1
         _tier test     "$t_test"    blade-test     "$e_test"     || return 1
     fi
+    # A whole-profile run that touched NOTHING almost always means the dist tree is
+    # wrong (empty, or pointed at the wrong build) — warn instead of a silent "done".
+    [ "$did" -eq 0 ] && warn "nothing to ${action}: no expected artifacts under ${DIST_DIR}. Did './build.sh ${ENV_NAME}' run into this dist?"
     return "$rc"
 }
 
