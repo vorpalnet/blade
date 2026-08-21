@@ -1915,6 +1915,60 @@ java_home_stable() {
     printf '%s' "$jh"
 }
 
+# Relabel paths for SELinux so systemd can exec the boot scripts (and the server
+# can exec java + its libs). A freshly mkfs'd block volume — e.g. /opt/oracle on
+# its own OCI volume, reformatted — comes up entirely `unlabeled_t`, and systemd
+# (init_t) REFUSES to exec an unlabeled_t ExecStart: the unit dies with
+# `status=203/EXEC` before the script runs a line. (An interactive start works —
+# an unconfined user shell may exec unlabeled_t — which is why NM comes up by hand
+# but its boot unit does not.) restorecon applies the policy label (bin/ -> bin_t,
+# which is execable). Best-effort and guarded: a no-op off SELinux, when
+# restorecon is absent, or when the tree is already labeled — so a normal
+# (non-reformatted) install pays nothing and a re-run does not re-walk gigabytes.
+selinux_relabel() {
+    command -v restorecon >/dev/null 2>&1 || return 0
+    if command -v selinuxenabled >/dev/null 2>&1; then selinuxenabled || return 0; fi
+    local sudo=""; [ "$(id -u)" != 0 ] && command -v sudo >/dev/null 2>&1 && sudo="sudo"
+    local p rp cur
+    for p in "$@"; do
+        [ -n "$p" ] || continue
+        rp="$(readlink -f "$p" 2>/dev/null || printf '%s' "$p")"
+        [ -e "$rp" ] || continue
+        # Only relabel a tree that is actually unlabeled (the fresh-volume signal);
+        # skip an already-labeled one so this stays cheap on every other install.
+        cur="$($sudo ls -dZ "$rp" 2>/dev/null | awk '{print $1}')"
+        case "$cur" in *:unlabeled_t:*) ;; *) continue ;; esac
+        if [ "$DRY" = "on" ]; then
+            log "${C_DIM}  [dry-run] restorecon -R ${rp}  (was unlabeled — reformatted volume)${C_RESET}"
+            continue
+        fi
+        info "SELinux: relabeling ${rp} (unlabeled — e.g. a reformatted block volume) …"
+        $sudo restorecon -R "$rp" 2>/dev/null \
+            && ok "SELinux: relabeled ${rp}" \
+            || warn "SELinux: restorecon on ${rp} failed — run 'sudo restorecon -Rv ${rp}' if a boot unit fails with 203/EXEC."
+    done
+    return 0
+}
+
+# Remote twin: relabel on an engine host over ssh (its /opt/oracle may be a fresh
+# volume too, rsync'd into). Best-effort; needs passwordless sudo there.
+selinux_relabel_remote() {
+    local host="$1"; shift
+    [ "$#" -gt 0 ] || return 0
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] ${host}: restorecon -R $* (if unlabeled)${C_RESET}"; return 0
+    fi
+    ssh -o BatchMode=yes "$host" "command -v restorecon >/dev/null 2>&1 || exit 0
+        if command -v selinuxenabled >/dev/null 2>&1; then selinuxenabled || exit 0; fi
+        for p in $*; do
+            [ -e \"\$p\" ] || continue
+            case \"\$(sudo ls -dZ \"\$p\" 2>/dev/null | awk '{print \$1}')\" in *:unlabeled_t:*) sudo restorecon -R \"\$p\" 2>/dev/null || true ;; esac
+        done" 2>/dev/null \
+        && ok "${host}: SELinux relabel checked." \
+        || warn "${host}: SELinux relabel skipped/failed — 'sudo restorecon -Rv /opt/oracle' there if a boot unit 203/EXECs."
+    return 0
+}
+
 render_systemd_unit() {
     local desc="$1" workdir="$2" start="$3" stop="$4" user="$5" group="$6" after="$7"
     local jh; jh="$(java_home_stable)"
@@ -2152,6 +2206,9 @@ do_install_nm_service() {
         "$nmhome" "${nmhome}/bin/startNodeManager.sh" "${nmhome}/bin/stopNodeManager.sh" \
         "$user" "$grp" "")"
     install_systemd_unit nodemanager.service "$text"
+    # So the NM boot unit can exec startNodeManager.sh (+ java) after a reboot on a
+    # fresh /opt/oracle volume. No-op unless the tree is unlabeled.
+    selinux_relabel "$nmhome" "${JAVA_BASE:-/opt/oracle/java}" "$mw"
 }
 
 # Install weblogic.service for our app domain's AdminServer (RUN: w). Starts the
@@ -2192,6 +2249,10 @@ do_install_wls_service() {
     stext="$(render_admin_nm_unit "$dom" "$domhome" "${domhome}/${BOOT_SCRIPT_SUBDIR}" \
         "$user" "$grp" "$envfile" "$sname" "${ADMINURL:-t3://${H_ADDR[0]}:7001}")"
     install_systemd_unit "weblogic-${sname}.service" "$stext"
+    # Before systemd execs either boot script, make sure they (and java, and the
+    # server's libs) are SELinux-labeled — a fresh /opt/oracle volume is unlabeled
+    # and both units would 203/EXEC. No-op unless the tree is actually unlabeled.
+    selinux_relabel "$domhome" "${JAVA_BASE:-/opt/oracle/java}" "$mw"
     # A single-machine install IS the cluster, so leaving its only engine stopped
     # means "install complete" with nothing serving SIP.
     if [ "$DRY" != "on" ] && command -v systemctl >/dev/null 2>&1; then
@@ -2455,6 +2516,9 @@ provision_one_host() {
         || { warn "${name}: weblogic-engine.service not installed."; return 1; }
 
     # --- start, through systemd (the same path a reboot takes) ------------
+    # The engine host's /opt/oracle was just rsync'd into; if it's a fresh volume
+    # the files are unlabeled_t and both units would 203/EXEC. Relabel first.
+    selinux_relabel_remote "$tgt" "${JAVA_BASE:-/opt/oracle/java}" "$mw" "$domhome" "$nmhome"
     info "  starting nodemanager.service …"
     if ! ssh -o BatchMode=yes "$tgt" "sudo systemctl restart nodemanager.service"; then
         warn "${name}: nodemanager.service failed to start — 'journalctl -u nodemanager' on that host."
