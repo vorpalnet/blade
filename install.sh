@@ -1246,7 +1246,7 @@ build_menu_rows() {
     _row phase runtime "Build profile, SSH user, admin URL" "${BUILD_PROFILE} · ${ADMINURL}" "$p_run"
     local distlbl; distlbl="$(ls -1t "${SCRIPT_DIR}/dist" 2>/dev/null | head -1)"; distlbl="${distlbl:-no build — run ./build.sh}"
     _row head ""      "STEP 7 · Deploy to WebLogic (./build.sh first)" "" "-"
-    _row action y "Deploy everything (shared library -> the 3 EARs)" "$distlbl" "-"
+    _row action y "Deploy everything (shared lib, admin/test EARs, service WARs)" "$distlbl" "-"
     _row action l "List current deployments" "" "-"
     _row action z "Undeploy everything" "" "-"
     # UNINSTALL · listed top-to-bottom in safe teardown order (reverse of STEP 1).

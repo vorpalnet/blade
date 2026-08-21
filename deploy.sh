@@ -467,7 +467,6 @@ do_all() {
         wls_deploy_one "$action" "$n" "$f" "$tg" "$lib" || trc=$?
         [ "$trc" -eq 3 ] && { warn "aborting — the AdminServer is unreachable (is it RUNNING? is the t3s trust in place?)."; return 3; }
         [ "$trc" -ne 0 ] && rc=1
-        [ "$lib" = true ] && [ "$trc" -eq 0 ] && [ "$action" = deploy ] && warn "shared-library deploy needs a server restart before dependents resolve it."
         return 0
     }
     _services() {  # every WAR in dist/services/
@@ -674,8 +673,7 @@ case "$MODE" in
     library|app)
         islib=false; [ "$MODE" = "library" ] && islib=true
         wls_deploy_one "$ACTION" "$APP_NAME" "$ART" "$TARGET" "$islib" || rc=$?
-        [ "$rc" = 3 ] && err "Could not connect to ${WLS_ADMINURL} — is the AdminServer running and the t3s trust in place?"
-        [ "$MODE" = "library" ] && [ "$ACTION" = "deploy" ] && [ "$rc" = 0 ] && warn "Shared-library deploy needs a server restart to complete before dependents resolve it." ;;
+        [ "$rc" = 3 ] && err "Could not connect to ${WLS_ADMINURL} — is the AdminServer running and the t3s trust in place?" ;;
 esac
 
 log ""
