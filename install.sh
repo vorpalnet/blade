@@ -182,6 +182,8 @@ set_conf_prop() {
 # deploy.sh source, so every tool migrates and resolves identically.
 # shellcheck source=misc/blade-paths.sh
 . "${SCRIPT_DIR}/misc/blade-paths.sh"
+# shellcheck source=misc/blade-profile.sh
+. "${SCRIPT_DIR}/misc/blade-profile.sh"
 
 # --- args ---------------------------------------------------------------------
 # Version tracks pom.xml's <revision>, so a dev's bug report pins to a build.
@@ -262,18 +264,15 @@ set_paths() {
 }
 # Every ~/.blade profile name — new layout first (~/.blade/<name>/profile.conf),
 # then legacy flat (~/.blade/<name>.conf) and the ancient .conf/<name>/. Deduped.
+# Enumerate profile names. The two current layouts come from the shared
+# blade_list_profiles (so all three scripts agree); install.sh additionally
+# tolerates an ancient $CONF_BASE/<name>/occas.conf, appended + deduped here.
 list_profile_names() {
-    local seen=" " p d c
-    if [ -d "$BLADE_HOME" ]; then
-        for d in "$BLADE_HOME"/*/; do
-            [ -f "${d}profile.conf" ] || continue
-            p="$(basename "$d")"; case "$seen" in *" $p "*) ;; *) echo "$p"; seen="${seen}${p} " ;; esac
-        done
-        for c in "$BLADE_HOME"/*.conf; do
-            [ -f "$c" ] || continue
-            p="$(basename "${c%.conf}")"; case "$seen" in *" $p "*) ;; *) echo "$p"; seen="${seen}${p} " ;; esac
-        done
-    fi
+    local seen=" " p d
+    while IFS= read -r p; do
+        [ -n "$p" ] || continue
+        case "$seen" in *" $p "*) ;; *) echo "$p"; seen="${seen}${p} " ;; esac
+    done < <(blade_list_profiles)
     if [ -d "$CONF_BASE" ]; then
         for d in "$CONF_BASE"/*/; do
             [ -f "${d}occas.conf" ] || continue
@@ -1134,6 +1133,16 @@ save_profile() {
         echo ""
         echo "build.profile=${BUILD_PROFILE}"
         echo ""
+        echo "# --- App / EAR selection (shared with build.sh + deploy.sh) ---"
+        echo "# Edit the tree with:  ./build.sh --edit ${NAME}"
+        echo "#   build.apps=*      build every app ('*'), or a CSV of app names"
+        echo "#   ear.<tier>=on     bundle the tier into blade-<tier>.ear; off = loose WARs"
+        echo "# Defaults match the deploy shape: admin/test bundled, services loose."
+        echo "build.apps=*"
+        echo "ear.admin=on"
+        echo "ear.services=off"
+        echo "ear.test=on"
+        echo ""
         echo "# --- OCCAS binaries (sync-occas.sh) ---"
         echo "occas.base.dir=${OCCAS_BASE}"
         echo "occas.current.link=${OCCAS_CURRENT}"
@@ -1330,11 +1339,9 @@ build_menu_rows() {
     _row action ngx   "Install/refresh nginx config (validate + reload)" "$([ -f /etc/nginx/nginx.conf ] && echo /etc/nginx/nginx.conf)" "-"
     _row head ""      "STEP 6 · Deploy settings (build profile, SSH, admin URL)" "" "-"
     _row phase runtime "Build profile, SSH user, admin URL" "${BUILD_PROFILE} · ${ADMINURL}" "$p_run"
-    local distlbl; distlbl="$(ls -1t "${SCRIPT_DIR}/dist" 2>/dev/null | head -1)"; distlbl="${distlbl:-no build — run ./build.sh}"
-    _row head ""      "STEP 7 · Deploy to WebLogic (./build.sh first)" "" "-"
-    _row action y "Deploy everything (shared lib, admin/test EARs, service WARs)" "$distlbl" "-"
-    _row action l "List current deployments" "" "-"
-    _row action z "Undeploy everything" "" "-"
+    # App deployment lives in deploy.sh (it reads THIS profile). install.sh stands
+    # up the server; it no longer deploys apps.
+    _row head ""      "STEP 7 · Deploy apps → run:  ./deploy.sh ${NAME:-<env>} --all" "" "-"
     # UNINSTALL · listed top-to-bottom in safe teardown order (reverse of STEP 1).
     # The checked set runs in menu order, so ticking any subset tears down safely.
     # Each ✓ means "still present / removable"; each row confirms before deleting.
@@ -1386,9 +1393,6 @@ dispatch_row() {
         x) stop_admin  "$MWHOME" "$DOMAIN" "$ADMIN_USER" || true ;;
         verify) do_verify || true ;;
         k) stop_nm || true ;;
-        y) delegate_deploy deploy   || true ;;
-        l) delegate_deploy status   || true ;;
-        z) delegate_deploy undeploy || true ;;
         r) do_remove_domain "$MWHOME" "$DOMAIN" "$ADMIN_USER" || true ;;
         b) do_remove_nmdomain || true ;;
         di)   do_deinstall     || true ;;
@@ -5656,13 +5660,12 @@ do_remove_repo() {
 }
 
 # ============================================================================
-# Deploy — STEP 7 delegates to deploy.sh, the single deploy authority (one
-# artifact, or --all in dependency order: shared library, admin EAR, service
-# WARs, test EAR). install.sh no longer reimplements WebLogic deploys; deploy.sh
-# reads the SAME ~/.blade/<env>.conf and drives the SAME wlst engine
-# (misc/deploy-wls.sh). The two helpers below stay because they compute values
-# install.sh writes INTO the profile: _wls_adminurl -> wls.adminurl, and
-# _test_target -> wls.targets.test (deploy.sh reads both).
+# Deploy is deploy.sh's job — not install.sh's. App deployment (one artifact, or
+# --all in dependency order) lives entirely in deploy.sh, which reads THIS profile
+# (~/.blade/<env>/profile.conf) and drives the wlst engine (misc/deploy-wls.sh).
+# The two helpers below stay because they compute values install.sh writes INTO
+# the profile for deploy.sh to read: _wls_adminurl -> wls.adminurl, and
+# _test_target -> wls.targets.test.
 # ============================================================================
 
 # Authoritative AdminServer t3/t3s URL from the live domain config (the server
@@ -5705,19 +5708,6 @@ _test_target() {
     local pfx
     pfx="$(read_prop "$OCCAS_CONF" server.name.prefix)"; pfx="${pfx:-engine}"
     printf '%s0' "$pfx"
-}
-
-# STEP 7 handlers delegate to deploy.sh — the single deploy authority — so there
-# is one deploy code path, not two that drift. deploy.sh reads the same profile
-# (~/.blade/<env>.conf) and, on this box, auto-selects the same wlst engine.
-#   action = deploy | undeploy | status ; --all does the ordered whole-build set.
-delegate_deploy() {
-    local action="${1:-deploy}" ds="${SCRIPT_DIR}/deploy.sh"
-    [ -x "$ds" ] || { warn "deploy.sh not found next to install.sh (${ds})."; return 1; }
-    local args=("$NAME" --all)
-    case "$action" in undeploy|status) args+=("$action") ;; esac
-    [ "$DRY" = "on" ] && args+=(--dry-run)
-    BLADE_HOME="${BLADE_HOME:-$HOME/.blade}" "$ds" "${args[@]}"
 }
 
 # ============================================================================

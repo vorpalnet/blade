@@ -2,21 +2,30 @@
 # ============================================================================
 # build.sh - Build wrapper for BLADE
 #
-# build.sh builds the whole shippable set — every module (libs/admin/services/
-# test/proto) plus the per-tier EARs — in one Maven reactor. There is no module
-# selection: to iterate on one module, run Maven directly (e.g.
-# ./mvnw -pl services/hold package). A leading profile name is still accepted for
-# back-compat (superprojects invoke `./build.sh default`) but has no effect.
+# build.sh builds the shippable set — libs/admin/services/test/proto plus the
+# per-tier EARs — in one Maven reactor. By default it builds everything; a named
+# profile can narrow it. The profile is the SAME ~/.blade/<name>/profile.conf that
+# deploy.sh and install.sh use, so one selection drives build AND deploy:
+#   build.apps=*|<csv>   which apps to compile
+#   ear.<tier>=on|off    bundle a tier into blade-<tier>.ear, or ship loose WARs
+# Edit that selection with a checkbox tree:  ./build.sh --edit <name>  (or pick
+# "create" from the menu a bare `./build.sh` shows on a terminal). A profile
+# WITHOUT those keys — and `./build.sh default` from a superproject — builds the
+# full set, unchanged. To iterate on one module, run Maven directly, e.g.
+# ./mvnw -pl services/hold package.
 #
 # Two output modes:
 #   dev  (default)  flat dist/               + app version <revision>          (redeploys in place)
 #   prod (--prod)   dist/<revision>-<build>/ + app version <revision>-<build>  (traceable release)
 #
 # Usage:
-#   ./build.sh [platform] [--dev|--prod] [--no-dist] [--no-parallel] [maven-args...]
+#   ./build.sh [profile|platform] [--edit] [--list] [--dev|--prod] [--no-dist] [--no-parallel] [maven-args...]
 #
 # Examples:
-#   ./build.sh                              # dev build: full set → flat dist/
+#   ./build.sh                              # on a terminal: pick a profile / create one / build all
+#   ./build.sh --list                       # list the ~/.blade profiles and exit
+#   ./build.sh --edit ashburn               # edit ashburn's app/EAR tree, then build it
+#   ./build.sh ashburn                      # build ashburn's selection
 #   ./build.sh --prod                       # release build: full set → dist/<rev>-<build>/
 #   ./build.sh occas-8.2                    # full set, OCCAS 8.2 platform
 #   ./build.sh clean package                # explicit Maven goals
@@ -98,6 +107,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # module-selection confs (default/full/minimal) and their picker are retired —
 # build.sh always builds the full shippable set.
 PLATFORMS_DIR="${SCRIPT_DIR}/build-profiles/platforms"
+
+# Shared profile helpers (listing, the numbered picker, key upsert) — the same
+# ones deploy.sh/install.sh use, so all three enumerate one ~/.blade pool and
+# prompt identically when no profile is named. The app/EAR tree editor itself
+# lives here in build.sh (below) since only build.sh selects what to compile.
+# shellcheck source=misc/blade-profile.sh
+. "${SCRIPT_DIR}/misc/blade-profile.sh"
 
 # --- Capture the full build console into dist/<ver>-<build>/build.log ---
 # Everything printed from here on (this header, Maven's reactor output, the
@@ -348,6 +364,10 @@ copy_all_to_dist() {
         # 'full' build would otherwise be swept into every later dist, because
         # 'clean' only touches the active profile's reactor, not proto's target/.
         case "$eardir" in */proto/) continue ;; esac
+        # A tier whose EAR flag is off ships loose WARs only — its .ear isn't built
+        # this run, so don't sweep a stale one from a previous build into dist.
+        _et="$(basename "$eardir")"
+        case " ${EAR_SKIP} " in *" ${_et} "*) continue ;; esac
         [ -d "${eardir}target" ] || continue
         for earf in "${eardir}target"/*.ear; do
             [ -f "$earf" ] || continue
@@ -516,6 +536,7 @@ PLATFORM=""
 MAVEN_ARGS=()
 LIST_ONLY=false
 INIT_REQUESTED=false
+EDIT_REQUESTED=false
 # A legacy module-profile name (default/full/minimal) passed by a consumer's
 # build.sh — accepted and ignored so those builds keep working (see below).
 IGNORED_PROFILE_ARG=""
@@ -575,6 +596,242 @@ env_profile_conf() {
     elif [ -f "${BLADE_HOME}/$1.conf" ]; then printf '%s' "${BLADE_HOME}/$1.conf"; fi
 }
 
+# ============================================================================
+# App / EAR selection — the shared profile carries build.apps + ear.<tier>
+# ============================================================================
+# build.apps=*        build every discovered app (default; auto-includes new apps)
+# build.apps=a,b,c    build only these (bare module names, globally unique)
+# ear.admin=on|off    on  → bundle the tier's selected WARs into blade-<tier>.ear
+#                     off → ship them as loose WARs (skip the .ear assembler)
+# Defaults preserve today's deploy shape: admin/test bundled, services loose.
+# proto has no EAR (loose only). These keys are written ONLY by the tree editor
+# below; a profile without them (a plain deploy profile) builds the full set, so
+# existing profiles and `./build.sh default` are unaffected.
+EAR_TIERS="admin services test"
+EAR_SKIP=""   # tiers whose .ear is skipped this build (set by apply_profile_selection)
+
+# Default EAR flag for a tier (services ships loose; see memory on FSMAR routing).
+ear_default() { case "$1" in services) echo off ;; *) echo on ;; esac; }
+
+# EAR flag for a tier from a conf, falling back to the default.
+ear_flag() {
+    local v; v="$(read_prop "$1" "ear.$2")"
+    case "$v" in on|off) printf '%s' "$v" ;; *) ear_default "$2" ;; esac
+}
+
+# Is <module> selected per build.apps in <conf>? '*' or empty ⇒ everything.
+app_selected() {
+    local apps; apps="$(read_prop "$1" build.apps)"
+    case "$apps" in ""|"*") return 0 ;; esac
+    case ",${apps}," in *,"$2",*) return 0 ;; esac
+    return 1
+}
+
+# Does this conf carry an app/EAR selection at all? Only then do we translate it
+# into -Dskip flags — a bare deploy profile builds the full set as before.
+profile_has_selection() {
+    grep -Eq '^(build\.apps|ear\.(admin|services|test))=' "$1" 2>/dev/null
+}
+
+# Translate a profile's selection into -Dskip.* flags + a filtered
+# INCLUDED_MODULES. Deselected WARs are skipped (dropped from the reactor AND
+# their EAR); a tier with ear.<tier>=off skips only the whole-tier .ear (its WARs
+# still build loose). libs always build — everything depends on them.
+apply_profile_selection() {
+    local conf="$1" mod mdir tier kept=""
+    while IFS= read -r mod; do
+        [ -n "$mod" ] || continue
+        mdir=$(module_dir "$mod")
+        case "$mdir" in libs/*) kept="${kept}${mod}"$'\n'; continue ;; esac
+        if app_selected "$conf" "$mod"; then kept="${kept}${mod}"$'\n'
+        else SKIP_FLAGS+=("-Dskip.${mod}"); fi
+    done <<< "$INCLUDED_MODULES"
+    INCLUDED_MODULES="${kept%$'\n'}"
+    for tier in $EAR_TIERS; do
+        if [ "$(ear_flag "$conf" "$tier")" = off ]; then
+            SKIP_FLAGS+=("-Dskip.${tier}"); EAR_SKIP="${EAR_SKIP} ${tier}"
+        fi
+    done
+}
+
+# --- The interactive app/EAR tree editor (writes into the shared profile) ---
+# Read one keystroke over /dev/tty, mapping arrows/space/enter/a/q to words.
+# /dev/tty (not fd 0) because build.sh tees stdout to a log and the picker paints
+# to the real terminal.
+_bp_esc_t=0.05; [ "${BASH_VERSINFO[0]}" -lt 4 ] && _bp_esc_t=1
+_bp_read_key() {
+    local k r
+    IFS= read -rsn1 k < /dev/tty 2>/dev/null || { printf 'quit'; return; }
+    case "$k" in
+        $'\e') IFS= read -rsn2 -t "$_bp_esc_t" r < /dev/tty 2>/dev/null || r=""
+               case "$r" in '[A'|'OA') printf 'up' ;; '[B'|'OB') printf 'down' ;; *) printf 'other' ;; esac ;;
+        ' ')            printf 'space' ;;
+        ''|$'\n'|$'\r') printf 'enter' ;;
+        a|A)            printf 'all' ;;
+        j|J)            printf 'down' ;;
+        k|K)            printf 'up' ;;
+        q|Q)            printf 'quit' ;;
+        *)              printf 'other' ;;
+    esac
+}
+
+# Prompt for a new profile name over /dev/tty; echo it. Returns 1 on EOF.
+prompt_new_profile_name() {
+    local name=""
+    while [ -z "$name" ]; do
+        printf '  new profile name: ' > /dev/tty
+        IFS= read -r name < /dev/tty || return 1
+        case "$name" in
+            "") ;;
+            *[!A-Za-z0-9_-]*) echo "  letters, digits, - or _ only." > /dev/tty; name="" ;;
+            *) [ -f "${PLATFORMS_DIR}/${name}.conf" ] && { echo "  '${name}' is a platform name — pick another." > /dev/tty; name=""; } ;;
+        esac
+    done
+    printf '%s' "$name"
+}
+
+# Full-screen accordion: choose which apps compile, and which tiers bundle into an
+# EAR. Writes build.apps + ear.<tier> into <conf> ($2 = display name). Renders
+# over /dev/tty. State is padded strings (bash 3.2 has no associative arrays).
+# Colour is never used — checkbox shape/position and the '›' cursor carry state.
+edit_profile_apps() {
+    local conf="$1" pname="${2:-$1}"
+    [ -t 3 ] || { echo "No terminal — cannot edit a profile interactively." >&2; return 1; }
+
+    local -a mods=() tiers=()
+    local tier dir name
+    for tier in admin services test proto; do
+        for dir in "${SCRIPT_DIR}/${tier}"/*/; do
+            [ -e "$dir" ] || continue
+            name=$(basename "$dir")
+            [ "$name" = "applications" ] && continue
+            [ -f "${dir}pom.xml" ] || continue
+            mods+=("$name"); tiers+=("$tier")
+        done
+    done
+    [ "${#mods[@]}" -gt 0 ] || { echo "No apps found to choose from." >&2; return 1; }
+
+    local checked=" " m
+    for m in "${mods[@]}"; do app_selected "$conf" "$m" && checked="${checked}${m} "; done
+    _has() { case "$checked" in *" $1 "*) return 0 ;; esac; return 1; }
+
+    local ear_admin ear_services ear_test
+    ear_admin=$(ear_flag "$conf" admin); ear_services=$(ear_flag "$conf" services); ear_test=$(ear_flag "$conf" test)
+    _ear_get() { case "$1" in admin) echo "$ear_admin" ;; services) echo "$ear_services" ;; test) echo "$ear_test" ;; esac; }
+    _ear_tog() { case "$1" in
+        admin)    [ "$ear_admin" = on ]    && ear_admin=off    || ear_admin=on ;;
+        services) [ "$ear_services" = on ] && ear_services=off || ear_services=on ;;
+        test)     [ "$ear_test" = on ]     && ear_test=off     || ear_test=on ;;
+    esac; }
+
+    local -a pos_cat=() pos_mod=()
+    local gi prev="__none__"
+    for gi in "${!mods[@]}"; do
+        if [ "${tiers[$gi]}" != "$prev" ]; then prev="${tiers[$gi]}"; pos_cat+=("$prev"); pos_mod+=("-1"); fi
+        pos_cat+=("${tiers[$gi]}"); pos_mod+=("$gi")
+    done
+    local npos=${#pos_cat[@]}
+    _tier_stats() { local t="$1" n=0 tot=0 g; for g in "${!mods[@]}"; do [ "${tiers[$g]}" = "$t" ] || continue; tot=$((tot+1)); _has "${mods[$g]}" && n=$((n+1)); done; printf '%d/%d' "$n" "$tot"; }
+
+    local cursor=1 key p c mi arrow box label pre earbox expanded sel g all mm
+    printf '\e[?25l' > /dev/tty
+    trap 'printf "\e[?25h" > /dev/tty; return 130' INT
+    while true; do
+        printf '\e[H\e[J' > /dev/tty
+        {
+            echo ""
+            echo "  BLADE — choose apps to build   (profile: ${pname})"
+            echo ""
+            expanded="${pos_cat[$cursor]}"
+            for p in $(seq 0 $((npos - 1))); do
+                c="${pos_cat[$p]}"; mi="${pos_mod[$p]}"
+                [ "$p" = "$cursor" ] && pre="›" || pre=" "
+                if [ "$mi" = "-1" ]; then
+                    [ "$c" = "$expanded" ] && arrow="▾" || arrow="▸"
+                    if [ "$c" = proto ]; then earbox="   loose only"
+                    else earbox="  [$([ "$(_ear_get "$c")" = on ] && echo x || echo ' ')] EAR"; fi
+                    label=$(printf '%s %-9s%s  (%s)' "$arrow" "$(echo "$c" | tr a-z A-Z)" "$earbox" "$(_tier_stats "$c")")
+                else
+                    [ "$c" = "$expanded" ] || continue
+                    box="[ ]"; _has "${mods[$mi]}" && box="[x]"
+                    label=$(printf '      %s %s' "$box" "${mods[$mi]}")
+                fi
+                if [ "$p" = "$cursor" ]; then printf '\e[7m %s %s \e[0m\n' "$pre" "$label"
+                else printf ' %s %s\n' "$pre" "$label"; fi
+            done
+            echo ""
+            echo "  ↑/↓ move · space toggle (an app, or a tier's EAR) · a all-in-tier · enter save & build · q cancel"
+        } > /dev/tty
+        key=$(_bp_read_key)
+        case "$key" in
+            up)   [ "$cursor" -gt 0 ] && cursor=$((cursor - 1)) ;;
+            down) [ "$cursor" -lt $((npos - 1)) ] && cursor=$((cursor + 1)) ;;
+            space)
+                mi="${pos_mod[$cursor]}"
+                if [ "$mi" != "-1" ]; then
+                    sel="${mods[$mi]}"
+                    if _has "$sel"; then checked="${checked/ $sel / }"; else checked="${checked}${sel} "; fi
+                else
+                    c="${pos_cat[$cursor]}"; [ "$c" != proto ] && _ear_tog "$c"
+                fi ;;
+            all)
+                c="${pos_cat[$cursor]}"; all=1
+                for g in "${!mods[@]}"; do [ "${tiers[$g]}" = "$c" ] || continue; _has "${mods[$g]}" || { all=0; break; }; done
+                for g in "${!mods[@]}"; do
+                    [ "${tiers[$g]}" = "$c" ] || continue
+                    mm="${mods[$g]}"
+                    if [ "$all" = 1 ]; then checked="${checked/ $mm / }"
+                    elif ! _has "$mm"; then checked="${checked}${mm} "; fi
+                done ;;
+            enter) break ;;
+            quit)  printf '\e[?25h' > /dev/tty; trap - INT; echo "  (cancelled — profile unchanged)" > /dev/tty; return 1 ;;
+        esac
+    done
+    printf '\e[?25h' > /dev/tty; trap - INT
+
+    local -a picked=(); for m in "${mods[@]}"; do _has "$m" && picked+=("$m"); done
+    local apps_val
+    if   [ "${#picked[@]}" -eq "${#mods[@]}" ]; then apps_val="*"
+    elif [ "${#picked[@]}" -eq 0 ];             then apps_val=""
+    else apps_val="$(IFS=,; echo "${picked[*]}")"; fi
+
+    blade_set_prop "$conf" build.apps "$apps_val"
+    blade_set_prop "$conf" ear.admin "$ear_admin"
+    blade_set_prop "$conf" ear.services "$ear_services"
+    blade_set_prop "$conf" ear.test "$ear_test"
+    echo "  saved ${conf}" > /dev/tty
+    echo "  ${#picked[@]}/${#mods[@]} apps · EAR admin=${ear_admin} services=${ear_services} test=${ear_test}" > /dev/tty
+}
+
+# Interactive: pick / create / edit a profile for this build. Sets ENV_PROFILE
+# (global; may stay empty for a full-set build). Returns 1 to abort the build.
+resolve_build_profile() {
+    local pick c
+    if [ "$EDIT_REQUESTED" = true ]; then
+        if [ -z "$ENV_PROFILE" ]; then
+            pick="$(blade_pick_profile)" || return 1
+            case "$pick" in
+                __create__) ENV_PROFILE="$(prompt_new_profile_name)" || return 1 ;;
+                *)          ENV_PROFILE="$pick" ;;
+            esac
+        fi
+        c="$(blade_profile_conf_path "$ENV_PROFILE")"; [ -n "$c" ] || c="${BLADE_HOME}/${ENV_PROFILE}/profile.conf"
+        edit_profile_apps "$c" "$ENV_PROFILE" || true
+        return 0
+    fi
+    # Bare build, no profile named → list/create (skip for a legacy default arg).
+    if [ -z "$ENV_PROFILE" ] && [ -z "$IGNORED_PROFILE_ARG" ]; then
+        pick="$(blade_pick_profile 'A|build the full shippable set (no profile)')" || return 1
+        case "$pick" in
+            __A__)      ENV_PROFILE="" ;;
+            __create__) ENV_PROFILE="$(prompt_new_profile_name)" || return 1
+                        edit_profile_apps "${BLADE_HOME}/${ENV_PROFILE}/profile.conf" "$ENV_PROFILE" || true ;;
+            *)          ENV_PROFILE="$pick" ;;
+        esac
+    fi
+    return 0
+}
+
 for arg in "$@"; do
     if [ "$arg" = "--" ]; then
         continue
@@ -590,6 +847,8 @@ for arg in "$@"; do
         LIST_ONLY=true
     elif [ "$arg" = "--init" ]; then
         INIT_REQUESTED=true
+    elif [ "$arg" = "--edit" ]; then
+        EDIT_REQUESTED=true
     elif [ "$arg" = "cleanAll" ]; then
         REMOVE_ALL_DIST=true
         MAVEN_ARGS+=("clean")
@@ -615,14 +874,16 @@ for arg in "$@"; do
     fi
 done
 
-# --list / --init are retired along with module profiles: build.sh now always
-# builds the full shippable set, so there is nothing to list or hand-pick.
-if [ "$LIST_ONLY" = true ] || [ "$INIT_REQUESTED" = true ]; then
-    echo "Module profiles are retired — build.sh builds the full shippable set."
-    echo "Just run:  ./build.sh          (development: flat dist/)"
-    echo "           ./build.sh --prod   (release: dist/<rev>-<build>/)"
+# --list prints the shared profile pool and exits. --init is a synonym for --edit
+# (create/refine a profile's app+EAR selection); the editor runs from the
+# interactive-resolution block once the build goal is known.
+if [ "$LIST_ONLY" = true ]; then
+    echo "BLADE profiles (~/.blade):"
+    _pl="$(blade_list_profiles)"
+    [ -n "$_pl" ] && printf '%s\n' "$_pl" | sed 's/^/  /' || echo "  (none yet)"
     exit 0
 fi
+[ "$INIT_REQUESTED" = true ] && EDIT_REQUESTED=true
 
 # Note: the old -Dblade.skip.dist flag (read by services/pom.xml's copy-dist
 # exec step) is no longer passed — that exec step is commented out along with
@@ -814,8 +1075,29 @@ elif [ "$HAS_INSTALL" = false ] && [ "$HAS_BUILD_GOAL" = true ]; then
     MAVEN_GOALS+=("install")
 fi
 
-# No profile gate: build.sh builds the full shippable set. A profile name is
-# accepted but ignored (see the module-selection block below).
+# --- Interactive profile resolution (TTY + build goal only) ---
+# --edit opens the app/EAR tree editor; a bare build with no profile lists the
+# pool or offers to create one (Jeff: "if a profile isn't provided, list or
+# create"). Guarded on a real terminal, so a non-interactive `./build.sh` in CI
+# and superproject calls like `./build.sh default` fall straight through to the
+# full set and never block.
+# [ -t 3 ] is the interactivity test: fd 3 is the pre-tee original stdout (see the
+# `exec 3>&1` up top). It is the ONLY reliable terminal check here — [ -t 1 ] is
+# always false (stdout is tee'd to the build log) and [ -e /dev/tty ] is true even
+# in CI (the device node exists but can't be opened), which would wrongly divert a
+# non-interactive build into the picker and abort it.
+if [ "$HAS_BUILD_GOAL" = true ] && [ -t 3 ] \
+   && { [ "$EDIT_REQUESTED" = true ] || [ -z "$ENV_PROFILE" ]; }; then
+    resolve_build_profile || { echo "Nothing to build."; exit 0; }
+    # A profile chosen/created just now may carry build.mode; honour it unless the
+    # CLI already named --dev/--prod.
+    if [ -n "$ENV_PROFILE" ] && [ "$MODE_EXPLICIT" != true ]; then
+        case "$(read_prop "$(env_profile_conf "$ENV_PROFILE")" build.mode)" in
+            production|prod) BLADE_MODE=prod ;;
+            development|dev) BLADE_MODE=dev ;;
+        esac
+    fi
+fi
 
 # --- Purge installed BLADE artifacts on clean ---
 # `mvn clean` only reaches target/; installed artifacts in ~/.m2 are the
@@ -888,6 +1170,18 @@ else
         echo "Note: module profiles are retired — building the full set (ignoring '${IGNORED_PROFILE_ARG}')."
     fi
     INCLUDED_MODULES="$ALL_MODULES"
+    # A profile that carries an app/EAR selection (written by the tree editor)
+    # narrows the build: deselected apps get -Dskip.<app>; a tier with its EAR off
+    # gets -Dskip.<tier> (its WARs still build loose). A plain deploy profile with
+    # no selection keys builds the full set, unchanged.
+    if [ -n "$ENV_PROFILE" ]; then
+        _selconf="$(env_profile_conf "$ENV_PROFILE")"
+        if [ -n "$_selconf" ] && profile_has_selection "$_selconf"; then
+            CONF_FILE="$_selconf"
+            PROFILE="profile: ${ENV_PROFILE}"
+            apply_profile_selection "$_selconf"
+        fi
+    fi
 fi
 
 INCLUDED_COUNT=$(echo "$INCLUDED_MODULES" | wc -l | tr -d ' ')

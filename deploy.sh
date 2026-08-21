@@ -146,6 +146,8 @@ fi
 BLADE_HOME="${BLADE_HOME:-$HOME/.blade}"
 # shellcheck source=misc/blade-paths.sh
 . "${SCRIPT_DIR}/misc/blade-paths.sh"
+# shellcheck source=misc/blade-profile.sh
+. "${SCRIPT_DIR}/misc/blade-profile.sh"
 if [ -f "$ENV_ARG" ]; then
     CONF_FILE="$ENV_ARG"
     ENV_NAME="$(blade_name_for_conf "$ENV_ARG")"
@@ -176,10 +178,8 @@ build_profile() {
     mkdir -p "$BLADE_HOME"; chmod 700 "$BLADE_HOME" 2>/dev/null || true
     CONF_FILE="${BLADE_HOME}/${ENV_NAME}.conf"; SECRET_FILE="$CONF_FILE"
 
-    local existing=() f
-    if [ -d "$BLADE_HOME" ]; then
-        for f in "$BLADE_HOME"/*.conf; do [ -f "$f" ] && existing+=("$(basename "${f%.conf}")"); done
-    fi
+    local existing=() n
+    while IFS= read -r n; do [ -n "$n" ] && existing+=("$n"); done < <(blade_list_profiles)
     log ""
     warn "No deploy profile '${ENV_NAME}'."
     [ "${#existing[@]}" -gt 0 ] && log "  existing profiles: ${existing[*]}"
@@ -461,6 +461,15 @@ do_all() {
     t_both="$(read_prop "$CONF_FILE" wls.targets.both)";       t_both="${t_both:-${t_admin},${t_cluster}}"
     t_test="$(read_prop "$CONF_FILE" wls.targets.test)";       t_test="${t_test:-$t_cluster}"
 
+    # Per-tier EAR flags — the SAME keys build.sh wrote from the shared profile, so
+    # we deploy exactly what was built: a tier's whole .ear when its flag is on,
+    # else its loose WARs. Defaults preserve the historical shape (admin/test as
+    # EARs, services loose for FSMAR flat-name routing).
+    local e_admin e_services e_test
+    e_admin="$(read_prop "$CONF_FILE" ear.admin)";       e_admin="${e_admin:-on}"
+    e_services="$(read_prop "$CONF_FILE" ear.services)"; e_services="${e_services:-off}"
+    e_test="$(read_prop "$CONF_FILE" ear.test)";         e_test="${e_test:-on}"
+
     _one() {  # <name> <file> <target> <islib> ; sets rc / returns 3 to abort
         local n="$1" f="$2" tg="$3" lib="$4" trc=0
         [ -f "$f" ] || { [ "$action" = deploy ] && warn "skip ${n}: not in this build (${f})."; return 0; }
@@ -469,27 +478,30 @@ do_all() {
         [ "$trc" -ne 0 ] && rc=1
         return 0
     }
-    _services() {  # every WAR in dist/services/
-        local war
-        [ -d "${DIST_DIR}/services" ] || return 0
+    _tier() {  # <tier-dir> <target> <earname> <earflag> ; EAR when on, else loose WARs
+        local tier="$1" tg="$2" earname="$3" flag="$4" war
+        if [ "$flag" = on ]; then
+            _one "$earname" "${DIST_DIR}/${earname}.ear" "$tg" false; return $?
+        fi
+        [ -d "${DIST_DIR}/${tier}" ] || return 0
         shopt -s nullglob
-        for war in "${DIST_DIR}/services"/*.war; do
-            _one "$(basename "${war%.war}")" "$war" "$t_cluster" false || { shopt -u nullglob; return 3; }
+        for war in "${DIST_DIR}/${tier}"/*.war; do
+            _one "$(basename "${war%.war}")" "$war" "$tg" false || { shopt -u nullglob; return 3; }
         done
         shopt -u nullglob
         return 0
     }
 
     if [ "$action" = undeploy ]; then
-        _one blade-test  "${DIST_DIR}/blade-test.ear"  "$t_test"  false || return 1
-        _services || return 1
-        _one blade-admin "${DIST_DIR}/blade-admin.ear" "$t_admin" false || return 1
+        _tier test     "$t_test"    blade-test     "$e_test"     || return 1
+        _tier services "$t_cluster" blade-services "$e_services" || return 1
+        _tier admin    "$t_admin"   blade-admin    "$e_admin"    || return 1
         _one blade-shared "${DIST_DIR}/lib/blade-shared.war" "$t_both" true || return 1
     else
         _one blade-shared "${DIST_DIR}/lib/blade-shared.war" "$t_both" true || return 1
-        _one blade-admin "${DIST_DIR}/blade-admin.ear" "$t_admin" false || return 1
-        _services || return 1
-        _one blade-test  "${DIST_DIR}/blade-test.ear"  "$t_test"  false || return 1
+        _tier admin    "$t_admin"   blade-admin    "$e_admin"    || return 1
+        _tier services "$t_cluster" blade-services "$e_services" || return 1
+        _tier test     "$t_test"    blade-test     "$e_test"     || return 1
     fi
     return "$rc"
 }
