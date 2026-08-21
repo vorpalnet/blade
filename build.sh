@@ -24,7 +24,7 @@
 # Examples:
 #   ./build.sh                              # on a terminal: pick a profile / create one / build all
 #   ./build.sh --list                       # list the ~/.blade profiles and exit
-#   ./build.sh --edit ashburn               # edit ashburn's app/EAR tree, then build it
+#   ./build.sh --edit ashburn               # edit ashburn's profile (apps, EARs, dev/prod) — does not build
 #   ./build.sh ashburn                      # build ashburn's selection
 #   ./build.sh --prod                       # release build: full set → dist/<rev>-<build>/
 #   ./build.sh occas-8.2                    # full set, OCCAS 8.2 platform
@@ -670,6 +670,7 @@ _bp_read_key() {
         ''|$'\n'|$'\r') printf 'enter' ;;
         a|A)            printf 'all' ;;
         m|M)            printf 'mode' ;;
+        s|S)            printf 'save' ;;
         j|J)            printf 'down' ;;
         k|K)            printf 'up' ;;
         q|Q)            printf 'quit' ;;
@@ -768,7 +769,8 @@ edit_profile_apps() {
                 else printf ' %s %s\n' "$pre" "$label"; fi
             done
             echo ""
-            echo "  ↑/↓ move · space toggle (an app, or a tier's EAR) · a all-in-tier · m dev/prod · enter save & build · q cancel"
+            echo "  ↑/↓ move · space toggle (app, or a tier's EAR) · a all-in-tier · m dev/prod"
+            echo "  s save & exit · q quit without saving"
         } > /dev/tty
         key=$(_bp_read_key)
         case "$key" in
@@ -792,7 +794,7 @@ edit_profile_apps() {
                     elif ! _has "$mm"; then checked="${checked}${mm} "; fi
                 done ;;
             mode) [ "$mode" = prod ] && mode=dev || mode=prod ;;
-            enter) break ;;
+            save|enter) break ;;
             quit)  printf '\e[?25h' > /dev/tty; trap - INT; echo "  (cancelled — profile unchanged)" > /dev/tty; return 1 ;;
         esac
     done
@@ -814,7 +816,10 @@ edit_profile_apps() {
 }
 
 # Interactive: pick / create / edit a profile for this build. Sets ENV_PROFILE
-# (global; may stay empty for a full-set build). Returns 1 to abort the build.
+# (global; may stay empty for a full-set build) and returns 0 to build it. Any path
+# that opens the app/EAR editor (--edit, or "create" from the picker) EXITS after
+# saving — editing configures the profile, it never builds; build with
+# `./build.sh <profile>`. Returns 1 if the picker was cancelled (nothing to build).
 resolve_build_profile() {
     local pick c
     if [ "$EDIT_REQUESTED" = true ]; then
@@ -826,8 +831,10 @@ resolve_build_profile() {
             esac
         fi
         c="$(blade_profile_conf_path "$ENV_PROFILE")"; [ -n "$c" ] || c="${BLADE_HOME}/${ENV_PROFILE}/profile.conf"
-        edit_profile_apps "$c" "$ENV_PROFILE" || true
-        return 0
+        if edit_profile_apps "$c" "$ENV_PROFILE"; then
+            echo "Saved '${ENV_PROFILE}'. Build it with:  ./build.sh ${ENV_PROFILE}"
+        fi
+        exit 0    # --edit configures the profile; it never builds. Build separately.
     fi
     # Bare build, no profile named → list/create (skip for a legacy default arg).
     if [ -z "$ENV_PROFILE" ] && [ -z "$IGNORED_PROFILE_ARG" ]; then
@@ -835,7 +842,10 @@ resolve_build_profile() {
         case "$pick" in
             __A__)      ENV_PROFILE="" ;;
             __create__) ENV_PROFILE="$(prompt_new_profile_name)" || return 1
-                        edit_profile_apps "${BLADE_HOME}/${ENV_PROFILE}/profile.conf" "$ENV_PROFILE" || true ;;
+                        if edit_profile_apps "${BLADE_HOME}/${ENV_PROFILE}/profile.conf" "$ENV_PROFILE"; then
+                            echo "Created '${ENV_PROFILE}'. Build it with:  ./build.sh ${ENV_PROFILE}"
+                        fi
+                        exit 0 ;;   # editing a profile configures it; it never builds
             *)          ENV_PROFILE="$pick" ;;
         esac
     fi
