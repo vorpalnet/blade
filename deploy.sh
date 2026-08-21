@@ -1,16 +1,24 @@
 #!/usr/bin/env bash
 # ============================================================================
-# deploy.sh - Deploy ONE named artifact to a WebLogic target. No tier magic.
+# deploy.sh - Deploy a BLADE profile, or ONE named artifact, to WebLogic.
 #
-# You name the exact file and where it goes; deploy.sh does exactly that and
-# nothing else. There is no built-in notion of tiers, ordering, or which app
-# belongs where — that is yours to decide, per deploy.
+# Two modes. Name a <file> and a target and deploy.sh does exactly that, nothing
+# else — no tier magic, the placement is yours. Name no <file> and it acts on the
+# WHOLE profile: the shared library, then each tier as its EAR or loose WARs per
+# the profile's ear.<tier> flags, in dependency order (what build.sh built).
 #
 # Usage:
-#   ./deploy.sh <env> <file> [target] [action] [options]
+#   ./deploy.sh <env> [action]                 whole profile (deploy everything)
+#   ./deploy.sh <env> <file> [target] [action] [options]   one named artifact
+#
+# With no <file>, deploy.sh acts on EVERYTHING the profile builds, in dependency
+# order (shared library, then each tier as its EAR or loose WARs per ear.<tier>,
+# see --all) — the symmetry with 'build.sh <env>'. Name a <file> to act on one.
 #
 # <env>   ~/.blade/<env>.conf (or a path to a conf). Connection + secrets:
 #         wls.adminurl, wls.user, admin.password (ENC), optional wls.target.
+#         Also carries the app/EAR selection (build.apps, ear.<tier>) that build.sh
+#         wrote, so deploy lands exactly what was built.
 # <file>  the exact artifact to deploy: a path, or a bare filename found in the
 #         newest dist/<ver>/ tree (searched across lib/ admin/ services/ test/
 #         proto/ and the root). e.g. blade-admin.ear, gateway.war, blade-services.ear
@@ -19,6 +27,7 @@
 # action  deploy (default) | undeploy | status
 #
 # Options:
+#   --all            act on the whole profile (implied when no <file> is given)
 #   --library        deploy/undeploy <file> as a WebLogic shared library
 #   --approuter      copy <file> into approuter.dir on THIS host (the FSMAR
 #                    mechanic) instead of a WebLogic deploy — no target, no WLS
@@ -40,6 +49,9 @@
 #   3. Interactive prompt (read -s), with offer to save
 #
 # Examples:
+#   ./deploy.sh ashburn                          # deploy everything in the profile
+#   ./deploy.sh ashburn status                   # what's deployed
+#   ./deploy.sh ashburn undeploy                 # undeploy everything
 #   ./deploy.sh production blade-admin.ear AdminServer
 #   ./deploy.sh production gateway.war cluster1
 #   ./deploy.sh production blade-services.ear cluster1
@@ -82,7 +94,9 @@ err()  { printf '%s\xe2\x9c\x97%s %s\n'   "$C_RED" "$C_RESET" "$*" >&2; }
 die()  { err "$*"; exit 1; }
 
 show_usage() {
-    sed -n '2,50p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    # Print the header comment block: everything between the top delimiter and the
+    # closing one (so it never truncates when the header grows).
+    awk 'NR>2 && /^# ={5,}/{exit} NR>2{sub(/^# ?/,""); print}' "${BASH_SOURCE[0]}"
     exit "${1:-0}"
 }
 
@@ -122,8 +136,14 @@ done
 [ ${#POSITIONAL[@]} -ge 1 ] || { err "Environment required."; show_usage 1; }
 ENV_ARG="${POSITIONAL[0]}"
 # The file is required for a deploy, but the check is DEFERRED: a missing profile
-# is built first, and 'deploy.sh <env>' with no file just builds the profile.
+# is built first, and 'deploy.sh <env>' with no file acts on the whole profile.
 FILE_ARG="${POSITIONAL[1]:-}"
+# 'deploy.sh <env> <action>' with no file: the 2nd positional is the ACTION, not a
+# filename (artifacts always carry a .war/.ear/.jar extension, so a bare
+# deploy/undeploy/status is never a file). Whole-profile deploy/undeploy/status.
+case "$FILE_ARG" in
+    deploy|undeploy|status) ACTION="$FILE_ARG"; FILE_ARG="" ;;
+esac
 
 # Remaining positionals: an action keyword sets ACTION, anything else is target.
 for i in "${!POSITIONAL[@]}"; do
@@ -249,15 +269,17 @@ build_profile() {
 BUILT_PROFILE=false
 [ -f "$CONF_FILE" ] || build_profile
 
-# 'deploy.sh <env>' with no file: after (or without) building, there's nothing to
-# deploy — point the way instead of erroring blankly.
+# 'deploy.sh <env>' with no file named deploys EVERYTHING in the profile — the
+# common case, and the symmetry with 'build.sh <env>'. Name a <file> to deploy just
+# one. A profile we just created is the exception: nothing is built yet, so point
+# the way instead of deploying into an empty dist.
 if [ -z "$FILE_ARG" ] && [ "$DEPLOY_ALL" = false ]; then
     if [ "$BUILT_PROFILE" = true ]; then
         log ""; ok "Profile '${ENV_NAME}' ready."
-        log "Deploy with:  ./deploy.sh ${ENV_NAME} <file> [target] [action]   (or --all)"
+        log "Build then deploy:  ./build.sh ${ENV_NAME} && ./deploy.sh ${ENV_NAME}"
         exit 0
     fi
-    err "A file to deploy is required (or pass --all)."; show_usage 1
+    DEPLOY_ALL=true   # bare 'deploy.sh <env> [action]' = whole-profile deploy/undeploy/status
 fi
 
 WLS_ADMINURL=$(read_prop   "$CONF_FILE" "wls.adminurl")

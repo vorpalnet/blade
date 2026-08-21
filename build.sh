@@ -634,15 +634,16 @@ profile_has_selection() {
 }
 
 # Translate a profile's selection into -Dskip.* flags + a filtered
-# INCLUDED_MODULES. Deselected WARs are skipped (dropped from the reactor AND
-# their EAR); a tier with ear.<tier>=off skips only the whole-tier .ear (its WARs
-# still build loose). libs always build — everything depends on them.
+# INCLUDED_MODULES. Any deselected module is skipped (dropped from the reactor AND,
+# for an app, its EAR); a tier with ear.<tier>=off skips only the whole-tier .ear
+# (its WARs still build loose). The libraries (framework/shared/fsmar) are
+# selectable too — deselecting one skips its rebuild and Maven resolves the copy a
+# prior build installed in ~/.m2, cutting compile time. Skip a library nothing has
+# built yet and Maven fails loudly on the unresolved dependency — the user's call.
 apply_profile_selection() {
-    local conf="$1" mod mdir tier kept=""
+    local conf="$1" mod tier kept=""
     while IFS= read -r mod; do
         [ -n "$mod" ] || continue
-        mdir=$(module_dir "$mod")
-        case "$mdir" in libs/*) kept="${kept}${mod}"$'\n'; continue ;; esac
         if app_selected "$conf" "$mod"; then kept="${kept}${mod}"$'\n'
         else SKIP_FLAGS+=("-Dskip.${mod}"); fi
     done <<< "$INCLUDED_MODULES"
@@ -700,7 +701,7 @@ edit_profile_apps() {
 
     local -a mods=() tiers=()
     local tier dir name
-    for tier in admin services test proto; do
+    for tier in libs admin services test proto; do
         for dir in "${SCRIPT_DIR}/${tier}"/*/; do
             [ -e "$dir" ] || continue
             name=$(basename "$dir")
@@ -748,8 +749,11 @@ edit_profile_apps() {
                 [ "$p" = "$cursor" ] && pre="›" || pre=" "
                 if [ "$mi" = "-1" ]; then
                     [ "$c" = "$expanded" ] && arrow="▾" || arrow="▸"
-                    if [ "$c" = proto ]; then earbox="   loose only"
-                    else earbox="  [$([ "$(_ear_get "$c")" = on ] && echo x || echo ' ')] EAR"; fi
+                    case "$c" in
+                        libs)  earbox="  libraries" ;;
+                        proto) earbox="  loose only" ;;
+                        *)     earbox="  [$([ "$(_ear_get "$c")" = on ] && echo x || echo ' ')] EAR" ;;
+                    esac
                     label=$(printf '%s %-9s%s  (%s)' "$arrow" "$(echo "$c" | tr a-z A-Z)" "$earbox" "$(_tier_stats "$c")")
                 else
                     [ "$c" = "$expanded" ] || continue
@@ -772,7 +776,7 @@ edit_profile_apps() {
                     sel="${mods[$mi]}"
                     if _has "$sel"; then checked="${checked/ $sel / }"; else checked="${checked}${sel} "; fi
                 else
-                    c="${pos_cat[$cursor]}"; [ "$c" != proto ] && _ear_tog "$c"
+                    c="${pos_cat[$cursor]}"; case "$c" in admin|services|test) _ear_tog "$c" ;; esac
                 fi ;;
             all)
                 c="${pos_cat[$cursor]}"; all=1
@@ -1154,11 +1158,12 @@ if [ -n "$DUPLICATE_MODULES" ]; then
     exit 1
 fi
 
-# Module profiles are retired: build.sh always builds the whole shippable set —
-# every discovered module (libs/admin/services/test/proto) plus the per-tier
-# EARs. No -Dskip flags (javadoc excepted, below). A leading profile name is
-# still accepted for back-compat (optum/att-tao invoke `./build.sh default`) but
-# has no effect. Clean-only runs build nothing.
+# By default build.sh builds the whole shippable set — every discovered module
+# (libs/admin/services/test/proto) plus the per-tier EARs, no -Dskip flags (javadoc
+# excepted, below). A ~/.blade profile that carries an app/EAR selection narrows it
+# (apply_profile_selection). The LEGACY module-set names default/full/minimal are
+# retired: accepted and ignored so optum/att-tao's `./build.sh default` keeps
+# working. Clean-only runs build nothing.
 CONF_FILE=""
 SKIP_FLAGS=()
 if [ "$HAS_BUILD_GOAL" != true ]; then
@@ -1167,7 +1172,7 @@ if [ "$HAS_BUILD_GOAL" != true ]; then
 else
     PROFILE="full set"
     if [ -n "$IGNORED_PROFILE_ARG" ]; then
-        echo "Note: module profiles are retired — building the full set (ignoring '${IGNORED_PROFILE_ARG}')."
+        echo "Note: the module-set names (default/full/minimal) are retired — building the full set (ignoring '${IGNORED_PROFILE_ARG}')."
     fi
     INCLUDED_MODULES="$ALL_MODULES"
     # A profile that carries an app/EAR selection (written by the tree editor)
