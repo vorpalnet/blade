@@ -2078,8 +2078,16 @@ render_admin_nm_unit() {
     printf '%s\n' "[Unit]"
     printf 'Description=WebLogic %s via Node Manager (BLADE %s)\n' "$server" "$dom"
     printf 'After=network-online.target nodemanager.service\n'
+    # Wants, not Requires: start-admin-nm.sh waits for the NM listener itself
+    # (NM_WAIT/ADMIN_WAIT loops) before nmConnect, so it does not need systemd to
+    # guarantee NM. A hard Requires instead FAILS this unit with result
+    # 'dependency' whenever NM is up but not under systemd — e.g. right after the
+    # interactive "Create & start Node Manager" step, where systemd cannot start
+    # its own nodemanager.service because the running NM already holds :5556. The
+    # server then actually starts (the ExecStart reaches the running NM) while
+    # systemd reports failure. After= still orders us behind NM on a clean reboot.
+    printf 'Wants=nodemanager.service\n'
     printf 'Wants=network-online.target\n'
-    printf 'Requires=nodemanager.service\n'
     printf '\n[Service]\n'
     printf 'Type=oneshot\n'
     printf 'RemainAfterExit=yes\n'
