@@ -44,6 +44,24 @@ xfer_ssh_cmd() {
     printf '%s' "$c"
 }
 
+# Does this rsync support --chown (3.1+)? Decide by the VERSION number, not by
+# grepping `rsync --help` for the flag — the help text's format varies between
+# builds and that grep was seen to misfire on a 3.1.3 that clearly has --chown,
+# which then aborted a perfectly capable copy. Fall back to the help probe only
+# if the version line can't be parsed.
+xfer_rsync_has_chown() {
+    local v maj min
+    v="$(rsync --version 2>/dev/null | sed -n 's/^rsync  *version \([0-9][0-9.]*\).*/\1/p' | head -1)"
+    case "$v" in
+        [0-9]*.[0-9]*)
+            maj="${v%%.*}"; min="${v#*.}"; min="${min%%.*}"
+            [ "$maj" -gt 3 ] && return 0
+            [ "$maj" -eq 3 ] && [ "$min" -ge 1 ] && return 0
+            return 1 ;;
+    esac
+    rsync --help 2>&1 | grep -q -- --chown
+}
+
 # xfer_rsync <owner[:group]> <src> <login@host:dst> [extra rsync options...]
 xfer_rsync() {
     local own="$1" src="$2" dst="$3"; shift 3
@@ -51,9 +69,15 @@ xfer_rsync() {
         rsync -a "$@" "$src" "$dst"
         return
     fi
-    if ! rsync --help 2>&1 | grep -q -- --chown; then
-        warn "local rsync has no --chown (needs rsync 3.1+) — cannot do a privileged copy."
-        return 1
+    if xfer_rsync_has_chown; then
+        sudo rsync -a "$@" -e "$(xfer_ssh_cmd)" --rsync-path="sudo rsync" --chown "$own" "$src" "$dst"
+        return
     fi
-    sudo rsync -a "$@" -e "$(xfer_ssh_cmd)" --rsync-path="sudo rsync" --chown "$own" "$src" "$dst"
+    # Pre-3.1 rsync (no --chown): copy as remote root, then set ownership BY NAME
+    # on the receiving side. Same end state as --chown, one extra ssh; no hard
+    # dependency on the local rsync version, so provisioning never dead-ends here.
+    warn "local rsync has no --chown (pre-3.1) — copying, then chown ${own} on the remote."
+    sudo rsync -a "$@" -e "$(xfer_ssh_cmd)" --rsync-path="sudo rsync" "$src" "$dst" || return 1
+    local host="${dst%%:*}" rpath="${dst#*:}"
+    ssh -o BatchMode=yes "$host" "sudo chown -R '${own}' '${rpath}'"
 }
