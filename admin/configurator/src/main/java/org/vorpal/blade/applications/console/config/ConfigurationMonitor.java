@@ -48,12 +48,6 @@ public class ConfigurationMonitor extends Thread {
 		return (WatchEvent<T>) event;
 	}
 
-	/// Tolerance (ms) for the fallback "is this the same physical file?" timestamp
-	/// match. Two mounts of one shared file can report mtime at different
-	/// granularity (e.g. NFS second-resolution vs local sub-second), so an exact
-	/// equality test is too brittle; within this window we treat it as shared.
-	private static final long SHARED_FS_TOLERANCE_MS = 2000L;
-
 	/// Explicit operator declaration of whether the config directory is shared
 	/// with the engine tier — system property `blade.shared.filesystem` or env
 	/// `BLADE_SHARED_FILESYSTEM` (true|false). When set, the timestamp heuristic
@@ -392,6 +386,13 @@ public class ConfigurationMonitor extends Thread {
 
 					Set<ObjectInstance> mbeans = mbeanServer.queryMBeans(objectName, null);
 					for (ObjectInstance mbean : mbeans) {
+						// Isolate each MBean. A failure on one server — e.g. an
+						// AdminServer-local Configuration MBean denying the monitor
+						// thread's unauthenticated JMX call (NoAccessRuntimeException) —
+						// must not abort distribution to the other servers, and (before
+						// this) escaped far enough to kill the whole watch thread, which
+						// stopped all config distribution until a redeploy.
+						try {
 						ObjectName name = mbean.getObjectName();
 						System.out.println("ConfigurationMonitor.updateManagedMBeans found " + name);
 
@@ -415,16 +416,21 @@ public class ConfigurationMonitor extends Thread {
 						if (declared != null) {
 							isSharedFileSystem = declared.booleanValue();
 						} else {
-							// Undeclared: fall back to a TOLERANT timestamp match. Exact
-							// equality is brittle across mounts with different mtime
-							// granularity and races NFS attribute caching; the window
-							// absorbs that without falsely reading shared-as-local.
-							isSharedFileSystem = Math.abs(localTimestamp - remoteTimestamp) <= SHARED_FS_TOLERANCE_MS;
+							// EXACT match: one physical file reports one mtime, so the
+							// admin's copy and the engine's copy read identical only when
+							// they ARE the same file (a shared mount). A tolerance window
+							// (commit 840f86cf) regressed this — it read a remote engine
+							// whose file had just been pushed (mtime ~1s off) as shared, so
+							// that engine skipped the copy and reloaded its stale local
+							// config. If a shared mount ever reports mtime at coarser
+							// granularity than the admin, declare it with
+							// blade.shared.filesystem rather than widening this compare.
+							isSharedFileSystem = (localTimestamp == remoteTimestamp);
 						}
 
 						System.out.println("ConfigurationMonitor.updateManagedMBeans localTimestamp=" + localTimestamp
 								+ ", remoteTimestamp=" + remoteTimestamp + ", isSharedFileSystem=" + isSharedFileSystem
-								+ (declared != null ? " (declared)" : " (heuristic, +/-" + SHARED_FS_TOLERANCE_MS + "ms)"));
+								+ (declared != null ? " (declared)" : ""));
 
 						if (false == isSharedFileSystem) {
 							System.out.println("ConfigurationMonitor.updateManagedMBeans openForWrite...");
@@ -452,6 +458,10 @@ public class ConfigurationMonitor extends Thread {
 
 						System.out.println("ConfigurationMonitor.updateManagedMBeans invoking reload()");
 						settings.reload();
+						} catch (Exception mbeanEx) {
+							System.out.println("ConfigurationMonitor.updateManagedMBeans MBean skipped ("
+									+ mbeanEx.getClass().getSimpleName() + "): " + mbeanEx.getMessage());
+						}
 					}
 				}
 

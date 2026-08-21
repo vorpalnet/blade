@@ -151,7 +151,9 @@ public class Settings<T> implements SettingsMXBean {
 			sipLogger.fine("Opening " + path.getFileName() + " for reading...");
 
 			if (path.toFile().exists()) {
-				bufferedWriter = Files.newBufferedWriter(path, StandardOpenOption.TRUNCATE_EXISTING);
+				// Reader ONLY. The prior code also opened a TRUNCATE_EXISTING writer
+				// on the same path, which zeroed the config file before it was read.
+				bufferedWriter = null;
 				bufferedReader = Files.newBufferedReader(path);
 			} else {
 				sipLogger.fine(path.getFileName() + " does not exist.");
@@ -177,6 +179,11 @@ public class Settings<T> implements SettingsMXBean {
 
 		} catch (Exception e) {
 			sipLogger.severe(e);
+		} finally {
+			// Drop the handles so the next open/close cycle can't reuse or
+			// double-close a stale reader/writer from the previous one.
+			bufferedReader = null;
+			bufferedWriter = null;
 		}
 	}
 
