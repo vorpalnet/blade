@@ -84,6 +84,11 @@ Everything below is how the installer delivers those five properties.
 - **Network:** the admin console (default `7001`, `7002` SSL), Node Manager
   (`5556`, SSL), and SIP (`5060`, `5061` TLS) reachable as configured. `install.sh`
   can open these in `firewalld`.
+- **Edge proxy (optional):** if you front the portal with nginx on this box,
+  `install.sh` renders and reloads its config (§6, STEP 5). Install `nginx`
+  yourself first — with the naxsi module if you want the WAF — and have a TLS
+  certificate on disk (e.g. Let's Encrypt); `install.sh` references the cert, it
+  does not obtain or renew it.
 
 ---
 
@@ -203,6 +208,17 @@ demo certificate on a live TLS port.
 
    This step also grows/shrinks the cluster, re-provisions engine hosts, verifies
    the cluster, deploys the WebLogic Remote Console, and opens firewall ports.
+
+   On the front-door box it also owns the **edge nginx reverse proxy**. The
+   **nginx** row sets the vhosts (admin → AdminServer, apps → engine0), the
+   backend address, cert paths, and whether naxsi is on; the **ngx** row renders
+   `/etc/nginx/nginx.conf`, validates it off to the side, backs up the old one,
+   and reloads. The rendered config terminates TLS and forwards both HTTP and
+   WebSocket — the `Upgrade`/`Connection` headers are hop-by-hop, so a proxy that
+   forgets to re-set them turns the Configurator/WebRTC handshake into a 302 to
+   login. The backend defaults to this box's routable address, not `127.0.0.1`:
+   the AdminServer SSL listener binds its ListenAddress, which localhost can't
+   reach.
 
 **STEP 6 — Deploy settings.** The build mode (dev or prod), SSH user, and the admin URL that
 `deploy.sh` will use. `install.sh` computes the admin URL from the live domain

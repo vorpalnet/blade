@@ -37,6 +37,10 @@
 #     14.1.2 dropped the built-in /console
 #   - stop Node Manager to re-read enrollments (RUN: k)
 #   - open the firewalld ports OCCAS needs (RUN: f)
+#   - own the edge nginx reverse proxy on the front-door box (RUN: nginx to set
+#     the vhosts/certs, ngx to render + validate + reload /etc/nginx/nginx.conf).
+#     TLS terminates here and HTTP + WebSocket forward to the local AdminServer
+#     (admin vhost) and engine0 (apps vhost). naxsi WAF optional; certs supplied.
 #   - supply/generate the TLS cert (RUN: g/sup; tls/make-certs.sh). HTTPS/SIP-TLS is
 #     stamped onto the ServerTemplate + AdminServer at configure (emit_tls_block),
 #     offline — no separate online "turn it on" step and no running server needed.
@@ -462,14 +466,19 @@ load_profile() {
     NM_TYPE="$(d nm.type ssl)"
     [ "$NM_TYPE" = "ssl" ] || { warn "nm.type='${NM_TYPE}' is no longer supported — Node Manager is always SSL with its own certificate."; NM_TYPE=ssl; }
     DCOUNT="$(d dynamic.server.count "")"
-    # No dynamic-cluster ceiling: MaximumDynamicServerCount (=DCOUNT) is the real
-    # cap; setMaxDynamicClusterSize is a no-op per the RE'd OCCAS code AND the WLS
-    # setter rejects INT_MAX, so configure() never calls it (the template line is
-    # commented out at stage time).
-    # Server names follow the machines: machine0 runs <prefix>0, machine1 runs
-    # <prefix>1. Starting at 0 is what lets the local machine's engine come from
-    # the same template as every other one -- there is no static server any more.
-    SRV_START_INDEX="$(d server.name.starting.index 0)"
+    # DYN_MAX is the dynamic cluster's MaximumDynamicServerCount — a high FIXED
+    # ceiling (default 1000), NOT the machine count. The actual running engines
+    # follow the match expression (machine1..N), so "add a machine" just extends
+    # the expression; the ceiling never needs resizing. setMaxDynamicClusterSize is
+    # a no-op per the RE'd OCCAS code and the WLS setter rejects INT_MAX, so the
+    # template line is commented out at stage time; MaximumDynamicServerCount alone
+    # governs.
+    DYN_MAX="$(d dynamic.server.max 1000)"
+    # STATIC machine0/engine0/AdminServer: the admin box runs a configured engine0
+    # (created by emit_static_engine0_block), OUTSIDE the dynamic template. The
+    # DYNAMIC range therefore starts at 1 — engine1 on machine1, engine2 on
+    # machine2 — with no off-by-one and no second engine on the admin box.
+    SRV_START_INDEX="$(d server.name.starting.index 1)"
     BUILD_PROFILE="$(d build.profile production)"
     # The LOGIN user, not the install user: cloud images only plant the ssh key
     # for their login account (opc, ec2-user). Privilege on the far side comes
@@ -512,6 +521,25 @@ load_profile() {
     CERT_CHAIN="$(d cert.import.chain "")"
     CA_CN="$(d tls.ca.cn 'BLADE Internal CA')"
     ID_CN="$(d tls.identity.cn "")"
+    # --- nginx edge reverse proxy (this box only, the front door) -------------
+    # When the nginx row runs, install.sh OWNS /etc/nginx/nginx.conf: TLS
+    # terminates here and HTTP + WebSocket forward to the local WebLogic servers
+    # (admin vhost → AdminServer, apps vhost → engine0). Blank server-names skip
+    # the whole thing. backend.addr blank ⇒ derived from `hostname -I` at render
+    # time: the AdminServer SSL listener binds its ListenAddress, not localhost,
+    # so 127.0.0.1 can't reach it, and deriving live re-picks the right IP after
+    # a compute re-image.
+    NGX_ADMIN_SN="$(d nginx.server_name.admin "")"
+    NGX_APPS_SN="$(d nginx.server_name.apps "")"
+    NGX_BACKEND="$(d nginx.backend.addr "")"
+    NGX_ADMIN_PORT="$(d nginx.admin.port "$SSL_PORT")"
+    NGX_APPS_PORT="$(d nginx.apps.port 8001)"
+    NGX_FULLCHAIN="$(d nginx.tls.fullchain "")"
+    NGX_PRIVKEY="$(d nginx.tls.privkey "")"
+    NGX_MAXBODY="$(d nginx.client.max.body.size 500m)"
+    # on|off|auto — auto emits the naxsi includes only when the core ruleset is
+    # present (naxsi is a compiled nginx module + rule files: a separate prereq).
+    NGX_NAXSI="$(d nginx.naxsi auto)"
     # hosts → arrays. machine.N = name:addr:port:type; pub/fqdn in host.N.*
     H_NAME=(); H_ADDR=(); H_PORT=(); H_TYPE=(); H_PUB=(); H_FQDN=(); H_ROLE=()
     local i=1 m nm na np nt
@@ -527,47 +555,46 @@ load_profile() {
     return 0
 }
 
-# Bring a pre-"add a machine" profile up to date, in memory and on disk.
+# Bring a profile up to date for the STATIC-machine0/engine0 model.
 #
-# Profiles written before this change carry two things that are now wrong:
-#   * static.server=engine0:machine0:...  -- there is no static server; engine0
-#     comes from the template like every other engine
-#   * a match expression that EXCLUDES the admin machine (machine1,machine2),
-#     because engines used to live only on the other boxes
-# Left alone, the first would try to create a server that collides with the
-# dynamic engine0, and the second would leave machine0 running no engine at all.
-# Migrating is mechanical, so do it rather than refuse to open the profile.
+# machine0/engine0/AdminServer are a STATIC pair on the admin box (created offline
+# by emit_static_engine0_block); the DYNAMIC cluster is engine1..N on machine1..N.
+# Older profiles — including the previous all-dynamic model where engine0 was a
+# dynamic member on machine0 — get migrated in place:
+#   * static.server = <prefix>0:machine0 is (re)asserted.
+#   * machine.match.expression = the ENGINE machines only (machine1..N); machine0
+#     is EXCLUDED so the dynamic calculation never lands a second engine on the
+#     admin box (the off-by-one that put engine1 on machine0). Empty on a
+#     single-box install — then the static engine0 is the whole tier.
+#   * server.name.starting.index = 1 (the dynamic range starts at engine1).
+#   * dynamic.server.max defaults to 1000 (a fixed ceiling, NOT the machine count).
 migrate_profile() {
     [ -f "$OCCAS_CONF" ] || return 0
-    local old_static old_match want_match changed=0
-    old_static="$(read_prop "$OCCAS_CONF" static.server)"
-    old_match="$(read_prop "$OCCAS_CONF" machine.match.expression)"
+    local changed=0 want_static want_match i
+    want_static="${prefix:-engine}0:${H_NAME[0]:-machine0}"
+    # Engine machines only: array index 1..N; index 0 (machine0/admin) excluded.
+    want_match=""
+    for i in "${!H_NAME[@]}"; do
+        [ "$i" -eq 0 ] && continue
+        want_match="${want_match:+${want_match},}${H_NAME[$i]}"
+    done
 
-    # Every machine now carries an engine, so the expression is just the list.
-    local n; want_match=""
-    for n in "${H_NAME[@]}"; do want_match="${want_match:+${want_match},}${n}"; done
-
-    if [ -n "$old_static" ]; then
-        set_conf_prop "$OCCAS_CONF" static.server ""
-        changed=1
+    if [ "$(read_prop "$OCCAS_CONF" static.server)" != "$want_static" ]; then
+        set_conf_prop "$OCCAS_CONF" static.server "$want_static"; changed=1
     fi
-    if [ -n "$want_match" ] && [ "$old_match" != "$want_match" ]; then
+    if [ "$(read_prop "$OCCAS_CONF" machine.match.expression)" != "$want_match" ]; then
         set_conf_prop "$OCCAS_CONF" machine.match.expression "$want_match"
-        match="$want_match"
-        changed=1
+        match="$want_match"; changed=1
     fi
-    if [ -z "$(read_prop "$OCCAS_CONF" server.name.starting.index)" ]; then
-        set_conf_prop "$OCCAS_CONF" server.name.starting.index 0
-        SRV_START_INDEX=0
-        changed=1
+    if [ "$(read_prop "$OCCAS_CONF" server.name.starting.index)" != "1" ]; then
+        set_conf_prop "$OCCAS_CONF" server.name.starting.index 1
+        SRV_START_INDEX=1; changed=1
     fi
-    # The count is derived from the machines now; nothing else may set it.
-    if [ "$(read_prop "$OCCAS_CONF" dynamic.server.count)" != "${#H_NAME[@]}" ]; then
-        set_conf_prop "$OCCAS_CONF" dynamic.server.count "${#H_NAME[@]}"
-        DCOUNT="${#H_NAME[@]}"
-        changed=1
+    if [ -z "$(read_prop "$OCCAS_CONF" dynamic.server.max)" ]; then
+        set_conf_prop "$OCCAS_CONF" dynamic.server.max "${DYN_MAX:-1000}"
+        DYN_MAX="${DYN_MAX:-1000}"; changed=1
     fi
-    [ "$changed" = 1 ] && warn "profile migrated: engines now follow the machines (machine0 → ${prefix:-engine}0); static.server dropped."
+    [ "$changed" = 1 ] && warn "profile migrated: static ${want_static}; dynamic engines = ${want_match:-<none>} (start index 1, ceiling ${DYN_MAX:-1000})."
     return 0
 }
 
@@ -795,6 +822,34 @@ phase_runtime() {
     ask BUILD_PROFILE "Build profile to deploy (production|minimal|full)" "$BUILD_PROFILE"
     ask SSH_USER      "SSH user for reaching engine nodes (reboot/provision)" "$SSH_USER"
     ask ADMINURL      "WebLogic admin URL (deploy runs ON the AdminServer)" "$ADMINURL"
+    return 0
+}
+
+# ----- nginx edge reverse proxy ----------------------------------------------
+# Only the front-door box runs this. Leave the server-names blank to skip it.
+# Settings persist to the profile; the 'nginx' ACTION row renders + reloads.
+phase_nginx() {
+    log ""; log "${C_BOLD}nginx reverse proxy (edge TLS + WebSocket)${C_RESET}"
+    help <<'EOF'
+The public front door for THIS box. nginx terminates TLS and reverse-proxies to
+the local WebLogic servers: the admin vhost → AdminServer (HTTPS), the apps
+vhost → engine0 (HTTP). WebSocket upgrades (Configurator, WebRTC) are forwarded.
+Leave a server-name blank to omit that vhost. Certs are supplied here (e.g.
+Let's Encrypt); install.sh does not obtain or renew them.
+EOF
+    ask NGX_ADMIN_SN "  Admin vhost server_name (blank = none)" "$NGX_ADMIN_SN"
+    ask NGX_APPS_SN  "  Apps vhost server_name (blank = none)"  "$NGX_APPS_SN"
+    local defbe; defbe="${NGX_BACKEND:-$(hostname -I 2>/dev/null | awk '{print $1}')}"
+    ask NGX_BACKEND    "  Backend address (this box's WebLogic listen addr)" "$defbe"
+    ask NGX_ADMIN_PORT "  AdminServer SSL port" "${NGX_ADMIN_PORT:-$SSL_PORT}"
+    ask NGX_APPS_PORT  "  engine0 HTTP port"    "${NGX_APPS_PORT:-8001}"
+    # Suggest the Let's Encrypt path for the cert's base domain (admin vhost minus
+    # its first label), but any PEM pair is fine.
+    local certbase="${NGX_ADMIN_SN#*.}"
+    ask NGX_FULLCHAIN "  TLS fullchain PEM path"    "${NGX_FULLCHAIN:-${certbase:+/etc/letsencrypt/live/${certbase}/fullchain.pem}}"
+    ask NGX_PRIVKEY   "  TLS private-key PEM path"  "${NGX_PRIVKEY:-${certbase:+/etc/letsencrypt/live/${certbase}/privkey.pem}}"
+    ask NGX_MAXBODY   "  client_max_body_size (admin uploads)" "${NGX_MAXBODY:-500m}"
+    ask NGX_NAXSI     "  naxsi WAF includes (on|off|auto)" "${NGX_NAXSI:-auto}"
     return 0
 }
 
@@ -1040,9 +1095,17 @@ save_profile() {
         echo "# dev default OOMs on Metaspace when the admin EAR deploys."
         echo "server.mem.args=${MEM_ARGS}"
         echo ""
-        echo "# --- Dynamic cluster shape (BEA_ENGINE_TIER_CLUST) ---"
+        echo "# --- Cluster shape (BEA_ENGINE_TIER_CLUST): STATIC machine0/engine0 on the"
+        echo "# admin box + DYNAMIC engine1..N on machine1..N ---"
         echo "server.name.prefix=${prefix}"
+        echo "# static.server = the configured engine on the admin box (outside the template)"
+        echo "static.server=${prefix:-engine}0:${H_NAME[0]:-machine0}"
+        echo "# machine.match.expression = the ENGINE machines only (machine1..N); machine0 excluded"
         echo "machine.match.expression=${match}"
+        echo "# server.name.starting.index = the DYNAMIC range start (1); engine0 is static, index 0"
+        echo "server.name.starting.index=${SRV_START_INDEX:-1}"
+        echo "# dynamic.server.max = MaximumDynamicServerCount, a fixed ceiling (NOT the machine count)"
+        echo "dynamic.server.max=${DYN_MAX:-1000}"
         echo "dynamic.server.count=${DCOUNT}"
         echo ""
         echo "# --- Node Manager: its own basic domain '${NM_DOMAIN}', stable across app"
@@ -1083,7 +1146,7 @@ save_profile() {
         echo "wls.targets.admin=AdminServer"
         echo "wls.targets.cluster=BEA_ENGINE_TIER_CLUST"
         echo "wls.targets.both=AdminServer,BEA_ENGINE_TIER_CLUST"
-        echo "wls.targets.test=${prefix:-engine}${SRV_START_INDEX:-0}"
+        echo "wls.targets.test=${prefix:-engine}0"
         echo ""
         echo "# --- FSMAR install destination + engine nodes (the 'fsmar' tier) ---"
         echo "ssh.user=${SSH_USER}"
@@ -1118,6 +1181,25 @@ save_profile() {
         echo "sip.tls.port=${SIP_PORT}"
         echo "sip.tls.versions=${SIP_VER}"
         echo "sip.tls.twoway=${SIP_TWOWAY}"
+        echo ""
+        echo "# --- nginx edge reverse proxy (the 'nginx' row installs it) -------------"
+        echo "# install.sh owns /etc/nginx/nginx.conf on THIS box: TLS terminates here"
+        echo "# and forwards HTTP + WebSocket to the AdminServer (admin vhost) and"
+        echo "# engine0 (apps vhost). Blank server-names skip the row. backend.addr"
+        echo "# blank ⇒ derived from 'hostname -I' at render time (re-image-safe: the"
+        echo "# AdminServer SSL listener binds its ListenAddress, so localhost can't"
+        echo "# reach it). Certs are supplied here (e.g. Let's Encrypt); install.sh"
+        echo "# does not obtain or renew them."
+        echo "nginx.server_name.admin=${NGX_ADMIN_SN}"
+        echo "nginx.server_name.apps=${NGX_APPS_SN}"
+        echo "nginx.backend.addr=${NGX_BACKEND}"
+        echo "nginx.admin.port=${NGX_ADMIN_PORT}"
+        echo "nginx.apps.port=${NGX_APPS_PORT}"
+        echo "nginx.tls.fullchain=${NGX_FULLCHAIN}"
+        echo "nginx.tls.privkey=${NGX_PRIVKEY}"
+        echo "nginx.client.max.body.size=${NGX_MAXBODY}"
+        echo "# naxsi WAF includes: on|off|auto (auto = on only if naxsi_core.rules exists)"
+        echo "nginx.naxsi=${NGX_NAXSI}"
     } >> "$DEPLOY_CONF"
     # Restore the secrets captured before the rewrite (ENC()-wrapped, mode 600).
     [ -n "$_secrets" ] && printf '%s\n' "$_secrets" >> "$BLADE_CONF"
@@ -1242,6 +1324,10 @@ build_menu_rows() {
     _row action verify "Verify the cluster (health-check every node)" "" "-"
     _row action o "Deploy WebLogic Remote Console (/rconsole)" "" "-"
     _row action f "Open firewall ports (firewalld)"              "NM/admin/ssl$([ "${SIP_TLS:-false}" = true ] && printf /sip)" "-"
+    local p_nginx ngxsum
+    if [ -n "${NGX_ADMIN_SN}${NGX_APPS_SN}" ]; then p_nginx=1; ngxsum="${NGX_ADMIN_SN:-—}${NGX_APPS_SN:+, ${NGX_APPS_SN}}"; else p_nginx=-; ngxsum="not configured"; fi
+    _row phase  nginx "nginx reverse proxy (edge TLS + WebSocket)" "$ngxsum" "$p_nginx"
+    _row action ngx   "Install/refresh nginx config (validate + reload)" "$([ -f /etc/nginx/nginx.conf ] && echo /etc/nginx/nginx.conf)" "-"
     _row head ""      "STEP 6 · Deploy settings (build profile, SSH, admin URL)" "" "-"
     _row phase runtime "Build profile, SSH user, admin URL" "${BUILD_PROFILE} · ${ADMINURL}" "$p_run"
     local distlbl; distlbl="$(ls -1t "${SCRIPT_DIR}/dist" 2>/dev/null | head -1)"; distlbl="${distlbl:-no build — run ./build.sh}"
@@ -1279,6 +1365,7 @@ dispatch_row() {
         hosts)   phase_hosts;   _save ;;
         tls)     phase_tls;     _save ;;
         runtime) phase_runtime; _save ;;
+        nginx)   phase_nginx;   _save ;;
         u) do_makeuser  || true ;;
         m) do_makedirs  || true ;;
         dl) do_download  || true ;;
@@ -1295,6 +1382,7 @@ dispatch_row() {
         E) do_provision_engines   || true ;;
         o) do_console             || true ;;
         f) do_open_firewall || true ;;
+        ngx) do_install_nginx || true ;;
         x) stop_admin  "$MWHOME" "$DOMAIN" "$ADMIN_USER" || true ;;
         verify) do_verify || true ;;
         k) stop_nm || true ;;
@@ -2247,11 +2335,12 @@ do_install_wls_service() {
     text="$(render_admin_nm_unit "$dom" "$domhome" "${domhome}/${BOOT_SCRIPT_SUBDIR}" "$user" "$grp" "$envfile")"
     install_systemd_unit weblogic.service "$text" || return 1
 
-    # machine0 runs the AdminServer AND the first engine, so that engine needs its
+    # machine0 runs the AdminServer AND the STATIC engine0, so that engine needs its
     # own unit: weblogic.service starts only the AdminServer, and the engine units
     # live on the engine hosts. Without this it is the one server that stays down
-    # after a reboot.
-    local sname="${prefix:-engine}${SRV_START_INDEX:-0}"
+    # after a reboot. engine0 is always index 0 (the static admin-box engine),
+    # independent of the dynamic range's starting index (1).
+    local sname="${prefix:-engine}0"
     write_boot_properties "$domhome" "$sname" "${ADMIN_USER:-weblogic}" "$pw" || true
     local stext
     stext="$(render_admin_nm_unit "$dom" "$domhome" "${domhome}/${BOOT_SCRIPT_SUBDIR}" \
@@ -2568,14 +2657,20 @@ do_add_machine() {
     H_NAME+=("$name"); H_ADDR+=("$addr"); H_PORT+=("$NM_PORT"); H_TYPE+=("$NM_TYPE")
     H_PUB+=("$pub");   H_FQDN+=("$fqdn");  H_ROLE+=("engine")
     DCOUNT="${#H_NAME[@]}"
-    local newmatch="" h
-    for h in "${H_NAME[@]}"; do newmatch="${newmatch:+${newmatch},}${h}"; done
+    # ENGINE machines only (index 1..N); machine0/engine0 is static, outside the
+    # dynamic template, so it is never in the match expression. The ceiling stays
+    # fixed at DYN_MAX (default 1000) — adding a machine only extends the match.
+    local newmatch="" i
+    for i in "${!H_NAME[@]}"; do
+        [ "$i" -eq 0 ] && continue
+        newmatch="${newmatch:+${newmatch},}${H_NAME[$i]}"
+    done
     match="$newmatch"
 
     # 1. the DOMAIN first. The new server has to exist before the host can be told
     #    to start it, and the rsync in step 2 copies this domain -- so the engine
     #    receives a config that already knows about itself.
-    if ! cluster_resize "$name" "$addr" "$newmatch" "$DCOUNT"; then
+    if ! cluster_resize "$name" "$addr" "$newmatch" "${DYN_MAX:-1000}"; then
         warn "could not add ${name} to the domain — nothing changed."
         local last=$(( ${#H_NAME[@]} - 1 ))
         unset "H_NAME[$last]" "H_ADDR[$last]" "H_PORT[$last]" "H_TYPE[$last]" "H_PUB[$last]" "H_FQDN[$last]" "H_ROLE[$last]"
@@ -2613,10 +2708,12 @@ do_remove_machine() {
 
     yesno "Remove ${name} (${addr}) and its server ${eng}? Stops it, deletes its domain copy and boot services." "N" || return 1
 
-    # Domain first: stop targeting the machine before tearing the host down.
+    # Domain first: stop targeting the machine before tearing the host down. The
+    # remaining match is the ENGINE machines only (index 1..n-1); machine0 is the
+    # static admin box and never in the expression. Ceiling stays DYN_MAX.
     local newmatch="" i
-    for i in $(seq 0 $((n - 1))); do newmatch="${newmatch:+${newmatch},}${H_NAME[$i]}"; done
-    cluster_resize "" "" "$newmatch" "$n" "$name" || warn "domain not updated — continuing with host teardown."
+    for i in $(seq 1 $((n - 1))); do newmatch="${newmatch:+${newmatch},}${H_NAME[$i]}"; done
+    cluster_resize "" "" "$newmatch" "${DYN_MAX:-1000}" "$name" || warn "domain not updated — continuing with host teardown."
 
     # Host: reuse the guarded teardown, which stops running servers first.
     local keep_name=("${H_NAME[@]}") keep_addr=("${H_ADDR[@]}") keep_role=("${H_ROLE[@]}")
@@ -4199,23 +4296,16 @@ place_nm_keystores() {  # $1 = destination dir (the nmdomain's config/certs)
 # AdminServer. The Oracle-home paths ride the 'current' symlink (MWHOME), so a
 # patch flip never strands them; the NM hostname-verification flag lives here
 # too because setUserOverrides.sh is not sourced on an MBean-mode start.
-emit_serverstart_block() {
-    local tmpl="${1}-template" OH="$MWHOME"
-    local mem; mem="$(read_prop "$OCCAS_CONF" server.mem.args)"
-    mem="${mem:--Xms512m -Xmx1024m -XX:MaxMetaspaceSize=512m}"
+# Emit the ServerStart MBean (MBean-mode JVM args + SIP classpath) for ONE server:
+# $1 = collection (ServerTemplates|Servers), $2 = name, $3 = memory args (heap).
+# Split out of emit_serverstart_block so the static engine0 can reuse it with its
+# OWN, lower heap ($3) — it shares the admin box with the AdminServer. The
+# classpath and the non-heap flags are identical for every server.
+emit_serverstart_one() {
+    local coll="$1" nm="$2" mem="$3" OH="$MWHOME"
     local cp="${OH}/wlserver/server/lib/weblogic.jar:${OH}/wlserver/../oracle_common/modules/thirdparty/ant-contrib-1.0b3.jar:${OH}/wlserver/modules/features/oracle.wls.common.nodemanager.jar:${OH}/occas/server/lib/platform/oracle.sdp.occas.depended.jar:${OH}/wlserver/sip/server/lib/wlss-runtime-rest-proxy.jar:${OH}/wlserver/sip/server/lib/weblogic_sip.jar:${OH}/wlserver/common/derby/lib/derbytools.jar:${OH}/wlserver/common/derby/lib/derbyclient.jar:${OH}/wlserver/common/derby/lib/derby.jar:${OH}/wlserver/common/derby/lib/derbyshared.jar"
     local args="${mem} -da -javaagent:${OH}/wlserver/server/lib/debugpatch-agent.jar -Dwls.home=${OH}/wlserver/server -Dweblogic.home=${OH}/wlserver/server -Dwlss.maddr.enable=true -Dwlss.replication=on -Dwlss.callstate.manager.classname=com.bea.wcp.sip.replicatedstore.server.CoherenceCallStateManager -Dweblogic.security.SSL.minimumProtocolVersion=TLSv1.2 -Dweblogic.servlet.ClasspathServlet.disableSecureMode=false -Dweblogic.nodemanager.sslHostNameVerificationEnabled=false"
-    # MaxMessageSize is set as a first-class config.xml attribute on the template and
-    # AdminServer -- NOT a -D JVM arg -- so it is honoured at startup independent of how
-    # the JVM args are assembled, and it is the same attribute the Tuning app edits
-    # (per-server, live). Raises the T3 cap from its 10 MB default so an engine can pull
-    # the FSMAR custom App Router jar (~10.5 MB) from the AdminServer on every AR load
-    # (AppRouterResource.getRemoteFileContent) without MaxMessageSizeExceededException.
-    echo "# --- BLADE: per-server ServerStart (MBean-mode JVM args + SIP classpath) ---"
-    local spec coll nm
-    for spec in "ServerTemplates:${tmpl}" "Servers:AdminServer"; do
-        coll="${spec%%:*}"; nm="${spec##*:}"
-        cat <<PYSS
+    cat <<PYSS
 cd('/${coll}/${nm}')
 set('MaxMessageSize', 100000000)
 try:
@@ -4226,7 +4316,22 @@ cd('/${coll}/${nm}/ServerStart/${nm}')
 set('ClassPath','${cp}')
 set('Arguments','${args}')
 PYSS
-    done
+}
+
+emit_serverstart_block() {
+    local tmpl="${1}-template"
+    local mem; mem="$(read_prop "$OCCAS_CONF" server.mem.args)"
+    mem="${mem:--Xms512m -Xmx1024m -XX:MaxMetaspaceSize=1g}"
+    # MaxMessageSize (set inside emit_serverstart_one) is a first-class config.xml
+    # attribute -- NOT a -D JVM arg -- so it is honoured at startup independent of
+    # how the JVM args are assembled, and it is the same attribute the Tuning app
+    # edits (per-server, live). Raises the T3 cap from its 10 MB default so an engine
+    # can pull the FSMAR custom App Router jar (~10.5 MB) from the AdminServer on every
+    # AR load without MaxMessageSizeExceededException. Dynamic engines inherit the
+    # ServerTemplate's ServerStart; the AdminServer gets its own.
+    echo "# --- BLADE: per-server ServerStart (MBean-mode JVM args + SIP classpath) ---"
+    emit_serverstart_one "ServerTemplates" "${tmpl}" "$mem"
+    emit_serverstart_one "Servers" "AdminServer" "$mem"
 }
 
 # Emit the offline-WLST that puts the real certificate and the SIP channels onto
@@ -4244,22 +4349,24 @@ PYSS
 # NOTE the ...PassPhraseEncrypted attribute names: offline WLST rejects the plain
 # ...PassPhrase setters while a domain is being created. The Encrypted variants
 # accept plaintext and store it encrypted with the new domain's key.
-emit_tls_block() {
-    local tmpl="${1}-template"
-    local kspw trpw
+# Emit offline-WLST that stamps the real CustomIdentity/CustomTrust keystores + an
+# SSL child onto ONE bean path ($1 = e.g. /Servers/AdminServer or /Servers/engine0
+# or /ServerTemplates/<tmpl>; $2 = the SSL child name). Shared by emit_tls_block
+# (template + AdminServer) and emit_static_engine0_block (the static engine0), so
+# the static engine gets exactly the same identity as every dynamic engine.
+# Keystore paths are RELATIVE to the domain root (./config/certs), NOT absolute.
+# WebLogic resolves a relative keystore path against the server's root (the domain
+# home), so every managed server -- including engines that received config/certs by
+# config replication onto a possibly different absolute path -- loads its own copy.
+# $3 = the default SSL channel's ListenPort (default 7002). engine0 shares the
+# admin box with the AdminServer, so it must NOT reuse 7002 — it passes its own.
+emit_keystore_block() {
+    local kspw trpw alias sslport
     kspw="$(read_prop "$WLS_SECRET" tls.keystore.passphrase)"
     trpw="$(read_prop "$WLS_SECRET" tls.trust.passphrase)"
-    local alias="${ID_ALIAS:-blade-identity}"
-    [ -n "$kspw" ] && [ -n "$trpw" ] || { warn "TLS passphrases missing from the config."; return 1; }
-
-    # Keystore paths are RELATIVE to the domain root (./config/certs), NOT absolute.
-    # WebLogic resolves a relative keystore path against the server's root (the
-    # domain home), so every managed server -- including engines that received
-    # config/certs by config replication onto a possibly different absolute path --
-    # loads its own copy. Only what's baked into config.xml is relative; the WLST
-    # client trust args elsewhere stay absolute.
-    _emit_keystores() {
-        cat <<PYBLOCK
+    alias="${ID_ALIAS:-blade-identity}"
+    sslport="${3:-${SSL_PORT:-7002}}"
+    cat <<PYBLOCK
 cd('${1}')
 set('KeyStores','CustomIdentityAndCustomTrust')
 set('CustomIdentityKeyStoreFileName','./config/certs/blade-identity.p12')
@@ -4276,7 +4383,7 @@ except:
     pass
 cd('${1}/SSL/${2}')
 set('Enabled','true')
-set('ListenPort',${SSL_PORT:-7002})
+set('ListenPort',${sslport})
 set('ServerPrivateKeyAlias','${alias}')
 set('ServerPrivateKeyPassPhraseEncrypted','${kspw}')
 # No hostname verification on the servers' outbound SSL. Inside the VCN,
@@ -4287,35 +4394,49 @@ set('ServerPrivateKeyPassPhraseEncrypted','${kspw}')
 # adds nothing between our own boxes.
 set('HostnameVerificationIgnored','true')
 PYBLOCK
-    }
+}
+
+emit_tls_block() {
+    local tmpl="${1}-template"
+    local kspw trpw
+    kspw="$(read_prop "$WLS_SECRET" tls.keystore.passphrase)"
+    trpw="$(read_prop "$WLS_SECRET" tls.trust.passphrase)"
+    [ -n "$kspw" ] && [ -n "$trpw" ] || { warn "TLS passphrases missing from the config."; return 1; }
 
     echo "# --- BLADE: real certificate + SIP channels (no demo certs) ---"
-    _emit_keystores "/ServerTemplates/${tmpl}" "${tmpl}"
-    _emit_keystores "/Servers/AdminServer" "AdminServer"
+    emit_keystore_block "/ServerTemplates/${tmpl}" "${tmpl}"
+    emit_keystore_block "/Servers/AdminServer" "AdminServer"
 
     # Dynamic-server shape, set at CREATE time so a rebuild keeps it.
     #
-    # ServerNameStartingIndex=0 is what makes machine0 run engine0 -- the local
-    # engine is stamped from the same template as every other one, so there is no
-    # static server to special-case.
+    # ServerNameStartingIndex=1: the DYNAMIC range is engine1..N on machine1..N.
+    # machine0/engine0 (and the AdminServer) are a STATIC pair on the admin box —
+    # NOT dynamic members — created by emit_static_engine0_block, so the dynamic
+    # calculation never lands a second engine on machine0. This also kills the
+    # off-by-one that put engine1 on machine0.
     #
-    # CalculatedListenPorts=false gives every engine the template's ports
-    # verbatim (5060/5061/8001) instead of base+index. Incrementing only makes
-    # sense when several engines share a host -- a developer laptop, not a SIP
-    # tier. The trade is one engine per machine, which is exactly the shape
-    # "add a machine" produces.
+    # MachineNameMatchExpression is the engine machines ONLY (machine1,machine2,…);
+    # machine0 is deliberately excluded. Empty on a single-box install — then the
+    # dynamic set is empty and the static engine0 is the whole tier.
     #
-    # The DynamicServers child is named after the server prefix in the domain
-    # this template builds. Try the cluster name too rather than fail the whole
-    # domain build if a future template names it differently.
+    # MaximumDynamicServerCount is a high fixed CEILING (default 1000), not the
+    # machine count: the actual running engines follow the match expression, so
+    # "add a machine" just extends the expression — no count resize, no rebuild.
+    #
+    # CalculatedListenPorts=false gives every engine the template's ports verbatim
+    # (5060/5061/8001) — one engine per machine, which is what "add a machine" is.
+    #
+    # The DynamicServers child is named after the server prefix in the domain this
+    # template builds. Try the cluster name too rather than fail the whole domain
+    # build if a future template names it differently.
     cat <<PYBLOCK
 for _dsn in ['${prefix:-engine}','${1}']:
     try:
         cd('/Clusters/${1}/DynamicServers/' + _dsn)
-        set('ServerNameStartingIndex',${SRV_START_INDEX:-0})
+        set('ServerNameStartingIndex',${SRV_START_INDEX:-1})
         set('CalculatedListenPorts','$([ "${DYN_CALC_PORTS:-false}" = true ] && echo true || echo false)')
-        set('MachineNameMatchExpression','${match:-machine0}')
-        set('MaximumDynamicServerCount',${DCOUNT:-1})
+        set('MachineNameMatchExpression','${match}')
+        set('MaximumDynamicServerCount',${DYN_MAX:-1000})
         break
     except:
         pass
@@ -4352,7 +4473,95 @@ cd('/ServerTemplates/${tmpl}/NetworkAccessPoints/sips')
 set('Enabled','false')
 PYBLOCK
     fi
-    unset -f _emit_keystores
+}
+
+# Emit offline-WLST that creates the STATIC engine0 on the admin box (machine0),
+# a configured member of the cluster next to the AdminServer. $1 = cluster name.
+#
+# Why static: machine0/engine0/AdminServer are deliberately OUTSIDE the dynamic
+# template (the template is engine1..N on machine1..N). A configured server
+# inherits NOTHING from the ServerTemplate, so its SIP channels, SSL identity and
+# ServerStart must be stamped by hand HERE, at create time — there is no
+# /Servers/engine0 to reach into afterward. It joins the cluster so it replicates
+# SIP call state (Coherence flowstate mesh) with the dynamic engines. It runs a
+# LOWER heap (engine0.mem.args) than the dynamic engines because it shares the box
+# with the AdminServer.
+#
+# Offline reference attributes use assign() (the documented offline command for
+# Cluster/Machine membership), not set(). REVIEW the dry-run output of this block
+# on the real OCCAS before running it live — the sip/sips NAP attributes on a
+# static server are the fiddly part.
+emit_static_engine0_block() {
+    local cluster="${1}"
+    local e0="${prefix:-engine}0"
+    local machine="${H_NAME[0]:-machine0}"
+    local addr="${H_ADDR[0]}"
+    local e0mem; e0mem="$(read_prop "$OCCAS_CONF" engine0.mem.args)"
+    e0mem="${e0mem:--Xms256m -Xmx768m -XX:MaxMetaspaceSize=512m}"
+    echo "# --- BLADE: STATIC engine0 on ${machine} (admin box), member of ${cluster} ---"
+    cat <<PYE0
+cd('/')
+try:
+    create('${e0}','Server')
+except:
+    pass
+try:
+    assign('Server','${e0}','Cluster','${cluster}')
+except:
+    pass
+try:
+    assign('Server','${e0}','Machine','${machine}')
+except:
+    pass
+cd('/Servers/${e0}')
+set('ListenAddress','${addr}')
+set('ListenPort',${ENGINE_HTTP_PORT:-8001})
+# Plain SIP channel (5060) — same shape the ServerTemplate gets, created by hand.
+try:
+    create('sip','NetworkAccessPoint')
+except:
+    pass
+cd('/Servers/${e0}/NetworkAccessPoints/sip')
+set('Protocol','sip')
+set('ListenAddress','${addr}')
+set('Enabled','$([ "$SIP_PLAIN" = false ] && echo false || echo true)')
+set('ListenPort',${SIP_PLAIN_PORT:-5060})
+set('HttpEnabledForThisProtocol','false')
+set('OutboundEnabled','true')
+PYE0
+    if [ "$SIP_TLS" = "true" ]; then
+        cat <<PYE0S
+cd('/Servers/${e0}')
+try:
+    create('sips','NetworkAccessPoint')
+except:
+    pass
+cd('/Servers/${e0}/NetworkAccessPoints/sips')
+set('Protocol','sips')
+set('ListenAddress','${addr}')
+set('Enabled','true')
+set('ListenPort',${SIP_PORT:-5061})
+set('HttpEnabledForThisProtocol','false')
+set('OutboundEnabled','true')
+set('TwoWaySSLEnabled','$([ "$SIP_TWOWAY" = true ] && echo true || echo false)')
+set('ClientCertificateEnforced','$([ "$SIP_TWOWAY" = true ] && echo true || echo false)')
+PYE0S
+    else
+        cat <<PYE0S
+cd('/Servers/${e0}')
+try:
+    create('sips','NetworkAccessPoint')
+except:
+    pass
+cd('/Servers/${e0}/NetworkAccessPoints/sips')
+set('Enabled','false')
+PYE0S
+    fi
+    # Same SSL identity as the AdminServer/template, but on a DISTINCT default SSL
+    # port (ENGINE_SSL_PORT, default 8002) — engine0 shares the box with the
+    # AdminServer, which owns 7002. Then a LOWER-heap ServerStart.
+    emit_keystore_block "/Servers/${e0}" "${e0}" "${ENGINE_SSL_PORT:-8002}"
+    emit_serverstart_one "Servers" "${e0}" "$e0mem"
 }
 
 # Admin password: env > the config > prompt (skipped under dry-run).
@@ -4400,8 +4609,11 @@ do_configure() {
     auser="$(read_prop "$OCCAS_CONF" admin.username)";     auser="${auser:-weblogic}"
     prefix="$(read_prop "$OCCAS_CONF" server.name.prefix)"
     match="$(read_prop "$OCCAS_CONF" machine.match.expression)"
-    dcount="$(read_prop "$OCCAS_CONF" dynamic.server.count)"
-    for chk in mwhome domain prefix match dcount; do
+    # DYNAMIC ceiling (fixed, default 1000). match may be EMPTY on a single-box
+    # install — then the dynamic set is empty and the static engine0 is the tier —
+    # so match is NOT required.
+    local dynmax; dynmax="$(read_prop "$OCCAS_CONF" dynamic.server.max)"; dynmax="${dynmax:-1000}"
+    for chk in mwhome domain prefix; do
         [ -n "${!chk}" ] || { warn "occas.conf: missing $chk (required for configure)"; return 1; }
     done
 
@@ -4414,15 +4626,15 @@ do_configure() {
 
     local pw; pw="$(get_admin_pw)" || return 1
 
-    info "Configure domain '${domain}' (${mode}) — dynamic cluster"
-    log  "  prefix=${prefix}  match=${match}  count=${dcount}  (no ceiling)"
+    info "Configure domain '${domain}' (${mode}) — static engine0 + dynamic engine1..N"
+    log  "  prefix=${prefix}  dynamic machines=${match:-<none, single-box>}  ceiling=${dynmax}"
 
     local props name addr port type idx=1
     props="ADMIN_USERNAME=${auser}
 ADMIN_PASSWORD=__PW__
 ServerNamePrefix=${prefix}
 MachineNameMatchExpression=${match}
-MaximumDynamicServerCount=${dcount}"
+MaximumDynamicServerCount=${dynmax}"
     for m in "${machines[@]}"; do
         IFS=: read -r name addr port type <<< "$m"
         [ -n "$name" ] && [ -n "$addr" ] && [ -n "$port" ] && [ -n "$type" ] \
@@ -4525,6 +4737,18 @@ Machine${idx}NodemanagerNMType=${type}"
         "${work}/serverstart.block" "${work}/occas-replicated-dynamiccluster.py" \
         > "${work}/.py.tmp" && mv "${work}/.py.tmp" "${work}/occas-replicated-dynamiccluster.py"
     log "  ServerStart: MBean-mode JVM args + SIP classpath on the template and AdminServer"
+
+    # STATIC engine0 on machine0 (the admin box), a configured member of the
+    # cluster. Spliced LAST so the cluster, machine0, the template and the
+    # AdminServer already exist when it runs. This is what makes machine0/engine0
+    # a static pair OUTSIDE the dynamic template (engine1..N).
+    emit_static_engine0_block "BEA_ENGINE_TIER_CLUST" > "${work}/engine0.block"
+    awk 'NR==FNR { blk = blk $0 ORS; next }
+         /OverwriteDomain/ && !ins { printf "%s", blk; ins = 1 }
+         { print }' \
+        "${work}/engine0.block" "${work}/occas-replicated-dynamiccluster.py" \
+        > "${work}/.py.tmp" && mv "${work}/.py.tmp" "${work}/occas-replicated-dynamiccluster.py"
+    log "  Static engine0: configured cluster member on ${H_NAME[0]:-machine0} (admin box), lower heap"
 
     local jh rc=0; jh="$(read_prop "$OCCAS_CONF" java.home)"
     # The domain lands in the install user's DOMAINS_DIR, so WLST runs as them.
@@ -4972,7 +5196,7 @@ write_user_overrides() {
     [ -d "${domhome}/bin" ] || return 0
     local IU_USER; IU_USER="$(iu_owner_user "$domhome")"   # write as the domain's owner
     mem="$(read_prop "$OCCAS_CONF" server.mem.args)"
-    mem="${mem:--Xms512m -Xmx1024m -XX:MaxMetaspaceSize=512m}"
+    mem="${mem:--Xms512m -Xmx1024m -XX:MaxMetaspaceSize=1g}"
     iu_write "${domhome}/bin/setUserOverrides.sh" 755 <<EOF
 # BLADE - generated by install.sh. NM-launched servers do NOT run this: Node
 # Manager starts servers MBean-mode from their config.xml ServerStart MBeans
@@ -5475,12 +5699,12 @@ _wls_adminurl() {
     printf '%s://%s:%s' "$scheme" "$addr" "$port"
 }
 
-# The engine on THIS machine -- prefix + starting index (machine0 runs engine0).
+# The engine on THIS (admin) box -- the STATIC engine0, always index 0. The
+# dynamic range starts at 1, but the deploy/test target is the local static engine.
 _test_target() {
-    local pfx idx
+    local pfx
     pfx="$(read_prop "$OCCAS_CONF" server.name.prefix)"; pfx="${pfx:-engine}"
-    idx="$(read_prop "$OCCAS_CONF" server.name.starting.index)"; idx="${idx:-0}"
-    printf '%s%s' "$pfx" "$idx"
+    printf '%s0' "$pfx"
 }
 
 # STEP 7 handlers delegate to deploy.sh — the single deploy authority — so there
@@ -5638,6 +5862,188 @@ do_backup() {
 
 # Open the ports OCCAS needs on firewalld. Server installs need this; laptops
 # usually have no firewalld and it no-ops. Idempotent.
+# ============================================================================
+# nginx edge reverse proxy
+# ----------------------------------------------------------------------------
+# Render + own /etc/nginx/nginx.conf for the front-door box. Faithful to the
+# hand-built config, parameterised from the profile, with the two things that
+# are easy to get wrong baked in permanently:
+#   * WebSocket: Upgrade/Connection are hop-by-hop, so nginx drops them unless
+#     re-set per request. Without them the Configurator/WebRTC handshake reaches
+#     WebLogic as a plain GET → 302 to login → the browser reports a bad
+#     handshake. The map + the two proxy_set_header lines fix it.
+#   * Backend is the box's ROUTABLE address, never 127.0.0.1: the AdminServer
+#     SSL listener binds its ListenAddress, and localhost never reaches it.
+# naxsi is optional (on|off|auto): the includes appear only when the compiled
+# module's rule files are present, so this also renders on a vanilla nginx.
+# ============================================================================
+render_nginx_conf() {
+    local admin_sn="$1" apps_sn="$2" backend="$3" admin_port="$4" apps_port="$5" \
+          fullchain="$6" privkey="$7" maxbody="$8" naxsi="$9"
+    if [ "$naxsi" = auto ]; then [ -f /etc/nginx/naxsi_core.rules ] && naxsi=on || naxsi=off; fi
+    local core_inc="" learn_inc="" block_inc=""
+    if [ "$naxsi" = on ]; then
+        core_inc="    include /etc/nginx/naxsi_core.rules;"
+        learn_inc="            include /etc/nginx/naxsi-learn.rules;"
+        block_inc="            include /etc/nginx/naxsi-block.rules;"
+    fi
+
+    # The proxy body shared by both vhosts. $1=scheme(https|http) $2=port
+    # $3=optional WAF include line. Reads $backend from the enclosing scope.
+    _emit_location() {
+        local scheme="$1" port="$2" waf="$3"
+        [ -n "$waf" ] && printf '%s\n' "$waf"
+        if [ "$scheme" = https ]; then
+            printf '            proxy_pass https://%s:%s; proxy_ssl_verify off; proxy_ssl_server_name on;\n' "$backend" "$port"
+        else
+            printf '            proxy_pass http://%s:%s;\n' "$backend" "$port"
+        fi
+        cat <<EOF
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_redirect https://\$host:${port}/ https://\$host/; proxy_redirect http://\$host:80/ https://\$host/; proxy_redirect http://\$host/ https://\$host/;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade \$http_upgrade;
+            proxy_set_header Connection \$connection_upgrade;
+EOF
+    }
+
+    cat <<EOF
+# Generated by install.sh — the BLADE edge reverse proxy. Do not hand-edit;
+# re-run the nginx row to regenerate. Backend ${backend} is this box's WebLogic.
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log;
+pid /run/nginx.pid;
+include /usr/share/nginx/modules/*.conf;
+events { worker_connections 1024; }
+http {
+    log_format main '\$remote_addr - \$remote_user [\$time_local] "\$request" \$status \$body_bytes_sent "\$http_referer" "\$http_user_agent"';
+    access_log /var/log/nginx/access.log main;
+    sendfile on;
+    tcp_nopush on;
+    keepalive_timeout 65;
+    types_hash_max_size 4096;
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+EOF
+    [ -n "$core_inc" ] && printf '%s\n' "$core_inc"
+    cat <<EOF
+
+    # WebSocket upgrade: Upgrade/Connection are hop-by-hop; re-set per request or
+    # nginx drops them and the handshake never reaches 101 Switching Protocols.
+    map \$http_upgrade \$connection_upgrade {
+        default upgrade;
+        ''      close;
+    }
+
+    ssl_certificate     ${fullchain};
+    ssl_certificate_key ${privkey};
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:SSL:10m;
+    server_tokens off;
+
+    server {
+        listen 80 default_server;
+        return 301 https://\$host\$request_uri;
+    }
+    server {
+        listen 443 ssl http2 default_server;
+        server_name _;
+        return 444;
+    }
+EOF
+    if [ -n "$admin_sn" ]; then
+        cat <<EOF
+    server {
+        listen 443 ssl http2;
+        server_name ${admin_sn};
+        client_max_body_size ${maxbody};
+        location / {
+EOF
+        _emit_location https "$admin_port" "$learn_inc"
+        cat <<'EOF'
+        }
+        location /RequestDenied { internal; return 403; }
+    }
+EOF
+    fi
+    if [ -n "$apps_sn" ]; then
+        cat <<EOF
+    server {
+        listen 443 ssl http2;
+        server_name ${apps_sn};
+        location / {
+EOF
+        _emit_location http "$apps_port" "$block_inc"
+        cat <<'EOF'
+        }
+        location /RequestDenied { internal; return 403; }
+    }
+EOF
+    fi
+    printf '%s\n' "}"
+    unset -f _emit_location
+}
+
+# Render the config from the profile, validate it OFF to the side, and only then
+# swap it in and reload. A validate-first swap keeps the on-disk file always-good
+# (nginx -t loads the SSL certs, so missing certs fail here, not at reload).
+do_install_nginx() {
+    command -v nginx >/dev/null 2>&1 || { warn "nginx is not installed on this box — install it (with the naxsi module if you use the WAF) first."; return 1; }
+    local admin_sn apps_sn backend admin_port apps_port fullchain privkey maxbody naxsi
+    admin_sn="$(read_prop "$DEPLOY_CONF" nginx.server_name.admin)"
+    apps_sn="$(read_prop "$DEPLOY_CONF" nginx.server_name.apps)"
+    backend="$(read_prop "$DEPLOY_CONF" nginx.backend.addr)"
+    [ -n "$backend" ] || backend="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    admin_port="$(read_prop "$DEPLOY_CONF" nginx.admin.port)"; admin_port="${admin_port:-${SSL_PORT:-7002}}"
+    apps_port="$(read_prop "$DEPLOY_CONF" nginx.apps.port)"; apps_port="${apps_port:-8001}"
+    fullchain="$(read_prop "$DEPLOY_CONF" nginx.tls.fullchain)"
+    privkey="$(read_prop "$DEPLOY_CONF" nginx.tls.privkey)"
+    maxbody="$(read_prop "$DEPLOY_CONF" nginx.client.max.body.size)"; maxbody="${maxbody:-500m}"
+    naxsi="$(read_prop "$DEPLOY_CONF" nginx.naxsi)"; naxsi="${naxsi:-auto}"
+
+    { [ -n "$admin_sn" ] || [ -n "$apps_sn" ]; } || { warn "no nginx server-names set — fill in the nginx phase first."; return 1; }
+    [ -n "$backend" ] || { warn "could not determine the backend address (hostname -I empty) — set nginx.backend.addr."; return 1; }
+    { [ -n "$fullchain" ] && [ -n "$privkey" ]; } || { warn "TLS cert paths are required (nginx.tls.fullchain / nginx.tls.privkey)."; return 1; }
+
+    local text; text="$(render_nginx_conf "$admin_sn" "$apps_sn" "$backend" "$admin_port" "$apps_port" "$fullchain" "$privkey" "$maxbody" "$naxsi")"
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] write /etc/nginx/nginx.conf:${C_RESET}"
+        printf '%s\n' "$text" | sed 's/^/    /'
+        log "${C_DIM}  [dry-run] nginx -t && systemctl reload nginx${C_RESET}"
+        return 0
+    fi
+    local sudo=""; [ "$(id -u)" != 0 ] && command -v sudo >/dev/null 2>&1 && sudo="sudo"
+    local tmp; tmp="$(mktemp)" || { warn "mktemp failed."; return 1; }
+    printf '%s\n' "$text" > "$tmp"
+    if ! $sudo nginx -t -c "$tmp" >/dev/null 2>&1; then
+        warn "rendered nginx config failed validation — NOT installed:"
+        $sudo nginx -t -c "$tmp" 2>&1 | sed 's/^/    /'
+        rm -f "$tmp"; return 1
+    fi
+    local stamp; stamp="$(date +%Y%m%d)"
+    [ -f /etc/nginx/nginx.conf ] && $sudo cp -a /etc/nginx/nginx.conf "/etc/nginx/nginx.conf.bak.${stamp}" 2>/dev/null || true
+    if ! $sudo install -m 0644 -o root -g root "$tmp" /etc/nginx/nginx.conf; then
+        warn "could not write /etc/nginx/nginx.conf (need sudo?)."; rm -f "$tmp"; return 1
+    fi
+    rm -f "$tmp"
+    if ! $sudo nginx -t >/dev/null 2>&1; then
+        warn "installed config failed in-place validation — restoring backup."
+        [ -f "/etc/nginx/nginx.conf.bak.${stamp}" ] && $sudo cp -a "/etc/nginx/nginx.conf.bak.${stamp}" /etc/nginx/nginx.conf 2>/dev/null
+        return 1
+    fi
+    if $sudo systemctl reload nginx 2>/dev/null; then
+        ok "nginx reloaded — edge config live (${admin_sn:-—}${apps_sn:+, ${apps_sn}})."
+    else
+        warn "config installed but 'systemctl reload nginx' failed — start it: sudo systemctl enable --now nginx"
+    fi
+    [ "$naxsi" = off ] && log "${C_DIM}  naxsi includes omitted (no compiled module / rule files) — WAF is off.${C_RESET}"
+    return 0
+}
+
 do_open_firewall() {
     command -v firewall-cmd >/dev/null 2>&1 || { ok "no firewalld here — nothing to open."; return 0; }
     firewall-cmd --state >/dev/null 2>&1 || { ok "firewalld not running — nothing to open."; return 0; }
