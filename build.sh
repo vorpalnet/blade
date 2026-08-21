@@ -669,6 +669,7 @@ _bp_read_key() {
         ' ')            printf 'space' ;;
         ''|$'\n'|$'\r') printf 'enter' ;;
         a|A)            printf 'all' ;;
+        m|M)            printf 'mode' ;;
         j|J)            printf 'down' ;;
         k|K)            printf 'up' ;;
         q|Q)            printf 'quit' ;;
@@ -716,6 +717,9 @@ edit_profile_apps() {
     for m in "${mods[@]}"; do app_selected "$conf" "$m" && checked="${checked}${m} "; done
     _has() { case "$checked" in *" $1 "*) return 0 ;; esac; return 1; }
 
+    local mode; mode="$(read_prop "$conf" build.mode)"
+    case "$mode" in production|prod) mode=prod ;; *) mode=dev ;; esac
+
     local ear_admin ear_services ear_test
     ear_admin=$(ear_flag "$conf" admin); ear_services=$(ear_flag "$conf" services); ear_test=$(ear_flag "$conf" test)
     _ear_get() { case "$1" in admin) echo "$ear_admin" ;; services) echo "$ear_services" ;; test) echo "$ear_test" ;; esac; }
@@ -741,7 +745,7 @@ edit_profile_apps() {
         printf '\e[H\e[J' > /dev/tty
         {
             echo ""
-            echo "  BLADE — choose apps to build   (profile: ${pname})"
+            echo "  BLADE — choose apps to build   (profile: ${pname} · mode: $(echo "$mode" | tr a-z A-Z))"
             echo ""
             expanded="${pos_cat[$cursor]}"
             for p in $(seq 0 $((npos - 1))); do
@@ -764,7 +768,7 @@ edit_profile_apps() {
                 else printf ' %s %s\n' "$pre" "$label"; fi
             done
             echo ""
-            echo "  ↑/↓ move · space toggle (an app, or a tier's EAR) · a all-in-tier · enter save & build · q cancel"
+            echo "  ↑/↓ move · space toggle (an app, or a tier's EAR) · a all-in-tier · m dev/prod · enter save & build · q cancel"
         } > /dev/tty
         key=$(_bp_read_key)
         case "$key" in
@@ -787,6 +791,7 @@ edit_profile_apps() {
                     if [ "$all" = 1 ]; then checked="${checked/ $mm / }"
                     elif ! _has "$mm"; then checked="${checked}${mm} "; fi
                 done ;;
+            mode) [ "$mode" = prod ] && mode=dev || mode=prod ;;
             enter) break ;;
             quit)  printf '\e[?25h' > /dev/tty; trap - INT; echo "  (cancelled — profile unchanged)" > /dev/tty; return 1 ;;
         esac
@@ -799,12 +804,13 @@ edit_profile_apps() {
     elif [ "${#picked[@]}" -eq 0 ];             then apps_val=""
     else apps_val="$(IFS=,; echo "${picked[*]}")"; fi
 
+    blade_set_prop "$conf" build.mode "$mode"
     blade_set_prop "$conf" build.apps "$apps_val"
     blade_set_prop "$conf" ear.admin "$ear_admin"
     blade_set_prop "$conf" ear.services "$ear_services"
     blade_set_prop "$conf" ear.test "$ear_test"
     echo "  saved ${conf}" > /dev/tty
-    echo "  ${#picked[@]}/${#mods[@]} apps · EAR admin=${ear_admin} services=${ear_services} test=${ear_test}" > /dev/tty
+    echo "  mode=${mode} · ${#picked[@]}/${#mods[@]} apps · EAR admin=${ear_admin} services=${ear_services} test=${ear_test}" > /dev/tty
 }
 
 # Interactive: pick / create / edit a profile for this build. Sets ENV_PROFILE
