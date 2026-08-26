@@ -25,16 +25,16 @@ import com.github.victools.jsonschema.generator.SchemaGeneratorConfigBuilder;
 /// v2 forces the redundant
 /// `new SettingsManager<Foo>(event, Foo.class, new FooSample())`. v3 recovers
 /// `T` reflectively (super-type-token), so the config class is named exactly
-/// once — in the `extends` clause. This requires a subclass that binds a
-/// concrete type (the pattern already used everywhere, e.g.
-/// `class FooManager extends SettingsManager<FooConfig>`), or an anonymous
-/// `new SettingsManager<FooConfig>(event){}`. A raw instantiation that leaves
-/// `T` unresolvable fails fast with a clear message.
+/// once — in the `extends` clause. The class is `abstract`, so `T` is always
+/// bound by a concrete subclass (the pattern already used everywhere, e.g.
+/// `class FooManager extends SettingsManager<FooConfig>`); the compiler now
+/// enforces what a raw instantiation could only fail on at runtime.
 ///
 /// ## 2. Sample via a hook, not a constructor argument
-/// Override [#sample] to supply the first-run seed config instead of threading
-/// a `sample` argument through the constructor. Returning `null` (the default)
-/// seeds from the loaded/empty config, exactly as v2 does.
+/// Implement the abstract [#sample] to supply the first-run seed config instead
+/// of threading a `sample` argument through the constructor. It is abstract so
+/// the seed can't be silently forgotten; return an empty `new FooConfig()` (or
+/// `null`) when the app genuinely needs no seed.
 ///
 /// ## 3. Config files are decoupled from the app
 /// A config file has a **name of its own**. It *happens* to default to the
@@ -55,16 +55,18 @@ import com.github.victools.jsonschema.generator.SchemaGeneratorConfigBuilder;
 /// extra    = new FooManager(event, "routing-rules"); // a second, independently-named config file
 /// ```
 ///
-/// ## Optional: [#onRefresh] — react to every config (re)load
-/// Override [#onRefresh] when a config file needs manipulation before it is
-/// usable — e.g. upgrading older config-file versions to the current shape. It
-/// runs on the initial load **and on every subsequent change** pushed through
-/// the Configurator/JMX, with [org.vorpal.blade.framework.v2.config.SettingsManager#getCurrent]
-/// already returning the new config. (This replaces v2's misleadingly-named
+/// ## Required: [#refreshed] — react to every config (re)load
+/// Implement [#refreshed] to manipulate a config before it is used — e.g.
+/// upgrading older config-file versions to the current shape. It runs on the
+/// initial load **and on every subsequent change** pushed through the
+/// Configurator/JMX, with [org.vorpal.blade.framework.v2.config.SettingsManager#getCurrent]
+/// already returning the new config. It is abstract on purpose: the reload hook
+/// is the piece developers overlook — then work around badly — so the contract
+/// puts it in front of everyone. An app with nothing to do returns immediately,
+/// but does so knowing the hook is there. (This replaces v2's misleadingly-named
 /// `initialize`, which fired on every reload despite the name — the reason
-/// almost no one used it. `onRefresh` is the v2 hook, renamed and made
-/// discoverable; leaving it un-overridden is fine.)
-public class SettingsManager<T> extends org.vorpal.blade.framework.v2.config.SettingsManager<T> {
+/// almost no one used it.)
+public abstract class SettingsManager<T> extends org.vorpal.blade.framework.v2.config.SettingsManager<T> {
 
 	/// No-arg constructor for subclasses that set their own fields before
 	/// driving [org.vorpal.blade.framework.v2.config.SettingsManager#build]
@@ -160,35 +162,36 @@ public class SettingsManager<T> extends org.vorpal.blade.framework.v2.config.Set
 		return "string";
 	}
 
-	/// First-run seed config. Override to supply a populated example; the
-	/// default returns `null`, which seeds from the loaded/empty config.
-	protected T sample() {
-		return null;
-	}
+	/// First-run seed config — the fully-populated example written to a fresh
+	/// config file on first deploy. Every manager must supply one; this is
+	/// abstract so it cannot be forgotten (an empty first-run config is almost
+	/// never intended). An app that genuinely wants no seed returns an empty
+	/// `new FooConfig()` or `null`, which seeds from the loaded/empty config.
+	protected abstract T sample();
 
 	/// Called on every config (re)load — initial load and every change pushed
-	/// through the Configurator/JMX. Override only when the config file needs
-	/// manipulation before use (e.g. upgrading an older config-file version to
-	/// the current shape). [org.vorpal.blade.framework.v2.config.SettingsManager#getCurrent]
-	/// already returns the new config when this runs. Default is a no-op.
+	/// through the Configurator/JMX, with
+	/// [org.vorpal.blade.framework.v2.config.SettingsManager#getCurrent] already
+	/// returning the new config. Implement it to manipulate a config before use
+	/// (e.g. upgrading an older config-file version to the current shape); an app
+	/// with nothing to do simply returns.
 	///
 	/// @param config the freshly-loaded configuration
-	protected void onRefresh(T config) throws ServletParseException {
-		// no-op; override to manipulate config after (re)load
-	}
+	protected abstract void refreshed(T config) throws ServletParseException;
 
 	/// Routes the v2 reload callback (the misleadingly-named `initialize`,
 	/// invoked from `Settings.reload()` on every load) to the clearer
-	/// [#onRefresh] hook. Override `onRefresh`, not this.
+	/// [#refreshed] hook. `final` so a subclass cannot re-introduce the v2
+	/// confusion by overriding it — override `refreshed`, not this.
 	@Override
-	public void initialize(T config) throws ServletParseException {
-		onRefresh(config);
+	public final void initialize(T config) throws ServletParseException {
+		refreshed(config);
 	}
 
 	/// The identity of the config file this manager owns — independent of the
 	/// application. Equals the application name unless an explicit `configName`
 	/// was supplied.
-	public String getConfigName() {
+	public final String getConfigName() {
 		return this.servletContextName;
 	}
 
@@ -197,7 +200,7 @@ public class SettingsManager<T> extends org.vorpal.blade.framework.v2.config.Set
 	/// Walks superclasses looking for the first parameterization bound to a
 	/// concrete class; throws if `T` cannot be determined.
 	@SuppressWarnings("unchecked")
-	protected Class<T> resolveConfigClass() {
+	private Class<T> resolveConfigClass() {
 		Class<?> node = getClass();
 		while (node != null && node != Object.class) {
 			Type generic = node.getGenericSuperclass();
@@ -211,7 +214,6 @@ public class SettingsManager<T> extends org.vorpal.blade.framework.v2.config.Set
 		}
 		throw new IllegalStateException("Cannot resolve the configuration type for " + getClass().getName()
 				+ ". Subclass with a concrete type — e.g. "
-				+ "`class FooManager extends org.vorpal.blade.framework.v3.configuration.SettingsManager<FooConfig>` — "
-				+ "or instantiate as `new SettingsManager<FooConfig>(event){}`.");
+				+ "`class FooManager extends org.vorpal.blade.framework.v3.configuration.SettingsManager<FooConfig>`.");
 	}
 }

@@ -3,16 +3,13 @@ package org.vorpal.blade.test.b2bua;
 import java.io.Serializable;
 
 import org.vorpal.blade.framework.v2.config.Configuration;
-
-import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import org.vorpal.blade.framework.v2.config.SchemaTitle;
 
-@SchemaTitle("B2BUA Configuration")
-public class SampleB2buaConfig extends Configuration implements Serializable {
-	private static final long serialVersionUID = 1L;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
-	@JsonPropertyDescription("The version of the configuration file.")
-	public static final String version = "2.1";
+@SchemaTitle("B2BUA Configuration")
+public class TestB2buaConfiguration extends Configuration implements Serializable {
+	private static final long serialVersionUID = 1L;
 
 	@JsonPropertyDescription("Your name")
 	public String traveler;

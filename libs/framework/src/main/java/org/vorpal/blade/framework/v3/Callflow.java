@@ -13,6 +13,7 @@ import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
+import javax.servlet.sip.UAMode;
 import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
@@ -145,8 +146,8 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	/// @param inboundRequest the request to clone
 	/// @return the outbound request, ready to send
 	/// @throws ServletParseException if a header fails to parse, or the method is
-	///                               one this cannot build
-	/// @throws IOException           if reading the body fails
+	/// one this cannot build
+	/// @throws IOException if reading the body fails
 	public static SipServletRequest createRequest(SipServletRequest inboundRequest)
 			throws ServletParseException, IOException {
 		return createRequest(null, inboundRequest);
@@ -159,14 +160,14 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	/// It picks its path from the state of the call:
 	///
 	/// - **The legs are already linked** — the request is created on the peer's
-	///   `SipSession`, which makes it in-dialog: a re-INVITE, BYE, INFO, and so on.
-	///   `uri` is **ignored**, because an established dialog can only be addressed
-	///   at its remote target.
+	/// `SipSession`, which makes it in-dialog: a re-INVITE, BYE, INFO, and so on.
+	/// `uri` is **ignored**, because an established dialog can only be addressed
+	/// at its remote target.
 	/// - **No linked leg yet** — the initial case. The request is built from the
-	///   `SipFactory` carrying the inbound From and To, its routing directive set
-	///   to `CONTINUE`, and its request URI taken from `uri` — merged with the
-	///   inbound request URI by [#copyParameters], so the user part and any URI
-	///   parameters survive — or from the inbound request URI when `uri` is null.
+	/// `SipFactory` carrying the inbound From and To, its routing directive set
+	/// to `CONTINUE`, and its request URI taken from `uri` — merged with the
+	/// inbound request URI by [#copyParameters], so the user part and any URI
+	/// parameters survive — or from the inbound request URI when `uri` is null.
 	///
 	/// Either way the body and the non-system headers are copied over, which also
 	/// links the two sessions for INVITE and ACK.
@@ -175,25 +176,26 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	///
 	/// ACK, CANCEL, and PRACK are refused. Each has to be derived from the message
 	/// it answers rather than created fresh. The container enforces two of those
-	/// itself — `SipSession.createRequest` and `SipFactory.createRequest` both throw
+	/// itself — `SipSession.createRequest` and `SipFactory.createRequest` both
+	/// throw
 	/// `IllegalArgumentException` on ACK and CANCEL — and BLADE refuses PRACK as
 	/// well, so that a PRACK always carries the `RAck` of the reliable response it
 	/// acknowledges. Reach for these instead:
 	///
 	/// - ACK and PRACK — [org.vorpal.blade.framework.Callflow#sendAcknowledgement]
-	///   or [org.vorpal.blade.framework.Callflow#createAcknowledgement], which match
-	///   whichever acknowledgement arrived upstream
+	/// or [org.vorpal.blade.framework.Callflow#createAcknowledgement], which match
+	/// whichever acknowledgement arrived upstream
 	/// - CANCEL — `createCancel()` on the INVITE being cancelled, which
-	///   `session.getActiveInvite(UAMode.UAC)` will hand you
+	/// `session.getActiveInvite(UAMode.UAC)` will hand you
 	///
-	/// @param uri            where to send it, or null to reuse the inbound request
-	///                       URI; ignored once the legs are linked
+	/// @param uri where to send it, or null to reuse the inbound request
+	/// URI; ignored once the legs are linked
 	/// @param inboundRequest the request to clone
 	/// @return the outbound request, ready to send
 	/// @throws ServletParseException if a header fails to parse, if the method is
-	///                               ACK, CANCEL, or PRACK, or if the peer leg has
-	///                               already terminated
-	/// @throws IOException           if reading the body fails
+	/// ACK, CANCEL, or PRACK, or if the peer leg has
+	/// already terminated
+	/// @throws IOException if reading the body fails
 	public static SipServletRequest createRequest(URI uri, SipServletRequest inboundRequest)
 			throws ServletParseException, IOException {
 		SipServletRequest outboundRequest;
@@ -765,4 +767,17 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 		List<CallStep> trace = (List<CallStep>) appSession.getAttribute(TRACE_ATTR);
 		return trace == null ? Collections.emptyList() : Collections.unmodifiableList(trace);
 	}
+
+	public SipServletRequest createCancel(SipServletRequest inboundCancel)
+			throws ServletParseException, UnsupportedEncodingException, IOException {
+		SipServletRequest outboundCancel = null;
+
+		SipSession sipSession = getLinkedSession(inboundCancel.getSession());
+		SipServletRequest activeInvite = sipSession.getActiveInvite(UAMode.UAC);
+		outboundCancel = activeInvite.createCancel();
+		copyContentAndHeaders(inboundCancel, outboundCancel);
+
+		return outboundCancel;
+	}
+
 }
