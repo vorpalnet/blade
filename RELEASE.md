@@ -99,6 +99,11 @@ editing panels and a dispatch-fidelity test suite for the round-trip.
   and systemd units now prefer the `<java.dir>/current` JDK link over a
   versioned path when both resolve to the same JDK — neither a PSU flip nor a
   JDK upgrade strands them.
+- `server.mem.args` default raised to `-XX:MaxMetaspaceSize=1g` (was 512m):
+  the full production suite boots inside 512m but redeploy cycles load fresh
+  classloaders and hit the ceiling — observed live as
+  `ModuleException: OutOfMemoryError: Metaspace` failing every subsequent
+  deploy to the engine until restart.
 - `install-occas.sh`: servers are configured for MBean-mode start so
   Tuning-driven JVM arguments actually apply; production-mode hardening
   (domain file permissions, internal servlets); a new `console` step deploys

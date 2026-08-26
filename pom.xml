@@ -33,25 +33,22 @@
 		     DEV vs PROD app versioning.
 
 		     WebLogic side-by-side versioning keys off WebLogic-Application-Version.
-		     Every distinct value mints a NEW version of the application, so a
-		     build.number that moves on each build means every redeploy leaves the
-		     previous version registered and you must undeploy it by name before
-		     the next one will replace it. During a test loop that is pure friction.
 
-		     dev  (default)  blade.app.version = ${revision}          e.g. 3.0.4
-		                     stable across builds, so OCCAS replaces the app in
-		                     place on redeploy. What you want while iterating.
-		     prod            blade.app.version = ${revision}-${build.number}
-		                     distinct per build, so releases are traceable and can
-		                     sit side by side. What you want when shipping.
+		     dev  (default)  NO WebLogic-Application-Version at all — the app is
+		                     unversioned, so a redeploy replaces it in place. What you
+		                     want while iterating; a versioned app rejects a same-version
+		                     redeploy (and same-version dev redeploys have corrupted the
+		                     app XACML store). The base pluginManagement omits the header.
+		     prod            WebLogic-Application-Version = ${revision}-${build.number},
+		                     distinct per build, so releases are traceable and redeploy
+		                     side by side. Added back by the blade-prod-versioning profile.
 
-		     Select with -Dblade.mode=prod, which build.sh passes when given its
-		     prod flag (it also stamps the mode into DEPLOYMENT.txt). The mode is recorded in
-		     every artifact's manifest as Blade-Build-Mode so a deployed WAR can
-		     always be traced back to how it was built.
+		     Select prod with -Dblade.mode=prod, which build.sh passes for a prod build
+		     (it also stamps the mode into DEPLOYMENT.txt). The mode is recorded in every
+		     artifact's manifest as Blade-Build-Mode so a deployed WAR can always be
+		     traced back to how it was built.
 		     ================================================================== -->
 		<blade.mode>dev</blade.mode>
-		<blade.app.version>${revision}</blade.app.version>
 		<ear.profile>full</ear.profile>
 		<build.platform>occas-8.1</build.platform>
 		<blade.skip.install>true</blade.skip.install>
@@ -499,7 +496,6 @@
 						<archive>
 							<manifestEntries>
 								<Implementation-Build-Date>${maven.build.timestamp}</Implementation-Build-Date>
-								<WebLogic-Application-Version>${blade.app.version}</WebLogic-Application-Version>
 								<Blade-Build-Mode>${blade.mode}</Blade-Build-Mode>
 								<Copyright>${blade.copyright}</Copyright>
 								<License>${blade.license}</License>
@@ -525,7 +521,6 @@
 						<archive>
 							<manifestEntries>
 								<Implementation-Build-Date>${maven.build.timestamp}</Implementation-Build-Date>
-								<WebLogic-Application-Version>${blade.app.version}</WebLogic-Application-Version>
 								<Blade-Build-Mode>${blade.mode}</Blade-Build-Mode>
 								<Copyright>${blade.copyright}</Copyright>
 								<License>${blade.license}</License>
@@ -542,7 +537,6 @@
 						<archive>
 							<manifestEntries>
 								<Implementation-Build-Date>${maven.build.timestamp}</Implementation-Build-Date>
-								<WebLogic-Application-Version>${blade.app.version}</WebLogic-Application-Version>
 								<Blade-Build-Mode>${blade.mode}</Blade-Build-Mode>
 								<Copyright>${blade.copyright}</Copyright>
 								<License>${blade.license}</License>
@@ -652,9 +646,51 @@ fi
 					<value>prod</value>
 				</property>
 			</activation>
-			<properties>
-				<blade.app.version>${revision}-${build.number}</blade.app.version>
-			</properties>
+			<!-- Stamp WebLogic-Application-Version = <revision>-<build.number> back onto
+			     the built artifacts, so each PROD build is a DISTINCT version (WebLogic
+			     side-by-side production redeploy). DEV omits the header entirely — the
+			     base pluginManagement no longer lists it — so a dev redeploy replaces the
+			     app in place with no same-version conflict. combine.children="append"
+			     adds this one key on top of the inherited base manifest entries. -->
+			<build>
+				<pluginManagement>
+					<plugins>
+						<plugin>
+							<groupId>org.apache.maven.plugins</groupId>
+							<artifactId>maven-war-plugin</artifactId>
+							<configuration>
+								<archive>
+									<manifestEntries combine.children="append">
+										<WebLogic-Application-Version>${revision}-${build.number}</WebLogic-Application-Version>
+									</manifestEntries>
+								</archive>
+							</configuration>
+						</plugin>
+						<plugin>
+							<groupId>org.apache.maven.plugins</groupId>
+							<artifactId>maven-ear-plugin</artifactId>
+							<configuration>
+								<archive>
+									<manifestEntries combine.children="append">
+										<WebLogic-Application-Version>${revision}-${build.number}</WebLogic-Application-Version>
+									</manifestEntries>
+								</archive>
+							</configuration>
+						</plugin>
+						<plugin>
+							<groupId>org.apache.maven.plugins</groupId>
+							<artifactId>maven-jar-plugin</artifactId>
+							<configuration>
+								<archive>
+									<manifestEntries combine.children="append">
+										<WebLogic-Application-Version>${revision}-${build.number}</WebLogic-Application-Version>
+									</manifestEntries>
+								</archive>
+							</configuration>
+						</plugin>
+					</plugins>
+				</pluginManagement>
+			</build>
 		</profile>
 
 		<!-- Library module profiles. Active by default; exclude with -Dskip.<name>.
