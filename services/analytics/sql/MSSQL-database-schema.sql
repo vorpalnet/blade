@@ -37,6 +37,25 @@
 -- Run as the owner of the target schema. Adjust the schema name if the
 -- deployment does not use dbo.
 
+-- REQUIRED, and not optional politeness.
+--
+-- SQL Server refuses to create a filtered index, or an index on a computed
+-- column, unless the connection has these set — and `sqlcmd` defaults
+-- QUOTED_IDENTIFIER **OFF**. Both of this schema's cleverer indexes are
+-- affected: the filtered `session_open_uk`, and `idx_event_risk` over the
+-- computed `risk_score`. Without these two lines the script appears to
+-- succeed, the tables and foreign keys all build, and you are left with a
+-- database silently missing its one-open-session guard and its risk index:
+--
+--   Msg 1934 ... CREATE INDEX failed because the following SET options have
+--   incorrect settings: 'QUOTED_IDENTIFIER'.
+--
+-- Set here rather than passed as a client flag (sqlcmd -I) so the script
+-- behaves the same from SSMS, Azure Data Studio, or a DBA's own tooling.
+SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
+GO
+
 IF OBJECT_ID('dbo.events', 'U')        IS NOT NULL DROP TABLE dbo.events;
 IF OBJECT_ID('dbo.session_keys', 'U')  IS NOT NULL DROP TABLE dbo.session_keys;
 IF OBJECT_ID('dbo.sessions', 'U')      IS NOT NULL DROP TABLE dbo.sessions;
@@ -189,7 +208,21 @@ ALTER TABLE events ADD risk_score AS
    TRY_CAST(JSON_VALUE(payload, '$.riskScore') AS DECIMAL(6,4)) PERSISTED;
 GO
 
-CREATE INDEX idx_event_risk ON events(risk_score) WHERE risk_score IS NOT NULL;
+-- NOT filtered, though it wants to be.
+--
+-- `WHERE risk_score IS NOT NULL` would skip the majority of events, which
+-- carry no risk score — but SQL Server refuses a filter expression that
+-- references a computed column:
+--
+--   Msg 10609 ... Filtered index 'idx_event_risk' cannot be created on table
+--   'events' because the column 'risk_score' in the filter expression is a
+--   computed column.
+--
+-- So the index covers every row and stores a NULL for most of them. That is
+-- cheap, and the alternative — filtering on `payload IS NOT NULL` instead —
+-- narrows almost nothing, because nearly every event carries a payload and
+-- only some carry a risk score.
+CREATE INDEX idx_event_risk ON events(risk_score);
 GO
 
 
