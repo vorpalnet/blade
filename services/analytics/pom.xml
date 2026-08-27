@@ -40,6 +40,16 @@
 			<artifactId>hsqldb</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- Lets AnalyticsWritePathTest target a real SQL Server when one is
+		     reachable (BLADE_MSSQL_URL). Optional by design: the suite must run
+		     offline in CI, so without that variable the test uses HSQLDB and
+		     this driver is never loaded. -->
+		<dependency>
+			<groupId>com.microsoft.sqlserver</groupId>
+			<artifactId>mssql-jdbc</artifactId>
+			<version>12.8.1.jre11</version>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>org.eclipse.persistence</groupId>
 			<artifactId>org.eclipse.persistence.jpa</artifactId>

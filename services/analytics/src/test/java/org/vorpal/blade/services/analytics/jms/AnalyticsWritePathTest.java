@@ -11,7 +11,9 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import javax.persistence.EntityManagerFactory;
@@ -47,19 +49,48 @@ class AnalyticsWritePathTest {
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 	private static final String CLUSTER = "test-cluster";
 
+	/// Point this at a real SQL Server and the whole suite runs against it
+	/// instead of HSQLDB — same assertions, same handler, a different engine
+	/// and a different JPA platform.
+	///
+	/// **Opt-in, because CI must run offline.** Unset, everything below uses
+	/// the in-memory database and nothing reaches the network. Set, it proves
+	/// the thing HSQLDB structurally cannot: that EclipseLink's SQL Server
+	/// platform writes these entities correctly. That exact question went
+	/// unasked on Oracle, where the provider quietly substituted a sequence
+	/// no schema created and the sink had never written a row.
+	///
+	///     BLADE_MSSQL_URL=jdbc:sqlserver://host:1433;databaseName=vorpal;encrypt=false
+	///     BLADE_MSSQL_USER=sa
+	///     BLADE_MSSQL_PASSWORD=...
+	private static final String MSSQL_URL = System.getenv("BLADE_MSSQL_URL");
+
 	private EntityManagerFactory factory;
 	private AnalyticsEventListener listener;
 	private Connection keepAlive;
 
 	@BeforeEach
 	void setUp() throws Exception {
-		// HSQLDB drops an in-memory database when the last connection closes.
-		// Holding one open for the test keeps the schema alive between the
-		// listener's own short-lived connections.
-		keepAlive = DriverManager.getConnection("jdbc:hsqldb:mem:blade-analytics", "sa", "");
-		runSchema(keepAlive);
+		Map<String, Object> properties = new HashMap<>();
 
-		factory = Persistence.createEntityManagerFactory("BladeAnalyticsTest");
+		if (MSSQL_URL != null && !MSSQL_URL.isEmpty()) {
+			keepAlive = DriverManager.getConnection(MSSQL_URL,
+					System.getenv("BLADE_MSSQL_USER"), System.getenv("BLADE_MSSQL_PASSWORD"));
+			runSchema(keepAlive, "mssql-schema.sql");
+			properties.put("javax.persistence.jdbc.driver",
+					"com.microsoft.sqlserver.jdbc.SQLServerDriver");
+			properties.put("javax.persistence.jdbc.url", MSSQL_URL);
+			properties.put("javax.persistence.jdbc.user", System.getenv("BLADE_MSSQL_USER"));
+			properties.put("javax.persistence.jdbc.password", System.getenv("BLADE_MSSQL_PASSWORD"));
+		} else {
+			// HSQLDB drops an in-memory database when the last connection
+			// closes. Holding one open keeps the schema alive between the
+			// listener's own short-lived connections.
+			keepAlive = DriverManager.getConnection("jdbc:hsqldb:mem:blade-analytics", "sa", "");
+			runSchema(keepAlive, "hsqldb-schema.sql");
+		}
+
+		factory = Persistence.createEntityManagerFactory("BladeAnalyticsTest", properties);
 		listener = new AnalyticsEventListener(factory);
 	}
 
@@ -68,8 +99,10 @@ class AnalyticsWritePathTest {
 		if (factory != null && factory.isOpen()) {
 			factory.close();
 		}
-		try (Statement statement = keepAlive.createStatement()) {
-			statement.execute("SHUTDOWN");
+		if (MSSQL_URL == null || MSSQL_URL.isEmpty()) {
+			try (Statement statement = keepAlive.createStatement()) {
+				statement.execute("SHUTDOWN");
+			}
 		}
 		keepAlive.close();
 	}
@@ -193,15 +226,21 @@ class AnalyticsWritePathTest {
 
 	// ──────────────────────────────────────────────────────────────── queries
 
-	private void runSchema(Connection connection) throws Exception {
+	private void runSchema(Connection connection, String resource) throws Exception {
 		String sql;
-		try (InputStream in = getClass().getClassLoader().getResourceAsStream("hsqldb-schema.sql")) {
-			assertNotNull(in, "hsqldb-schema.sql is missing from the test resources");
+		try (InputStream in = getClass().getClassLoader().getResourceAsStream(resource)) {
+			assertNotNull(in, resource + " is missing from the test resources");
 			sql = new String(in.readAllBytes(), StandardCharsets.UTF_8);
 		}
+		// Strip comments FIRST, then split.
+		//
+		// The other order splits a comment containing a semicolon in half and
+		// executes its tail as SQL, which fails somewhere in the middle of an
+		// English sentence ("Incorrect syntax near the keyword 'is'") and reads
+		// like a schema problem rather than a parsing one.
 		try (Statement statement = connection.createStatement()) {
-			for (String each : sql.split(";")) {
-				String trimmed = stripComments(each).trim();
+			for (String each : stripComments(sql).split(";")) {
+				String trimmed = each.trim();
 				if (!trimmed.isEmpty()) {
 					statement.execute(trimmed);
 				}
@@ -209,12 +248,20 @@ class AnalyticsWritePathTest {
 		}
 	}
 
+	/// Remove `--` comments, INLINE ones included.
+	///
+	/// Whole-line stripping is not enough: the shipped schemas annotate columns
+	/// on the same line, and one of those annotations contains a semicolon
+	/// ("multi-tenant RLS; NULL = single-tenant"). Left in, it splits a
+	/// CREATE TABLE through the middle of its column list.
+	///
+	/// This would also mangle a `--` inside a string literal. None of the three
+	/// schemas contains one, and a test helper that assumes its own inputs is a
+	/// fair trade against writing a SQL lexer here.
 	private static String stripComments(String sql) {
 		StringBuilder out = new StringBuilder(sql.length());
 		for (String line : sql.split("\\r?\\n")) {
-			if (!line.trim().startsWith("--")) {
-				out.append(line).append('\n');
-			}
+			out.append(line.replaceAll("--.*$", "")).append('\n');
 		}
 		return out.toString();
 	}
