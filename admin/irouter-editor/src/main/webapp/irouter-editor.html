@@ -329,7 +329,7 @@
 				<p>A Route either <strong>forwards</strong> (a <code>requestUri</code>, proxied
 				downstream — leave it empty to forward to the inbound Request-URI unchanged) or
 				<strong>responds</strong> (a <code>statusCode</code> like <code>603 Decline</code> —
-				the call ends here, no downstream leg). Either way it can stamp headers, plain or
+				the call ends here, no downstream dialog). Either way it can stamp headers, plain or
 				conditional (<code>when: ${customerTier} == premium</code>), all
 				<code>${var}</code>-resolved at decision time.</p>
 			</section>
@@ -650,7 +650,7 @@ Max-Forwards: 70
 			} else if (data.outcome === 'respond') {
 				outcome.textContent = 'Responds ' + data.statusCode
 					+ (data.reasonPhrase ? ' ' + data.reasonPhrase : '')
-					+ ' — the call ends here, no downstream leg.';
+					+ ' — the call ends here, no downstream dialog.';
 			} else {
 				outcome.textContent = 'No routing decision — production would answer 503.';
 			}

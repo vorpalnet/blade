@@ -73,10 +73,10 @@ public final class BladeEventTypes {
 	// ------------------------------------------------------------------ the call
 
 	/// A call began — `InitialInvite` received an initial INVITE and is placing
-	/// the outbound leg. Published beside `Analytics.sessionStart`.
+	/// the outbound dialog. Published beside `Analytics.sessionStart`.
 	public static final String CALL_STARTED = "org.vorpal.blade.call.started";
 
-	/// The callee's leg returned a success response, on its way back to the
+	/// The callee's dialog returned a success response, on its way back to the
 	/// caller.
 	public static final String CALL_ANSWERED = "org.vorpal.blade.call.answered";
 
@@ -95,9 +95,9 @@ public final class BladeEventTypes {
 	/// in `EARLY` and is cancelling the INVITE.
 	public static final String CALL_ABANDONED = "org.vorpal.blade.call.abandoned";
 
-	/// The callee's leg returned a failure response.
+	/// The callee's dialog returned a failure response.
 	///
-	/// Any failure response, from anywhere on that leg — an intermediary's 503
+	/// Any failure response, from anywhere on that dialog — an intermediary's 503
 	/// counts, so this says the call did not succeed rather than that the callee
 	/// personally refused it.
 	public static final String CALL_DECLINED = "org.vorpal.blade.call.declined";
@@ -120,7 +120,7 @@ public final class BladeEventTypes {
 	/// a `200 OK` sipfrag in a NOTIFY.
 	public static final String TRANSFER_COMPLETED = "org.vorpal.blade.transfer.completed";
 
-	/// The transfer did not succeed: the target's leg returned a failure response,
+	/// The transfer did not succeed: the target's dialog returned a failure response,
 	/// or the REFER itself was refused.
 	///
 	/// Both cases land here — `ReferTransfer` publishes it for a failed REFER as

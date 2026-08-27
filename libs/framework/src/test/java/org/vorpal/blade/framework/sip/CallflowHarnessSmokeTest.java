@@ -29,7 +29,7 @@ import org.vorpal.blade.framework.v3.Callflow;
 @DisplayName("running a callflow without a container")
 class CallflowHarnessSmokeTest {
 
-	/// A minimal B2BUA leg: forward the inbound INVITE, then answer upstream with
+	/// A minimal B2BUA dialog: forward the inbound INVITE, then answer upstream with
 	/// whatever comes back. Roughly what `InitialInvite` does, with nothing else.
 	static class ForwardingCallflow extends Callflow {
 		private static final long serialVersionUID = 1L;
@@ -65,7 +65,7 @@ class CallflowHarnessSmokeTest {
 	}
 
 	/// Hands a response to the callflow the way the container would: look up the
-	/// callback `sendRequest` stored on the outbound leg and invoke it.
+	/// callback `sendRequest` stored on the outbound dialog and invoke it.
 	private static void deliver(SipServletResponse response) throws Exception {
 		Callback<SipServletResponse> callback = Callflow.pullCallback(response);
 		assertNotNull(callback, "no callback was registered for this response");

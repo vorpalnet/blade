@@ -13,8 +13,8 @@ import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.framework.v3.media.CallflowHold;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 
-/// Parks a call: answers the leg itself with inactive media and holds the
-/// dialog open until the far end resumes or hangs up. A single-leg UAS — there
+/// Parks a call: answers the dialog itself with inactive media and holds the
+/// dialog open until the far end resumes or hangs up. A single-dialog UAS — there
 /// is no second party and no transfer.
 ///
 /// @author Jeff McDonald

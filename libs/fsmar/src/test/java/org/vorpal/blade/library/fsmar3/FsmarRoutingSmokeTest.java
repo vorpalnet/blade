@@ -339,11 +339,11 @@ public final class FsmarRoutingSmokeTest {
 		AppRouterConfigurationSample cfg = new AppRouterConfigurationSample();
 		State caller = cfg.getStates().get("b2bua");
 		State callee2 = cfg.getStates().get("b2bua-callee");
-		check("sample has both b2bua-leg states", caller != null && callee2 != null);
-		check("sample b2bua (caller leg) runs app b2bua", caller != null && "b2bua".equals(caller.appOrId("b2bua")));
+		check("sample has both b2bua-dialog states", caller != null && callee2 != null);
+		check("sample b2bua (caller dialog) runs app b2bua", caller != null && "b2bua".equals(caller.appOrId("b2bua")));
 		check("sample b2bua-callee runs app b2bua", callee2 != null && "b2bua".equals(callee2.getApp()));
-		Transition callerLeg = findTransition(caller, "B2B-caller-leg");
-		check("sample caller leg routes to the callee-leg state id",
+		Transition callerLeg = findTransition(caller, "B2B-caller-dialog");
+		check("sample caller dialog routes to the callee-dialog state id",
 				callerLeg != null && "b2bua-callee".equals(callerLeg.getNext()));
 	}
 

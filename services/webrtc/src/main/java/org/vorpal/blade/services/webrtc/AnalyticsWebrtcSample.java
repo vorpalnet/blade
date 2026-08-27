@@ -8,7 +8,7 @@ import org.vorpal.blade.framework.v2.analytics.EventSelector;
 /// Which parts of a browser call end up in the analytics record.
 ///
 /// Attribute selectors only decorate; a fact publishes with or without one, carrying just its name,
-/// correlator and `leg`. These exist so that an operator who turns analytics on gets rows that say
+/// correlator and `dialog`. These exist so that an operator who turns analytics on gets rows that say
 /// something rather than rows that merely count.
 ///
 /// **No `DialogType.origin` selectors here, unlike `AnalyticsB2buaSample`.** That sample is written

@@ -22,7 +22,7 @@ import org.vorpal.blade.framework.v3.tester.TesterServlet;
 ///   transformation rules), expected responses, and per-call assertions
 /// - inbound softphone calls pass through B2BUA-style with the resolved
 ///   scenario's template and rules applied — e.g. dressing a plain call up
-///   as a SIPREC recorder leg
+///   as a SIPREC recorder dialog
 ///
 /// The legacy top-level `template` config field is still honored on the
 /// softphone path when the resolved scenario has no template of its own.

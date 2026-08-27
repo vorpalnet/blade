@@ -246,7 +246,7 @@ public abstract class MediaCallflow extends Callflow {
 	/// [org.vorpal.blade.framework.Callflow#sendResponse] already delivers it to a continuation.
 	///
 	/// @param invite       the SDP-less initial INVITE
-	/// @param nc           the media leg facing the caller
+	/// @param nc           the media dialog facing the caller
 	/// @param onNegotiated run once the answer from the ACK has been applied; may be null
 	protected void answerWithLateMedia(SipServletRequest invite, NetworkConnection nc,
 			Callback<SipServletRequest> onNegotiated) throws MsControlException {
@@ -268,7 +268,7 @@ public abstract class MediaCallflow extends Callflow {
 	/// they can be far apart.
 	///
 	/// @param invite       the SDP-less initial INVITE
-	/// @param nc           the media leg facing the caller
+	/// @param nc           the media dialog facing the caller
 	/// @param onAnswering  run with the `200 OK` just before it is sent; may be null
 	/// @param onNegotiated run once the answer from the ACK has been applied; may be null
 	protected void answerWithLateMedia(SipServletRequest invite, NetworkConnection nc,
@@ -291,7 +291,7 @@ public abstract class MediaCallflow extends Callflow {
 					});
 				} else if (onNegotiated != null) {
 					// An ACK with no body is not fatal — some peers answer in a PRACK-negotiated
-					// early dialog instead, leaving the leg as the media server already set it.
+					// early dialog instead, leaving the dialog as the media server already set it.
 					onNegotiated.accept(ack);
 				}
 			});
@@ -323,7 +323,7 @@ public abstract class MediaCallflow extends Callflow {
 		SdpPortManager sdp = networkConnection.getSdpPortManager();
 		arm(sdp, SDP, onAnswer);
 		sdp.processSdpOffer(callerSdpOffer);
-		// The anchor now exists on the media server (processSdpOffer created the pipeline + leg).
+		// The anchor now exists on the media server (processSdpOffer created the pipeline + dialog).
 		// Refresh the failover recovery record so a node that takes over between now and the next
 		// verb can still reclaim — and release — the running media. Closes the leak window.
 		captureRecovery(appOf(networkConnection.getMediaSession()), networkConnection.getMediaSession());
@@ -334,7 +334,7 @@ public abstract class MediaCallflow extends Callflow {
 	/// [Joinable#join] contract — it returns when the join is established. The
 	/// asynchronous [Joinable#joinInitiate] variant (with a `JoinEvent` continuation)
 	/// is a future addition; the synchronous form matches how the reference
-	/// conference sample joins legs.
+	/// conference sample joins dialogs.
 	protected void join(Joinable from, Joinable.Direction direction, Joinable to)
 			throws MsControlException {
 		from.join(direction, to);

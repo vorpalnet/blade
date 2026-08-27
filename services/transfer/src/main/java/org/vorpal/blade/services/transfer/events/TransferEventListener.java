@@ -228,7 +228,7 @@ public class TransferEventListener
 		logger.info(describe("the transfer target answered", event, payload.getAppName(), payload.getOccurredAt()));
 	}
 
-	/// The transfer was refused: either the target's leg returned a failure response, or the REFER
+	/// The transfer was refused: either the target's dialog returned a failure response, or the REFER
 	/// itself was refused. Both land here, so this means the transfer did not happen — not
 	/// specifically that the target said no.
 	///

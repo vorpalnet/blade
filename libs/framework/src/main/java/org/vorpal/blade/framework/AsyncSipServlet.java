@@ -1021,7 +1021,7 @@ public abstract class AsyncSipServlet extends SipServlet
 
 	/// Last-ditch error recovery when a callflow throws while processing a
 	/// request: for INVITE, send a 500 (with stack trace) back upstream; for
-	/// ACK the call is already connected, so terminate both legs via
+	/// ACK the call is already connected, so terminate both dialogs via
 	/// [CallflowCallConnectedError].
 	protected final void recoverFromRequestError(SipServletRequest request, Exception ex3) {
 		sipLogger.warning("AsyncSipServlet.doRequest - Exception #ex3");
@@ -1268,7 +1268,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// Sometimes a 180 Ringing comes back on a brand new SipSession because the
 	/// tag on the To header changed due to a failure downstream. Find the
 	/// original early-dialog session by Call-ID, move its INVITE response
-	/// callback and attributes onto the new session, relink the legs, and
+	/// callback and attributes onto the new session, relink the dialogs, and
 	/// invalidate the old session.
 	///
 	/// @return the merged-in response callback, or null if no early-dialog

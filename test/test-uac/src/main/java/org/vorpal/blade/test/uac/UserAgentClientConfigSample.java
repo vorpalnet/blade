@@ -47,7 +47,7 @@ public class UserAgentClientConfigSample extends UserAgentClientConfig {
 		basic.getAssertions().add(fast);
 		this.getScenarios().put("load-basic", basic);
 
-		// --- originate: simulate a SIPREC recorder leg ---
+		// --- originate: simulate a SIPREC recorder dialog ---
 		Scenario siprec = new Scenario();
 		siprec.setDescription("Load calls carrying a SIPREC multipart body (rs-metadata + SDP from the template)");
 		siprec.setRole(Scenario.ROLE_ORIGINATE);

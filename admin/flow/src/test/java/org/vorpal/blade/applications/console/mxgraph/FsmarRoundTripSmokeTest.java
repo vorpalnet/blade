@@ -406,7 +406,7 @@ public class FsmarRoundTripSmokeTest {
 				"b2bua-callee must keep app=b2bua, got " + states.path("b2bua-callee"), null);
 		expect("b2bua-callee".equals(states.path("b2bua-caller").path("triggers").path("INVITE")
 				.path("transitions").path(0).path("next").asText()),
-				"caller leg must route to the callee-leg state id, got "
+				"caller dialog must route to the callee-dialog state id, got "
 				+ states.path("b2bua-caller").path("triggers"), null);
 		expect(!states.path("screening").has("app"),
 				"a state whose app equals its id must emit no 'app', got " + states.path("screening"), null);

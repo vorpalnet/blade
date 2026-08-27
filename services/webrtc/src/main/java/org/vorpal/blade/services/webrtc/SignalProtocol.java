@@ -14,7 +14,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /// **`call.accept`** meant "yes, without SDP" — accepting a call before its media was negotiated.
 /// There is no SIP message it can honestly produce. Both answer paths build the `200 OK` out of an
 /// SDP only the browser has: pass-through puts the browser's own answer in it, and the anchored path
-/// needs the browser leg negotiated before the legs can be joined. Answering the network early would
+/// needs the browser dialog negotiated before the dialogs can be joined. Answering the network early would
 /// start a call whose browser has no media path yet — dead air on an answered call — and a `183`
 /// instead tends to stop the caller's ringback, replacing a ringing tone with silence for as long as
 /// ICE gathering takes. Neither beats waiting for [#CALL_ANSWER], which is a moment away.
@@ -110,7 +110,7 @@ public final class SignalProtocol {
 	/// `org.vorpal.blade.framework.v3.events.BladeEventTypes.CALL_CONNECTED`.
 	///
 	/// `data.negotiated` is whether the media path is actually negotiated at this instant. It is
-	/// false when the far end answered without SDP and nothing was applied to the media leg — a call
+	/// false when the far end answered without SDP and nothing was applied to the media dialog — a call
 	/// that is up for signaling and silent for media. Saying so lets a browser show that, instead of
 	/// reporting a healthy call and leaving the user to wonder why nobody can hear them.
 	///
@@ -141,10 +141,10 @@ public final class SignalProtocol {
 	/// alongside — is cryptographic. In a relayed call the two browsers complete a DTLS handshake
 	/// directly with each other and derive their SRTP keys from a master secret the signaling path
 	/// never sees (RFC 8827 is built that way). The gateway forwarded fingerprints and nothing more,
-	/// so it cannot decrypt a single packet. The only way in is to re-offer **both** legs from the
+	/// so it cannot decrypt a single packet. The only way in is to re-offer **both** dialogs from the
 	/// media server so it becomes a real DTLS endpoint on each.
 	///
-	/// The visible cost is an ICE restart and a new DTLS handshake per leg — a short audible gap.
+	/// The visible cost is an ICE restart and a new DTLS handshake per dialog — a short audible gap.
 	/// A deployment that would rather not have that gap can anchor every call from the start; see
 	/// `WebrtcSettings.mediaMode`.
 	public static final String CALL_UPDATE = "call.update";

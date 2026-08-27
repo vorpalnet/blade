@@ -56,10 +56,10 @@ public final class CallEvents {
 
 	/// Which side of the gateway a call came in on. Not decoration: a browser-to-browser call is one
 	/// call that traverses this application twice — out through [OutboundFromBrowser], back in
-	/// through [InboundToBrowser] via the location service — and the second leg inherits the first's
-	/// `X-Vorpal-ID`. Both legs therefore publish under the same correlator, the same source and the
+	/// through [InboundToBrowser] via the location service — and the second dialog inherits the first's
+	/// `X-Vorpal-ID`. Both dialogs therefore publish under the same correlator, the same source and the
 	/// same application name, and without this attribute nothing in the payload tells them apart.
-	static final String LEG = "leg";
+	static final String DIALOG = "dialog";
 	static final String INBOUND = "inbound";
 	static final String OUTBOUND = "outbound";
 
@@ -79,10 +79,10 @@ public final class CallEvents {
 	/// WebSocket thread has no inbound request to have stamped a Vorpal-ID, so the correlator is
 	/// minted lazily on the way out; publish first and `Analytics.sessionStart` returns early on a
 	/// null correlator and the event carries no subject.
-	static void started(SipServletMessage carrier, String leg) {
+	static void started(SipServletMessage carrier, String dialog) {
 		try {
 			Analytics.sessionStart(carrier);
-			publish(STARTED, carrier, leg);
+			publish(STARTED, carrier, dialog);
 		} catch (Throwable t) {
 			dropped(STARTED, t);
 		}
@@ -90,9 +90,9 @@ public final class CallEvents {
 
 	/// The call was answered — a `200 OK`. Also records that it got that far, so the eventual
 	/// teardown knows whether it is completing a call or abandoning one.
-	static void answered(SipServletMessage carrier, String leg) {
+	static void answered(SipServletMessage carrier, String dialog) {
 		markAnswered(sessionOf(carrier));
-		fact(ANSWERED, carrier, leg);
+		fact(ANSWERED, carrier, dialog);
 	}
 
 	/// Record that this call reached a `200 OK`, which is what [#terminalName] reads later to tell a
@@ -104,9 +104,9 @@ public final class CallEvents {
 	}
 
 	/// One fact, no lifecycle bookkeeping.
-	static void fact(String name, SipServletMessage carrier, String leg) {
+	static void fact(String name, SipServletMessage carrier, String dialog) {
 		try {
-			publish(name, carrier, leg);
+			publish(name, carrier, dialog);
 		} catch (Throwable t) {
 			dropped(name, t);
 		}
@@ -114,8 +114,8 @@ public final class CallEvents {
 
 	/// The call is over: publish `callCompleted` if it was ever answered and `callAbandoned` if it
 	/// was not, then stop the session. At most once per call.
-	static void hungUp(SipServletMessage carrier, String leg) {
-		terminal(terminalName(sessionOf(carrier)), carrier, leg);
+	static void hungUp(SipServletMessage carrier, String dialog) {
+		terminal(terminalName(sessionOf(carrier)), carrier, dialog);
 	}
 
 	/// Whether a call that is ending now completed or was abandoned.
@@ -138,17 +138,17 @@ public final class CallEvents {
 	}
 
 	/// The call failed or was refused before it could be answered.
-	static void declined(SipServletMessage carrier, String leg) {
-		terminal(DECLINED, carrier, leg);
+	static void declined(SipServletMessage carrier, String dialog) {
+		terminal(DECLINED, carrier, dialog);
 	}
 
 	/// Publish a terminal fact and its session stop, once. Later callers are silent.
-	static void terminal(String name, SipServletMessage carrier, String leg) {
+	static void terminal(String name, SipServletMessage carrier, String dialog) {
 		if (!claimTerminal(sessionOf(carrier))) {
 			return;
 		}
 		try {
-			publish(name, carrier, leg);
+			publish(name, carrier, dialog);
 			Analytics.sessionStop(carrier);
 		} catch (Throwable t) {
 			dropped(name, t);
@@ -160,7 +160,7 @@ public final class CallEvents {
 	/// `createEvent` hands back the event *and* stashes it on the message, which is what `sendEvent`
 	/// reads back — so both calls must see the same message object. A null return means this
 	/// application is not collecting, and there is nothing to send.
-	private static void publish(String name, SipServletMessage carrier, String leg) {
+	private static void publish(String name, SipServletMessage carrier, String dialog) {
 		if (carrier == null) {
 			return;
 		}
@@ -168,8 +168,8 @@ public final class CallEvents {
 		if (event == null) {
 			return;
 		}
-		if (leg != null) {
-			event.addAttribute(LEG, leg);
+		if (dialog != null) {
+			event.addAttribute(DIALOG, dialog);
 		}
 		SettingsManager.sendEvent(carrier);
 	}

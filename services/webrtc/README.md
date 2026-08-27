@@ -79,7 +79,7 @@ than once.
 
 How it responds depends on which media path the call is using:
 
-- **Anchored** — the new offer concerns only the network leg, between the far end and the
+- **Anchored** — the new offer concerns only the network dialog, between the far end and the
   media server. The media server answers it directly and the browser is never involved,
   because those two sides were negotiated independently to begin with. If the refresh
   carries no SDP, the media server supplies the answer and reads the far end's reply from
@@ -158,7 +158,7 @@ corresponds to the `ACK` that completes the handshake, and never arrives before 
 split follows the framework's own call lifecycle (`CALL_ANSWERED` then `CALL_CONNECTED`), and
 it exists because that third message carries information worth surfacing. `call.connected`
 reports a `negotiated` flag, which is false when the far end answered without SDP and nothing
-was applied to the media leg — a call that is up for signaling but silent for media. Reported
+was applied to the media dialog — a call that is up for signaling but silent for media. Reported
 as a plain `call.established`, as it was before, such a call looked perfectly healthy.
 
 `call.connected` also declares an `sdp` field that is reserved and currently unset on every
@@ -274,7 +274,7 @@ when the browser returns, it registers again from wherever it lands.
 ## Late media
 
 An INVITE that arrives with no SDP is handled — the case the earlier product dropped. On this
-kind of call the offer and answer run in the opposite order on the network leg: the media
+kind of call the offer and answer run in the opposite order on the network dialog: the media
 server puts its offer in the `200 OK`, and the caller's answer is read back out of the `ACK`.
 
 This is the one path where `call.established` and `call.connected` are genuinely far apart in
@@ -304,11 +304,11 @@ and phone calls together, with no webrtc-specific special case, and the payload 
 
 Two things are worth knowing before reading a report:
 
-- **Every fact carries a `leg` attribute**, either `inbound` or `outbound`. A
+- **Every fact carries a `dialog` attribute**, either `inbound` or `outbound`. A
   browser-to-browser call is a single call that crosses this application twice — outbound
   through `OutboundFromBrowser`, then back inbound through `InboundToBrowser` by way of the
-  location service — and the second leg inherits the first's `X-Vorpal-ID` correlation id.
-  Both legs are published under the same correlator, source, and application name, so `leg` is
+  location service — and the second dialog inherits the first's `X-Vorpal-ID` correlation id.
+  Both dialogs are published under the same correlator, source, and application name, so `dialog` is
   the only attribute that tells them apart.
 - **`analytics.enabled` is the switch, not `events.enabled`.** Turning on `events.enabled`
   alone gives a live bus connection that carries no call facts. The shipped sample fills in

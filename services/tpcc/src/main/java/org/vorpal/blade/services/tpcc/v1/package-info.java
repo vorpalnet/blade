@@ -24,12 +24,12 @@
 /// The [DialogAPI] class provides the following REST endpoints:
 ///
 /// - `POST /api/v1/session` - Creates a session, returns {sessionId}
-/// - `POST /api/v1/dialog/{sessionId}` - Creates a leg, returns {sessionId, dialogId}
-/// - `GET /api/v1/dialog/{sessionId}` - Lists the session's legs
-/// - `GET /api/v1/dialog/{sessionId}/{dialogId}` - Returns a leg's properties
-/// - `PUT /api/v1/dialog/{sessionId}/{dialogId}` - Sets a leg's attributes
-/// - `PUT /api/v1/dialog/{sessionId}/{dialogA}/connect/{dialogB}` - Bridges two legs
-/// - `DELETE /api/v1/dialog/{sessionId}/{dialogId}` - Tears a leg down (BYE)
+/// - `POST /api/v1/dialog/{sessionId}` - Creates a dialog, returns {sessionId, dialogId}
+/// - `GET /api/v1/dialog/{sessionId}` - Lists the session's dialogs
+/// - `GET /api/v1/dialog/{sessionId}/{dialogId}` - Returns a dialog's properties
+/// - `PUT /api/v1/dialog/{sessionId}/{dialogId}` - Sets a dialog's attributes
+/// - `PUT /api/v1/dialog/{sessionId}/{dialogA}/connect/{dialogB}` - Bridges two dialogs
+/// - `DELETE /api/v1/dialog/{sessionId}/{dialogId}` - Tears a dialog down (BYE)
 ///
 /// ## Integration Points
 ///
@@ -67,12 +67,12 @@
 ///
 /// ### GET dialog/{sessionId}
 ///
-/// Lists every leg in the session as a `SessionGetResponse` (dialogs keyed by dialogId),
+/// Lists every dialog in the session as a `SessionGetResponse` (dialogs keyed by dialogId),
 /// so a UI can discover and poll call state.
 ///
 /// ### GET dialog/{sessionId}/{dialogId}
 ///
-/// Returns the properties of one leg, located by its Vorpal dialog id (`findLeg`), as a
+/// Returns the properties of one dialog, located by its Vorpal dialog id (`findLeg`), as a
 /// `DialogProperties` response object.
 ///
 /// ### PUT dialog/{sessionId}/{dialogId}

@@ -5,7 +5,7 @@
 ///
 /// ## What is a B2BUA?
 ///
-/// A B2BUA sits between two call legs&mdash;Alice (the caller) and Bob (the callee)&mdash;
+/// A B2BUA sits between two call dialogs&mdash;Alice (the caller) and Bob (the callee)&mdash;
 /// terminating the inbound SIP dialog and creating a corresponding outbound dialog.
 /// From Alice's perspective, she is talking to the application. From Bob's perspective,
 /// the application is calling him. This gives the application full control over call
@@ -131,12 +131,12 @@
 /// You can override {@code chooseCallflow()} in your servlet to substitute custom
 /// callflows for any of these. For example, you might replace {@link InitialInvite}
 /// with a custom callflow that performs number translation before creating the
-/// outbound leg.
+/// outbound dialog.
 ///
 ///
 /// ## Controlling Message Processing
 ///
-/// By default, each callflow automatically forwards messages between call legs.
+/// By default, each callflow automatically forwards messages between call dialogs.
 /// To intercept and prevent automatic forwarding, call {@code doNotProcess()} from
 /// within a lifecycle callback:
 ///
@@ -154,7 +154,7 @@
 /// <ul>
 ///   <li>{@code doNotProcess(message)} &mdash; suppress forwarding silently</li>
 ///   <li>{@code doNotProcess(request, statusCode)} &mdash; suppress forwarding and
-///       send an error response to the other leg</li>
+///       send an error response to the other dialog</li>
 ///   <li>{@code doNotProcess(request, statusCode, reasonPhrase)} &mdash; same with
 ///       a custom reason phrase</li>
 /// </ul>
@@ -166,12 +166,12 @@
 /// {@linkplain org.vorpal.blade.framework.v2.callflow callflow package}:
 ///
 /// <ul>
-///   <li><b>{@link InitialInvite}</b> &mdash; creates the outbound INVITE leg,
+///   <li><b>{@link InitialInvite}</b> &mdash; creates the outbound INVITE dialog,
 ///       links sessions, handles the full INVITE/response/ACK exchange with nested
 ///       lambdas, and fires lifecycle callbacks ({@code callStarted},
 ///       {@code callAnswered}, {@code callConnected}, {@code callDeclined})
 ///       at each stage.</li>
-///   <li><b>{@link Reinvite}</b> &mdash; forwards re-INVITE between legs using the
+///   <li><b>{@link Reinvite}</b> &mdash; forwards re-INVITE between dialogs using the
 ///       three-step lambda pattern: forward request, relay response, forward ACK.
 ///       Fires {@code requestEvent} and {@code responseEvent} callbacks.</li>
 ///   <li><b>{@link Terminate}</b> &mdash; handles both BYE and CANCEL in a single
@@ -194,9 +194,9 @@
 ///
 /// ### Callflow Handlers
 ///
-/// - {@link InitialInvite} - Initial INVITE: creates outbound leg, links sessions, full handshake
+/// - {@link InitialInvite} - Initial INVITE: creates outbound dialog, links sessions, full handshake
 /// - {@link Reinvite} - Re-INVITE: three-step lambda pattern for mid-dialog modifications
-/// - {@link Terminate} - BYE and CANCEL: state-aware termination of the other call leg
+/// - {@link Terminate} - BYE and CANCEL: state-aware termination of the other call dialog
 /// - {@link Passthru} - INFO, OPTIONS, UPDATE, etc.: simple bidirectional forwarding
 ///
 /// @see B2buaServlet

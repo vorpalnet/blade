@@ -3,7 +3,7 @@ package org.vorpal.blade.framework.v3.media;
 import javax.media.mscontrol.Configuration;
 import javax.media.mscontrol.networkconnection.NetworkConnection;
 
-/// BLADE-defined JSR-309 [Configuration]s, for leg types the 2009 spec did not anticipate.
+/// BLADE-defined JSR-309 [Configuration]s, for dialog types the 2009 spec did not anticipate.
 ///
 /// `Configuration` is an empty marker interface and
 /// [NetworkConnection#BASIC]/[NetworkConnection#ECHO_CANCEL]/[NetworkConnection#DTMF_CONVERSION]
@@ -12,13 +12,13 @@ import javax.media.mscontrol.networkconnection.NetworkConnection;
 /// exposed WebRTC through a vendor method on its own `NetworkConnection`.
 ///
 /// Declaring these in the framework rather than in a driver keeps applications vendor-neutral: an
-/// app asks for a [#WEBRTC] leg, and whichever driver is installed either honours it or throws
+/// app asks for a [#WEBRTC] dialog, and whichever driver is installed either honours it or throws
 /// `MsControlException`. Nothing in the public tree names a media server.
 public enum MediaConfigs implements Configuration<NetworkConnection> {
 
-	/// A leg whose far end is a browser: the media server must terminate ICE and DTLS-SRTP on it.
+	/// A dialog whose far end is a browser: the media server must terminate ICE and DTLS-SRTP on it.
 	///
-	/// Everything that distinguishes such a leg travels **inside the SDP** — `a=fingerprint`,
+	/// Everything that distinguishes such a dialog travels **inside the SDP** — `a=fingerprint`,
 	/// `a=setup`, `a=ice-ufrag`, `a=candidate` — so the offer/answer verbs on
 	/// [javax.media.mscontrol.networkconnection.SdpPortManager] need no change. The only thing the
 	/// driver cannot infer is which kind of endpoint to create *before* any SDP exists, which is
@@ -29,8 +29,8 @@ public enum MediaConfigs implements Configuration<NetworkConnection> {
 	/// server-reflexive path there is frequently no routable candidate pair.
 	WEBRTC,
 
-	/// A plain RTP leg facing the SIP network — no ICE, no DTLS. Equivalent to
-	/// [NetworkConnection#BASIC]; present so a callflow that chooses per leg can say which it means
+	/// A plain RTP dialog facing the SIP network — no ICE, no DTLS. Equivalent to
+	/// [NetworkConnection#BASIC]; present so a callflow that chooses per dialog can say which it means
 	/// instead of relying on the default.
 	RTP
 }

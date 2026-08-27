@@ -63,7 +63,7 @@ import org.vorpal.blade.framework.v3.diagnostics.TraceLog;
 /// (via [SipServletRequest#isInitial]); in-dialog sends are never touched.
 ///
 /// Because no ACK or BYE ever reaches us after drop-out, OCCAS won't
-/// auto-invalidate — so we tear down both legs and the app session ourselves.
+/// auto-invalidate — so we tear down both dialogs and the app session ourselves.
 public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	private static final long serialVersionUID = 1L;
 
@@ -123,7 +123,7 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 
 	/// `SipApplicationSession` attribute (Boolean) — has this call engaged proxy
 	/// drop-out? Set on the initial-INVITE forward, read when the 2xx goes back.
-	/// On the app session (not a leg) because it spans both legs.
+	/// On the app session (not a dialog) because it spans both dialogs.
 	public static final String PASSTHRU_ARMED_ATTR = "org.vorpal.blade.v3.passthru.armed";
 
 	private static boolean passthruEnabled() {
@@ -139,7 +139,7 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 		return app != null && Boolean.TRUE.equals(app.getAttribute(PASSTHRU_ARMED_ATTR));
 	}
 
-	/// Clones an inbound request into an outbound one on the peer leg, keeping its
+	/// Clones an inbound request into an outbound one on the peer dialog, keeping its
 	/// destination. Shorthand for `createRequest(null, inboundRequest)` — see that
 	/// method for what is copied and what is refused.
 	///
@@ -153,17 +153,17 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 		return createRequest(null, inboundRequest);
 	}
 
-	/// Clones an inbound request into an outbound one on the peer leg — the single
+	/// Clones an inbound request into an outbound one on the peer dialog — the single
 	/// request builder in v3, and the replacement for the family of builders v2
 	/// once carried.
 	///
 	/// It picks its path from the state of the call:
 	///
-	/// - **The legs are already linked** — the request is created on the peer's
+	/// - **The dialogs are already linked** — the request is created on the peer's
 	/// `SipSession`, which makes it in-dialog: a re-INVITE, BYE, INFO, and so on.
 	/// `uri` is **ignored**, because an established dialog can only be addressed
 	/// at its remote target.
-	/// - **No linked leg yet** — the initial case. The request is built from the
+	/// - **No linked dialog yet** — the initial case. The request is built from the
 	/// `SipFactory` carrying the inbound From and To, its routing directive set
 	/// to `CONTINUE`, and its request URI taken from `uri` — merged with the
 	/// inbound request URI by [#copyParameters], so the user part and any URI
@@ -189,11 +189,11 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	/// `session.getActiveInvite(UAMode.UAC)` will hand you
 	///
 	/// @param uri where to send it, or null to reuse the inbound request
-	/// URI; ignored once the legs are linked
+	/// URI; ignored once the dialogs are linked
 	/// @param inboundRequest the request to clone
 	/// @return the outbound request, ready to send
 	/// @throws ServletParseException if a header fails to parse, if the method is
-	/// ACK, CANCEL, or PRACK, or if the peer leg has
+	/// ACK, CANCEL, or PRACK, or if the peer dialog has
 	/// already terminated
 	/// @throws IOException if reading the body fails
 	public static SipServletRequest createRequest(URI uri, SipServletRequest inboundRequest)
@@ -470,8 +470,8 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 
 	/// Tear down after the 2xx is on the wire. No ACK or BYE will ever reach us —
 	/// the dialog is caller↔callee now — so OCCAS won't auto-invalidate; we
-	/// invalidate the callee leg, the caller leg, and the app session ourselves.
-	/// (Jeff: this is also what we're counting on to settle the caller-leg INVITE
+	/// invalidate the callee dialog, the caller dialog, and the app session ourselves.
+	/// (Jeff: this is also what we're counting on to settle the caller-dialog INVITE
 	/// transaction so OCCAS stops retransmitting the 200 — to be confirmed live.)
 	private void passthruInvalidate(SipServletResponse toCaller) {
 		try {
@@ -499,14 +499,14 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	/// The peer endpoint's Contact — the address the OTHER UA should be reached at
 	/// for in-dialog messages, which is what the symmetric stitch writes.
 	///
-	/// Derived from the LINKED leg's remote target: once a leg's dialog is up,
+	/// Derived from the LINKED dialog's remote target: once a dialog's dialog is up,
 	/// OCCAS stores the peer's Contact as that session's remote target (the URI it
-	/// uses for in-dialog requests). So the peer leg's remote target IS the peer's
+	/// uses for in-dialog requests). So the peer dialog's remote target IS the peer's
 	/// Contact — read via [LooseRoutingHelper#remoteTarget] (public
 	/// `SipSessionImpl.getRemoteTarget()`, unwrapped by reflection). Null safely
 	/// degrades to record-route-only drop-out. NEEDS LIVE VERIFICATION — the
 	/// remote target must already be populated at the moment of each stitch (the
-	/// caller leg's at the outbound-INVITE send; the callee leg's at the 2xx).
+	/// caller dialog's at the outbound-INVITE send; the callee dialog's at the 2xx).
 	private Address peerContact(javax.servlet.sip.SipServletMessage message) {
 		try {
 			if (message == null || sipFactory == null) {

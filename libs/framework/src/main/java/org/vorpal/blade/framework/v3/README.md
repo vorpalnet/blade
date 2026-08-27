@@ -40,7 +40,7 @@ proxy that leaves the dialog after setup: the endpoints' Contacts are stitched t
 OCCAS is removed from the route set. The same callflow runs as a full B2BUA when passthru
 is off. The deciding vote is configuration, so an operator picks B2BUA vs. proxy per
 network without touching code. Because no ACK or BYE reaches OCCAS after drop-out, the
-framework tears down both legs and the application session itself.
+framework tears down both dialogs and the application session itself.
 
 ## Final responses without ceremony
 

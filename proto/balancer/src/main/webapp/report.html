@@ -201,7 +201,7 @@
 				+ '<div class="lbl">impaired endpoint' + (impaired.length === 1 ? '' : 's')
 				+ ' (down, in backoff, or undefined)</div></div>';
 			h += '<div class="tile"><div class="val">' + nf(attempts) + '</div>'
-				+ '<div class="lbl">call legs attempted since start &middot; ' + pct(successes, attempts) + ' answered'
+				+ '<div class="lbl">call dialogs attempted since start &middot; ' + pct(successes, attempts) + ' answered'
 				+ (failovers ? ' &middot; ' + nf(failovers) + ' failovers' : '') + '</div></div>';
 			h += '</div>';
 
@@ -221,7 +221,7 @@
 			var el = document.getElementById('rpt-sites');
 			var keys = Object.keys(roll);
 			if (!keys.length) { el.textContent = 'No sites configured.'; return; }
-			var h = '<table><thead><tr><th>Site</th><th>Endpoints up</th><th>Worst state</th><th>Call legs</th><th>Answered</th></tr></thead><tbody>';
+			var h = '<table><thead><tr><th>Site</th><th>Endpoints up</th><th>Worst state</th><th>Call dialogs</th><th>Answered</th></tr></thead><tbody>';
 			keys.forEach(function (k) {
 				var r = roll[k];
 				var attempts = 0, successes = 0;
@@ -258,7 +258,7 @@
 						+ (tier.timeout != null ? ' &middot; timeout ' + tier.timeout + 's' : '')
 						+ (ti > 0 ? ' &middot; used when tier ' + ti + ' fails' : '') + '</div>';
 					h += '<table><thead><tr><th>Endpoint</th><th>URI</th><th>Site</th><th>Weight</th><th>State</th>'
-						+ '<th>RTT</th><th>Call legs (answered)</th><th>Failovers</th></tr></thead><tbody>';
+						+ '<th>RTT</th><th>Call dialogs (answered)</th><th>Failovers</th></tr></thead><tbody>';
 					(tier.endpoints || []).forEach(function (te) {
 						var a = index[te.name];
 						if (!a) { return; }

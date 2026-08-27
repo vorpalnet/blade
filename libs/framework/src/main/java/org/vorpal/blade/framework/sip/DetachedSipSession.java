@@ -33,7 +33,7 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
  *
  * <p>Attributes, identity ({@link #getId()}), validity, dialog state, and
  * {@link #createRequest(String)} are fully functional, which is enough for
- * {@code Callflow.getLinkedSession} to walk between two linked legs. The
+ * {@code Callflow.getLinkedSession} to walk between two linked dialogs. The
  * remaining methods are stubs returning null or default values.
  */
 public class DetachedSipSession implements SipSession {

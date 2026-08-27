@@ -21,7 +21,7 @@ import org.vorpal.blade.framework.sip.DetachedSipSessionsUtil;
 
 /// Guards the glare contract that both `AsyncSipServlet.doRequest` and the REST
 /// [org.vorpal.blade.framework.v2.transfer.api.TransferAPI] depend on:
-/// `PROTECT` means a transaction is outstanding on that leg, and a second
+/// `PROTECT` means a transaction is outstanding on that dialog, and a second
 /// request against it is answered `491 Request Pending`.
 ///
 /// `TransferAPI` used to gate its 491 on an `EXPECT_ACK` attribute that nothing
@@ -65,7 +65,7 @@ class GlareStateSmokeTest {
 		new Sender().process(request);
 	}
 
-	/// A leg that has sent nothing is not in glare. This is what keeps the REST
+	/// A dialog that has sent nothing is not in glare. This is what keeps the REST
 	/// API from rejecting a perfectly good first transfer.
 	@Test
 	void anUntouchedSessionAllows() {
@@ -78,7 +78,7 @@ class GlareStateSmokeTest {
 		assertEquals(GlareState.PROTECT, Callflow.getGlareState(session));
 	}
 
-	/// The fire-and-forget case: a REFER holds the leg until its transaction
+	/// The fire-and-forget case: a REFER holds the dialog until its transaction
 	/// finishes, so a second transfer arriving meanwhile glares.
 	@Test
 	void sendingAReferProtects() throws Exception {

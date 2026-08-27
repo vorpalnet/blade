@@ -37,16 +37,16 @@
 /// and a caller who CANCELs mid-hunt ends the plan.
 ///
 /// Health has two writers and one reader: the OPTIONS ping cycle (any final
-/// response except 408/503 proves the endpoint alive), live call legs (2xx →
+/// response except 408/503 proves the endpoint alive), live call dialogs (2xx →
 /// up; 503 → down with Retry-After or `health.defaultBackoff`), and the
 /// routing filter. Every engine node keeps its own independent view — no
 /// shared cluster state — and publishes it as
 /// `vorpal.blade:Name=proxy-balancer,Type=EndpointHealth[,Cluster=...]`,
 /// which the `blade/balancer` admin app aggregates over federated JMX.
 ///
-/// Real 18x ringing from the legs is relayed upstream via the fan-out
-/// primitives' per-leg observer, on top of the immediate 180 sent when the
-/// fork starts. With `session:passthru` set, the winning leg's Contacts are
+/// Real 18x ringing from the dialogs is relayed upstream via the fan-out
+/// primitives' per-dialog observer, on top of the immediate 180 sent when the
+/// fork starts. With `session:passthru` set, the winning dialog's Contacts are
 /// stitched together and the balancer drops out of the dialog after setup;
 /// without it, it stays in the path as a full B2BUA.
 ///

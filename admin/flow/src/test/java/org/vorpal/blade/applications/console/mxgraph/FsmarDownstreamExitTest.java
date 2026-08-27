@@ -86,10 +86,10 @@ class FsmarDownstreamExitTest {
 	void twoStopsShareOneNode() throws Exception {
 		String cfg = "{\"states\":{"
 				+ "\"null\":{\"triggers\":{\"INVITE\":{\"transitions\":["
-				+ "  {\"id\":\"A\",\"when\":\"${To.user} == 'a'\",\"next\":\"legA\"},"
-				+ "  {\"id\":\"B\",\"when\":\"${To.user} == 'b'\",\"next\":\"legB\"}]}}},"
-				+ "\"legA\":{\"triggers\":{\"INVITE\":{\"transitions\":[{\"id\":\"A-stop\"}]}}},"
-				+ "\"legB\":{\"triggers\":{\"INVITE\":{\"transitions\":[{\"id\":\"B-stop\"}]}}}}}";
+				+ "  {\"id\":\"A\",\"when\":\"${To.user} == 'a'\",\"next\":\"dialogA\"},"
+				+ "  {\"id\":\"B\",\"when\":\"${To.user} == 'b'\",\"next\":\"dialogB\"}]}}},"
+				+ "\"dialogA\":{\"triggers\":{\"INVITE\":{\"transitions\":[{\"id\":\"A-stop\"}]}}},"
+				+ "\"dialogB\":{\"triggers\":{\"INVITE\":{\"transitions\":[{\"id\":\"B-stop\"}]}}}}}";
 		JsonNode original = MAPPER.readTree(cfg);
 		JsonNode exported = roundTrip(cfg);
 

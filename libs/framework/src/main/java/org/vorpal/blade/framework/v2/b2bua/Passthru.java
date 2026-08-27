@@ -35,7 +35,7 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
 
 /**
  * Callflow for passing through mid-dialog requests (INFO, OPTIONS, etc.) in a B2BUA.
- * Forwards requests and responses between the two call legs.
+ * Forwards requests and responses between the two call dialogs.
  */
 public class Passthru extends org.vorpal.blade.framework.v3.Callflow {
 	private static final long serialVersionUID = 1L;

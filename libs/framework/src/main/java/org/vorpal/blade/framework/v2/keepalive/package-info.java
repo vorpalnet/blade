@@ -7,7 +7,7 @@
 /// SIP sessions can time out if no signaling activity occurs for an extended period.
 /// NAT bindings expire, firewalls close pinholes, and some endpoints disconnect idle
 /// sessions. The keep-alive mechanism sends periodic re-INVITE requests to both call
-/// legs, forcing SDP renegotiation and refreshing all intermediate network state.
+/// dialogs, forcing SDP renegotiation and refreshing all intermediate network state.
 ///
 ///
 /// ## Configuration
@@ -51,7 +51,7 @@
 /// ## Re-INVITE SDP Exchange
 ///
 /// When the keep-alive timer fires, {@link KeepAlive} performs a three-step SDP
-/// exchange across both call legs:
+/// exchange across both call dialogs:
 ///
 /// <pre>
 ///   Alice                     BLADE                      Bob
@@ -72,15 +72,15 @@
 /// ## Session Expiry
 ///
 /// When the session timer expires without a successful refresh, {@link KeepAliveExpiry}
-/// terminates the call by sending BYE to both legs independently. Each BYE is wrapped
-/// in its own try-catch block so that a failure on one leg does not prevent termination
+/// terminates the call by sending BYE to both dialogs independently. Each BYE is wrapped
+/// in its own try-catch block so that a failure on one dialog does not prevent termination
 /// of the other. Sessions that are no longer valid are silently skipped.
 ///
 ///
 /// ## Core Classes
 ///
 /// - {@link KeepAlive} - Session refresh: re-INVITE with three-step SDP exchange
-/// - {@link KeepAliveExpiry} - Session termination: BYE to both legs on timeout
+/// - {@link KeepAliveExpiry} - Session termination: BYE to both dialogs on timeout
 ///
 /// Both classes extend
 /// {@link org.vorpal.blade.framework.v2.callflow.ClientCallflow ClientCallflow} and

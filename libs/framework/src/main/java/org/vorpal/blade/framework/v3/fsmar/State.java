@@ -17,7 +17,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// A state in the FSMAR state machine — a node identified by its map key (the
 /// state **id**), distinct from the **application** it invokes. Two states with
 /// different ids may share the same [#app], so one application can be invoked
-/// more than once on a call-path (e.g. a B2BUA per subscriber leg). `"null"` is
+/// more than once on a call-path (e.g. a B2BUA per subscriber dialog). `"null"` is
 /// the entry state for an initial request.
 ///
 /// On entry to a state, its [#selectors] extract values from the request into

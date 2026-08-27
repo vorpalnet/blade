@@ -51,20 +51,20 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 ///
 /// ```
 /// POST   /session                                          -- create a session, returns {sessionId}
-/// POST   /dialog/{sessionId}                               -- create a leg, returns {sessionId, dialogId}
-/// GET    /dialog/{sessionId}                               -- list the session's legs
-/// GET    /dialog/{sessionId}/{dialogId}                    -- one leg's properties
-/// PUT    /dialog/{sessionId}/{dialogId}                    -- set a leg's attributes
-/// PUT    /dialog/{sessionId}/{dialogA}/connect/{dialogB}   -- bridge two legs
-/// DELETE /dialog/{sessionId}/{dialogId}                    -- tear a leg down (BYE)
+/// POST   /dialog/{sessionId}                               -- create a dialog, returns {sessionId, dialogId}
+/// GET    /dialog/{sessionId}                               -- list the session's dialogs
+/// GET    /dialog/{sessionId}/{dialogId}                    -- one dialog's properties
+/// PUT    /dialog/{sessionId}/{dialogId}                    -- set a dialog's attributes
+/// PUT    /dialog/{sessionId}/{dialogA}/connect/{dialogB}   -- bridge two dialogs
+/// DELETE /dialog/{sessionId}/{dialogId}                    -- tear a dialog down (BYE)
 /// ```
 ///
-/// A `sessionId` is the SIP application-session key; a `dialogId` is one leg's
+/// A `sessionId` is the SIP application-session key; a `dialogId` is one dialog's
 /// Vorpal dialog id (the `X-Vorpal-Dialog` attribute). Create returns the
 /// dialogId so the caller can chain connect/delete; `GET /dialog/{sessionId}`
-/// lets a UI discover and poll every leg.
+/// lets a UI discover and poll every dialog.
 ///
-/// Not yet implemented (roadmap): per-leg mute / hold (the framework ships
+/// Not yet implemented (roadmap): per-dialog mute / hold (the framework ships
 /// `CallflowMute` / `CallflowHold` / `CallflowResume`), and a friendlier v2
 /// `POST /call {from,to}` that runs create+create+connect in one shot.
 @OpenAPIDefinition(info = @Info(title = "3PCC API", version = "1", description = "Allows one entity (the controller) to set up and manage a call between two or more other parties."))
@@ -75,7 +75,7 @@ public class DialogAPI extends Callflow implements Serializable {
 
 	/// Parks the JAX-RS async continuation (which is not serializable) in static
 	/// memory so the SIP callback in `CreateDialog` can resume it, keyed by the
-	/// leg's SipSession id. Carries the `sessionId` so the resume can echo it back.
+	/// dialog's SipSession id. Carries the `sessionId` so the resume can echo it back.
 	public static class ResponseStuff {
 		public UriInfo uriInfo;
 		public AsyncResponse asyncResponse;
@@ -94,10 +94,10 @@ public class DialogAPI extends Callflow implements Serializable {
 		// no-arg ctor for JAX-RS per-request instantiation
 	}
 
-	/// Find one leg (SipSession) in a session by its Vorpal dialog id. Returns
-	/// null if the session or the requested leg is absent. Replaces three
+	/// Find one dialog (SipSession) in a session by its Vorpal dialog id. Returns
+	/// null if the session or the requested dialog is absent. Replaces three
 	/// copy-pasted loops that overwrote the requested id with the last one
-	/// enumerated (so they always resolved the wrong leg).
+	/// enumerated (so they always resolved the wrong dialog).
 	@SuppressWarnings("unchecked")
 	private SipSession findLeg(SipApplicationSession appSession, String dialogId) {
 		if (appSession == null || dialogId == null) {
@@ -154,7 +154,7 @@ public class DialogAPI extends Callflow implements Serializable {
 	@Asynchronous
 	@Path("dialog/{sessionId}")
 	@Consumes({ MediaType.APPLICATION_JSON })
-	@Operation(operationId = "createDialog", summary = "Create a new dialog (leg); returns its dialogId.")
+	@Operation(operationId = "createDialog", summary = "Create a new dialog (dialog); returns its dialogId.")
 	@ApiResponses(value = { @ApiResponse(responseCode = "200", description = "OK"),
 			@ApiResponse(responseCode = "404", description = "Session Not Found"),
 			@ApiResponse(responseCode = "500", description = "Internal Server Error") })
@@ -181,7 +181,7 @@ public class DialogAPI extends Callflow implements Serializable {
 				// re-INVITEs to bridge the call.
 
 				// Park the async continuation (not serializable) in static memory,
-				// keyed by the leg's SipSession id, for CreateDialog to resume.
+				// keyed by the dialog's SipSession id, for CreateDialog to resume.
 				responseMap.put(invite.getSession().getId(), new ResponseStuff(uriInfo, asyncResponse, sessionId));
 
 				CreateDialog cd = new CreateDialog();
@@ -199,7 +199,7 @@ public class DialogAPI extends Callflow implements Serializable {
 
 	@GET
 	@Path("dialog/{sessionId}")
-	@Operation(operationId = "listDialogs", summary = "List every leg in a session, keyed by dialogId.")
+	@Operation(operationId = "listDialogs", summary = "List every dialog in a session, keyed by dialogId.")
 	@ApiResponses(value = { @ApiResponse(responseCode = "200", description = "OK"),
 			@ApiResponse(responseCode = "404", description = "Session Not Found"),
 			@ApiResponse(responseCode = "500", description = "Internal Server Error") })
@@ -221,7 +221,7 @@ public class DialogAPI extends Callflow implements Serializable {
 
 	@GET
 	@Path("dialog/{sessionId}/{dialogId}")
-	@Operation(operationId = "getDialog", summary = "Get one leg's properties.")
+	@Operation(operationId = "getDialog", summary = "Get one dialog's properties.")
 	@ApiResponses(value = { @ApiResponse(responseCode = "200", description = "OK"),
 			@ApiResponse(responseCode = "404", description = "Not Found"),
 			@ApiResponse(responseCode = "500", description = "Internal Server Error") })
@@ -231,12 +231,12 @@ public class DialogAPI extends Callflow implements Serializable {
 
 		try {
 			SipApplicationSession appSession = sipUtil.getApplicationSessionByKey(sessionId, false);
-			SipSession leg = findLeg(appSession, dialogId);
+			SipSession dialog = findLeg(appSession, dialogId);
 
-			if (leg == null) {
+			if (dialog == null) {
 				return Response.status(Status.NOT_FOUND).build();
 			}
-			return Response.ok(new DialogProperties(leg)).build();
+			return Response.ok(new DialogProperties(dialog)).build();
 
 		} catch (Exception e) {
 			sipLogger.severe(e);
@@ -247,7 +247,7 @@ public class DialogAPI extends Callflow implements Serializable {
 	@PUT
 	@Path("dialog/{sessionId}/{dialogId}")
 	@Consumes({ MediaType.APPLICATION_JSON })
-	@Operation(operationId = "setDialogAttributes", summary = "Set a leg's attributes.")
+	@Operation(operationId = "setDialogAttributes", summary = "Set a dialog's attributes.")
 	@ApiResponses(value = { @ApiResponse(responseCode = "200", description = "OK"),
 			@ApiResponse(responseCode = "404", description = "Not Found"),
 			@ApiResponse(responseCode = "500", description = "Internal Server Error") })
@@ -258,15 +258,15 @@ public class DialogAPI extends Callflow implements Serializable {
 
 		try {
 			SipApplicationSession appSession = sipUtil.getApplicationSessionByKey(sessionId, false);
-			SipSession leg = findLeg(appSession, dialogId);
+			SipSession dialog = findLeg(appSession, dialogId);
 
-			if (leg == null) {
+			if (dialog == null) {
 				return Response.status(Status.NOT_FOUND).build();
 			}
 
 			if (dialogData != null && dialogData.attributes != null) {
 				for (Entry<String, String> entry : dialogData.attributes.entrySet()) {
-					leg.setAttribute("3pcc_" + entry.getKey(), entry.getValue());
+					dialog.setAttribute("3pcc_" + entry.getKey(), entry.getValue());
 				}
 			}
 			return Response.ok().build();
@@ -280,7 +280,7 @@ public class DialogAPI extends Callflow implements Serializable {
 	@PUT
 	@Asynchronous
 	@Path("dialog/{sessionId}/{dialogId}/connect/{dialogId2}")
-	@Operation(operationId = "connectDialogs", summary = "Bridge two legs together.")
+	@Operation(operationId = "connectDialogs", summary = "Bridge two dialogs together.")
 	@ApiResponses(value = { @ApiResponse(responseCode = "200", description = "OK"),
 			@ApiResponse(responseCode = "404", description = "Session or Dialog Not Found"),
 			@ApiResponse(responseCode = "500", description = "Internal Server Error") })
@@ -359,7 +359,7 @@ public class DialogAPI extends Callflow implements Serializable {
 	@DELETE
 	@Asynchronous
 	@Path("dialog/{sessionId}/{dialogId}")
-	@Operation(operationId = "deleteDialog", summary = "Tear a leg down (send BYE).")
+	@Operation(operationId = "deleteDialog", summary = "Tear a dialog down (send BYE).")
 	@ApiResponses(value = { @ApiResponse(responseCode = "200", description = "OK"),
 			@ApiResponse(responseCode = "404", description = "Not Found"),
 			@ApiResponse(responseCode = "500", description = "Internal Server Error") })
@@ -370,14 +370,14 @@ public class DialogAPI extends Callflow implements Serializable {
 
 		try {
 			SipApplicationSession appSession = sipUtil.getApplicationSessionByKey(sessionId, false);
-			SipSession leg = findLeg(appSession, dialogId);
+			SipSession dialog = findLeg(appSession, dialogId);
 
-			if (leg == null) {
+			if (dialog == null) {
 				asyncResponse.resume(Response.status(Status.NOT_FOUND).build());
 				return;
 			}
 
-			sendRequest(leg.createRequest(BYE), (byeResponse) -> {
+			sendRequest(dialog.createRequest(BYE), (byeResponse) -> {
 				asyncResponse.resume(
 						Response.status(byeResponse.getStatus(), byeResponse.getReasonPhrase()).build());
 			});

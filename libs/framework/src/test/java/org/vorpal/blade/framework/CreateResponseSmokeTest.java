@@ -22,7 +22,7 @@ import org.vorpal.blade.framework.sip.DetachedSipSession;
 
 /// Pins the contract of [Callflow#createResponse(javax.servlet.sip.SipServletRequest,SipServletResponse)]:
 /// it answers the upstream request, and it never returns null. It used to return
-/// null when the upstream leg had gone away, which surfaced as a
+/// null when the upstream dialog had gone away, which surfaced as a
 /// NullPointerException wherever the result was first dereferenced; it now
 /// throws `ServletParseException` with a message naming the cause, matching how
 /// `v3.Callflow.createRequest` reports its failures.
@@ -104,8 +104,8 @@ class CreateResponseSmokeTest {
 	}
 
 	@Nested
-	@DisplayName("the upstream leg is gone")
-	class LegGone {
+	@DisplayName("the upstream dialog is gone")
+	class DialogGone {
 
 		/// The caller hung up or CANCELed before the downstream response arrived.
 		/// A race rather than a bug, but it has to say so rather than hand back a

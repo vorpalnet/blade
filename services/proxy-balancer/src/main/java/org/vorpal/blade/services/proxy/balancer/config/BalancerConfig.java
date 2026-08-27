@@ -35,7 +35,7 @@ public class BalancerConfig extends Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	/// Runtime health per endpoint NAME (the registry key). Seeded on config
-	/// load; written by the OPTIONS ping cycle and live call legs; consulted
+	/// load; written by the OPTIONS ping cycle and live call dialogs; consulted
 	/// by routing; published per node via the EndpointHealth MBean. Health
 	/// objects are CARRIED ACROSS config publishes for names that still exist
 	/// (see ProxyBalancerSettingsManager) — history and traffic counters

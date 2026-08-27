@@ -40,22 +40,22 @@ class FsmarSharedShapesTest {
 		// Both transitions must still come back carrying those routes.
 		JsonNode out = roundTrip("{\"version\":3,\"states\":{"
 				+ "\"null\":{\"triggers\":{\"INVITE\":{\"transitions\":["
-				+ "  {\"id\":\"A\",\"when\":\"${To.user} == 'a'\",\"next\":\"legA\"},"
-				+ "  {\"id\":\"B\",\"when\":\"${To.user} == 'b'\",\"next\":\"legB\"}]}}},"
-				+ "\"legA\":{\"triggers\":{\"INVITE\":{\"transitions\":["
+				+ "  {\"id\":\"A\",\"when\":\"${To.user} == 'a'\",\"next\":\"dialogA\"},"
+				+ "  {\"id\":\"B\",\"when\":\"${To.user} == 'b'\",\"next\":\"dialogB\"}]}}},"
+				+ "\"dialogA\":{\"triggers\":{\"INVITE\":{\"transitions\":["
 				+ "  {\"id\":\"A-out\",\"routes\":[\"sip:carrier.example.com\"],"
 				+ "   \"routeModifier\":\"ROUTE_FINAL\"}]}}},"
-				+ "\"legB\":{\"triggers\":{\"INVITE\":{\"transitions\":["
+				+ "\"dialogB\":{\"triggers\":{\"INVITE\":{\"transitions\":["
 				+ "  {\"id\":\"B-out\",\"routes\":[\"sip:carrier.example.com\"],"
 				+ "   \"routeModifier\":\"ROUTE_FINAL\"}]}}}}}");
 
-		JsonNode a = transitions(out, "legA", "INVITE").get(0);
-		JsonNode b = transitions(out, "legB", "INVITE").get(0);
+		JsonNode a = transitions(out, "dialogA", "INVITE").get(0);
+		JsonNode b = transitions(out, "dialogB", "INVITE").get(0);
 
 		assertEquals("sip:carrier.example.com", a.path("routes").get(0).asText(),
-				"legA lost its egress routes to the shared node");
+				"dialogA lost its egress routes to the shared node");
 		assertEquals("sip:carrier.example.com", b.path("routes").get(0).asText(),
-				"legB lost its egress routes to the shared node");
+				"dialogB lost its egress routes to the shared node");
 		assertEquals("ROUTE_FINAL", a.path("routeModifier").asText());
 		assertEquals("ROUTE_FINAL", b.path("routeModifier").asText());
 	}
@@ -67,20 +67,20 @@ class FsmarSharedShapesTest {
 		// and must not share a node.
 		JsonNode out = roundTrip("{\"version\":3,\"states\":{"
 				+ "\"null\":{\"triggers\":{\"INVITE\":{\"transitions\":["
-				+ "  {\"id\":\"A\",\"when\":\"${To.user} == 'a'\",\"next\":\"legA\"},"
-				+ "  {\"id\":\"B\",\"when\":\"${To.user} == 'b'\",\"next\":\"legB\"}]}}},"
-				+ "\"legA\":{\"triggers\":{\"INVITE\":{\"transitions\":["
+				+ "  {\"id\":\"A\",\"when\":\"${To.user} == 'a'\",\"next\":\"dialogA\"},"
+				+ "  {\"id\":\"B\",\"when\":\"${To.user} == 'b'\",\"next\":\"dialogB\"}]}}},"
+				+ "\"dialogA\":{\"triggers\":{\"INVITE\":{\"transitions\":["
 				+ "  {\"id\":\"A-out\",\"next\":\"resumeA\","
 				+ "   \"routes\":[\"sip:sbc.example.com\"],\"routeModifier\":\"ROUTE_BACK\"}]}}},"
-				+ "\"legB\":{\"triggers\":{\"INVITE\":{\"transitions\":["
+				+ "\"dialogB\":{\"triggers\":{\"INVITE\":{\"transitions\":["
 				+ "  {\"id\":\"B-out\",\"next\":\"resumeB\","
 				+ "   \"routes\":[\"sip:sbc.example.com\"],\"routeModifier\":\"ROUTE_BACK\"}]}}},"
 				+ "\"resumeA\":{\"triggers\":{}},\"resumeB\":{\"triggers\":{}}}}");
 
-		assertEquals("resumeA", transitions(out, "legA", "INVITE").get(0).path("next").asText(),
-				"legA's resume state was merged away");
-		assertEquals("resumeB", transitions(out, "legB", "INVITE").get(0).path("next").asText(),
-				"legB's resume state was merged away");
+		assertEquals("resumeA", transitions(out, "dialogA", "INVITE").get(0).path("next").asText(),
+				"dialogA's resume state was merged away");
+		assertEquals("resumeB", transitions(out, "dialogB", "INVITE").get(0).path("next").asText(),
+				"dialogB's resume state was merged away");
 	}
 
 	@Test
@@ -132,12 +132,12 @@ class FsmarSharedShapesTest {
 	void sharedEgressIsStable() throws Exception {
 		String cfg = "{\"version\":3,\"states\":{"
 				+ "\"null\":{\"triggers\":{\"INVITE\":{\"transitions\":["
-				+ "  {\"id\":\"A\",\"when\":\"${To.user} == 'a'\",\"next\":\"legA\"},"
-				+ "  {\"id\":\"B\",\"when\":\"${To.user} == 'b'\",\"next\":\"legB\"}]}}},"
-				+ "\"legA\":{\"triggers\":{\"INVITE\":{\"transitions\":["
+				+ "  {\"id\":\"A\",\"when\":\"${To.user} == 'a'\",\"next\":\"dialogA\"},"
+				+ "  {\"id\":\"B\",\"when\":\"${To.user} == 'b'\",\"next\":\"dialogB\"}]}}},"
+				+ "\"dialogA\":{\"triggers\":{\"INVITE\":{\"transitions\":["
 				+ "  {\"id\":\"A-out\",\"routes\":[\"sip:carrier.example.com\"],"
 				+ "   \"routeModifier\":\"ROUTE_FINAL\"}]}}},"
-				+ "\"legB\":{\"triggers\":{\"INVITE\":{\"transitions\":["
+				+ "\"dialogB\":{\"triggers\":{\"INVITE\":{\"transitions\":["
 				+ "  {\"id\":\"B-out\",\"routes\":[\"sip:carrier.example.com\"],"
 				+ "   \"routeModifier\":\"ROUTE_FINAL\"}]}}}}}";
 

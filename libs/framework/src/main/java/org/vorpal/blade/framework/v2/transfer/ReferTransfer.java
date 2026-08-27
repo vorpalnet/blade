@@ -155,7 +155,7 @@ public class ReferTransfer extends Transfer {
 				// one (both throw IllegalArgumentException on ACK and CANCEL), which
 				// is what the previous 'continueRequest(transferorSession, cancel)'
 				// tried to do. Same shape as Terminate: take the outstanding UAC
-				// INVITE on the transferor leg and cancel that.
+				// INVITE on the transferor dialog and cancel that.
 				SipServletRequest transferorInvite = transferorSession.getActiveInvite(UAMode.UAC);
 				if (transferorInvite != null && transferorInvite.isCommitted()) {
 					SipServletRequest transferorCancel = transferorInvite.createCancel();
@@ -163,7 +163,7 @@ public class ReferTransfer extends Transfer {
 					sendRequest(transferorCancel);
 				} else {
 					sipLogger.finer(transferorSession, "ReferTransfer.process - no outstanding INVITE on the "
-							+ "transferor leg; nothing to cancel.");
+							+ "transferor dialog; nothing to cancel.");
 				}
 			});
 

@@ -302,9 +302,9 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 					// against it glares. A REFER puts the session in PROTECT until
 					// its 200/NOTIFY, which is exactly the fire-and-forget case —
 					// a caller issuing transfers back to back gets 491 Request
-					// Pending instead of two overlapping transfers on one leg.
+					// Pending instead of two overlapping transfers on one dialog.
 					//
-					// getGlareState defaults to ALLOW, so a leg that has never sent
+					// getGlareState defaults to ALLOW, so a dialog that has never sent
 					// anything is never rejected here.
 					if (Callflow.getGlareState(transfereeSession) == GlareState.PROTECT) {
 						TransferResponse transferResponse = new TransferResponse();

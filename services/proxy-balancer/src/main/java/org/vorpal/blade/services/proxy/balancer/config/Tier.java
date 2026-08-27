@@ -55,7 +55,7 @@ public class Tier implements Serializable {
 		return this;
 	}
 
-	@JsonPropertyDescription("Seconds a leg may ring before it is canceled (serial hunts advance; parallel races give up). "
+	@JsonPropertyDescription("Seconds a dialog may ring before it is canceled (serial hunts advance; parallel races give up). "
 			+ "Also the whole tier's budget in a parallel race.")
 	@JsonProperty(defaultValue = "180", required = true)
 	public Integer getTimeout() {

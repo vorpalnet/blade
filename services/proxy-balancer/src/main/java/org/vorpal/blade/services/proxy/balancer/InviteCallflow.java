@@ -46,14 +46,14 @@ import org.vorpal.blade.services.proxy.balancer.config.Tier;
 /// caller without touching a more expensive tier. Nothing routable answers
 /// 503.
 ///
-/// The per-leg observer relays real 18x ringing upstream and passively marks
+/// The per-dialog observer relays real 18x ringing upstream and passively marks
 /// endpoint health (2xx → up; 503 → down, honoring Retry-After, else the
-/// configured defaultBackoff). With `session:passthru` set, the winning leg
+/// configured defaultBackoff). With `session:passthru` set, the winning dialog
 /// drops out of the dialog after setup.
 public class InviteCallflow extends Callflow implements Serializable {
 	private static final long serialVersionUID = 1L;
 
-	/// Leg-request attribute carrying the endpoint's registry NAME, so the
+	/// Dialog-request attribute carrying the endpoint's registry NAME, so the
 	/// observer can mark health without reverse-mapping URIs.
 	static final String ENDPOINT_NAME_ATTR = "balancer.endpointName";
 
@@ -82,8 +82,8 @@ public class InviteCallflow extends Callflow implements Serializable {
 			return;
 		}
 
-		// Ring the caller immediately; real 18x from the legs is also relayed
-		// (via the per-leg observer), but until a leg responds the caller's UA
+		// Ring the caller immediately; real 18x from the dialogs is also relayed
+		// (via the per-dialog observer), but until a dialog responds the caller's UA
 		// generates local ringback from this one.
 		sendResponse(aliceRequest.createResponse(180));
 
@@ -115,7 +115,7 @@ public class InviteCallflow extends Callflow implements Serializable {
 				SipServletRequest bobRequest = sipFactory.createRequest(appSession, INVITE, aliceRequest.getFrom(),
 						aliceRequest.getTo());
 				bobRequest.setRoutingDirective(SipApplicationRoutingDirective.CONTINUE, aliceRequest);
-				copyContentAndHeaders(aliceRequest, bobRequest); // links each leg back to alice
+				copyContentAndHeaders(aliceRequest, bobRequest); // links each dialog back to alice
 				bobRequest.setRequestURI(sipFactory.createURI(entry.getValue().getUri()));
 				bobRequest.setAttribute(ENDPOINT_NAME_ATTR, entry.getKey());
 				bobRequests.add(bobRequest);
@@ -135,14 +135,14 @@ public class InviteCallflow extends Callflow implements Serializable {
 			return;
 		}
 
-		// Every response from every leg: passive health marking, and relay of
+		// Every response from every dialog: passive health marking, and relay of
 		// real ringing (180/183) upstream. 100 Trying is hop-by-hop.
-		Callback<SipServletResponse> legObserver = (legResponse) -> {
-			trackHealth(legResponse);
-			int status = legResponse.getStatus();
+		Callback<SipServletResponse> dialogObserver = (dialogResponse) -> {
+			trackHealth(dialogResponse);
+			int status = dialogResponse.getStatus();
 			if (status > 100 && status < 200 && !aliceRequest.isCommitted()) {
 				SipServletResponse aliceRinging = aliceRequest.createResponse(status);
-				copyContentAndHeaders(legResponse, aliceRinging);
+				copyContentAndHeaders(dialogResponse, aliceRinging);
 				sendResponse(aliceRinging);
 			}
 		};
@@ -150,7 +150,7 @@ public class InviteCallflow extends Callflow implements Serializable {
 		Callback<SipServletResponse> tierComplete = (bobResponse) -> {
 
 			// The isCommitted() guard matters: a caller who CANCELed has
-			// already been answered 487 by Terminate — the losing leg's 487
+			// already been answered 487 by Terminate — the losing dialog's 487
 			// (or any late failure) must not march up the cost ladder on
 			// behalf of a caller who is gone.
 			if (!successful(bobResponse) && !plan.isEmpty() && shouldFailover(bobResponse)
@@ -166,7 +166,7 @@ public class InviteCallflow extends Callflow implements Serializable {
 			if (!aliceRequest.isCommitted()) {
 
 				SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
-				copyContentAndHeaders(bobResponse, aliceResponse); // links alice to the winning leg
+				copyContentAndHeaders(bobResponse, aliceResponse); // links alice to the winning dialog
 
 				if (successful(bobResponse)) {
 					sendResponse(aliceResponse, (aliceAck) -> {
@@ -184,10 +184,10 @@ public class InviteCallflow extends Callflow implements Serializable {
 		long timeoutMillis = ((timeout != null && timeout > 0) ? timeout : 180) * 1000L;
 
 		if (tier.getStrategy() == Tier.Strategy.parallel) {
-			sendRequestsInParallel(timeoutMillis, bobRequests, tierComplete, legObserver);
+			sendRequestsInParallel(timeoutMillis, bobRequests, tierComplete, dialogObserver);
 		} else {
 			// all hunt strategies: the ordering above IS the strategy
-			sendRequestsInSerial(timeoutMillis, bobRequests, tierComplete, legObserver);
+			sendRequestsInSerial(timeoutMillis, bobRequests, tierComplete, dialogObserver);
 		}
 
 	}
@@ -328,14 +328,14 @@ public class InviteCallflow extends Callflow implements Serializable {
 		}
 	}
 
-	/// Passive health marking from a live leg response: 2xx proves the
+	/// Passive health marking from a live dialog response: 2xx proves the
 	/// endpoint alive; 503 is the overload signal — Retry-After honored,
 	/// else the configured defaultBackoff. User responses (486 busy, 603
 	/// decline, other 4xx) say nothing about the endpoint and are ignored —
 	/// the OPTIONS ping cycle is the authoritative detector.
-	private void trackHealth(SipServletResponse legResponse) {
+	private void trackHealth(SipServletResponse dialogResponse) {
 		try {
-			String name = (String) legResponse.getRequest().getAttribute(ENDPOINT_NAME_ATTR);
+			String name = (String) dialogResponse.getRequest().getAttribute(ENDPOINT_NAME_ATTR);
 			if (name == null) {
 				return;
 			}
@@ -345,25 +345,25 @@ public class InviteCallflow extends Callflow implements Serializable {
 				return;
 			}
 
-			int status = legResponse.getStatus();
+			int status = dialogResponse.getStatus();
 
-			// traffic counters: every leg-final response is one attempt on
+			// traffic counters: every dialog-final response is one attempt on
 			// that endpoint (provisionals are not attempts); these power the
 			// dashboard's traffic-share bars and pulse animation
 			if (status >= 200) {
 				health.recordAttempt();
-				if (successful(legResponse)) {
+				if (successful(dialogResponse)) {
 					health.recordSuccess();
-				} else if (shouldFailover(legResponse)) {
+				} else if (shouldFailover(dialogResponse)) {
 					health.recordFailover();
 				}
 			}
 
-			if (successful(legResponse)) {
+			if (successful(dialogResponse)) {
 				health.markUp("INVITE " + status, "call", -1);
 			} else if (status == 503) {
 				Integer backoff = null;
-				String header = legResponse.getHeader("Retry-After");
+				String header = dialogResponse.getHeader("Retry-After");
 				if (header != null) {
 					try {
 						backoff = Integer.parseInt(header.trim());
@@ -378,7 +378,7 @@ public class InviteCallflow extends Callflow implements Serializable {
 				health.markDown("503" + (backoff != null ? " backoff " + backoff + "s" : ""), backoff, "call", -1);
 			}
 		} catch (Exception e) {
-			sipLogger.warning(legResponse, "InviteCallflow.trackHealth - " + e.getMessage());
+			sipLogger.warning(dialogResponse, "InviteCallflow.trackHealth - " + e.getMessage());
 		}
 	}
 

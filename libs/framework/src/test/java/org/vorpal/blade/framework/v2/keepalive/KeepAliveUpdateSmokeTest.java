@@ -14,7 +14,7 @@ import org.vorpal.blade.framework.sip.DetachedSipSession;
 /// Smoke test for the UPDATE-style keep-alive decision logic:
 /// [KeepAlive#allowsUpdate] (Allow header parsing),
 /// [KeepAlive#updateStyleConfigured] (config gate) and
-/// [KeepAlive#supportsUpdate] (per-leg capability flag).
+/// [KeepAlive#supportsUpdate] (per-dialog capability flag).
 ///
 /// Note: `KeepAlive` unqualified means the callflow class (same package);
 /// the config enum is always written `KeepAliveParameters.KeepAlive`.

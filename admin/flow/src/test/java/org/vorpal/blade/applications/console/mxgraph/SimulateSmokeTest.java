@@ -118,11 +118,11 @@ public final class SimulateSmokeTest {
 
 		JsonNode hops = t.path("hops");
 		check("twice: four hops (null, caller, callee, registrar)", hops.size() == 4);
-		check("twice: hop2 is the caller-leg state", "b2bua-caller".equals(hops.path(1).path("state").asText()));
+		check("twice: hop2 is the caller-dialog state", "b2bua-caller".equals(hops.path(1).path("state").asText()));
 		check("twice: hop2 runs app b2bua", "b2bua".equals(hops.path(1).path("app").asText()));
-		check("twice: hop3 is the callee-leg state", "b2bua-callee".equals(hops.path(2).path("state").asText()));
+		check("twice: hop3 is the callee-dialog state", "b2bua-callee".equals(hops.path(2).path("state").asText()));
 		check("twice: hop3 runs app b2bua", "b2bua".equals(hops.path(2).path("app").asText()));
-		check("twice: the two legs are distinct states",
+		check("twice: the two dialogs are distinct states",
 				!hops.path(1).path("state").asText().equals(hops.path(2).path("state").asText()));
 		check("twice: final application is registrar", "registrar".equals(t.path("finalApp").asText()));
 	}

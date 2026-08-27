@@ -30,7 +30,7 @@ public class DetachedApplicationSession implements SipApplicationSession {
 	String appName = "Dummy";
 
 	// Real registry so getSipSession(id) resolves, which is what
-	// Callflow.getLinkedSession needs to walk from one leg to the other.
+	// Callflow.getLinkedSession needs to walk from one dialog to the other.
 	private final Map<String, SipSession> sipSessions = new LinkedHashMap<>();
 	private static final java.util.concurrent.atomic.AtomicInteger counter = new java.util.concurrent.atomic.AtomicInteger();
 	private final String id = "dummy-app-" + counter.incrementAndGet();

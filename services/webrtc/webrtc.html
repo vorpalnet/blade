@@ -304,7 +304,7 @@
       <div class="stack">
         <span class="tag m"><span class="dot"></span>Anchored</span>
         <ul class="facts m">
-          <li>The re-offer <b>belongs to the network leg alone.</b> The media server answers it and the browser is never told, because the two negotiations were independent from the start.</li>
+          <li>The re-offer <b>belongs to the network dialog alone.</b> The media server answers it and the browser is never told, because the two negotiations were independent from the start.</li>
           <li>A no-SDP refresh is answered from the media server, with the answer taken from the <code>ACK</code>.</li>
         </ul>
       </div>
@@ -456,7 +456,7 @@
       </figure>
     </div>
     <ul class="facts">
-      <li><code>negotiated</code> is false when the far end answered with no SDP and nothing was applied to the media leg: <b>a call that is up for signaling and silent for media.</b></li>
+      <li><code>negotiated</code> is false when the far end answered with no SDP and nothing was applied to the media dialog: <b>a call that is up for signaling and silent for media.</b></li>
       <li>Previously that case was reported as an ordinary <code>call.established</code> and <b>looked healthy.</b></li>
       <li><code>call.connected</code> also declares an <code>sdp</code> field, <b>reserved and unset on every path today.</b> The ACK is a real SDP-carrying moment — in late media the caller's answer arrives there — so the field is declared to describe the message honestly. Clients must tolerate its absence, which is the ordinary case.</li>
       <li><code>call.update</code> is the one that makes escalation possible: a fresh SDP offer for a call already up. Without it a call's media path could never change after setup — the same mechanism WSC's mobile SDKs exposed as <code>Call.update()</code>.</li>
@@ -623,7 +623,7 @@
           <marker id="y3" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><polygon points="0,0 8,4 0,8" fill="var(--med)"/></marker>
         </defs>
       </svg>
-      <figcaption>Offer and answer run backwards on the network leg.</figcaption>
+      <figcaption>Offer and answer run backwards on the network dialog.</figcaption>
     </figure>
     <ul class="facts m">
       <li>This is <b>the one path where <code>call.established</code> and <code>call.connected</code> are genuinely far apart</b>, and the only one where the ACK can arrive owing an answer it does not carry — hence <code>negotiated: false</code>.</li>
@@ -653,7 +653,7 @@
       <p class="lede" style="margin-top:12px;font-size:clamp(11px,1.16vw,13px)">Reusing them is the point: <b style="color:var(--ink)">one subscription gets browser calls and phone calls together</b>, with no webrtc-specific clause.</p>
     </div>
     <ul class="facts">
-      <li><b>Every fact carries a <code>leg</code> attribute</b>, <code>inbound</code> or <code>outbound</code>. A browser-to-browser call is one call that crosses this application <b>twice</b> — out and back in through the location service — and the second leg inherits the first's correlation id. Both publish under the same correlator, source and application name; <code>leg</code> is the only thing that tells them apart.</li>
+      <li><b>Every fact carries a <code>dialog</code> attribute</b>, <code>inbound</code> or <code>outbound</code>. A browser-to-browser call is one call that crosses this application <b>twice</b> — out and back in through the location service — and the second dialog inherits the first's correlation id. Both publish under the same correlator, source and application name; <code>dialog</code> is the only thing that tells them apart.</li>
       <li><b><code>analytics.enabled</code> is the switch, not <code>events.enabled</code>.</b> Setting <code>events.enabled</code> alone gives a live bus connection carrying no call facts.</li>
       <li>The shipped sample fills in the selectors and <b>leaves the switch off</b>, the way every other BLADE application samples itself.</li>
     </ul>

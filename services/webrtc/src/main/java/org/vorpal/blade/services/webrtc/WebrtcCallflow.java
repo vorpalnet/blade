@@ -75,12 +75,12 @@ public abstract class WebrtcCallflow extends MediaCallflow {
 		byte[] reoffer = rawContent(reinvite);
 
 		if (networkLeg != null) {
-			// Anchored: this belongs to the network leg alone. The browser's leg is untouched, so it
+			// Anchored: this belongs to the network dialog alone. The browser's dialog is untouched, so it
 			// is not told and does not re-key — the point of anchoring is that the two negotiations
 			// are independent of each other.
 			if (reoffer == null) {
 				answerWithLateMedia(reinvite, networkLeg, negotiated -> {
-					// Nothing further; the leg is as the media server just set it.
+					// Nothing further; the dialog is as the media server just set it.
 				});
 			} else {
 				offer(networkLeg, reoffer, answerEvent -> {

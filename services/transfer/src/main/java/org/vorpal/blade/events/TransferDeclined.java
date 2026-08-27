@@ -5,7 +5,7 @@ import java.io.Serializable;
 import java.time.Instant;
 import java.util.List;
 
-/// The transfer was refused: either the target's leg returned a failure response, or the REFER
+/// The transfer was refused: either the target's dialog returned a failure response, or the REFER
 /// itself was refused. Both land here, so this means the transfer did not happen — not specifically
 /// that the target said no.
 ///

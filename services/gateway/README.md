@@ -35,7 +35,7 @@ multi‑tenant. Each virtual gateway:
   the trunk's own **Contact IP** — so the *arrival interface identifies the trunk*
   (`matchesInterface`), with no `;vgw=` present. FSMAR routes the trunk INVITE to this app
   (match on `${localIP}`); the app checks the source against the trunk's `sourceHosts` and
-  bridges the call onward. FSMAR then runs again on the second leg (`previousApp = gateway`) and
+  bridges the call onward. FSMAR then runs again on the second dialog (`previousApp = gateway`) and
   routes it to whichever app answers — which never learns which carrier called.
 - **Outbound** (BLADE → PSTN): **FSMAR owns the policy** — it picks the trunk (dial‑plan /
   conditions) and routes the INVITE to this app, naming the trunk in the **Route URI**
@@ -129,7 +129,7 @@ transition targets).
   accept outbound INVITEs from the authenticated source, so it's rarely needed — and it can't live in
   `callStarted`: the stock B2BUA bridge propagates a carrier `401/407` to the caller
   (`InitialInvite.processContinue`, `v2/b2bua/InitialInvite.java:197‑206`). Answering the challenge
-  needs a re‑auth‑aware outbound leg (a gateway `InitialInvite` variant mirroring
+  needs a re‑auth‑aware outbound dialog (a gateway `InitialInvite` variant mirroring
   `RegisterCallflow.onResponse`: `createRequest(response,"INVITE")` + `addAuthHeader` + loop guard),
   or a challenge hook on the framework's `InitialInvite`. Add it when a target carrier re‑challenges
   INVITEs.

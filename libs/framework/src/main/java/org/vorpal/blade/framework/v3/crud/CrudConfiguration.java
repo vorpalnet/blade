@@ -92,7 +92,7 @@ public class CrudConfiguration extends Configuration implements Serializable {
 	/// On completion every enrichment value is **promoted to the
 	/// application session**, because that's where rule operations resolve
 	/// `${var}` from ([MessageHelper#getSessionVariables]) — selectors write
-	/// to the inbound SipSession, which the outbound leg's messages never
+	/// to the inbound SipSession, which the outbound dialog's messages never
 	/// see. Promotion makes pipeline-extracted values (`${dialedNumber}`)
 	/// usable inside `create`/`update` templates and `when` clauses.
 	public Context enrich(SipServletRequest request) {

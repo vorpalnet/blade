@@ -13,7 +13,7 @@
 /// ## Architecture
 ///
 /// The service extends `AsyncSipServlet` rather than `B2buaServlet` since it only needs
-/// to respond to requests without establishing back-to-back call legs. The
+/// to respond to requests without establishing back-to-back call dialogs. The
 /// `chooseCallflow` method always returns an [OptionsCallflow] instance regardless of
 /// the SIP method, making it a simple request/response handler.
 ///

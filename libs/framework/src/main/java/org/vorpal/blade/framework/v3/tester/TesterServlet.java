@@ -286,7 +286,7 @@ public abstract class TesterServlet extends B2buaServlet {
 	}
 
 	// ------------------------------------------------------------
-	// B2BUA lifecycle: template + rules on the outbound leg
+	// B2BUA lifecycle: template + rules on the outbound dialog
 	// ------------------------------------------------------------
 
 	@Override

@@ -40,7 +40,7 @@ import org.vorpal.blade.framework.v2.config.SettingsManager;
 
 /**
  * Callflow for handling BYE and CANCEL requests in a B2BUA scenario. Terminates
- * both call legs by sending appropriate termination requests.
+ * both call dialogs by sending appropriate termination requests.
  */
 public class Terminate extends org.vorpal.blade.framework.v3.Callflow {
 	private static final long serialVersionUID = 1L;

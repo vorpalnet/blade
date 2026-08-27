@@ -6,7 +6,7 @@ A scenario-driven SIP load generator and test client built on the BLADE
 framework. The Test UAC originates SIP calls at scale — replacing SIPp with a
 reliable, API-driven, cluster-native alternative — and, as a B2BUA, can also
 take *real* calls from a softphone or SBC and transform them en route (e.g.
-dressing a plain call up as a SIPREC recorder leg). It is the counterpart to
+dressing a plain call up as a SIPREC recorder dialog). It is the counterpart to
 the [Test UAS](../test-uas).
 
 ## One tool, two call sources

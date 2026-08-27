@@ -1,6 +1,6 @@
 package org.vorpal.blade.framework.v3.media;
 
-/// Resume the target leg after a hold/mute: RESTORES the per-stream
+/// Resume the target dialog after a hold/mute: RESTORES the per-stream
 /// directions captured before the change ([CallflowMediaDirection]'s
 /// `PRIOR_DIRECTIONS_ATTR`), so a video stream that was `inactive` before the
 /// hold comes back `inactive` — not blanket `a=sendrecv`, which is what the

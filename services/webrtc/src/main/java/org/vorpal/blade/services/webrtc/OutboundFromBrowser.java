@@ -34,16 +34,16 @@ import org.vorpal.blade.framework.v3.media.MediaConfigs;
 /// - **Anchored** — two independent negotiations that never see each other's SDP:
 ///
 ///   ```
-///   browser  --offer-->  [ webrtc leg | rtp leg ]  --offer-->  network
+///   browser  --offer-->  [ webrtc dialog | rtp dialog ]  --offer-->  network
 ///            <-answer--                           <-answer--
 ///   ```
 ///
-///   Joining the legs is what connects them. Required when the far end is a phone, and the only
+///   Joining the dialogs is what connects them. Required when the far end is a phone, and the only
 ///   way any other service can reach this call's audio — nothing can tap media it never carries.
 ///
 /// - **Pass-through** — the browser's own offer goes in the INVITE body untouched, and the far
 ///   answer comes back untouched. If a browser answers (through the location service and a second
-///   gateway leg), DTLS-SRTP runs endpoint to endpoint and this gateway could not decrypt a packet
+///   gateway dialog), DTLS-SRTP runs endpoint to endpoint and this gateway could not decrypt a packet
 ///   if it wanted to; that property is RFC 8827's, not ours. Complete SDP both ways — no trickle,
 ///   so the candidates ride inside the offer and answer.
 ///
@@ -112,7 +112,7 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 							.put("sdp", new String(browserAnswer.getMediaServerSdp(), StandardCharsets.UTF_8))
 							.put("status", "trying")));
 
-			// Offer to the network from the RTP leg.
+			// Offer to the network from the RTP dialog.
 			generateOffer(networkLeg, networkOffer -> {
 				invite.setContent(networkOffer.getMediaServerSdp(), SDP_TYPE);
 				BrowserSignals.expect(app, SignalProtocol.CALL_HANGUP, hangup -> cancelOrBye(invite, app));
@@ -266,7 +266,7 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 		int status = response.getStatus();
 
 		if (status < 200) {
-			// 180/183. Any SDP here is early media and belongs to the network leg only; the browser
+			// 180/183. Any SDP here is early media and belongs to the network dialog only; the browser
 			// is already negotiated and hears whatever the media server relays.
 			byte[] early = rawContent(response);
 			if (early != null) {
@@ -297,7 +297,7 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 		if (answer != null) {
 			processAnswer(networkLeg, answer, done -> acknowledge(response, app, aor, callId, networkLeg, true));
 		} else {
-			// Answered with no SDP, so processAnswer never runs and the network leg is never
+			// Answered with no SDP, so processAnswer never runs and the network dialog is never
 			// negotiated: the media server has nowhere to send audio. The call is up for signaling
 			// and silent. This branch used to reach the same "established" the negotiated one did,
 			// which reported a healthy call to a browser that would never hear anything.

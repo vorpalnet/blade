@@ -19,8 +19,8 @@ import org.vorpal.blade.framework.v3.Callflow;
 
 /// Forks an initial INVITE to every contact registered for the account — a
 /// forking B2BUA built on [Callflow#sendRequestsInParallel]: the first 2xx
-/// wins and the framework CANCELs the losing legs. With `session:passthru`
-/// set, the winning leg drops out of the dialog after setup.
+/// wins and the framework CANCELs the losing dialogs. With `session:passthru`
+/// set, the winning dialog drops out of the dialog after setup.
 public class InviteCallflow extends Callflow implements Serializable {
 	private static final long serialVersionUID = 397213565821542521L;
 
@@ -57,9 +57,9 @@ public class InviteCallflow extends Callflow implements Serializable {
 			return;
 		}
 
-		// sendRequestsInParallel doesn't surface the legs' provisional
+		// sendRequestsInParallel doesn't surface the dialogs' provisional
 		// responses, so ring the caller immediately — their UA generates
-		// local ringback until a leg answers.
+		// local ringback until a dialog answers.
 		sendResponse(aliceRequest.createResponse(180));
 
 		SipApplicationSession appSession = aliceRequest.getApplicationSession();
@@ -69,20 +69,20 @@ public class InviteCallflow extends Callflow implements Serializable {
 			SipServletRequest bobRequest = sipFactory.createRequest(appSession, INVITE, aliceRequest.getFrom(),
 					aliceRequest.getTo());
 			bobRequest.setRoutingDirective(SipApplicationRoutingDirective.CONTINUE, aliceRequest);
-			copyContentAndHeaders(aliceRequest, bobRequest); // links each leg back to alice
+			copyContentAndHeaders(aliceRequest, bobRequest); // links each dialog back to alice
 			bobRequest.setRequestURI(contact);
 			bobRequests.add(bobRequest);
 		}
 
 		long timeout = (settings.getTimeout() != null) ? settings.getTimeout() * 1000L : 0;
 
-		// relay real ringing (180/183) from any leg upstream, on top of the
+		// relay real ringing (180/183) from any dialog upstream, on top of the
 		// immediate 180 above; 100 Trying is hop-by-hop
-		Callback<SipServletResponse> legObserver = (legResponse) -> {
-			int status = legResponse.getStatus();
+		Callback<SipServletResponse> dialogObserver = (dialogResponse) -> {
+			int status = dialogResponse.getStatus();
 			if (status > 100 && status < 200 && !aliceRequest.isCommitted()) {
 				SipServletResponse aliceRinging = aliceRequest.createResponse(status);
-				copyContentAndHeaders(legResponse, aliceRinging);
+				copyContentAndHeaders(dialogResponse, aliceRinging);
 				sendResponse(aliceRinging);
 			}
 		};
@@ -92,7 +92,7 @@ public class InviteCallflow extends Callflow implements Serializable {
 			if (!aliceRequest.isCommitted()) {
 
 				SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
-				copyContentAndHeaders(bobResponse, aliceResponse); // links alice to the winning leg
+				copyContentAndHeaders(bobResponse, aliceResponse); // links alice to the winning dialog
 
 				if (successful(bobResponse)) {
 					sendResponse(aliceResponse, (aliceAck) -> {
@@ -104,7 +104,7 @@ public class InviteCallflow extends Callflow implements Serializable {
 
 			}
 
-		}, legObserver);
+		}, dialogObserver);
 
 	}
 

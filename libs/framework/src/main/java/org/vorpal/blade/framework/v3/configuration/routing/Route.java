@@ -25,7 +25,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 ///
 /// - **Direct response** — `statusCode` is set. The router answers
 ///   the inbound INVITE itself with `<statusCode> <reasonPhrase>`
-///   and is done — no proxy, no redirect, no downstream leg. Use
+///   and is done — no proxy, no redirect, no downstream dialog. Use
 ///   for screening verdicts that should produce a SIP-correct
 ///   final response (e.g. `603 Decline` for a blocked call,
 ///   `403 Forbidden` for a policy reject). When `statusCode` is

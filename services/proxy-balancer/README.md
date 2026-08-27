@@ -64,7 +64,7 @@ tier first. Failover is response-classified: route-level failures (408 /
 timeout, 480, 404, 5xx, 3xx) escalate to the next tier; user-state and auth
 responses (486 busy, 401/407 auth, 487 canceled, all 6xx per RFC 3261 §16.7)
 are relayed to the caller and never touch a more expensive tier. A caller
-who CANCELs mid-hunt ends the plan — late leg failures cannot launch new
+who CANCELs mid-hunt ends the plan — late dialog failures cannot launch new
 tiers. The last tier's failure is relayed; nothing routable anywhere → 503.
 Tier `timeout` defaults to 180s in the schema (a serial hunt's timer drives
 it, so it must never be 0). In-dialog requests are relayed by the b2bua
@@ -85,7 +85,7 @@ name (no shared cluster state), with two writers:
   `pingEnabled` applies at once — no redeploy, no waiting out the old
   interval. An unpingable endpoint (malformed URI) is marked DOWN with an
   "unpingable" note and never stops the rest of the cycle.
-- **Live call legs** — a 2xx marks its endpoint UP; a **503** marks it DOWN
+- **Live call dialogs** — a 2xx marks its endpoint UP; a **503** marks it DOWN
   with a timed backoff from `Retry-After`, else `health.defaultBackoff`
   (0 = down until a ping revives it). User responses (486, 603, other 4xx)
   are ignored.
@@ -110,9 +110,9 @@ The v2 `Proxy` API is gone; path presence is decided by configuration:
 - `session:passthru = false` — the balancer remains in the dialog as a full
   B2BUA.
 
-Provisional responses: real 18x ringing from the legs is relayed upstream
-(per-leg observer on the fan-out primitives), on top of an immediate 180 sent
-when the fork starts so the caller hears ringback before any leg responds.
+Provisional responses: real 18x ringing from the dialogs is relayed upstream
+(per-dialog observer on the fan-out primitives), on top of an immediate 180 sent
+when the fork starts so the caller hears ringback before any dialog responds.
 
 ## Maven Coordinates
 

@@ -26,7 +26,7 @@ import org.vorpal.blade.framework.sip.DetachedSipURI;
 /// without a SIP container, using the mock objects in
 /// `org.vorpal.blade.framework.sip`.
 ///
-/// Covers the two paths the method chooses between — in-dialog on the linked leg
+/// Covers the two paths the method chooses between — in-dialog on the linked dialog
 /// versus a fresh initial request from the factory — and the methods it refuses
 /// to build at all.
 class CreateRequestSmokeTest {
@@ -103,11 +103,11 @@ class CreateRequestSmokeTest {
 	}
 
 	@Nested
-	@DisplayName("legs already linked")
+	@DisplayName("dialogs already linked")
 	class InDialog {
 
 		/// Links alice's session to bob's the way a relayed response does, then
-		/// checks that the outbound request is created on bob's leg rather than
+		/// checks that the outbound request is created on bob's dialog rather than
 		/// through the factory.
 		@Test
 		void createsOnTheLinkedSession() throws Exception {
@@ -124,7 +124,7 @@ class CreateRequestSmokeTest {
 			SipServletRequest bobRequest = Callflow.createRequest(aliceRequest);
 
 			assertNotNull(bobRequest);
-			assertSame(bobSession, bobRequest.getSession(), "should be built on the linked leg");
+			assertSame(bobSession, bobRequest.getSession(), "should be built on the linked dialog");
 			assertEquals("INVITE", bobRequest.getMethod());
 			assertEquals("carried-across", bobRequest.getHeader("X-Custom"), "non-system headers should copy");
 		}
@@ -168,7 +168,7 @@ class CreateRequestSmokeTest {
 	}
 
 	@Nested
-	@DisplayName("no linked leg yet")
+	@DisplayName("no linked dialog yet")
 	class Initial {
 
 		/// With nothing linked, the request comes from the factory on a brand-new
@@ -182,7 +182,7 @@ class CreateRequestSmokeTest {
 
 			assertNotNull(bobRequest);
 			assertEquals("INVITE", bobRequest.getMethod());
-			assertNotSame(aliceRequest.getSession(), bobRequest.getSession(), "should be a new leg");
+			assertNotSame(aliceRequest.getSession(), bobRequest.getSession(), "should be a new dialog");
 			assertEquals("carried-across", bobRequest.getHeader("X-Custom"), "non-system headers should copy");
 		}
 
@@ -216,7 +216,7 @@ class CreateRequestSmokeTest {
 			assertEquals("sip:alice@caller.example.com", bobRequest.getRequestURI().toString());
 		}
 
-		/// An unlinked leg is exactly the initial-INVITE case, so this is where the
+		/// An unlinked dialog is exactly the initial-INVITE case, so this is where the
 		/// two sessions first get joined.
 		@Test
 		void linksTheNewLegBackToTheInbound() throws Exception {

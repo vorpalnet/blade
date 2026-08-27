@@ -167,7 +167,7 @@
 /// ### [org.vorpal.blade.framework.v2.keepalive]
 /// Implements SIP session keep-alive functionality using re-INVITE requests to refresh RTP
 /// streams and prevent session timeouts. [KeepAlive][org.vorpal.blade.framework.v2.keepalive.KeepAlive] performs three-step SDP exchange between
-/// call legs, while [KeepAliveExpiry][org.vorpal.blade.framework.v2.keepalive.KeepAliveExpiry] terminates expired sessions by sending BYE requests
+/// call dialogs, while [KeepAliveExpiry][org.vorpal.blade.framework.v2.keepalive.KeepAliveExpiry] terminates expired sessions by sending BYE requests
 /// to both participants.
 ///
 /// ### [org.vorpal.blade.framework.v2.logging]

@@ -12,7 +12,7 @@ import javax.servlet.sip.SipSession;
 import org.vorpal.blade.framework.v2.sdp.Sdp;
 import org.vorpal.blade.framework.v3.Callflow;
 
-/// Answer a (re-)INVITE with a `200 OK` that parks the leg — the v3, RFC
+/// Answer a (re-)INVITE with a `200 OK` that parks the dialog — the v3, RFC
 /// 3264-style replacement for the v2 `CallflowHold` blackhole.
 ///
 /// Where the v2 version echoed the caller's own SDP back with `c=0.0.0.0`
@@ -76,7 +76,7 @@ public class CallflowHold extends Callflow {
 		response.setContent(answer.getBytes(StandardCharsets.UTF_8), "application/sdp");
 
 		sendResponse(response, (ack) -> {
-			// nothing further; the leg is parked
+			// nothing further; the dialog is parked
 		});
 	}
 

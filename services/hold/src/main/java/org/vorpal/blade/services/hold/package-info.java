@@ -1,7 +1,7 @@
-/// Call parking: this service answers a leg and holds it, so the far end hears
+/// Call parking: this service answers a dialog and holds it, so the far end hears
 /// nothing and the dialog stays up until someone resumes or hangs up.
 ///
-/// It is a single-leg UAS, not a B2BUA. There is no second party — the service
+/// It is a single-dialog UAS, not a B2BUA. There is no second party — the service
 /// answers the INVITE itself rather than forwarding it, which is why it has no
 /// `callStarted` / `callAnswered` / `callConnected` lifecycle callbacks. Those
 /// belong to [org.vorpal.blade.framework.v3.B2buaServlet], which this service

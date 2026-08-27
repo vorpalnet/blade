@@ -91,7 +91,7 @@ public final class BrowserRegistry {
 		}
 		try {
 			String json = event.toJson();
-			// One socket, potentially several call legs writing to it: serialize the sends, since
+			// One socket, potentially several call dialogs writing to it: serialize the sends, since
 			// the WebSocket API forbids overlapping partial writes on one connection.
 			synchronized (session) {
 				session.getBasicRemote().sendText(json);

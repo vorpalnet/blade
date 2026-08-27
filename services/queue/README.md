@@ -18,14 +18,14 @@ optionally — after `ringDuration` — gets connected to an announcement server
 music/announcements, using the caller's own SDP. A per-queue timer releases up to `rate`
 calls every `period`, oldest first: each released call is B2BUA-connected to its original
 destination; a caller parked on the announcement is moved to the agent with an offerless
-re-INVITE and the announcement leg is BYEd. A CANCEL while queued cleans up both legs.
+re-INVITE and the announcement dialog is BYEd. A CANCEL while queued cleans up both dialogs.
 
 When the outbound connect fails, the response decides the call's fate. **Retryable**
 failures — 408 (transaction timeout, the unreachable-network case), 480, 486, and 5xx
 other than 501 — put the call back at the release end of the queue, so the queue buffers
 against a failing or busy destination until it recovers; the retry loop is bounded by the
 caller hanging up and by the session expiration. **Definitive** failures — the rest of
-4xx and all of 6xx — remove the call from the queue and end both legs: a call that can
+4xx and all of 6xx — remove the call from the queue and end both dialogs: a call that can
 never succeed doesn't sit in the queue forever.
 
 Queues are **per node**. BLADE runs no singletons, so each engine drains its own queues;
@@ -50,7 +50,7 @@ a prefix map steering dialed numbers to queues. Edit and publish through the
 
 ## Related modules
 
-- [services/hold](../hold/README.md) — parking a single leg, when you don't need queue semantics
+- [services/hold](../hold/README.md) — parking a single dialog, when you don't need queue semantics
 - [Framework v3 API](../../libs/framework/src/main/java/org/vorpal/blade/framework/v3/README.md) — the B2BUA base and async primitives in use
 - [BLADE](../../README.md) — project home
 

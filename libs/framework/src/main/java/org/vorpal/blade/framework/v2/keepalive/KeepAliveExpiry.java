@@ -24,7 +24,7 @@ alice <-  blade         : ACK (SDP)
 */
 
 /**
- * Handles session expiry by terminating both call legs with BYE requests.
+ * Handles session expiry by terminating both call dialogs with BYE requests.
  * Used when a keep-alive timeout occurs and the call should be terminated.
  *
  * @see SessionKeepAlive.Callback
@@ -34,7 +34,7 @@ public class KeepAliveExpiry extends ClientCallflow implements SessionKeepAlive.
 	private static final long serialVersionUID = 1L;
 
 	/**
-	 * Handles session expiry by sending BYE to both call legs.
+	 * Handles session expiry by sending BYE to both call dialogs.
 	 *
 	 * @param sipSession the SIP session that expired
 	 */

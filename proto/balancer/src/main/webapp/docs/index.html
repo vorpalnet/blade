@@ -69,7 +69,7 @@
 					<h2>Tier strategies</h2>
 					<ul>
 						<li><strong>parallel</strong> — race every endpoint at
-							once; the first 2xx wins and the losing legs are
+							once; the first 2xx wins and the losing dialogs are
 							canceled.</li>
 						<li><strong>serial</strong> — hunt one at a time in listed
 							(priority) order.</li>
@@ -107,8 +107,8 @@
 							one. The 408 generated when nothing answers, or a 503,
 							marks it DOWN. Publishing a config reschedules the
 							cycle immediately.</li>
-						<li><strong>Live call legs</strong> — a 2xx from an INVITE
-							leg marks its endpoint UP; a <strong>503</strong> (the
+						<li><strong>Live call dialogs</strong> — a 2xx from an INVITE
+							dialog marks its endpoint UP; a <strong>503</strong> (the
 							SIP overload signal) marks it DOWN, honoring
 							<code>Retry-After</code> as a timed backoff, else the
 							configured <code>health.defaultBackoff</code>. User
@@ -132,7 +132,7 @@
 						OPTIONS ping records its <strong>round-trip time</strong>,
 						and passive call marks are logged alongside — plus live
 						traffic counters (attempts / successes / failovers per
-						INVITE leg). These feed the sparklines, heartbeat strips,
+						INVITE dialog). These feed the sparklines, heartbeat strips,
 						and traffic-share bars below.
 					</p>
 

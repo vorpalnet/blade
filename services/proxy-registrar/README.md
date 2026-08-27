@@ -14,7 +14,7 @@ location database, and initial INVITEs are forwarded to the registered contact.
   bindings age out with the session.
 - **INVITE** — `InviteCallflow` forks the call to **every** registered
   contact with `sendRequestsInParallel`: the first 2xx wins and the framework
-  CANCELs the losing legs; if all legs fail, the last error is relayed; the
+  CANCELs the losing dialogs; if all dialogs fail, the last error is relayed; the
   `timeout` setting cancels everything and answers 408. Unregistered accounts
   get a 404 unless `proxyOnUnregistered` is set, in which case the INVITE is
   forwarded to its request URI unchanged. In-dialog requests are relayed by
@@ -34,8 +34,8 @@ now decided by configuration, not code:
 
 Provisional responses: the service sends its own 180 Ringing as soon as the
 fork starts (so the caller hears local ringback immediately), and real 18x
-from the legs — including 183 early media — is relayed upstream via the
-fan-out primitive's per-leg observer.
+from the dialogs — including 183 early media — is relayed upstream via the
+fan-out primitive's per-dialog observer.
 
 ## Configuration
 
@@ -43,7 +43,7 @@ fan-out primitive's per-leg observer.
 |---|---|
 | `allowHeader` | Value for the `Allow` header on REGISTER responses |
 | `proxyOnUnregistered` | Forward to the request URI instead of answering 404 when no contact is registered |
-| `timeout` | Overall timeout in seconds for the forked INVITEs; on expiry all legs are canceled and the caller gets a 408 |
+| `timeout` | Overall timeout in seconds for the forked INVITEs; on expiry all dialogs are canceled and the caller gets a 408 |
 | `session:passthru` | Drop out of the dialog after setup (see above) |
 
 ## Maven Coordinates

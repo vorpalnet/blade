@@ -159,7 +159,7 @@
 /// <ul>
 ///   <li><b>{@code [sessionId:dialogId]}</b>&mdash;an 8-character hex hash of the
 ///       {@code SipApplicationSession} and a 4-character hex hash of the {@code SipSession},
-///       used to correlate all messages belonging to the same call leg</li>
+///       used to correlate all messages belonging to the same call dialog</li>
 ///   <li><b>{@code appName}</b>&mdash;the application name, so entries from different
 ///       BLADE applications can be distinguished in a merged log view</li>
 ///   <li><b>Arrow direction</b>&mdash;{@code --->} indicates the message is flowing
@@ -202,7 +202,7 @@
 ///       to find call boundaries in a busy log file.</li>
 ///   <li>The session ID {@code 621EA3E1} is shared across all lines, tying every message
 ///       to the same {@code SipApplicationSession}. The dialog IDs ({@code 760D} for
-///       Alice's leg, {@code F980} for Bob's leg) distinguish the two SIP dialogs
+///       Alice's dialog, {@code F980} for Bob's dialog) distinguish the two SIP dialogs
 ///       within the B2BUA.</li>
 ///   <li>Alice's messages appear on the left side; Bob's appear indented on the right.
 ///       This two-column layout makes the B2BUA's role as a middleman visually obvious.</li>

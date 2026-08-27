@@ -1114,8 +1114,8 @@ public abstract class Callflow implements Serializable {
 	/// hunt a second time — the timeout path already did.
 	private static final String SERIAL_ABANDONED = "serialRequestAbandoned";
 
-	/// Sends multiple requests (INVITE) in serial, with a per-leg observer.
-	/// `legResponse` (may be null) is called with EVERY response each leg
+	/// Sends multiple requests (INVITE) in serial, with a per-dialog observer.
+	/// `dialogResponse` (may be null) is called with EVERY response each dialog
 	/// produces — provisional and final — before any hunt logic runs; use it
 	/// to relay ringing upstream or track endpoint health. Provisional
 	/// responses never stop the per-request timer, advance the hunt, or reach
@@ -1124,11 +1124,11 @@ public abstract class Callflow implements Serializable {
 	/// @param milliseconds   timer duration in milliseconds for each request
 	/// @param requests       a list of SipServletRequest objects
 	/// @param lambdaFunction supplies the winning (or last failing) final response
-	/// @param legResponse    observer for every per-leg response, or null
+	/// @param dialogResponse    observer for every per-dialog response, or null
 	/// @throws ServletException
 	/// @throws IOException
 	public void sendRequestsInSerial(long milliseconds, List<SipServletRequest> requests,
-			Callback<SipServletResponse> lambdaFunction, Callback<SipServletResponse> legResponse)
+			Callback<SipServletResponse> lambdaFunction, Callback<SipServletResponse> dialogResponse)
 			throws ServletException, IOException {
 
 		if (requests.isEmpty()) {
@@ -1140,14 +1140,14 @@ public abstract class Callflow implements Serializable {
 		String timerId = startTimer(request.getApplicationSession(), milliseconds, false, (timeout) -> {
 			request.setAttribute(SERIAL_ABANDONED, Boolean.TRUE);
 			sendRequest(request.createCancel());
-			sendNextInSerialOrFail(milliseconds, requests, lambdaFunction, legResponse, request);
+			sendNextInSerialOrFail(milliseconds, requests, lambdaFunction, dialogResponse, request);
 		});
 
 		try {
 			sendRequest(request, (response) -> {
 
-				if (legResponse != null) {
-					legResponse.accept(response);
+				if (dialogResponse != null) {
+					dialogResponse.accept(response);
 				}
 
 				if (provisional(response)) {
@@ -1166,7 +1166,7 @@ public abstract class Callflow implements Serializable {
 					lambdaFunction.accept(response);
 				} else {
 					// failure and more requests remain; try the next one
-					sendRequestsInSerial(milliseconds, requests, lambdaFunction, legResponse);
+					sendRequestsInSerial(milliseconds, requests, lambdaFunction, dialogResponse);
 				}
 			});
 		} catch (Exception ex500) {
@@ -1174,7 +1174,7 @@ public abstract class Callflow implements Serializable {
 					"#1.6 Callflow.sendRequestsInSerial - catch Exception ex500: " + ex500.getMessage());
 			sipLogger.severe(request, ex500.getMessage());
 			stopTimer(request.getApplicationSession(), timerId);
-			sendNextInSerialOrFail(milliseconds, requests, lambdaFunction, legResponse, request);
+			sendNextInSerialOrFail(milliseconds, requests, lambdaFunction, dialogResponse, request);
 		}
 
 	}
@@ -1182,10 +1182,10 @@ public abstract class Callflow implements Serializable {
 	/// Continue with the next request in the serial list, or deliver a dummy
 	/// 408 response built from the request that just failed if none remain.
 	private void sendNextInSerialOrFail(long milliseconds, List<SipServletRequest> requests,
-			Callback<SipServletResponse> lambdaFunction, Callback<SipServletResponse> legResponse,
+			Callback<SipServletResponse> lambdaFunction, Callback<SipServletResponse> dialogResponse,
 			SipServletRequest request) throws ServletException, IOException {
 		if (!requests.isEmpty()) {
-			sendRequestsInSerial(milliseconds, requests, lambdaFunction, legResponse);
+			sendRequestsInSerial(milliseconds, requests, lambdaFunction, dialogResponse);
 		} else {
 			// No valid responses, create a dummy one
 			lambdaFunction.accept(request.createResponse(RESPONSE_CODE_408));
@@ -1220,21 +1220,21 @@ public abstract class Callflow implements Serializable {
 	}
 
 	/**
-	 * Sends multiple requests (INVITE) in parallel, with a timeout and a per-leg
-	 * observer. {@code legResponse} (may be null) is called with EVERY response
-	 * each leg produces — provisional and final — before the race logic runs;
+	 * Sends multiple requests (INVITE) in parallel, with a timeout and a per-dialog
+	 * observer. {@code dialogResponse} (may be null) is called with EVERY response
+	 * each dialog produces — provisional and final — before the race logic runs;
 	 * use it to relay ringing upstream or track endpoint health. Provisional
 	 * responses never affect the race and never reach {@code lambdaFunction}.
 	 *
 	 * @param timeout        timer duration in milliseconds for all requests
 	 * @param requests       a list of SipServletRequest objects
 	 * @param lambdaFunction supplies the winning (or last failing) final response
-	 * @param legResponse    observer for every per-leg response, or null
+	 * @param dialogResponse    observer for every per-dialog response, or null
 	 * @throws ServletException
 	 * @throws IOException
 	 */
 	public void sendRequestsInParallel(long timeout, List<SipServletRequest> requests,
-			Callback<SipServletResponse> lambdaFunction, Callback<SipServletResponse> legResponse)
+			Callback<SipServletResponse> lambdaFunction, Callback<SipServletResponse> dialogResponse)
 			throws ServletException, IOException {
 
 		// Save requests in appSession memory.
@@ -1285,8 +1285,8 @@ public abstract class Callflow implements Serializable {
 
 			sendRequest(request, (response) -> {
 
-				if (legResponse != null) {
-					legResponse.accept(response);
+				if (dialogResponse != null) {
+					dialogResponse.accept(response);
 				}
 
 				if (!provisional(response)) {
@@ -1819,7 +1819,7 @@ public abstract class Callflow implements Serializable {
 	/**
 	 * Records the inbound message's session on the outbound message's session, so
 	 * {@link #getLinkedSession(SipSession) getLinkedSession(outboundSession)} finds
-	 * the inbound leg.
+	 * the inbound dialog.
 	 * <p>
 	 * <b>This links one way only.</b> The attribute is written on the outbound
 	 * session; the inbound session is not touched. A B2BUA ends up linked in both
@@ -1887,7 +1887,7 @@ public abstract class Callflow implements Serializable {
 	/// [#getLinkedSession(SipSession)] on that session no longer finds a peer.
 	///
 	/// Because [#linkSession(SipServletMessage,SipServletMessage)] writes one way
-	/// only, this clears one direction. Severing a B2BUA's two legs takes a call
+	/// only, this clears one direction. Severing a B2BUA's two dialogs takes a call
 	/// on each side, or [#unlinkSessions(SipSession,SipSession)].
 	///
 	/// @param msg the message whose session should forget its peer
@@ -1937,17 +1937,17 @@ public abstract class Callflow implements Serializable {
 	 * reason phrase, plus its body and non-system headers. A successful INVITE
 	 * response links the two sessions as a side effect of the content copy.
 	 * <p>
-	 * <b>Never returns null.</b> It used to return null when the upstream leg had
+	 * <b>Never returns null.</b> It used to return null when the upstream dialog had
 	 * gone away, which pushed the failure to whatever dereferenced the result — a
 	 * NullPointerException nowhere near the cause. It now says what happened:
 	 * It throws {@code ServletParseException} instead, with a message naming the
 	 * cause:
 	 * <ul>
 	 * <li>either argument was null &mdash; a coding mistake.</li>
-	 * <li>the upstream leg is gone: its session is null, invalid, or TERMINATED.
+	 * <li>the upstream dialog is gone: its session is null, invalid, or TERMINATED.
 	 * That is a race rather than a bug &mdash; the caller hung up or CANCELed
 	 * before the downstream response arrived. Callflows that expect it already
-	 * guard with {@code !aliceRequest.isCommitted()} before calling; the far leg
+	 * guard with {@code !aliceRequest.isCommitted()} before calling; the far dialog
 	 * does not leak, because {@code Terminate} tears it down when the upstream BYE
 	 * or CANCEL arrives.</li>
 	 * </ul>
@@ -1973,7 +1973,7 @@ public abstract class Callflow implements Serializable {
 		SipSession aliceSession = aliceRequest.getSession();
 		if (aliceSession == null || !aliceSession.isValid() || aliceSession.getState() == State.TERMINATED) {
 			throw new ServletParseException("Cannot answer the upstream " + aliceRequest.getMethod()
-					+ " with " + bobResponse.getStatus() + ": that leg is already gone (session="
+					+ " with " + bobResponse.getStatus() + ": that dialog is already gone (session="
 					+ (aliceSession == null ? "null"
 							: "valid=" + aliceSession.isValid() + ", state=" + aliceSession.getState())
 					+ "). The caller hung up or CANCELed before the downstream response arrived; test "

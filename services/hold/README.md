@@ -2,7 +2,7 @@
 
 Javadocs: `/blade/javadoc/hold/` on the Admin Portal
 
-A single-leg parking endpoint: route a call leg here and its media goes quiet until the
+A single-dialog parking endpoint: route a call dialog here and its media goes quiet until the
 far end re-INVITEs it somewhere else. No media server is involved — the service answers
 with SDP of its own construction.
 
@@ -17,10 +17,10 @@ replay the cached SDP byte for byte; `Session-Expires` is echoed with `refresher
 when the caller didn't state one. Multipart offers (SIPREC-style) are handled; the answer
 is always plain `application/sdp`.
 
-BYE and CANCEL tear the leg down; any other method gets `405` with an accurate `Allow`
-header — a single-leg UAS has no peer to forward to.
+BYE and CANCEL tear the dialog down; any other method gets `405` with an accurate `Allow`
+header — a single-dialog UAS has no peer to forward to.
 
-There is no "resume" operation here: a parked leg resumes when whoever routed it here
+There is no "resume" operation here: a parked dialog resumes when whoever routed it here
 re-INVITEs it with a live offer. The inactive-answer builder is reusable framework code
 (`CallflowHold.inactiveAnswerFor`) — the [TPCC service](../tpcc/README.md) uses it to
 park newly created dialogs.

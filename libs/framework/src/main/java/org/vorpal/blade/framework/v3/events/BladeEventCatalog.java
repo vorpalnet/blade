@@ -278,7 +278,7 @@ public final class BladeEventCatalog {
 
 	private static EventType callStarted() {
 		EventType declaration = base(BladeEventTypes.CALL_STARTED, "Call Started",
-				"A call began: an initial INVITE was received and the B2BUA is placing the outbound leg. Published beside Analytics.sessionStart, so it is the first event of a call.",
+				"A call began: an initial INVITE was received and the B2BUA is placing the outbound dialog. Published beside Analytics.sessionStart, so it is the first event of a call.",
 				"CallStarted");
 		declaration.setFields(callScopedFields());
 		return declaration;
@@ -286,7 +286,7 @@ public final class BladeEventCatalog {
 
 	private static EventType callAnswered() {
 		EventType declaration = base(BladeEventTypes.CALL_ANSWERED, "Call Answered",
-				"The callee's leg returned a success response, on its way back to the caller.", "CallAnswered");
+				"The callee's dialog returned a success response, on its way back to the caller.", "CallAnswered");
 		declaration.setFields(callScopedFields());
 		return declaration;
 	}
@@ -317,7 +317,7 @@ public final class BladeEventCatalog {
 
 	private static EventType callDeclined() {
 		EventType declaration = base(BladeEventTypes.CALL_DECLINED, "Call Declined",
-				"The callee's leg returned a failure response. Any failure from anywhere on that leg counts — an intermediary's 503 as much as a 486 from the endpoint — so this says the call did not succeed, not that the callee personally refused it.",
+				"The callee's dialog returned a failure response. Any failure from anywhere on that dialog counts — an intermediary's 503 as much as a 486 from the endpoint — so this says the call did not succeed, not that the callee personally refused it.",
 				"CallDeclined");
 		declaration.setFields(callScopedFields());
 		return declaration;
@@ -349,7 +349,7 @@ public final class BladeEventCatalog {
 
 	private static EventType transferDeclined() {
 		EventType declaration = base(BladeEventTypes.TRANSFER_DECLINED, "Transfer Declined",
-				"The transfer was refused: either the target's leg returned a failure response, or the REFER itself was refused. Both land here, so this means the transfer did not happen — not specifically that the target said no.",
+				"The transfer was refused: either the target's dialog returned a failure response, or the REFER itself was refused. Both land here, so this means the transfer did not happen — not specifically that the target said no.",
 				"TransferDeclined");
 		declaration.setFields(callScopedFields());
 		return declaration;

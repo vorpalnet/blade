@@ -258,7 +258,7 @@ public class QueueCallflow extends Callflow {
 														+ ", to=" + bobResponse.getTo());
 										QueueServlet.queues.get(queueId).callflows.add(this);
 									} else {
-										// Definitive failure: this call can never succeed. End both legs.
+										// Definitive failure: this call can never succeed. End both dialogs.
 										sipLogger.warning(bobResponse,
 												"QueueCallflow.complete - Call failure, removing from queue. status="
 														+ status + ", from=" + bobResponse.getFrom()

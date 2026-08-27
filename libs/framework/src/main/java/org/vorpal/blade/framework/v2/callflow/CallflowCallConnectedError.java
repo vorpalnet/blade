@@ -13,7 +13,7 @@ import org.vorpal.blade.framework.v2.logging.Logger;
 
 /**
  * Handles errors that occur after a call has been connected (after 200 OK/ACK exchange).
- * Terminates both legs of a B2BUA call by sending BYE requests with error information
+ * Terminates both dialogs of a B2BUA call by sending BYE requests with error information
  * in the Reason header and stack trace in the body.
  */
 public class CallflowCallConnectedError extends org.vorpal.blade.framework.v3.Callflow {
@@ -35,7 +35,7 @@ public class CallflowCallConnectedError extends org.vorpal.blade.framework.v3.Ca
 	}
 
 	/**
-	 * Processes an ACK by terminating both call legs with BYE requests containing error details.
+	 * Processes an ACK by terminating both call dialogs with BYE requests containing error details.
 	 *
 	 * @param ack the ACK request that triggered this callflow
 	 * @throws ServletException if a servlet error occurs

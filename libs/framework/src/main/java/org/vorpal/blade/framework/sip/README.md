@@ -75,7 +75,7 @@ assert. This is
 [`CallflowHarnessSmokeTest`](../../../../../../../test/java/org/vorpal/blade/framework/sip/CallflowHarnessSmokeTest.java),
 which runs in the suite — copy it rather than the fragments below.
 
-The callflow under test, a minimal B2BUA leg:
+The callflow under test, a minimal B2BUA dialog:
 
 ```java
 static class ForwardingCallflow extends Callflow {
@@ -105,7 +105,7 @@ alice.setHeader("X-Trace", "abc123");
 alice.setContent(sdp.getBytes("UTF-8"), "application/sdp");
 ```
 
-Run it, and assert on the outbound leg:
+Run it, and assert on the outbound dialog:
 
 ```java
 ForwardingCallflow callflow = new ForwardingCallflow();

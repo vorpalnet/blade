@@ -27,10 +27,10 @@ import org.vorpal.blade.framework.v3.media.MediaConfigs;
 /// The caller needed policy to pick a media path, because it could not know what would answer. This
 /// side needs none: the INVITE that arrives *is* the evidence. An offer carrying a DTLS fingerprint
 /// (`a=fingerprint:`) came from a WebRTC endpoint — the far browser, through the location service
-/// and another leg of this gateway — and is passed to the browser untouched, so the two endpoints
+/// and another dialog of this gateway — and is passed to the browser untouched, so the two endpoints
 /// key to each other and media never comes near this server. An offer without one came from a phone
 /// or a trunk, which a browser cannot talk to directly, so the media server terminates WebRTC on
-/// the browser side and plain RTP on the network side, and bridging the legs makes the call.
+/// the browser side and plain RTP on the network side, and bridging the dialogs makes the call.
 ///
 /// ## Both network-side offer directions (anchored path)
 ///
@@ -219,7 +219,7 @@ public class InboundToBrowser extends WebrtcCallflow {
 		expectRequest(invite.getSession(), "CANCEL", cancel -> onCallerCancelled(cancel, app, aor, callId));
 	}
 
-	/// Offer the browser leg's SDP to the browser and wait for it to accept.
+	/// Offer the browser dialog's SDP to the browser and wait for it to accept.
 	private void ringBrowser(SipServletRequest invite, SipApplicationSession app, String aor, String callId,
 			NetworkConnection browserLeg, NetworkConnection networkLeg, byte[] networkAnswer)
 			throws MsControlException {
@@ -245,7 +245,7 @@ public class InboundToBrowser extends WebrtcCallflow {
 		});
 	}
 
-	/// The browser accepted: apply its answer, bridge the legs, and complete the SIP side.
+	/// The browser accepted: apply its answer, bridge the dialogs, and complete the SIP side.
 	private void onBrowserAnswered(SipServletRequest invite, SipApplicationSession app, String aor, String callId,
 			NetworkConnection browserLeg, NetworkConnection networkLeg, byte[] networkAnswer,
 			CloudEvent answerEvent) throws MsControlException {
@@ -300,7 +300,7 @@ public class InboundToBrowser extends WebrtcCallflow {
 	/// The `ACK` arrived and the handshake is complete.
 	///
 	/// `negotiated` is false only on the late-media path, and only when the ACK owed an answer and
-	/// carried none — the media leg then stays as the media server set it, which is a call that is
+	/// carried none — the media dialog then stays as the media server set it, which is a call that is
 	/// up for signaling and may be silent for media. Every other path negotiated before the 200 OK
 	/// went out, so there is nothing left for the ACK to settle.
 	private void connected(SipServletRequest ack, String aor, String callId, boolean negotiated) {

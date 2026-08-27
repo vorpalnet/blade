@@ -131,20 +131,20 @@ public class AppRouterConfigurationSample extends AppRouterConfiguration impleme
 				.setId("SCR-normal")
 				.setSubscriber("To");
 
-		// ----- B2BUA invoked ONCE PER SUBSCRIBER LEG — two states, same app.
+		// ----- B2BUA invoked ONCE PER SUBSCRIBER DIALOG — two states, same app.
 		// This is what separating a state's id from its application enables: the
 		// states map has two keys ("b2bua", "b2bua-callee") that both run the
-		// `b2bua` application, so the call is B2BUA'd for the caller leg and then
-		// again for the callee leg, with different routing each time.
+		// `b2bua` application, so the call is B2BUA'd for the caller dialog and then
+		// again for the callee dialog, with different routing each time.
 		//
-		// Caller (originating) leg: run the B2BUA for the caller, then hand off
-		// to the callee leg. `next` is the SECOND b2bua state's id.
+		// Caller (originating) dialog: run the B2BUA for the caller, then hand off
+		// to the callee dialog. `next` is the SECOND b2bua state's id.
 		State b2buaCaller = this.getState("b2bua");
 		b2buaCaller.getTrigger("INVITE").createTransition("b2bua-callee")
-				.setId("B2B-caller-leg")
+				.setId("B2B-caller-dialog")
 				.setSubscriber("From");
 
-		// Callee (terminating) leg: a distinct state id, same `app`. Off-net
+		// Callee (terminating) dialog: a distinct state id, same `app`. Off-net
 		// (E.164) callees EGRESS to the carrier (a terminal transition, no
 		// `next` — the call leaves OCCAS); on-net callees are delivered to the
 		// registrar.

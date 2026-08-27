@@ -307,7 +307,7 @@ same self-contained skin as the Tuning report (no CDN, no brand.css; status by
 symbols and words, never color alone), each fed by the app's existing REST API:
 
 - **Balancer — Site Health & Capacity** (`blade/balancer/report.html`):
-  executive summary (endpoints up / impaired / call legs answered), per-site
+  executive summary (endpoints up / impaired / call dialogs answered), per-site
   rollup, plans & failover tiers with per-endpoint state, RTT, and counters,
   a Node Agreement section calling out endpoints the engine nodes disagree on,
   and the health-checking config. The derived-state logic (`stateOf`,
@@ -415,14 +415,14 @@ they stay in the signaling path is now configuration, not code: with `session:pa
 set (both samples default to true), the framework stitches the endpoints' Contacts and
 drops out of the dialog after setup; without it they stay in the path as full B2BUAs,
 relaying in-dialog traffic via the b2bua callflows inherited from the v3 `B2buaServlet`.
-Because the fan-out primitives don't surface the legs' provisional responses, both
+Because the fan-out primitives don't surface the dialogs' provisional responses, both
 services send an immediate 180 Ringing when the fork starts (local ringback; a callee's
 183 early media is not relayed).
 
 - **proxy-registrar**: initial INVITEs fork to *every* registered contact — first 2xx
   wins, losers are CANCELed. Config: the proxy-only knobs (`addToPath`, `parallel`,
   `recordRoute`, `proxyTimeout`, `supervised`, outbound interfaces) are gone; a single
-  `timeout` (seconds; sample 180) cancels all legs and answers 408. `proxyOnUnregistered`
+  `timeout` (seconds; sample 180) cancels all dialogs and answers 408. `proxyOnUnregistered`
   and `allowHeader` survive.
 - **proxy-balancer**: the `plans` config model (`ProxyPlan`/`ProxyTier`) is unchanged —
   a `parallel` tier races its endpoints with `sendRequestsInParallel`, a `serial` tier
@@ -447,14 +447,14 @@ The balancer is now an actual load balancer, not just a failover router:
   cluster state), keyed by full endpoint URI (was host-only, which collided). Writers:
   the OPTIONS ping cycle (finally scheduled — self-rescheduling per node from
   `servletCreated`, re-reads `pingInterval` each cycle; 200 → up, else → down) and
-  live legs (2xx → up, 503 → down honoring Retry-After as timed backoff; user
+  live dialogs (2xx → up, 503 → down honoring Retry-After as timed backoff; user
   responses like 486/603 deliberately ignored). Routing skips down endpoints, skips
   empty tiers, answers 503 when nothing is routable. Health resets on config publish.
 - **Fan-out primitives (v2, freeze relaxed)** — both `sendRequestsInSerial` and
-  `sendRequestsInParallel` gain an optional per-leg observer overload (every leg
+  `sendRequestsInParallel` gain an optional per-dialog observer overload (every dialog
   response, provisional + final: powers passive health marking and real 18x/183
   relay upstream in both proxy-registrar and proxy-balancer). Two serial-hunt bug
-  fixes: provisionals no longer stop the leg timer or get delivered to the final
+  fixes: provisionals no longer stop the dialog timer or get delivered to the final
   callback as if they were finals (a 100 Trying used to end the hunt), and a late
   487 after a timer CANCEL no longer double-advances the hunt.
 - **Balancer admin app** (`proto/balancer`, context root `blade/balancer`, new
@@ -546,8 +546,8 @@ rewritten — the regenerated `_samples` shows the new shape. What changed and w
   NEVER escalate: 486 (called party busy, not a broken route), 401/407 (auth must
   reach the caller), 487, and all 6xx (RFC 3261 §16.7: no further branches after a
   global failure). Also fixes a real bug: a caller who CANCELed mid-hunt used to
-  trigger tier failover from the losing leg's 487 — new INVITEs up the cost ladder
-  for a caller who was gone. Failover now also requires the caller leg uncommitted.
+  trigger tier failover from the losing dialog's 487 — new INVITEs up the cost ladder
+  for a caller who was gone. Failover now also requires the caller dialog uncommitted.
 
 ### Proxy Balancer: geo map + live operations console (sites, RTT, history, counters)
 
@@ -580,7 +580,7 @@ instrumentation in the service. All config additions are optional — schema sta
   excluded). Divergent RTT on one engine fingers that network path, not the endpoint.
 - **Observation ring + traffic counters** — `EndpointHealth` keeps a bounded ring
   (120 entries) of ping and passive observations and counts attempts/successes/
-  failovers per INVITE leg-final; all published through the health MBean JSON
+  failovers per INVITE dialog-final; all published through the health MBean JSON
   (`endpointDetails` carries the ring once per endpoint, not per tier row).
 - **Health survives config publishes** — a node-level registry keyed by endpoint name
   carries `EndpointHealth` objects across publishes; a surviving name keeps status,
@@ -824,7 +824,7 @@ in `blade-admin.ear` like every other admin app.)
   (they name the ultimate caller/callee, not the next hop), while co-located BLADE apps share one
   host so SIP addressing can't tell them apart. So `buildLadder` pairs an `out` with the `in` that
   received THE SAME wire message, keyed by **Call-ID + CSeq** (a message keeps its Call-ID hop to
-  hop; a B2BUA gives each leg its own, so `test-uas → bob` — a leg no traced app receives — stays
+  hop; a B2BUA gives each dialog its own, so `test-uas → bob` — a dialog no traced app receives — stays
   an egress to bob and is never mis-paired with an unrelated INVITE some other app happened to
   receive next; the first cut keyed on method+time and drew `test-uas → proxy-registrar`). One
   arrow per hop, between the two app lanes. `From`/`To` name only the leftover boundary steps — the
@@ -838,7 +838,7 @@ in `blade-admin.ear` like every other admin app.)
   hop it belongs to (a hop carries both its `out` and `in` step indices); clicking a hop (delegated
   handler on the SVG) selects its `out` step, driving the source/message panes. Selection is shown
   by a heavy line + band + bold label, never color alone (colorblind-safe). Viewer harness (35/35)
-  plus a B2BUA chain fixture (distinct per-leg Call-IDs) confirm `alice | transfer | test-uac |
+  plus a B2BUA chain fixture (distinct per-dialog Call-IDs) confirm `alice | transfer | test-uac |
   test-uas | proxy-registrar | bob` with `test-uas → bob` correct and the responses paired back.
   Method+time is the fallback only when a step carries no message. Docs page updated.
 - Registered on the portal deck via `CallflowSettings` `@SchemaAbout`. Ships in
@@ -904,12 +904,12 @@ classes are DELETED (`CallflowHold`, `CallflowHoldRelease`, `CallflowMute`, `Cal
 `CallflowResume`, `AbstractCallflow3PCC`, `SdpDirection` + their smoke tests). What was wrong
 and is now right:
 
-- **Perspective bug (v2 CallflowMute muted the wrong leg).** Direction attributes read from
+- **Perspective bug (v2 CallflowMute muted the wrong dialog).** Direction attributes read from
   the SDP sender's perspective; forcing `recvonly` into the offer makes the *target* the
   sender. v3 `MediaDirection.reverse()` owns the flip: `CallflowMute` drives the target to
   `recvonly` by offering `sendonly`, per RFC 3264 §6.1's answer rules.
 - **No failure handling (v2 threw on 486/491).** `createAck()` was called on any response.
-  v3 `CallflowMediaDirection` guards provisionals and non-2xx on both legs; when the target
+  v3 `CallflowMediaDirection` guards provisionals and non-2xx on both dialogs; when the target
   rejects the rewritten offer, the peer's open offer is still answered (`a=inactive`, media
   parked, logged severe) instead of leaving its 200 retransmitting.
 - **Blanket `sendrecv` wiped per-stream state.** v3 captures pre-change directions on the
@@ -971,9 +971,9 @@ directly, with OCCAS out of the route set — no SipServlet Proxy API, so it's a
 that inherits every `sendRequest` fix. New `SessionParameters.passthru` (default false, forwarder-
 apps-only) flips the *same* callflow between B2BUA and proxy per network. Logic lives in the
 `v3.Callflow` `sendRequest`/`sendResponse` overrides, deduced from `request.isInitial()`. On the
-outbound 2xx it disables Record-Route (`LooseRoutingHelper`) and manually invalidates both legs +
+outbound 2xx it disables Record-Route (`LooseRoutingHelper`) and manually invalidates both dialogs +
 the app session (no ACK/BYE returns, so OCCAS won't auto-invalidate). The symmetric Contact-stitch
-(`peerContact`) is wired via the peer LEG's remote target: once a leg's dialog is up, OCCAS stores
+(`peerContact`) is wired via the peer DIALOG's remote target: once a dialog's dialog is up, OCCAS stores
 the peer's Contact as that `SipSessionImpl`'s remote target (it IS the in-dialog request-URI), read
 through new `LooseRoutingHelper.remoteTarget(SipSession)` (isolated reflection unwrap of
 `SipSessionAdapter.impl`). **Needs live verification** (test-uac → test-b2bua`[passthru]` →
@@ -1293,7 +1293,7 @@ The sample shows it: anonymous callers detour through a media server
 
 A state used to be keyed by the application that runs there — the states-map key
 *was* the app name. That made it impossible to invoke one application **twice**
-on a call-path (e.g. a B2BUA once per subscriber leg): on each continuation hop
+on a call-path (e.g. a B2BUA once per subscriber dialog): on each continuation hop
 the engine recomputed "where am I" from the SIP session's last application name,
 so two states sharing an app name were indistinguishable.
 
@@ -1316,7 +1316,7 @@ application it invokes). Two states can share an `app` under different ids:
 - Flow editor: a **State ID** field (defaults to the name); a node whose id
   differs from its app shows the id as a qualifier so duplicate-app boxes read
   distinctly. The Route Simulator visits each instance as its own hop.
-- The sample demonstrates a two-leg B2BUA (`b2bua` → `b2bua-callee`, both running
+- The sample demonstrates a two-dialog B2BUA (`b2bua` → `b2bua-callee`, both running
   `b2bua`).
 
 FSMAR 3 has no users yet, so this is a clean config-shape change with no
@@ -1913,15 +1913,15 @@ otherwise each refresh falls back to the re-INVITE behavior, unchanged.
 
 - **Capability detection**: `AsyncSipServlet` passively sniffs `Allow:`
   headers on every inbound request/response and records
-  `Callflow.ALLOW_UPDATE` (Boolean) on that leg's SipSession. No Allow header
+  `Callflow.ALLOW_UPDATE` (Boolean) on that dialog's SipSession. No Allow header
   → flag untouched; unknown counts as unsupported (conservative).
 - **Refresh dispatch** (`keepalive.KeepAlive.handle`): style is read from
   config at refresh time (a republish flips live calls on their next cycle).
-  UPDATE style + both legs flagged TRUE → sequential bodiless UPDATE on each
-  leg (leg B only after leg A's 2xx, so at most one fallback can fire). Any
-  non-2xx final → that cycle completes via re-INVITE (refreshes both legs, so
+  UPDATE style + both dialogs flagged TRUE → sequential bodiless UPDATE on each
+  dialog (dialog B only after dialog A's 2xx, so at most one fallback can fire). Any
+  non-2xx final → that cycle completes via re-INVITE (refreshes both dialogs, so
   a half-refreshed pair self-corrects); 405/501 additionally latches the
-  failing leg to non-supporting so future cycles skip UPDATE entirely.
+  failing dialog to non-supporting so future cycles skip UPDATE entirely.
 - B2BUA chains relay the refresh end-to-end — UPDATE already routes through
   `Passthru`. Glare logic is untouched (UPDATE never set PROTECT, same as
   INFO).
@@ -1930,7 +1930,7 @@ otherwise each refresh falls back to the re-INVITE behavior, unchanged.
   package-private.
 
 Verified: framework builds clean; new `KeepAliveUpdateSmokeTest` 20/20 (Allow
-parsing, config gate, per-leg flag); existing Callflow/SDP smoke tests 84/84.
+parsing, config gate, per-dialog flag); existing Callflow/SDP smoke tests 84/84.
 Wire-level behavior (UPDATE vs re-INVITE on a real refresh cycle, 405
 fallback) is SIPp/deploy-only.
 

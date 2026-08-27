@@ -13,16 +13,16 @@ import javax.servlet.sip.SipSession;
 import org.vorpal.blade.framework.v2.sdp.Sdp;
 import org.vorpal.blade.framework.v3.Callflow;
 
-/// B2BUA-initiated re-INVITE that changes one leg's media direction via
+/// B2BUA-initiated re-INVITE that changes one dialog's media direction via
 /// third-party call control (RFC 3725 Flow I) — the v3 replacement for the v2
 /// `AbstractCallflow3PCC` family, with the three defects of that code fixed:
 ///
-/// 1. **Perspective.** [#targetDirection] is what the TARGET leg should DO,
+/// 1. **Perspective.** [#targetDirection] is what the TARGET dialog should DO,
 ///    and the offer presented to it is [MediaDirection#reverse]d, as RFC 3264
 ///    §6.1's answer rules require. (The v2 `CallflowMute` forced `recvonly`
 ///    into the offer, which makes the target the SENDER — it muted the wrong
-///    leg.)
-/// 2. **Failure handling.** Non-2xx from either leg is handled: the v2 code
+///    dialog.)
+/// 2. **Failure handling.** Non-2xx from either dialog is handled: the v2 code
 ///    called `createAck()` on any response, which throws on a 486 or a 491 —
 ///    and re-INVITE glare (491) is routine for a B2BUA. If the target rejects
 ///    the rewritten offer, the peer's open offer is still answered (media
@@ -33,7 +33,7 @@ import org.vorpal.blade.framework.v3.Callflow;
 ///    ([CallflowResume]) puts back what was there instead of blanket
 ///    `a=sendrecv`-ing streams that were never active.
 ///
-/// The wire flow (`target` = the leg whose media state changes, `peer` = its
+/// The wire flow (`target` = the dialog whose media state changes, `peer` = its
 /// [Callflow#getLinkedSession] counterpart):
 ///
 /// 1. B2BUA → peer: re-INVITE, no SDP (delayed offer).
@@ -49,7 +49,7 @@ import org.vorpal.blade.framework.v3.Callflow;
 public class CallflowMediaDirection extends Callflow {
 	private static final long serialVersionUID = 1L;
 
-	/// Target-leg [SipSession] attribute holding the comma-joined per-m-line
+	/// Target-dialog [SipSession] attribute holding the comma-joined per-m-line
 	/// directions captured before the last non-restoring change — what a
 	/// restoring flow puts back.
 	public static final String PRIOR_DIRECTIONS_ATTR = "org.vorpal.blade.v3.media.priorDirections";
@@ -57,7 +57,7 @@ public class CallflowMediaDirection extends Callflow {
 	private final MediaDirection targetDirection;
 	private final boolean restorePrior;
 
-	/// Drive the target leg to `targetDirection`.
+	/// Drive the target dialog to `targetDirection`.
 	public CallflowMediaDirection(MediaDirection targetDirection) {
 		this(targetDirection, false);
 	}
@@ -79,7 +79,7 @@ public class CallflowMediaDirection extends Callflow {
 	public void process(SipSession target) throws ServletException, IOException {
 		SipSession peer = getLinkedSession(target);
 		if (peer == null) {
-			throw new ServletException(getClass().getSimpleName() + ": no linked session for the target leg");
+			throw new ServletException(getClass().getSimpleName() + ": no linked session for the target dialog");
 		}
 
 		SipServletRequest emptyToPeer = peer.createRequest(INVITE);

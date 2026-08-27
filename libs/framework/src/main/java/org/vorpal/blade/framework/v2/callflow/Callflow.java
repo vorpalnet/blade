@@ -50,7 +50,7 @@ import org.vorpal.blade.framework.v2.proxy.ProxyTier.Mode;
 /// extends the baseline directly — never inherits them:
 ///
 /// - the container-proxy overloads, [#proxyRequest(Proxy,URI)] and its siblings,
-///   which drive `javax.servlet.sip.Proxy` rather than a B2BUA leg. v3 answers
+///   which drive `javax.servlet.sip.Proxy` rather than a B2BUA dialog. v3 answers
 ///   the same need with passthru drop-out on
 ///   [org.vorpal.blade.framework.v3.Callflow#sendRequest], and the proxy API
 ///   stays here until that is proven in the field.

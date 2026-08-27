@@ -25,14 +25,14 @@ import org.vorpal.blade.framework.v3.B2buaServlet;
 ///     {@link RegistrationStyle}) bound to its own Contact IP; de‑register at shutdown.
 ///  2. **Outbound** (BLADE → carrier): FSMAR routes an outbound INVITE here, naming the trunk in
 ///     the Route URI (`;vgw=<name>`). As a {@link B2buaServlet} it bridges the call and
-///     {@link #callStarted} rewrites the outbound leg onto that virtual gateway — Request‑URI to
+///     {@link #callStarted} rewrites the outbound dialog onto that virtual gateway — Request‑URI to
 ///     the carrier, From to the trunk identity, source bound to the gateway's Contact IP
 ///     (`setOutboundInterface`).
 ///  3. **Inbound** (carrier → BLADE): the call arrives on a trunk's own Contact IP, so the
 ///     **arrival interface identifies the trunk** ({@link VirtualGateway#matchesInterface}) with
 ///     no `;vgw=` present. The source is checked against the trunk's
 ///     {@link VirtualGateway#getSourceHosts()} and the bridge carries the call onward; FSMAR runs
-///     again on the B2BUA's second leg (`previousApp = gateway`) and routes it to the app that
+///     again on the B2BUA's second dialog (`previousApp = gateway`) and routes it to the app that
 ///     answers.
 ///
 /// The two directions are told apart by the `vgw` param: FSMAR sets it going out, and a carrier
@@ -109,11 +109,11 @@ public class GatewaySipServlet extends B2buaServlet {
 
 	// ============================================================ the bridge, both directions
 
-	/// The B2BUA is creating the second leg. Which direction this call is going decides what
+	/// The B2BUA is creating the second dialog. Which direction this call is going decides what
 	/// happens to it:
 	///
 	///  - **`;vgw=` present** — FSMAR named a trunk, so this is BLADE → carrier: rewrite the
-	///    outbound leg onto that trunk ({@link #bridgeToTrunk}).
+	///    outbound dialog onto that trunk ({@link #bridgeToTrunk}).
 	///  - **no `;vgw=`, but the call arrived on a trunk's Contact IP** — carrier → BLADE: check
 	///    the source and let the call through to the rest of the chain ({@link #bridgeFromTrunk}).
 	///  - **neither** — nothing here owns this call; reject it.
@@ -147,7 +147,7 @@ public class GatewaySipServlet extends B2buaServlet {
 		}
 	}
 
-	/// BLADE → carrier. Rewrite the outbound leg onto `vg`: Request‑URI to the carrier trunk, From
+	/// BLADE → carrier. Rewrite the outbound dialog onto `vg`: Request‑URI to the carrier trunk, From
 	/// to the trunk identity, source bound to the trunk's Contact IP.
 	private void bridgeToTrunk(VirtualGateway vg, SipServletRequest outboundRequest)
 			throws ServletException, IOException {
@@ -188,15 +188,15 @@ public class GatewaySipServlet extends B2buaServlet {
 		// rarely needed. It also can't be done from callStarted: the stock bridge treats a carrier
 		// 401/407 as a failure and propagates it to the caller (InitialInvite.processContinue,
 		// v2/b2bua/InitialInvite.java:197-206) — answering the challenge needs a re-auth-aware
-		// outbound leg (a gateway InitialInvite variant, mirroring RegisterCallflow.onResponse's
+		// outbound dialog (a gateway InitialInvite variant, mirroring RegisterCallflow.onResponse's
 		// createRequest(response,"INVITE") + addAuthHeader + loop guard). Add it if a carrier
 		// re-challenges INVITEs.
 	}
 
 	/// Carrier → BLADE. The trunk is already known (the call landed on its Contact IP); confirm the
-	/// call actually came from that carrier, then leave the second leg alone.
+	/// call actually came from that carrier, then leave the second dialog alone.
 	///
-	/// The leg keeps the dialed Request-URI, so FSMAR — which runs again on this leg with
+	/// The dialog keeps the dialed Request-URI, so FSMAR — which runs again on this dialog with
 	/// `previousApp = gateway` — routes it onward to whichever app answers. That handoff is the
 	/// whole point: the answering app never learns which carrier called.
 	private void bridgeFromTrunk(VirtualGateway vg, SipServletRequest inbound, SipServletRequest outboundRequest)

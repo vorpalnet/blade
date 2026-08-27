@@ -29,17 +29,17 @@ alice <-  blade         : ACK (SDP)
 @enduml
 */
 
-/// Implements SIP session keep-alive by refreshing both call legs.
+/// Implements SIP session keep-alive by refreshing both call dialogs.
 ///
 /// Two refresh styles, chosen per cycle by [#handle]:
 ///
-/// - **UPDATE** (RFC 3311) — a lightweight, bodiless UPDATE on each leg; no
+/// - **UPDATE** (RFC 3311) — a lightweight, bodiless UPDATE on each dialog; no
 ///   SDP renegotiation. Used only when the config file's
 ///   `session.keepAlive.style` is `UPDATE` **and** both endpoints have
 ///   advertised `Allow: UPDATE` (tracked passively by AsyncSipServlet in the
 ///   [Callflow#ALLOW_UPDATE][org.vorpal.blade.framework.v2.callflow.Callflow#ALLOW_UPDATE]
 ///   session attribute).
-/// - **re-INVITE** — INVITE to both call legs with full SDP exchange. Used
+/// - **re-INVITE** — INVITE to both call dialogs with full SDP exchange. Used
 ///   for `style: REINVITE`, whenever either endpoint's UPDATE support is
 ///   unknown or absent, and as the fallback when an UPDATE refresh fails.
 ///
@@ -48,7 +48,7 @@ public class KeepAlive extends ClientCallflow implements SessionKeepAlive.Callba
 
 	private static final long serialVersionUID = 1L;
 
-	/// Handles the keep-alive callback by refreshing both call legs, using
+	/// Handles the keep-alive callback by refreshing both call dialogs, using
 	/// the UPDATE style when configured and supported by both endpoints, the
 	/// re-INVITE style otherwise.
 	///
@@ -117,12 +117,12 @@ public class KeepAlive extends ClientCallflow implements SessionKeepAlive.Callba
 		return sawAllow ? Boolean.FALSE : null;
 	}
 
-	/// Refresh both legs with bodiless UPDATEs, sequentially — the linked leg
-	/// is refreshed only after this leg's UPDATE succeeds, so at most one
+	/// Refresh both dialogs with bodiless UPDATEs, sequentially — the linked dialog
+	/// is refreshed only after this dialog's UPDATE succeeds, so at most one
 	/// fallback can fire. Any non-2xx final response falls back to the
-	/// re-INVITE refresh for this cycle (which refreshes both legs, so a
+	/// re-INVITE refresh for this cycle (which refreshes both dialogs, so a
 	/// half-refreshed pair self-corrects); a 405/501 additionally marks the
-	/// failing leg as not supporting UPDATE so future cycles go straight to
+	/// failing dialog as not supporting UPDATE so future cycles go straight to
 	/// re-INVITE. Exceptions inside sendRequest surface here as a dummy 500
 	/// response, so the failure path covers those too.
 	private void refreshWithUpdate(SipSession sipSession, SipSession linkedSession) {
@@ -152,7 +152,7 @@ public class KeepAlive extends ClientCallflow implements SessionKeepAlive.Callba
 	}
 
 	/// Log an UPDATE refresh failure; on 405 Method Not Allowed or 501 Not
-	/// Implemented, record that this leg's endpoint does not support UPDATE.
+	/// Implemented, record that this dialog's endpoint does not support UPDATE.
 	private static void noteUpdateFailure(SipServletResponse response) {
 		sipLogger.warning(response, "KeepAlive - UPDATE refresh failed with " + response.getStatus()
 				+ ", falling back to re-INVITE");
@@ -163,7 +163,7 @@ public class KeepAlive extends ClientCallflow implements SessionKeepAlive.Callba
 		}
 	}
 
-	/// Refresh both legs with a re-INVITE and full SDP exchange — the
+	/// Refresh both dialogs with a re-INVITE and full SDP exchange — the
 	/// original keep-alive behavior, used for REINVITE style and as the
 	/// UPDATE fallback.
 	private void refreshWithReinvite(SipSession sipSession, SipSession linkedSession) {

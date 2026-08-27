@@ -24,7 +24,7 @@ swap the driver, swap the media server.
 offer(nc, callerSdp, answer -> {          // feed caller SDP to the media server
     sendResponse(200 with answer);        //   → its answer goes in our 200 OK
     on ACK:
-        join(mediaGroup, DUPLEX, nc);      // wire player/recorder to the caller leg
+        join(mediaGroup, DUPLEX, nc);      // wire player/recorder to the caller dialog
         record(mediaGroup, recordUri, …);  // optional: record the caller
         play(mediaGroup, mediaUri, done -> // play the prompt/music
             loop ? play again : hang up);

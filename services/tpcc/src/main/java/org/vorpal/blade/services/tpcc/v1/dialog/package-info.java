@@ -6,7 +6,7 @@
 /// ## Core Classes
 ///
 /// - [Dialog] - Represents a complete SIP dialog with request URI, local party, remote party, and custom attributes
-/// - [DialogResponse] - Response from create-leg: echoes the sessionId and the new dialogId
+/// - [DialogResponse] - Response from create-dialog: echoes the sessionId and the new dialogId
 /// - [DialogProperties] - Read-only view of dialog properties including remote party and attributes
 /// - [DialogPutAttributes] - Request model for updating dialog attributes with key-value pairs
 ///

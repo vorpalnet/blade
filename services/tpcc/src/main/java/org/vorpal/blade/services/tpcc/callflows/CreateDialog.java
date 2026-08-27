@@ -14,7 +14,7 @@ import org.vorpal.blade.services.tpcc.v1.DialogAPI;
 import org.vorpal.blade.services.tpcc.v1.DialogAPI.ResponseStuff;
 import org.vorpal.blade.services.tpcc.v1.dialog.DialogResponse;
 
-/// Create-and-park: the REST-initiated 3PCC first leg (RFC 3725 Flow I).
+/// Create-and-park: the REST-initiated 3PCC first dialog (RFC 3725 Flow I).
 ///
 /// The INVITE goes out OFFERLESS, so the party's 200 OK carries its real
 /// offer, and per offer/answer the ACK must carry our answer — an RFC 3264
@@ -46,7 +46,7 @@ public class CreateDialog extends ClientCallflow {
 				}
 				sendRequest(ack);
 
-				// Return the leg's dialogId so the caller can chain connect/delete.
+				// Return the dialog's dialogId so the caller can chain connect/delete.
 				ResponseStuff rstuff = DialogAPI.responseMap.remove(inviteResponse.getSession().getId());
 				if (rstuff != null) {
 					String dialogId = Callflow.getVorpalDialogId(inviteResponse.getSession());
