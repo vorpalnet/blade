@@ -82,6 +82,32 @@ public final class AnalyticsCatalog {
 		return FRAMEWORK_DEFAULTS.findType(type) != null;
 	}
 
+	/// Every type the sink should be receiving — the set [#persists] would say
+	/// yes to, expressed as a list so it can become a broker-side selector.
+	///
+	/// This is what lets the sink filter at the broker instead of taking
+	/// everything and discarding most of it. The two must agree, which is why
+	/// this is derived from the same two rules [#persists] applies: a declared
+	/// type counts when its flag says so, and a framework type counts unless a
+	/// declaration turns it off.
+	public static java.util.List<String> persistedTypes() {
+		java.util.LinkedHashSet<String> wanted = new java.util.LinkedHashSet<>();
+		EventCatalog catalog = catalog();
+
+		for (EventType declared : catalog.typesOrEmpty()) {
+			if (declared.isPersist() && declared.getType() != null) {
+				wanted.add(declared.getType());
+			}
+		}
+		for (EventType framework : FRAMEWORK_DEFAULTS.typesOrEmpty()) {
+			String type = framework.getType();
+			if (type != null && catalog.findType(type) == null) {
+				wanted.add(type);
+			}
+		}
+		return new java.util.ArrayList<>(wanted);
+	}
+
 	/// The catalog, reloaded from disk when it has changed and the throttle has
 	/// elapsed.
 	///

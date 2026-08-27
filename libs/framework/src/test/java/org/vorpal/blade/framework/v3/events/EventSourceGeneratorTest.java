@@ -444,7 +444,7 @@ class EventSourceGeneratorTest {
 		}
 
 		@Test
-		@DisplayName("past the readability bound the filtering moves into code")
+		@DisplayName("past the size bound the filtering moves into code")
 		void tooManyTypesFallBackToCodeFiltering() {
 			List<String> many = new ArrayList<>();
 			for (int i = 0; i <= EventSubscription.MAX_SELECTOR_TYPES; i++) {
@@ -453,7 +453,25 @@ class EventSourceGeneratorTest {
 			EventSubscription subscription = new EventSubscription("wide");
 			subscription.setTypes(many);
 			assertNull(subscription.selector());
-			assertTrue(subscription.selectorRationale().contains("readability bound"));
+			assertTrue(subscription.selectorRationale().contains("selector size bound"));
+		}
+
+		@Test
+		@DisplayName("a realistic catalog fits inside the bound")
+		void aWholeCatalogStillSelects() {
+			// The bound exists to stop a pathological selector, not to stop a
+			// real one. Analytics derives its selector from every type the
+			// catalog marks persisted, so BLADE's own set has to fit with room
+			// to spare or the sink silently falls back to taking everything —
+			// which is the behaviour this whole change set removed.
+			EventSubscription subscription = new EventSubscription("analytics-db");
+			List<String> declared = new ArrayList<>();
+			for (EventType type : BladeEventCatalog.analyticsTypes()) {
+				declared.add(type.getType());
+			}
+			subscription.setTypes(declared);
+			assertNotNull(subscription.selector(),
+					declared.size() + " catalog types did not fit in a selector");
 		}
 	}
 

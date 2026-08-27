@@ -9,11 +9,7 @@
 		<provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
 		<non-jta-data-source>jdbc/BladeAnalytics</non-jta-data-source>
 		<class>org.vorpal.blade.services.analytics.model.Application</class>
-		<class>org.vorpal.blade.services.analytics.model.Attribute</class>
-		<class>org.vorpal.blade.services.analytics.model.AttributeName</class>
-		<class>org.vorpal.blade.services.analytics.model.AttributePK</class>
 		<class>org.vorpal.blade.services.analytics.model.Event</class>
-		<class>org.vorpal.blade.services.analytics.model.EventType</class>
 		<class>org.vorpal.blade.services.analytics.model.Session</class>
 		<class>org.vorpal.blade.services.analytics.model.SessionKey</class>
 		<class>org.vorpal.blade.services.analytics.model.SessionKeyPK</class>

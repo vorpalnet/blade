@@ -4,34 +4,14 @@ import java.sql.Connection;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.util.Date;
+import java.util.UUID;
 import java.util.List;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.LongAdder;
 
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
-import javax.annotation.Resource;
-import javax.ejb.ActivationConfigProperty;
-import javax.ejb.MessageDriven;
-import javax.ejb.MessageDrivenContext;
-import javax.ejb.Timeout;
-import javax.ejb.Timer;
-import javax.ejb.TimerConfig;
-import javax.ejb.TimerService;
-import javax.ejb.TransactionManagement;
-import javax.ejb.TransactionManagementType;
-import javax.jms.Message;
-import javax.jms.MessageListener;
-import javax.jms.TextMessage;
-import javax.management.MBeanServer;
-import javax.management.ObjectName;
 import javax.naming.InitialContext;
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
-import javax.persistence.TypedQuery;
 import javax.sql.DataSource;
 
 import org.vorpal.blade.framework.v2.config.SettingsManager;
@@ -39,29 +19,31 @@ import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v3.events.BladeEventCatalog;
 import org.vorpal.blade.framework.v3.events.BladeEventTypes;
 import org.vorpal.blade.framework.v3.events.CloudEvent;
-import org.vorpal.blade.services.analytics.model.Attribute;
-import org.vorpal.blade.services.analytics.model.AttributeName;
-import org.vorpal.blade.services.analytics.model.AttributePK;
+import org.vorpal.blade.framework.v3.events.EventBus;
+import org.vorpal.blade.framework.v3.events.EventSubscriber;
 import org.vorpal.blade.services.analytics.model.Event;
-import org.vorpal.blade.services.analytics.model.EventType;
 import org.vorpal.blade.services.analytics.model.SessionKey;
 import org.vorpal.blade.services.analytics.model.SessionKeyPK;
 import org.vorpal.blade.services.analytics.sip.AnalyticsSipServlet;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
-/// The analytics database, as one subscriber on the BLADE event bus.
+/// The analytics database, as one subscriber on the BLADE event bus. This class
+/// is the *handler*; [AnalyticsSubscription] owns when it runs and what it
+/// receives.
 ///
-/// **This is a sink, and it is shaped differently from every other consumer on
-/// purpose.** An *actor* — a transfer app acting on a refer — names the types it
-/// handles and lets the broker filter, so it never wakes for an event it would
-/// ignore, and it fails closed: a type nobody listed is never enqueued for it.
-/// This one names nothing and takes everything, deciding per message from the
-/// catalog's `persist` flags. It fails *open*: a type marked persisted this
-/// afternoon is recorded this afternoon, with no regeneration and no redeploy.
-/// The price is real and worth stating — this subscription's store holds events
-/// this consumer will drop, against the destination's quota — but for the one
-/// consumer whose job is to miss nothing, that is the right side of the trade.
+/// **It used to take every event on the bus and throw most of them away.** Not
+/// carelessly — it was the only option. As an `@MessageDriven` class its
+/// selector was an annotation constant, so a type marked persisted in the
+/// console could not reach a running consumer; taking everything was how a sink
+/// whose job is to miss nothing avoided missing anything. It paid for that in
+/// broker storage (this subscription's store held events it would discard,
+/// against a quota shared with every other subscriber) and in a delivery per
+/// discarded event. With the subscription owned in code and rebuilt on change,
+/// the sink asks the broker for exactly the types it intends to write and
+/// still tracks the catalog.
 ///
 /// **The subscription identity is this subscriber's name, not any event's.** Two
 /// applications wanting the same event each need their own, or they are not two
@@ -70,58 +52,40 @@ import com.fasterxml.jackson.databind.JsonNode;
 /// [BladeEventCatalog#ANALYTICS_SUBSCRIPTION], which is where this name is
 /// declared so the catalog and this file cannot disagree.
 ///
-/// **What it replaced.** `AnalyticsJmsListener`, which read Java-serialized JPA
-/// entities off a queue of its own and discriminated on them with `instanceof` —
-/// the mechanism that required every consumer to be on BLADE's classpath and made
-/// selector-based routing impossible. The good parts of it survive here: the
-/// database-down backpressure that suspends delivery through JMX rather than
-/// discarding, the health-check timer that resumes it, and the interning caches
-/// for event and attribute names.
-@TransactionManagement(TransactionManagementType.BEAN)
-@MessageDriven(mappedName = "jms/BladeEventBusTopic", activationConfig = {
-		@ActivationConfigProperty(propertyName = "destinationType", propertyValue = "javax.jms.Topic"),
-		// Named explicitly. Left out, the container falls back to a default
-		// connection factory — which works, and quietly means the factory the bus
-		// provisions (and its prefetch settings) applies to nothing.
-		@ActivationConfigProperty(propertyName = "connectionFactoryJndiName", propertyValue = "jms/BladeEventBusConnectionFactory"),
-		@ActivationConfigProperty(propertyName = "subscriptionDurability", propertyValue = "Durable"),
-		// Both are this SUBSCRIPTION's name, never an event type's.
-		@ActivationConfigProperty(propertyName = "subscriptionName", propertyValue = "analytics-db"),
-		@ActivationConfigProperty(propertyName = "clientId", propertyValue = "analytics-db"),
-		@ActivationConfigProperty(propertyName = "topicMessagesDistributionMode", propertyValue = "One-Copy-Per-Application"),
-		@ActivationConfigProperty(propertyName = "distributedDestinationConnection", propertyValue = "EveryMember"),
-		// No messageSelector, deliberately: see the class comment.
-		@ActivationConfigProperty(propertyName = "acknowledgeMode", propertyValue = "Auto-acknowledge") })
-public class AnalyticsEventListener implements MessageListener {
-
-	/// Must match this class's simple name. The MDB finds its own runtime MBean
-	/// through this to suspend and resume itself, and two MDBs sharing a simple
-	/// class name would both match — one application's backpressure would stop
-	/// another's delivery.
-	private static final String MDB_MBEAN_QUERY = "com.bea:Type=MessageDrivenEJBRuntime,Name=AnalyticsEventListener,*";
+/// **Failure is held, not swallowed.** A batch that cannot be written is not
+/// acknowledged, so the broker redelivers it; a database that is unreachable
+/// pauses the subscription entirely and lets the backlog accumulate on the
+/// broker's file store until a health check says it is back. The previous
+/// version logged a persistence failure and acknowledged the message anyway,
+/// which meant any database trouble that was not a connection error destroyed
+/// events while every other indicator said the pipeline was healthy.
+///
+/// **What it replaced originally.** `AnalyticsJmsListener`, which read
+/// Java-serialized JPA entities off a queue of its own and discriminated on them
+/// with `instanceof` — the mechanism that required every consumer to be on
+/// BLADE's classpath and made selector-based routing impossible.
+public class AnalyticsEventListener implements EventSubscriber.Handler {
 
 	private EntityManagerFactory emf;
 	private static Logger sipLogger;
 	private static volatile boolean databaseDown = false;
-	private static Timer healthCheckTimer;
 
-	/// Events this subscription received but the catalog does not mark persisted.
+	/// Events that arrived anyway and the catalog does not mark persisted.
 	///
-	/// Counted rather than ignored: taking everything means dropping most of it
-	/// is normal, and without a number "analytics is missing events" has no
-	/// answer. Logged on a decade boundary so the log says something occasionally
-	/// without saying it per message.
+	/// This should now be near zero — the broker filters — so unlike before it
+	/// is a number worth looking at rather than background noise. A rising
+	/// count means the live subscription and the catalog disagree: either the
+	/// selector could not be built and the sink is filtering in code, or a
+	/// `persist` flag was cleared and the subscription has not caught up yet.
 	private static final LongAdder dropped = new LongAdder();
 	private static final LongAdder persisted = new LongAdder();
 
-	@Resource
-	private MessageDrivenContext mdbContext;
+	/// Builds the `events.payload` document. Thread-safe once configured, which
+	/// is what the JSON library documents and what a pooled consumer needs.
+	private static final ObjectMapper MAPPER = new ObjectMapper();
 
-	@Resource
-	private TimerService timerService;
-
-	@PostConstruct
-	public void init() {
+	/// Open the persistence unit. Called once when the subscription starts.
+	public void start() {
 		sipLogger = SettingsManager.getSipLogger();
 		try {
 			emf = Persistence.createEntityManagerFactory("BladeAnalytics");
@@ -131,89 +95,82 @@ public class AnalyticsEventListener implements MessageListener {
 		}
 	}
 
-	@PreDestroy
-	public void cleanup() {
-		if (emf != null && emf.isOpen()) {
-			emf.close();
-		}
+	/// Close the persistence unit. Called when the application shuts down.
+	public void stop() {
+		closeEmf();
 	}
 
+	/// Write one batch, or throw so the broker redelivers it.
+	///
+	/// **Everything in the batch commits or nothing does.** Re-applying a batch
+	/// whose middle failed is safe because every key in this schema is computed
+	/// from the event's own identity, so a row written twice is written to the
+	/// same place — see `model/NaturalKey.java`. That property is what makes
+	/// batching worth doing at all: without it, a rollback would have to be a
+	/// per-event affair and the round trip per row would come straight back.
 	@Override
-	public void onMessage(Message message) {
-
+	public void handle(java.util.List<CloudEvent> batch) throws Exception {
 		if (sipLogger == null) {
 			sipLogger = SettingsManager.getSipLogger();
 		}
-
-		// Safety net for the brief window between setting databaseDown and the
-		// JMX suspend taking effect. Discarding is right here and only here: the
-		// subscription is durable, so anything not yet delivered is being held.
-		if (databaseDown) {
-			logWarning("AnalyticsEventListener: Database unavailable, discarding message");
-			return;
-		}
-
-		if (!(message instanceof TextMessage)) {
-			logWarning("AnalyticsEventListener: Received non-TextMessage, ignoring");
-			return;
-		}
-
 		if (emf == null) {
-			try {
-				emf = Persistence.createEntityManagerFactory("BladeAnalytics");
-			} catch (Exception e) {
-				logSevere("AnalyticsEventListener: Cannot create EntityManagerFactory: " + e.getMessage(), e);
-				reportDatabaseDown();
-				return;
-			}
+			emf = Persistence.createEntityManagerFactory("BladeAnalytics");
 		}
 
-		EntityManager em = null;
+		EntityManager em = emf.createEntityManager();
 		try {
-			CloudEvent event = CloudEvent.fromJson(((TextMessage) message).getText());
-			String type = event.getType();
-
-			if (!AnalyticsCatalog.persists(type)) {
-				dropped.increment();
-				long total = dropped.sum();
-				if (total % 10_000 == 0) {
-					logInfo("AnalyticsEventListener: " + total + " events not marked persisted have been "
-							+ "dropped; " + persisted.sum() + " written. Most recent: " + type);
-				}
-				return;
-			}
-
-			em = emf.createEntityManager();
 			em.getTransaction().begin();
-			persist(em, event, type);
+			int written = 0;
+			for (CloudEvent event : batch) {
+				String type = event.getType();
+				if (!AnalyticsCatalog.persists(type)) {
+					// Should be rare now that the selector filters at the
+					// broker: this is the window between an operator clearing
+					// a `persist` flag and the subscription being rebuilt.
+					dropped.increment();
+					continue;
+				}
+				persist(em, event, type);
+				written++;
+			}
 			em.getTransaction().commit();
-			persisted.increment();
+			persisted.add(written);
 
 		} catch (Exception ex) {
-			if (em != null) {
-				try {
-					if (em.getTransaction().isActive()) {
-						em.getTransaction().rollback();
-					}
-				} catch (Exception rollbackEx) {
-					logSevere("AnalyticsEventListener: Rollback failed: " + rollbackEx.getMessage(), rollbackEx);
-				}
-			}
+			rollback(em);
 
 			if (isDatabaseConnectionError(ex)) {
+				// Not this batch's fault, and not something redelivery fixes
+				// quickly. Stop consuming and let the durable subscription hold
+				// the backlog on the broker's file store until the database is
+				// back — burning the destination's redelivery limit during an
+				// outage would send good events to the error destination.
 				logSevere("AnalyticsEventListener: Database connection error: " + ex.getMessage(), ex);
 				closeEmf();
 				reportDatabaseDown();
 			} else {
-				// Bad data or a constraint violation. Consume it: a malformed
-				// payload will not fix itself on redelivery, and forcing one would
-				// spin this event forever ahead of every event behind it.
-				logSevere("AnalyticsEventListener: Persist error: " + ex.getMessage(), ex);
+				logSevere("AnalyticsEventListener: Persist error, batch of " + batch.size()
+						+ " will be redelivered: " + ex.getMessage(), ex);
 			}
+			// Either way the batch is NOT acknowledged. This is the difference
+			// from the previous consumer, which logged and acknowledged — so a
+			// database hiccup that was not a connection error destroyed events
+			// while reporting itself as healthy.
+			throw ex;
 		} finally {
-			if (em != null && em.isOpen()) {
+			if (em.isOpen()) {
 				em.close();
 			}
+		}
+	}
+
+	private void rollback(EntityManager em) {
+		try {
+			if (em.getTransaction().isActive()) {
+				em.getTransaction().rollback();
+			}
+		} catch (Exception rollbackEx) {
+			logSevere("AnalyticsEventListener: Rollback failed: " + rollbackEx.getMessage(), rollbackEx);
 		}
 	}
 
@@ -310,7 +267,19 @@ public class AnalyticsEventListener implements MessageListener {
 		JsonNode data = cloudEvent.getData();
 
 		Event event = new Event();
-		event.setEventUid(cloudEvent.getId());
+		// The CloudEvent id is this row's identity, so it cannot be absent.
+		// CloudEvents requires it and the HTTP ingress fills one in, but a
+		// producer that skipped it would otherwise take the whole message down;
+		// mint one instead and say so. Such an event is not replay-safe, which
+		// is the point of naming it in the log.
+		String uid = cloudEvent.getId();
+		if (uid == null || uid.isEmpty()) {
+			uid = UUID.randomUUID().toString();
+			logWarning("AnalyticsEventListener: event of type " + type
+					+ " arrived with no CloudEvent id; minted " + uid
+					+ " — this row cannot dedupe on redelivery");
+		}
+		event.setEventUid(uid);
 		event.setApplicationId(applicationId(em, data).longValue());
 
 		// The domain time, not the envelope's `time`. Getting this wrong shifts
@@ -327,34 +296,31 @@ public class AnalyticsEventListener implements MessageListener {
 		}
 
 		// The framework's own names travel as the type; an operator's name
-		// travels in the payload under the generic type. Either way the
-		// event_types table stores the short name, as it always has, so existing
-		// reports keep working.
+		// travels in the payload under the generic type. Either way the short
+		// name lands in the `type` column, so existing reports keep working.
 		String name = data.hasNonNull("eventName") ? data.path("eventName").asText() : Wire.shortName(type);
-		event.setName(name);
-		event.setEventTypeId(lookupEventTypeId(em, name));
+		event.setType(name);
 
-		em.persist(event);
-		em.flush();
-
-		long eventId = event.getId();
+		ObjectNode payload = MAPPER.createObjectNode();
 		JsonNode attributes = data.path("attributes");
-		int count = 0;
 		if (attributes.isArray()) {
 			for (JsonNode pair : attributes) {
 				String attrName = pair.path("name").asText(null);
 				if (attrName == null) {
 					continue;
 				}
-				Attribute attribute = new Attribute();
-				attribute.setId(new AttributePK(eventId, lookupAttributeNameId(em, attrName)));
-				attribute.setValue(Wire.truncate(pair.path("value").asText(""), 1024));
-				em.persist(attribute);
-				count++;
+				payload.put(attrName, Wire.truncate(pair.path("value").asText(""), 1024));
 			}
 		}
+		event.setPayload(payload.toString());
 
-		logFine("AnalyticsEventListener: Event id=" + eventId + " name=" + name + " attributes=" + count);
+		// No flush. The key came from the CloudEvent id before the insert, and
+		// nothing downstream needs to read it back — which is what forced a
+		// mid-transaction flush here before.
+		em.persist(event);
+
+		logFine("AnalyticsEventListener: Event id=" + event.getId() + " type=" + name
+				+ " attributes=" + payload.size());
 	}
 
 	// ───────────────────────────────────────────────────────── wire helpers
@@ -368,67 +334,72 @@ public class AnalyticsEventListener implements MessageListener {
 
 	// ────────────────────────────────────────────── backpressure and health
 
+	/// Stop consuming until the database answers again.
+	///
+	/// **A durable subscription is what makes this work.** A subscription that
+	/// is not being consumed accumulates on the broker's file store rather than
+	/// being dropped, so a database outage costs latency instead of rows. It
+	/// also means a long outage draws on the destination's quota — which is
+	/// shared with every other subscriber, so a database down for a day can
+	/// start failing publishes for applications that have nothing to do with
+	/// analytics. The destination's time-to-live bounds that.
+	///
+	/// This used to suspend the MDB through a WebLogic JMX operation, found by
+	/// querying for this class's own runtime MBean by simple class name. The
+	/// subscription is owned directly now, so pausing it is a method call — and
+	/// the fragile part of the old arrangement goes away with it: two consumers
+	/// sharing a simple class name both matched that JMX query, and one
+	/// application's backpressure would have stopped another application's
+	/// delivery.
 	private void reportDatabaseDown() {
 		synchronized (AnalyticsEventListener.class) {
-			if (!databaseDown) {
-				databaseDown = true;
-				logSevere("AnalyticsEventListener: Database failure detected, suspending message delivery", null);
-				suspendMessageDelivery();
-				startHealthCheckTimer();
+			if (databaseDown) {
+				return;
 			}
-		}
-	}
+			databaseDown = true;
+			logSevere("AnalyticsEventListener: database failure detected; pausing the subscription."
+					+ " Events accumulate on the broker until it recovers.", null);
 
-	private void startHealthCheckTimer() {
-		if (healthCheckTimer == null) {
-			int healthCheckInterval = AnalyticsSipServlet.settingsManager.getCurrent().healthCheckInterval * 1000;
-			healthCheckTimer = timerService.createIntervalTimer(healthCheckInterval, healthCheckInterval,
-					new TimerConfig("dbHealthCheck", false));
-			logWarning("AnalyticsEventListener: Started health check timer (" + healthCheckInterval + "ms interval)");
-		}
-	}
-
-	@Timeout
-	public void checkDatabaseHealth(Timer timer) {
-		synchronized (AnalyticsEventListener.class) {
-			if (testDatabaseConnection()) {
-				databaseDown = false;
-				healthCheckTimer = null;
-				timer.cancel();
-				resumeMessageDelivery();
-				logWarning("AnalyticsEventListener: Database connection restored, resumed message delivery");
+			EventSubscriber subscriber = EventBus.subscriberFor(BladeEventCatalog.ANALYTICS_SUBSCRIPTION);
+			if (subscriber != null) {
+				subscriber.pause();
 			}
+			startHealthCheck();
 		}
 	}
 
-	/// Suspend delivery to this MDB through WebLogic JMX.
+	/// Poll the database until it answers, then resume consuming.
 	///
-	/// **A durable subscription is what makes this work.** Suspended delivery
-	/// means events accumulate in the subscription's store rather than being
-	/// dropped, so a database outage costs latency instead of rows. It also means
-	/// a long outage draws on the destination's quota — which is shared with
-	/// every other subscriber, so a database down for a day can start failing
-	/// publishes for applications that have nothing to do with analytics.
-	private void suspendMessageDelivery() {
-		invokeOnSelf("suspend");
-	}
-
-	private void resumeMessageDelivery() {
-		invokeOnSelf("resume");
-	}
-
-	private void invokeOnSelf(String operation) {
-		try {
-			MBeanServer mbs = (MBeanServer) new InitialContext().lookup("java:comp/env/jmx/runtime");
-			Set<ObjectName> mbeans = mbs.queryNames(new ObjectName(MDB_MBEAN_QUERY), null);
-			for (ObjectName name : mbeans) {
-				mbs.invoke(name, operation, null, null);
-				logWarning("AnalyticsEventListener: JMS message delivery " + operation + "ed via JMX (" + name + ")");
+	/// One thread, created only during an outage and ended by it. It replaces
+	/// an EJB interval timer, which is not available outside a bean and would
+	/// have been the only thing still tying this class to the container.
+	private void startHealthCheck() {
+		int intervalMs = Math.max(1, AnalyticsSipServlet.settingsManager.getCurrent().healthCheckInterval) * 1000;
+		Thread health = new Thread(() -> {
+			while (databaseDown) {
+				try {
+					Thread.sleep(intervalMs);
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					return;
+				}
+				if (testDatabaseConnection()) {
+					synchronized (AnalyticsEventListener.class) {
+						databaseDown = false;
+						EventSubscriber subscriber =
+								EventBus.subscriberFor(BladeEventCatalog.ANALYTICS_SUBSCRIPTION);
+						if (subscriber != null) {
+							subscriber.resume();
+						}
+					}
+					logWarning("AnalyticsEventListener: database connection restored, resumed consuming");
+					return;
+				}
 			}
-		} catch (Exception e) {
-			logSevere("AnalyticsEventListener: Failed to " + operation + " message delivery via JMX: "
-					+ e.getMessage(), e);
-		}
+		}, "blade-analytics-health");
+		health.setDaemon(true);
+		health.start();
+		logWarning("AnalyticsEventListener: started health check (" + intervalMs + "ms interval)");
 	}
 
 	private boolean testDatabaseConnection() {
@@ -489,69 +460,18 @@ public class AnalyticsEventListener implements MessageListener {
 		return (id != null && !id.isEmpty()) ? id : SettingsManager.getDomainName();
 	}
 
-	// ─────────────────────────────────────────── name interning, unchanged
-
-	// Static, not per-instance. WebLogic pools MDB instances, so instance-level
-	// caches meant the synchronized lookup below did not even cover one JVM —
-	// two pooled instances could race each other on the UNIQUE(name) constraint,
-	// and the loser's violation took the whole event down with it. Static at
-	// least makes the lock mean what it looks like it means. It still does not
-	// coordinate across nodes; a duplicate-key failure is treated as "someone
-	// else won" and re-read.
-	private static final ConcurrentMap<String, Short> eventTypeCache = new ConcurrentHashMap<>();
-	private static final ConcurrentMap<String, Short> attributeNameCache = new ConcurrentHashMap<>();
-
-	private short lookupEventTypeId(EntityManager em, String name) {
-		Short id = eventTypeCache.get(name);
-		if (id != null) {
-			return id.shortValue();
-		}
-		synchronized (eventTypeCache) {
-			id = eventTypeCache.get(name);
-			if (id != null) {
-				return id.shortValue();
-			}
-			TypedQuery<EventType> q = em.createNamedQuery("EventType.findByName", EventType.class);
-			q.setParameter("name", name);
-			List<EventType> results = q.getResultList();
-			EventType et;
-			if (!results.isEmpty()) {
-				et = results.get(0);
-			} else {
-				et = new EventType(name);
-				em.persist(et);
-				em.flush();
-			}
-			eventTypeCache.put(name, Short.valueOf(et.getId()));
-			return et.getId();
-		}
-	}
-
-	private short lookupAttributeNameId(EntityManager em, String name) {
-		Short id = attributeNameCache.get(name);
-		if (id != null) {
-			return id.shortValue();
-		}
-		synchronized (attributeNameCache) {
-			id = attributeNameCache.get(name);
-			if (id != null) {
-				return id.shortValue();
-			}
-			TypedQuery<AttributeName> q = em.createNamedQuery("AttributeName.findByName", AttributeName.class);
-			q.setParameter("name", name);
-			List<AttributeName> results = q.getResultList();
-			AttributeName an;
-			if (!results.isEmpty()) {
-				an = results.get(0);
-			} else {
-				an = new AttributeName(name);
-				em.persist(an);
-				em.flush();
-			}
-			attributeNameCache.put(name, Short.valueOf(an.getId()));
-			return an.getId();
-		}
-	}
+	// The name-interning caches that used to live here are gone with the
+	// `event_types` and `attribute_names` tables they fronted.
+	//
+	// They are worth a note because their failure mode was subtle and cost a
+	// day. Each cache was filled after `em.flush()` but inside the caller's
+	// transaction, so when anything later in the same message rolled back, the
+	// row vanished and the id stayed cached. Every subsequent event then
+	// referenced a lookup row that no longer existed and died on the foreign
+	// key — permanently, until the application was redeployed, and with an
+	// error naming the foreign key rather than the original failure. Storing
+	// the name in the event row removes the cache, the cross-node race on
+	// UNIQUE(name), and this.
 
 	// ─── Defensive logging — sipLogger may be null if SettingsManager hasn't ────
 	// been initialized yet (the SIP servlet half of services/analytics owns it).

@@ -5,10 +5,7 @@ import java.util.Date;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.GenerationType;
 import javax.persistence.Id;
-import javax.persistence.NamedQueries;
 import javax.persistence.Lob;
 import javax.persistence.NamedQuery;
 import javax.persistence.Table;
@@ -19,28 +16,34 @@ import javax.servlet.sip.SipServletContextEvent;
 /// One application instance — one app, on one server, with one configuration.
 /// A restart is a new instance, deliberately.
 ///
-/// **The key is DB-assigned and resolved from the natural key.** The producer
-/// used to mint `id` itself as a random 64-bit value and put it on the wire — a
-/// surrogate primary key invented by the one participant with no database, with a
-/// stated ~1e-11 collision risk. `(name, domain, server, created)` says the same
-/// thing and is already on every event, so [Application#NATURAL_KEY] resolves it
-/// here instead.
+/// **The key is [#idFor] of `(name, domain, server, created)`** — computed, not
+/// assigned, and not invented either.
+///
+/// Both earlier designs are worth naming, because this one is neither. The
+/// producer originally minted `id` as a *random* 64-bit value and put it on the
+/// wire: reproducible by nobody, so the same instance seen twice became two
+/// rows. Replacing that with a database-assigned key fixed the duplication and
+/// bought a different problem — the key had to be read back before any event
+/// could reference it. Hashing the natural key keeps what both were reaching
+/// for: every node computes the same id for the same instance, before the
+/// insert, without a round trip.
+///
+/// The natural-key lookup query this class used to carry is gone: with the key
+/// computed, resolving an instance is a primary-key `find`, and a query that
+/// asks the database to search on the same four columns the key already
+/// encodes is just a slower way to get the same row.
 @Entity
 @Table(name = "applications")
-@NamedQueries({
-		@NamedQuery(name = "Application.findAll", query = "SELECT a FROM Application a"),
-		@NamedQuery(name = Application.NATURAL_KEY,
-				query = "SELECT a FROM Application a WHERE a.name = :name AND a.domain = :domain"
-						+ " AND a.server = :server AND a.created = :created") })
+@NamedQuery(name = "Application.findAll", query = "SELECT a FROM Application a")
 public class Application implements Serializable {
 	private static final long serialVersionUID = 1L;
 
-	/// Resolve an instance by what it is, rather than by a key the producer
-	/// invented.
-	public static final String NATURAL_KEY = "Application.findByNaturalKey";
+	/// This instance's key, from the four fields every event already carries.
+	public static long idFor(String name, String domain, String server, Date created) {
+		return NaturalKey.idFor(name, domain, server, created);
+	}
 
 	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	@Column(updatable = false, unique = true, nullable = false)
 	private long id;
 
@@ -64,7 +67,7 @@ public class Application implements Serializable {
 	@Column(length = 64)
 	private String domain;
 
-	@Column(length = 256)
+	@Column(length = 128)
 	private String host;
 
 	@Column(nullable = false, length = 32)

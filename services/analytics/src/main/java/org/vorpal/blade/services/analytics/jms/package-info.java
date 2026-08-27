@@ -9,8 +9,11 @@
 ///   named `analytics-db`, with no message selector.
 /// - [AnalyticsCatalog] — the live event catalog, read for each type's `persist`
 ///   flag
-/// - [ApplicationResolver] / [SessionResolver] — natural-key resolution of the
-///   two surrogate foreign keys every row needs
+/// - [ApplicationResolver] / [SessionResolver] — the two foreign keys every row
+///   needs, computed from the natural keys on the wire rather than looked up.
+///   See `model/NaturalKey.java`: no key in this schema is assigned by the
+///   database, so resolving is a primary-key `find` and creating needs no
+///   round trip to discover what id the row got.
 /// - [Wire] — reading the payload; pure, and the only part of this package that
 ///   can be tested without a live domain
 ///

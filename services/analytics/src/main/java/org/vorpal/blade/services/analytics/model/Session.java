@@ -6,8 +6,6 @@ import java.util.Date;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.persistence.NamedQueries;
 import javax.persistence.NamedQuery;
@@ -17,11 +15,16 @@ import javax.persistence.TemporalType;
 
 /// One call, as it flows through every application in a chain.
 ///
-/// The database assigns `id`. The producer sends the correlator — the
-/// environment-unique X-Vorpal-ID and the call's birth instant — and
-/// `SessionResolver` maps it to this row by natural key, creating the row if it
-/// has not been seen. Nothing depends on a session start arriving before the
-/// events that reference it.
+/// The key is [#idFor] of the correlator the producer already sends — the
+/// cluster, the X-Vorpal-ID and the call's birth instant. Any node handling any
+/// part of the call computes the same id without asking the database, so
+/// nothing depends on a session start arriving before the events that reference
+/// it: whoever gets there first writes the row, and the others collide with it.
+///
+/// **The birth instant is part of the identity, not decoration.** The
+/// X-Vorpal-ID is 32 bits and is reused over time, so `(cluster, vorpal_id)`
+/// alone eventually names two different calls. `created` carries millisecond
+/// precision throughout the schema for this reason.
 @Entity
 @Table(name = "sessions")
 @NamedQueries({
@@ -41,8 +44,13 @@ public class Session implements Serializable {
 	public Session() {
 	}
 
+	/// This session's key, from the correlator on the wire. Callers use this
+	/// instead of inserting a row to find out what its id turned out to be.
+	public static long idFor(String clusterName, long vorpalId, Date created) {
+		return NaturalKey.idFor(clusterName, vorpalId, created);
+	}
+
 	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	@Column(unique = true, nullable = false)
 	public long getId() {
 		return this.id;

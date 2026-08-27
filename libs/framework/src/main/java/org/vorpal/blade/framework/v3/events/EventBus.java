@@ -48,6 +48,16 @@ public final class EventBus {
 	/// missing, in which case publishing is a no-op rather than an error.
 	private static final ConcurrentMap<String, EventPublisher> PUBLISHERS = new ConcurrentHashMap<>();
 
+	/// Subscribers by subscription name, installed at web-app startup and
+	/// re-established on config reload.
+	///
+	/// Keyed by the SUBSCRIBER's name rather than the destination, because
+	/// several subscriptions legitimately share one destination — that is what a
+	/// topic is for — whereas two subscriptions sharing a name are one
+	/// subscription named twice, with the two apps splitting a single stream
+	/// instead of each getting a copy.
+	private static final ConcurrentMap<String, EventSubscriber> SUBSCRIBERS = new ConcurrentHashMap<>();
+
 	/// The destination [#publish(CloudEvent)] sends to when the caller does not
 	/// name one. Set at startup from the catalog; falls back to [#TOPIC_JNDI].
 	private static volatile String defaultDestinationJndi = TOPIC_JNDI;
@@ -87,13 +97,122 @@ public final class EventBus {
 		return true;
 	}
 
-	/// Remove and close every installed publisher. Called at web-app shutdown.
+	/// Close every installed publisher and subscriber. Called at web-app
+	/// shutdown.
+	///
+	/// Subscribers are closed, not unsubscribed: a redeploy must leave the
+	/// durable subscription in place so the broker holds events until the app
+	/// comes back.
 	public static void unregisterAll() {
 		for (EventPublisher publisher : PUBLISHERS.values()) {
 			publisher.close();
 		}
 		PUBLISHERS.clear();
+		for (EventSubscriber subscriber : SUBSCRIBERS.values()) {
+			subscriber.close();
+		}
+		SUBSCRIBERS.clear();
 		defaultDestinationJndi = TOPIC_JNDI;
+	}
+
+	/// Install a subscriber, keyed by its subscription name.
+	///
+	/// @param subscriber an initialized subscriber
+	public static void register(EventSubscriber subscriber) {
+		if (subscriber != null && subscriber.getSubscriptionName() != null) {
+			SUBSCRIBERS.put(subscriber.getSubscriptionName(), subscriber);
+		}
+	}
+
+	/// The subscriptions currently consuming on this node.
+	///
+	/// Diffed against the catalog on every config reload, so an operator can
+	/// change what a consumer listens to — or stop it listening at all —
+	/// without a redeploy. That was impossible while the selector was an
+	/// annotation constant.
+	public static java.util.Set<String> registeredSubscriptions() {
+		return new java.util.HashSet<>(SUBSCRIBERS.keySet());
+	}
+
+	/// The subscriber for a subscription name, or null when none is installed.
+	public static EventSubscriber subscriberFor(String subscriptionName) {
+		return SUBSCRIBERS.get(subscriptionName);
+	}
+
+	/// Bring one subscription into line with what the configuration now asks
+	/// for, rebuilding it only if something that matters actually changed.
+	///
+	/// **This is the call that makes a consumer reconfigurable.** An app puts
+	/// it in its `SettingsManager.initialize()` hook, which runs on every
+	/// config reload, and the subscription follows the catalog from then on —
+	/// widen the selector and the running consumer starts receiving more;
+	/// narrow it and it stops.
+	///
+	/// Diff, not rebuild, for the same reason the publisher side diffs: tearing
+	/// down a subscription that did not change would drop the consumer's
+	/// connection and re-deliver whatever was in flight, on every unrelated
+	/// edit to an unrelated part of the config.
+	///
+	/// @return true if the subscription was created or rebuilt, false if the
+	///         installed one already matched
+	/// @throws NamingException if a JNDI lookup fails
+	/// @throws JMSException    if the subscription cannot be established
+	public static boolean reconcileSubscriber(String subscriptionName, String connectionFactoryJndi,
+			String destinationJndi, String selector, boolean durable, EventSubscriber.Handler handler)
+			throws javax.naming.NamingException, javax.jms.JMSException {
+		return reconcileSubscriber(subscriptionName, connectionFactoryJndi, destinationJndi, selector, durable,
+				handler, EventSubscriber.DEFAULT_BATCH_SIZE, EventSubscriber.DEFAULT_BATCH_MILLIS);
+	}
+
+	/// @param batchSize   events per transaction
+	/// @param batchMillis how long a partial batch waits before committing
+	/// @see #reconcileSubscriber(String, String, String, String, boolean, EventSubscriber.Handler)
+	public static boolean reconcileSubscriber(String subscriptionName, String connectionFactoryJndi,
+			String destinationJndi, String selector, boolean durable, EventSubscriber.Handler handler,
+			int batchSize, long batchMillis)
+			throws javax.naming.NamingException, javax.jms.JMSException {
+
+		String wanted = (selector == null || selector.isEmpty()) ? null : selector;
+		EventSubscriber installed = SUBSCRIBERS.get(subscriptionName);
+
+		if (installed != null
+				&& equal(installed.getDestinationJndi(), destinationJndi)
+				&& equal(installed.getSelector(), wanted)
+				&& installed.isDurable() == durable) {
+			return false;
+		}
+
+		if (installed != null) {
+			// Close rather than unsubscribe: the broker keeps holding events
+			// for this subscription name during the moment it takes to
+			// re-establish, so a selector change does not lose the backlog.
+			SUBSCRIBERS.remove(subscriptionName);
+			installed.close();
+		}
+
+		EventSubscriber subscriber = new EventSubscriber(connectionFactoryJndi, destinationJndi, subscriptionName,
+				wanted, durable, handler, batchSize, batchMillis);
+		subscriber.init();
+		SUBSCRIBERS.put(subscriptionName, subscriber);
+		return true;
+	}
+
+	private static boolean equal(String a, String b) {
+		return (a == null) ? (b == null) : a.equals(b);
+	}
+
+	/// Stop and close one subscription, leaving it registered with the broker
+	/// so events accumulate while it is away.
+	///
+	/// @param subscriptionName the subscription to stop consuming
+	/// @return true if a subscriber was installed and has now been closed
+	public static boolean unregisterSubscriber(String subscriptionName) {
+		EventSubscriber removed = SUBSCRIBERS.remove(subscriptionName);
+		if (removed == null) {
+			return false;
+		}
+		removed.close();
+		return true;
 	}
 
 	/// The publisher for a destination, or null when none is installed.

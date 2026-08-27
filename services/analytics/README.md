@@ -15,7 +15,9 @@ The service has two halves:
   [services/events](../events/README.md)). It subscribes with no message selector and
   decides per message whether to persist, driven by the event catalog's `persist` flags —
   failing open, so an unknown event type is stored rather than dropped. Rows are written
-  through JPA; surrogate keys are resolved here from the natural keys on the wire.
+  through JPA. No key is assigned by the database: every id is a hash of the row's
+  natural key, computed before the insert, so two cluster members writing the same call
+  agree without consulting each other and a redelivered event collides with its own row.
 - **The SIP layer.** `AnalyticsSipServlet` is a passive B2BUA built on the framework's
   `v3.B2buaServlet`. It logs the call lifecycle and owns the service's configuration; it
   does not route.

@@ -52,20 +52,30 @@ public class EventSubscription implements Serializable {
 
 	private static final long serialVersionUID = 1L;
 
-	/// Above this many types the derived selector stops being worth its length
-	/// and the generator emits a code filter instead.
+	/// Above this many types the derived selector is abandoned and the consumer
+	/// filters in code instead.
 	///
 	/// The JMS specification imposes no selector length limit and **I have not
-	/// found a documented WebLogic maximum** — this is not a limit being respected,
-	/// it is a readability bound. The selector lands in generated source as a
-	/// single-line string literal inside an `@ActivationConfigProperty`, and past
-	/// a handful of reverse-DNS type names nobody reads it, which defeats the
-	/// point of generating something a human can check.
-	public static final int MAX_SELECTOR_TYPES = 8;
+	/// found a documented WebLogic maximum** — this is not a limit being
+	/// respected, it is a self-imposed bound.
+	///
+	/// It used to be 8, for a reason that no longer holds: the selector was
+	/// baked into generated source as a single-line string literal inside an
+	/// `@ActivationConfigProperty`, so past a handful of reverse-DNS type names
+	/// it was unreadable, which defeated the point of generating something a
+	/// human could check. A selector is now built at runtime by
+	/// [EventBus#reconcileSubscriber] and never appears in source at all, so the
+	/// readability argument applies to nothing.
+	///
+	/// The bound is kept, larger, because an unbounded `IN` list built from a
+	/// catalog an operator edits is a way to hand the broker a pathological
+	/// selector. It is set well above the size of a realistic catalog — BLADE
+	/// declares 16 types of its own — so the fallback to code filtering stays
+	/// the rare case it is meant to be.
+	public static final int MAX_SELECTOR_TYPES = 64;
 
-	/// Companion bound to [#MAX_SELECTOR_TYPES], for a few types with very long
-	/// names.
-	public static final int MAX_SELECTOR_LENGTH = 512;
+	/// Companion bound to [#MAX_SELECTOR_TYPES], for types with long names.
+	public static final int MAX_SELECTOR_LENGTH = 4096;
 
 	private String name;
 	private String description;
@@ -175,7 +185,7 @@ public class EventSubscription implements Serializable {
 		}
 		if (selector() == null) {
 			return "No selector: " + count + " declared types exceed the "
-					+ "readability bound for a generated selector, so the filtering happens in code below.";
+					+ "selector size bound, so the filtering happens in code below.";
 		}
 		return "Selector derived from the " + count + " type" + (count == 1 ? "" : "s")
 				+ " this subscription declares. The broker filters, so this app never wakes for an event it "

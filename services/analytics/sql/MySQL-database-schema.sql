@@ -1,41 +1,39 @@
 -- BLADE Analytics schema — MySQL / InnoDB.
 --
--- The single source of truth for the analytics schema. Oracle / SQL Server
--- dialect scripts are regenerated from this one when needed.
+-- This file and its Oracle sibling are maintained side by side and kept in step
+-- by a test, not by a generator. (The Oracle file used to claim it was
+-- "generated from" this one. Nothing generated it, and the two had drifted far
+-- enough apart that the Oracle side could not be written to at all.)
 --
 -- Design notes:
---   * Every surrogate key is DB-assigned (AUTO_INCREMENT). The producer sends
---     facts with natural keys — (name, domain, server, created) for an
---     application, (cluster_name, vorpal_id, created) for a call — and the
---     consumer resolves them to rows. The producer used to mint the application
---     id itself, as a random 64-bit value with a stated ~1e-11 collision risk:
---     a surrogate primary key invented by the one participant with no database.
+--   * NO key is assigned by the database. Every id is a 64-bit hash of the
+--     row's natural key, computed by the writer — see
+--     model/NaturalKey.java, which also explains why. The natural-key UNIQUE
+--     constraints below are retained on purpose: they are what turns a hash
+--     collision into a failed insert instead of two calls silently becoming
+--     one row.
 --   * created/destroyed are DATETIME (not TIMESTAMP) to dodge the 2038 limit.
---   * DATETIME(3) wherever a column takes part in a natural key. The wire carries
---     ISO-8601 instants with milliseconds; a DATETIME(0) column silently truncates
---     them, and the consumer then compares an un-truncated Date against the
---     truncated column and never matches. Every lookup would miss and insert a
---     duplicate — quietly, and at full call rate.
+--   * DATETIME(3) wherever a column takes part in a natural key. The wire
+--     carries ISO-8601 instants with milliseconds, and a DATETIME(0) column
+--     silently truncates them — which, now that the timestamp is an input to
+--     the key, would make two nodes compute two different ids for one call.
 --   * `events.application_id` is a plain FK (no cascade); event cleanup flows
---     applications -> sessions -> events -> attributes, plus time-based retention.
---   * Table names are plural — `session` (singular) is a reserved word in Oracle,
---     so the whole set is pluralized for portability and consistency.
+--     applications -> sessions -> events, plus time-based retention.
+--   * Table names are plural — `session` (singular) is a reserved word in
+--     Oracle, so the whole set is pluralized for portability and consistency.
 --
 -- Database creation:
 --     CREATE DATABASE IF NOT EXISTS vorpal;   -- or JDBC createDatabaseIfNotExist=true
 
-DROP TABLE IF EXISTS attributes;
-DROP TABLE IF EXISTS attribute_names;
 DROP TABLE IF EXISTS events;
-DROP TABLE IF EXISTS event_types;
 DROP TABLE IF EXISTS session_keys;
 DROP TABLE IF EXISTS sessions;
 DROP TABLE IF EXISTS applications;
 
 -- application instances — unique deployments in time
 CREATE TABLE applications(
-   -- DB-assigned; resolved from the natural key below
-   id BIGINT NOT NULL AUTO_INCREMENT,
+   -- hash of (name, domain, server, created); never auto-assigned
+   id BIGINT NOT NULL,
    CONSTRAINT application_pk PRIMARY KEY(id),
    name VARCHAR(32) NOT NULL,          -- e.g. 'transfer' (no version)
    version VARCHAR(16) DEFAULT NULL,   -- e.g. '1.0.1'
@@ -48,11 +46,9 @@ CREATE TABLE applications(
    comments TEXT NULL,                 -- user-defined data (JSON)
 
    -- An application INSTANCE is one app, on one server, with one configuration —
-   -- a restart is a new instance, deliberately. That is exactly what these four
-   -- columns say, so they are the identity and the consumer resolves on them.
-   -- Without this constraint two cluster members racing the same
-   -- application.started would each insert their own row and every later event
-   -- would attach to whichever one it happened to find.
+   -- a restart is a new instance, deliberately. These four columns are the
+   -- identity, and the id above is their hash. Keeping the constraint means a
+   -- hash collision fails loudly here rather than merging two instances.
    CONSTRAINT application_natural_uk UNIQUE (name, domain, server, created),
 
    -- tenant discriminator: session/event rows reach their tenant via
@@ -61,8 +57,8 @@ CREATE TABLE applications(
 );
 
 CREATE TABLE sessions(
-   -- DB-assigned key (producer no longer mints a session id)
-   id BIGINT NOT NULL AUTO_INCREMENT,
+   -- hash of (cluster_name, vorpal_id, created)
+   id BIGINT NOT NULL,
    CONSTRAINT session_pk PRIMARY KEY(id),
 
    application_id BIGINT NOT NULL,
@@ -78,10 +74,13 @@ CREATE TABLE sessions(
    cluster_name VARCHAR(64) NOT NULL,
    vorpal_id    BIGINT      NOT NULL,
 
-   -- Millisecond precision is load-bearing: this column is part of the natural
-   -- key the consumer resolves on, and the wire carries milliseconds.
+   -- Millisecond precision is load-bearing: this column is an input to the
+   -- primary key, and the wire carries milliseconds. It is also what keeps the
+   -- correlator unique over time — the X-Vorpal-ID is 32 bits and is reused.
    created   DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),  -- real call-start time
    destroyed DATETIME(3) NULL DEFAULT NULL,                      -- NULL while open
+
+   CONSTRAINT session_natural_uk UNIQUE (cluster_name, vorpal_id, created),
 
    INDEX idx_session_correlator (cluster_name, vorpal_id, destroyed),
    INDEX idx_session_created (created),
@@ -106,17 +105,11 @@ CREATE TABLE session_keys(
    INDEX idx_session_key_lookup (name, value)
 );
 
--- normalized event-name lookup; populated lazily by the consumer
-CREATE TABLE event_types(
-   id SMALLINT NOT NULL AUTO_INCREMENT,
-   CONSTRAINT event_type_pk PRIMARY KEY(id),
-   name VARCHAR(64) NOT NULL,
-   CONSTRAINT event_type_uk UNIQUE (name)
-);
-
 -- events associated with a session (and/or application for sessionless events)
 CREATE TABLE events(
-   id BIGINT NOT NULL AUTO_INCREMENT,
+   -- hash of event_uid: a redelivered event computes the key it already has and
+   -- collides with its own row, so replay is a no-op rather than a duplicate.
+   id BIGINT NOT NULL,
    CONSTRAINT event_pk PRIMARY KEY(id),
 
    application_id BIGINT NOT NULL,
@@ -127,46 +120,37 @@ CREATE TABLE events(
    CONSTRAINT event_fk2 FOREIGN KEY (session_id)
       REFERENCES sessions(id) ON DELETE CASCADE,
 
-   event_type_id SMALLINT NOT NULL,
-   CONSTRAINT event_fk3 FOREIGN KEY (event_type_id)
-      REFERENCES event_types(id),
+   -- The event name, inline. It lived in an event_types lookup table for a
+   -- while; that saved a few bytes a row and cost an interning cache, a race
+   -- between cluster members creating the same lookup row, and a join on every
+   -- read. Sixty-four characters is cheaper than all three.
+   type VARCHAR(64) NOT NULL,
 
-   -- The CloudEvent id, so a redelivery does not become a second row.
-   -- A durable topic subscription redelivers as a matter of course — a rolling
-   -- restart makes it certain — and `events` has no other natural key to
-   -- collide on. Nullable, so a row written by anything that does not carry one
-   -- is still accepted; NULLs do not collide in a UNIQUE index.
-   event_uid CHAR(36) NULL,
+   -- The CloudEvent id this row was built from. NOT NULL, because the primary
+   -- key is derived from it. Kept alongside the key because the derivation is
+   -- one way and an operator holding an id from a producer log has to be able
+   -- to find the row.
+   event_uid CHAR(36) NOT NULL,
    CONSTRAINT event_uid_uk UNIQUE (event_uid),
 
    -- DATETIME, not TIMESTAMP: the 2038 limit the header calls out applies here
    -- too, and this column was the one place it had been missed.
    created DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
+   -- The event's attributes as one JSON object of name to value. This replaced
+   -- an attributes/attribute_names pair that cost one insert per attribute on
+   -- write and a two-table join plus a string-to-number cast on read.
+   payload JSON NULL,
+
    INDEX idx_event_session (session_id, created),
-   INDEX idx_event_type_created (event_type_id, created),
-   INDEX idx_event_created (created)
-);
+   INDEX idx_event_type_created (type, created),
+   INDEX idx_event_created (created),
 
--- normalized attribute-name lookup; populated lazily by the consumer
-CREATE TABLE attribute_names(
-   id SMALLINT NOT NULL AUTO_INCREMENT,
-   CONSTRAINT attribute_name_pk PRIMARY KEY(id),
-   name VARCHAR(64) NOT NULL,
-   CONSTRAINT attribute_name_uk UNIQUE (name)
-);
-
--- key/value attributes attached to an event
-CREATE TABLE attributes(
-   event_id BIGINT NOT NULL,
-   CONSTRAINT attribute_fk1 FOREIGN KEY (event_id)
-      REFERENCES events(id) ON DELETE CASCADE,
-   attribute_name_id SMALLINT NOT NULL,
-   CONSTRAINT attribute_fk2 FOREIGN KEY (attribute_name_id)
-      REFERENCES attribute_names(id),
-   CONSTRAINT attribute_pk PRIMARY KEY(event_id, attribute_name_id),
-   -- typical SIP values are <200 chars; cap at 1024 to keep rows in-page
-   value VARCHAR(1024) NOT NULL
+   -- Attribute values arrive as strings and are stored as strings, faithful to
+   -- the wire. The reader's common question is numeric, so the cast lives in an
+   -- index rather than in every query. MySQL 8.0.13+ for functional indexes.
+   INDEX idx_event_risk ((CAST(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.riskScore'))
+                               AS DECIMAL(6,4))))
 );
 
 
@@ -174,14 +158,22 @@ CREATE TABLE attributes(
 -- Time-based retention / partitioning (operator-enabled when policy is set)
 -- ─────────────────────────────────────────────────────────────────────────
 -- MySQL InnoDB requires the partitioning column in every UNIQUE index, so to
--- RANGE-partition `events` by `created`, fold it into the PK and re-create:
+-- RANGE-partition `events` by `created`, fold it into the PK and the event_uid
+-- constraint, then re-create:
 --
 --   ALTER TABLE events
 --     DROP PRIMARY KEY,
 --     ADD PRIMARY KEY (id, created),
+--     DROP INDEX event_uid_uk,
+--     ADD UNIQUE KEY event_uid_uk (event_uid, created),
 --     PARTITION BY RANGE (TO_DAYS(created)) (
 --       PARTITION p_2026 VALUES LESS THAN (TO_DAYS('2027-01-01')),
 --       PARTITION p_2027 VALUES LESS THAN (TO_DAYS('2028-01-01')),
 --       PARTITION p_future VALUES LESS THAN MAXVALUE
 --     );
 --   ALTER TABLE events DROP PARTITION p_2026;   -- annual retention drop
+--
+-- Note what widening event_uid_uk costs: redelivery is only deduped within a
+-- partition. That is acceptable because redelivery happens within minutes of
+-- the original and partitions are annual, but it is a real narrowing of the
+-- guarantee and should be a deliberate choice, not a surprise.

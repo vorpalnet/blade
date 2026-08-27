@@ -1,7 +1,6 @@
 package org.vorpal.blade.services.analytics.jms;
 
 import java.util.Date;
-import java.util.List;
 
 import javax.persistence.EntityManager;
 
@@ -46,36 +45,22 @@ public final class ApplicationResolver {
 	public static Long resolveOrCreate(EntityManager em, String name, String domain, String server, Date started,
 			String host, String tenant) {
 
-		Application existing = find(em, name, domain, server, started);
-		if (existing != null) {
-			return Long.valueOf(existing.getId());
+		Date created = (started != null) ? started : new Date();
+		long id = Application.idFor(name, domain, server, created);
+
+		if (em.find(Application.class, id) != null) {
+			return Long.valueOf(id);
 		}
 
 		Application row = new Application();
+		row.setId(id);
 		row.setName(name);
 		row.setDomain(domain);
 		row.setServer(server);
-		row.setCreated((started != null) ? started : new Date());
+		row.setCreated(created);
 		row.setHost(host);
 		row.setTenant(tenant);
-
-		try {
-			em.persist(row);
-			em.flush();
-			return Long.valueOf(row.getId());
-		} catch (RuntimeException raced) {
-			// Another cluster member inserted the same instance between the
-			// lookup and the insert — every member of a cluster publishes its own
-			// application.started, and two of them can land together.
-			// `application_natural_uk` is doing its job; re-read rather than fail
-			// the message.
-			em.clear();
-			Application found = find(em, name, domain, server, started);
-			if (found != null) {
-				return Long.valueOf(found.getId());
-			}
-			throw raced;
-		}
+		return insert(em, row, id);
 	}
 
 	/// Record an instance's stop.
@@ -84,36 +69,44 @@ public final class ApplicationResolver {
 	/// reason [SessionResolver#close] does: the only record that this instance
 	/// existed is worth more than the tidiness of refusing it.
 	public static Long close(EntityManager em, String name, String domain, String server, Date started, Date stopped) {
-		Application existing = find(em, name, domain, server, started);
+		Date created = (started != null) ? started : new Date();
+		long id = Application.idFor(name, domain, server, created);
+
+		Application existing = em.find(Application.class, id);
 		if (existing == null) {
+			// A stop whose start this node never saw. `started` is on the wire
+			// for exactly this reason, so the key still resolves to the row the
+			// instance would have had.
 			Application row = new Application();
+			row.setId(id);
 			row.setName(name);
 			row.setDomain(domain);
 			row.setServer(server);
-			row.setCreated((started != null) ? started : new Date());
+			row.setCreated(created);
 			row.setDestroyed(stopped);
-			em.persist(row);
-			em.flush();
-			return Long.valueOf(row.getId());
+			return insert(em, row, id);
 		}
 		if (existing.getDestroyed() == null) {
 			existing.setDestroyed(stopped);
 			em.merge(existing);
 		}
-		return Long.valueOf(existing.getId());
+		return Long.valueOf(id);
 	}
 
-	private static Application find(EntityManager em, String name, String domain, String server, Date started) {
-		if (name == null || started == null) {
-			return null;
+	/// Insert a row whose key is already known. A duplicate-key failure means
+	/// another cluster member wrote the identical row first — every member of a
+	/// cluster publishes its own `application.started` — so the id is returned
+	/// rather than the message failed.
+	private static Long insert(EntityManager em, Application row, long id) {
+		try {
+			em.persist(row);
+			return Long.valueOf(id);
+		} catch (RuntimeException raced) {
+			em.clear();
+			if (em.find(Application.class, id) != null) {
+				return Long.valueOf(id);
+			}
+			throw raced;
 		}
-		List<Application> found = em.createNamedQuery(Application.NATURAL_KEY, Application.class)
-				.setParameter("name", name)
-				.setParameter("domain", domain)
-				.setParameter("server", server)
-				.setParameter("created", started)
-				.setMaxResults(1)
-				.getResultList();
-		return found.isEmpty() ? null : found.get(0);
 	}
 }
