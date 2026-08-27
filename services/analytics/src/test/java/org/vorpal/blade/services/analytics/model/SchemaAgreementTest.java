@@ -86,6 +86,11 @@ class SchemaAgreementTest {
 	}
 
 	@Test
+	void sqlServerSchemaMatchesTheEntities() throws IOException {
+		assertSchemaMatches("MSSQL-database-schema.sql");
+	}
+
+	@Test
 	@DisplayName("the test schema matches the entities too, so it cannot drift")
 	void testSchemaMatchesTheEntities() throws IOException {
 		// AnalyticsWritePathTest runs against this one. A test database that has
@@ -94,22 +99,48 @@ class SchemaAgreementTest {
 		assertSchemaMatches("hsqldb-schema.sql");
 	}
 
+	/// Every shipped dialect, not just two.
+	///
+	/// A third database was added the moment a customer asked for one, and the
+	/// cost of that is entirely in keeping these files saying the same thing.
+	/// Nothing generates them from one another — a claim the Oracle file used
+	/// to make and nothing honoured — so this is what holds them together.
+	private static final String[] SHIPPED = {
+			"MySQL-database-schema.sql", "Oracle-database-schema.sql", "MSSQL-database-schema.sql" };
+
 	@Test
-	void bothSchemasDeclareTheSameTablesAndColumns() throws IOException {
-		Map<String, Map<String, Integer>> mysql = parse("MySQL-database-schema.sql");
-		Map<String, Map<String, Integer>> oracle = parse("Oracle-database-schema.sql");
+	@DisplayName("every shipped dialect declares the same tables and columns")
+	void everyDialectDeclaresTheSameTablesAndColumns() throws IOException {
+		Map<String, Map<String, Integer>> reference = logical(SHIPPED[0]);
 
-		assertEquals(mysql.keySet(), oracle.keySet(), "the two schema files declare different tables");
+		for (int i = 1; i < SHIPPED.length; i++) {
+			Map<String, Map<String, Integer>> other = logical(SHIPPED[i]);
+			assertEquals(reference.keySet(), other.keySet(),
+					SHIPPED[i] + " declares different tables from " + SHIPPED[0]);
 
-		for (String table : mysql.keySet()) {
-			// MySQL carries `open_key`, a generated column standing in for a
-			// filtered unique index that Oracle expresses as a function-based
-			// index instead. It is the one column that legitimately exists on
-			// one side only.
-			Map<String, Integer> left = new LinkedHashMap<>(mysql.get(table));
-			left.remove("open_key");
-			assertEquals(left.keySet(), oracle.get(table).keySet(), "table " + table + " differs between the two schema files");
+			for (String table : reference.keySet()) {
+				assertEquals(reference.get(table).keySet(), other.get(table).keySet(),
+						"table `" + table + "` differs between " + SHIPPED[0] + " and " + SHIPPED[i]);
+			}
 		}
+	}
+
+	/// A schema's columns with the dialect-only ones removed, so the files can
+	/// be compared for what they mean rather than how they spell it.
+	///
+	/// `open_key` is MySQL's alone: a generated column standing in for a
+	/// filtered unique index, which Oracle writes as a function-based index and
+	/// SQL Server writes directly. All three say "one open session per
+	/// correlator"; only one of them needs a column to say it.
+	private static Map<String, Map<String, Integer>> logical(String scriptName) throws IOException {
+		Map<String, Map<String, Integer>> parsed = parse(scriptName);
+		Map<String, Map<String, Integer>> logical = new LinkedHashMap<>();
+		for (Map.Entry<String, Map<String, Integer>> table : parsed.entrySet()) {
+			Map<String, Integer> columns = new LinkedHashMap<>(table.getValue());
+			columns.remove("open_key");
+			logical.put(table.getKey(), columns);
+		}
+		return logical;
 	}
 
 	// ─────────────────────────────────────────────────────────── the machinery
@@ -244,7 +275,7 @@ class SchemaAgreementTest {
 	/// column disappear, which is the safe direction to fail in.
 	private static final String TYPES = "BIGINT|INT|INTEGER|SMALLINT|DECIMAL|NUMBER"
 			+ "|VARCHAR|VARCHAR2|CHAR|TEXT|CLOB|JSON|DATETIME|TIMESTAMP|BLOB|DATE"
-			+ "|LONGVARCHAR";
+			+ "|LONGVARCHAR|NVARCHAR|NCHAR|DATETIME2";
 
 	/// A column line: a name, one of the types above, and optionally a width.
 	private static final Pattern COLUMN = Pattern.compile(
