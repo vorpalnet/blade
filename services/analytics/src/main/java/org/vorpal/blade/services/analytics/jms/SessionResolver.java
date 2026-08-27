@@ -54,7 +54,16 @@ public final class SessionResolver {
 	public static Long resolveOrCreate(EntityManager em, String clusterName, long vorpalId, Date created,
 			long applicationId) {
 
-		Date birth = birthInstant(em, clusterName, vorpalId, created);
+		if (created == null) {
+			// No birth instant on the wire, so no key can be computed. Adopt
+			// the correlator's open session BY ITS ID — see #openSessionId.
+			Long open = openSessionId(em, clusterName, vorpalId);
+			if (open != null) {
+				return open;
+			}
+			created = new Date();
+		}
+		Date birth = created;
 		long id = Session.idFor(clusterName, vorpalId, birth);
 
 		Session existing = em.find(Session.class, id);
@@ -78,7 +87,19 @@ public final class SessionResolver {
 	public static Long close(EntityManager em, String clusterName, long vorpalId, Date created, long applicationId,
 			Timestamp destroyed) {
 
-		Date birth = birthInstant(em, clusterName, vorpalId, created);
+		if (created == null) {
+			Long open = openSessionId(em, clusterName, vorpalId);
+			if (open != null) {
+				Session row = em.find(Session.class, open);
+				if (row != null && row.getDestroyed() == null) {
+					row.setDestroyed(destroyed);
+					em.merge(row);
+				}
+				return open;
+			}
+			created = new Date();
+		}
+		Date birth = created;
 		long id = Session.idFor(clusterName, vorpalId, birth);
 
 		Session existing = em.find(Session.class, id);
@@ -101,24 +122,28 @@ public final class SessionResolver {
 		return id;
 	}
 
-	/// The birth instant to key on.
+	/// The id of the correlator's one open session, or null when there is none.
 	///
-	/// Normally it is on the wire and this is a no-op. When it is absent the
-	/// key cannot be computed, so fall back to the correlator's one open
-	/// session and adopt *its* birth instant — that is the row the message
-	/// means. With no open session either, mint an instant and let this call
-	/// have its own identity; a row under a slightly-wrong timestamp beats
-	/// discarding the message.
-	private static Date birthInstant(EntityManager em, String clusterName, long vorpalId, Date created) {
-		if (created != null) {
-			return created;
-		}
+	/// **Returns the id, deliberately, and not the row's birth instant.** This
+	/// used to hand back `created` for the caller to hash, which meant deriving
+	/// a key from a timestamp that had been through the database and back.
+	///
+	/// That is the one rule this schema's keys depend on. A key is computed
+	/// from the WIRE — see [org.vorpal.blade.framework.v3.analytics.NaturalKey]
+	/// — because nothing guarantees a stored timestamp round-trips
+	/// bit-for-bit through a column, a driver and a time zone. When it does
+	/// not, the recomputed id misses the very row it was read from, the insert
+	/// that follows collides on the natural-key constraint instead, and the
+	/// message fails for a reason that looks nothing like the cause.
+	///
+	/// The row's own id needs no derivation. It is already stored.
+	private static Long openSessionId(EntityManager em, String clusterName, long vorpalId) {
 		List<Session> open = em.createNamedQuery("Session.findOpen", Session.class)
 				.setParameter("clusterName", clusterName)
 				.setParameter("vorpalId", vorpalId)
 				.setMaxResults(1)
 				.getResultList();
-		return open.isEmpty() ? new Date() : open.get(0).getCreated();
+		return open.isEmpty() ? null : Long.valueOf(open.get(0).getId());
 	}
 
 	/// Insert a row whose key is already known.

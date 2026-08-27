@@ -17,6 +17,11 @@
 --     DB-assigned keys the provider cannot use identity columns here at all —
 --     no EclipseLink Oracle platform reports native identity support, so it
 --     silently substitutes one default sequence shared by every table.
+--   * TWO KINDS OF TIMESTAMP live here. `applications.created` and
+--     `sessions.created` are IDENTITY — they feed the row's key and
+--     disambiguate an X-Vorpal-ID that is only 32 bits and gets reused.
+--     `events.created` is a FACT ABOUT TIME, and is what a report groups by.
+--     Never recompute a key from a stored identity timestamp; read the id.
 --   * JSON is a CLOB with an IS JSON check rather than the native 21c+ JSON
 --     type, so this script runs unchanged on a 19c Autonomous Database.
 --     Swapping to the native type on 23ai is a column change, not a redesign.

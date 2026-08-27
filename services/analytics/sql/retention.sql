@@ -1,0 +1,48 @@
+-- BLADE Analytics retention — run this deliberately; nothing runs it for you.
+--
+-- `events` grows without bound. There is no scheduler in BLADE that deletes
+-- rows and this file is not one either: it is the statements an operator or a
+-- DBA schedules once a retention policy actually exists.
+--
+-- That is a deliberate choice rather than an omission. A job whose whole
+-- purpose is destroying data should not run because a WAR was deployed, on
+-- every node of a cluster at once, under a default nobody chose.
+--
+-- Deleting `sessions` and `applications` cascades to everything beneath them
+-- (see the ON DELETE CASCADE in the schema files), so the ORDER below matters
+-- only if you choose to delete events on their own.
+--
+-- ─────────────────────────────────────────────────────────────────────────
+-- Time-based delete. Substitute your own window.
+-- ─────────────────────────────────────────────────────────────────────────
+
+-- MySQL: events older than 90 days, in bounded chunks so one statement does
+-- not hold a long transaction against a live writer. Repeat until it reports
+-- zero rows.
+--   DELETE FROM events
+--    WHERE created < NOW() - INTERVAL 90 DAY
+--    LIMIT 10000;
+
+-- Oracle: the same window. Repeat until SQL%ROWCOUNT is zero.
+--   DELETE FROM events
+--    WHERE created < SYSTIMESTAMP - INTERVAL '90' DAY
+--      AND ROWNUM <= 10000;
+
+-- Closed sessions whose events are already gone, and the application
+-- instances left with nothing under them:
+--   DELETE FROM sessions
+--    WHERE destroyed IS NOT NULL
+--      AND id NOT IN (SELECT session_id FROM events WHERE session_id IS NOT NULL);
+--   DELETE FROM applications
+--    WHERE destroyed IS NOT NULL
+--      AND id NOT IN (SELECT application_id FROM events);
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- Partitioning, which is what you want at volume
+-- ─────────────────────────────────────────────────────────────────────────
+-- Dropping a partition is near-instant and does not touch the rest of the
+-- table, where a DELETE of the same rows writes as much undo as the rows it
+-- removes. The recipes and their trade-offs are in the headers of
+-- MySQL-database-schema.sql and Oracle-database-schema.sql — including the
+-- one real cost on MySQL, where folding `created` into the unique key narrows
+-- redelivery de-duplication to within a partition.

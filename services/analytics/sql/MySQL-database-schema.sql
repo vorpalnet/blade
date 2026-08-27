@@ -13,6 +13,14 @@
 --     hash
 --     collision into a failed insert instead of two calls silently becoming
 --     one row.
+--   * TWO KINDS OF TIMESTAMP live here, and conflating them is a bug waiting
+--     to happen. `applications.created` and `sessions.created` are IDENTITY:
+--     they feed the row's key and exist to disambiguate an X-Vorpal-ID that
+--     is only 32 bits and gets reused. `events.created` is a FACT ABOUT TIME
+--     — when that event occurred — and is what a report groups by. A
+--     callStarted occurs after the session it belongs to was born, so those
+--     columns legitimately differ. Never recompute a key from a stored
+--     identity timestamp; read the row's id instead.
 --   * created/destroyed are DATETIME (not TIMESTAMP) to dodge the 2038 limit.
 --   * DATETIME(3) wherever a column takes part in a natural key. The wire
 --     carries ISO-8601 instants with milliseconds, and a DATETIME(0) column

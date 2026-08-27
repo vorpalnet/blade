@@ -113,8 +113,72 @@ public final class EventBusControl implements EventBusControlMXBean {
 					.append(subscriber.getSelector() == null ? "(none — takes everything)"
 							: subscriber.getSelector())
 					.append('\n');
+
+			org.vorpal.blade.framework.v3.metrics.Counter.Series[] meters = EventBus.metersFor(name);
+			if (meters != null) {
+				// `failed` is the one to read. Each message it counts was rolled
+				// back and redelivered, and a message that keeps failing ends up
+				// on the error destination below.
+				status.append("      received=").append(value(meters[0]))
+						.append(" handled=").append(value(meters[1]))
+						.append(" failed=").append(value(meters[2]))
+						.append('\n');
+			}
 		}
+
+		status.append(errorQueueLine());
 		return status.toString();
+	}
+
+	private static String value(org.vorpal.blade.framework.v3.metrics.Counter.Series series) {
+		return (series == null) ? "?" : Long.toString(series.value());
+	}
+
+	/// How many messages are parked on the error destination, as far as this
+	/// server can see.
+	///
+	/// **This server's member, not the cluster's total.** The engine tier can
+	/// reach its own runtime MBean server (`java:comp/env/jmx/runtime`) but not
+	/// the domain-wide one — `java:comp/env/jmx/domainRuntime` exists only on
+	/// the AdminServer — so an application can count what is parked on the
+	/// member it is hosting and nothing more. That is honest and still useful:
+	/// the question being asked is "is anything failing", and any non-zero
+	/// answer settles it.
+	///
+	/// Never throws. A control surface that cannot report a number must still
+	/// report everything else.
+	private static String errorQueueLine() {
+		try {
+			// The PLATFORM server, not a JNDI lookup. `java:comp/env/jmx/runtime`
+			// is an EJB binding and is simply not present in a web application —
+			// it fails with NameNotFoundException, which is how the first attempt
+			// at this was written and what it reported. WebLogic publishes its
+			// runtime beans under `com.bea` on the platform MBean server, which
+			// this class already uses to register itself.
+			javax.management.MBeanServer runtime = ManagementFactory.getPlatformMBeanServer();
+			java.util.Set<ObjectName> found = runtime.queryNames(
+					new ObjectName("com.bea:Type=JMSDestinationRuntime,*"), null);
+			long parked = 0;
+			int matched = 0;
+			for (ObjectName destination : found) {
+				String beanName = String.valueOf(destination.getKeyProperty("Name"));
+				if (!beanName.contains("BladeEventBusErrorQueue")) {
+					continue;
+				}
+				matched++;
+				Object count = runtime.getAttribute(destination, "MessagesCurrentCount");
+					if (count instanceof Number) {
+					parked += ((Number) count).longValue();
+				}
+			}
+			if (matched == 0) {
+				return "error queue (" + EventBus.ERROR_QUEUE_JNDI + "): not hosted on this server\n";
+			}
+			return "error queue (" + EventBus.ERROR_QUEUE_JNDI + "): " + parked + " parked"
+					+ (parked > 0 ? "  <-- EVENTS WERE NOT PROCESSED" : "") + "\n";
+		} catch (Throwable t) {
+			return "error queue (" + EventBus.ERROR_QUEUE_JNDI + "): unreadable (" + t + ")\n";
+		}
 	}
 
 	@Override

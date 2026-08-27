@@ -84,9 +84,65 @@ public class AnalyticsEventListener implements EventSubscriber.Handler {
 	/// is what the JSON library documents and what a pooled consumer needs.
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
+	/// The same two numbers as [#persisted] and [#dropped], where an operator
+	/// can see them.
+	///
+	/// The adders alone were only ever reported when `dropped` crossed a
+	/// multiple of 10,000 — which, now that the broker filters, may never
+	/// happen at all. "How many rows has this written" should not require
+	/// reading a log, so they are registered with the application's metrics
+	/// alongside `events.published` and friends.
+	private static volatile org.vorpal.blade.framework.v3.metrics.Counter.Series persistedMeter;
+	private static volatile org.vorpal.blade.framework.v3.metrics.Counter.Series droppedMeter;
+
+	/// Register the write counters. Never fatal: a sink that cannot count must
+	/// still record.
+	public static void meter(javax.servlet.ServletContext context) {
+		try {
+			org.vorpal.blade.framework.v3.metrics.MetricsRegistry metrics =
+					org.vorpal.blade.framework.v3.metrics.MetricsRegistry.from(context);
+			if (metrics == null) {
+				return;
+			}
+			persistedMeter = metrics.counter("analytics.persisted",
+					"Events written to the analytics database").series();
+			droppedMeter = metrics.counter("analytics.dropped",
+					"Events received but not marked persisted by the catalog. Near zero once the "
+							+ "broker filters; a rising count means the subscription and the catalog "
+							+ "disagree.").series();
+		} catch (Throwable t) {
+			logWarning("AnalyticsEventListener: write counters unavailable: " + t);
+		}
+	}
+
+	private static void count(org.vorpal.blade.framework.v3.metrics.Counter.Series series, int times) {
+		if (series != null) {
+			for (int i = 0; i < times; i++) {
+				series.increment();
+			}
+		}
+	}
+
+	public AnalyticsEventListener() {
+	}
+
+	/// Write through a caller-supplied factory instead of the container's.
+	///
+	/// The seam exists so the write path can be exercised without a domain.
+	/// Everything this class does that is worth testing — resolving a parent
+	/// before its child, surviving a redelivery, adopting an open session when
+	/// the wire carries no birth instant — needed a live database to observe,
+	/// which is how an insert-ordering bug reached a production deploy.
+	AnalyticsEventListener(EntityManagerFactory factory) {
+		this.emf = factory;
+	}
+
 	/// Open the persistence unit. Called once when the subscription starts.
 	public void start() {
 		sipLogger = SettingsManager.getSipLogger();
+		if (emf != null) {
+			return;
+		}
 		try {
 			emf = Persistence.createEntityManagerFactory("BladeAnalytics");
 		} catch (Exception e) {
@@ -128,6 +184,7 @@ public class AnalyticsEventListener implements EventSubscriber.Handler {
 					// broker: this is the window between an operator clearing
 					// a `persist` flag and the subscription being rebuilt.
 					dropped.increment();
+					count(droppedMeter, 1);
 					continue;
 				}
 				persist(em, event, type);
@@ -135,6 +192,7 @@ public class AnalyticsEventListener implements EventSubscriber.Handler {
 			}
 			em.getTransaction().commit();
 			persisted.add(written);
+			count(persistedMeter, written);
 
 		} catch (Exception ex) {
 			rollback(em);
@@ -314,6 +372,24 @@ public class AnalyticsEventListener implements EventSubscriber.Handler {
 		}
 		event.setPayload(payload.toString());
 
+		// Skip an event already recorded, rather than inserting it again.
+		//
+		// **A deterministic key makes the row predictable; it does not make the
+		// write idempotent.** `persist` on an existing primary key throws — so
+		// without this check every redelivery fails, gets redelivered, fails
+		// again, and is eventually parked on the error destination. And
+		// redelivery is routine here, not exceptional: a durable subscription
+		// replays on every rolling restart, and a batch that fails partway is
+		// redelivered whole, including the events in it that succeeded.
+		//
+		// An event is an immutable fact, so a row that exists needs nothing
+		// done to it. The lookup is a primary-key find, served from the
+		// persistence context for anything already touched in this batch.
+		if (em.find(Event.class, event.getId()) != null) {
+			logFine("AnalyticsEventListener: event " + event.getEventUid() + " already recorded");
+			return;
+		}
+
 		// No flush. The key came from the CloudEvent id before the insert, and
 		// nothing downstream needs to read it back — which is what forced a
 		// mid-transaction flush here before.
@@ -456,8 +532,24 @@ public class AnalyticsEventListener implements EventSubscriber.Handler {
 	/// `cluster_name` on every session row so a shared analytics database can tell
 	/// environments apart — several clusters may all be called `SIPREC`.
 	private static String domainId() {
-		String id = AnalyticsSipServlet.settingsManager.getCurrent().domainId;
-		return (id != null && !id.isEmpty()) ? id : SettingsManager.getDomainName();
+		// Defensive on every hop. This is read while writing a session row, and
+		// the SIP half of this application may not have initialized when the
+		// first event arrives — the subscription starts from a servlet context
+		// listener, which the container may run first. An NPE here would fail
+		// the batch for a reason that has nothing to do with the batch.
+		try {
+			if (AnalyticsSipServlet.settingsManager != null
+					&& AnalyticsSipServlet.settingsManager.getCurrent() != null) {
+				String id = AnalyticsSipServlet.settingsManager.getCurrent().domainId;
+				if (id != null && !id.isEmpty()) {
+					return id;
+				}
+			}
+		} catch (Throwable t) {
+			// Fall through to the domain name.
+		}
+		String domain = SettingsManager.getDomainName();
+		return (domain != null && !domain.isEmpty()) ? domain : "unknown";
 	}
 
 	// The name-interning caches that used to live here are gone with the

@@ -339,6 +339,22 @@ public class EventSubscriber {
 		private Thread pump;
 		private volatile boolean legClosed;
 
+		/// How many events this member batches right now.
+		///
+		/// **Drops to one after any failed flush, and only goes back up after a
+		/// clean one.** A transacted JMS session cannot acknowledge part of a
+		/// batch, so a batch containing one message that always fails takes its
+		/// neighbours down with it: all of them roll back, all of them are
+		/// redelivered together, all of them accumulate redelivery counts, and
+		/// all of them end up on the error destination — sixty-three good
+		/// events destroyed by one bad one, in exactly the scenario the error
+		/// destination exists to contain.
+		///
+		/// The batch in hand cannot be salvaged, so the NEXT pass is narrowed
+		/// instead. Redelivered one at a time, the poison message fails alone
+		/// and is parked alone while its neighbours commit.
+		private int currentBatchSize = batchSize;
+
 		private Leg(String memberName, String name) {
 			this.memberName = memberName;
 			this.name = name;
@@ -377,7 +393,7 @@ public class EventSubscriber {
 						}
 					}
 
-					boolean full = batch.size() >= batchSize;
+					boolean full = batch.size() >= currentBatchSize;
 					boolean expired = !batch.isEmpty() && System.currentTimeMillis() >= deadline;
 					if (full || expired || (message == null && !batch.isEmpty())) {
 						flush(batch);
@@ -414,9 +430,17 @@ public class EventSubscriber {
 				handler.handle(batch);
 				session.commit();
 				count(handled, size);
+				if (currentBatchSize != batchSize) {
+					// A clean pass: whatever was poisoning this stream is past,
+					// so stop paying one transaction per event.
+					currentBatchSize = batchSize;
+				}
 			} catch (Exception e) {
 				count(failed, size);
 				rollback();
+				if (size > 1) {
+					currentBatchSize = 1;
+				}
 			} finally {
 				batch.clear();
 			}

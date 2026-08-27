@@ -1,0 +1,36 @@
+<persistence xmlns="http://xmlns.jcp.org/xml/ns/persistence"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/persistence
+		http://xmlns.jcp.org/xml/ns/persistence/persistence_2_2.xsd"
+	version="2.2"
+>
+	<!-- The write path, without a container.
+
+	     A SEPARATE unit name from the shipped one on purpose: both files are on
+	     the test classpath, and reusing the name would mean the test either
+	     silently ran against the shipped unit's JNDI data source or replaced
+	     it. Different names, no ambiguity.
+
+	     DDL generation stays off here for the same reason it is off in the
+	     shipped unit: these entities declare no JPA relationships, so a schema
+	     the provider generates has none of the foreign keys the real one has —
+	     and foreign keys are precisely what the ordering test is about. The
+	     test runs hsqldb-schema.sql instead. -->
+	<persistence-unit name="BladeAnalyticsTest" transaction-type="RESOURCE_LOCAL">
+		<provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
+		<class>org.vorpal.blade.services.analytics.model.Application</class>
+		<class>org.vorpal.blade.services.analytics.model.Event</class>
+		<class>org.vorpal.blade.services.analytics.model.Session</class>
+		<class>org.vorpal.blade.services.analytics.model.SessionKey</class>
+		<class>org.vorpal.blade.services.analytics.model.SessionKeyPK</class>
+		<exclude-unlisted-classes>true</exclude-unlisted-classes>
+		<properties>
+			<property name="javax.persistence.jdbc.driver" value="org.hsqldb.jdbc.JDBCDriver" />
+			<property name="javax.persistence.jdbc.url" value="jdbc:hsqldb:mem:blade-analytics" />
+			<property name="javax.persistence.jdbc.user" value="sa" />
+			<property name="javax.persistence.jdbc.password" value="" />
+			<property name="eclipselink.ddl-generation" value="none" />
+			<property name="eclipselink.logging.level" value="OFF" />
+		</properties>
+	</persistence-unit>
+</persistence>

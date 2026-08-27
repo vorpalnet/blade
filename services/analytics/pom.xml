@@ -29,6 +29,23 @@
 			<artifactId>junit-jupiter</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- An in-memory database for the write path.
+
+		     The insert-ordering bug compiled, passed every test, and failed on
+		     the first live call — because nothing exercised a resolver, a
+		     persist or a redelivery without a domain and a phone call.
+		     AnalyticsWritePathTest does, in a plain JVM. -->
+		<dependency>
+			<groupId>org.hsqldb</groupId>
+			<artifactId>hsqldb</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.eclipse.persistence</groupId>
+			<artifactId>org.eclipse.persistence.jpa</artifactId>
+			<version>2.7.15</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>

@@ -28,6 +28,7 @@ import javax.persistence.Lob;
 import javax.persistence.Table;
 import javax.persistence.Transient;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /// Checks that the entities and the two schema files describe the same
@@ -82,6 +83,15 @@ class SchemaAgreementTest {
 	@Test
 	void oracleSchemaMatchesTheEntities() throws IOException {
 		assertSchemaMatches("Oracle-database-schema.sql");
+	}
+
+	@Test
+	@DisplayName("the test schema matches the entities too, so it cannot drift")
+	void testSchemaMatchesTheEntities() throws IOException {
+		// AnalyticsWritePathTest runs against this one. A test database that has
+		// quietly diverged from the shipped schemas would keep passing while
+		// proving nothing about what actually deploys.
+		assertSchemaMatches("hsqldb-schema.sql");
 	}
 
 	@Test
@@ -233,7 +243,8 @@ class SchemaAgreementTest {
 	/// A type that genuinely is new fails [#parse]'s sanity check by making a
 	/// column disappear, which is the safe direction to fail in.
 	private static final String TYPES = "BIGINT|INT|INTEGER|SMALLINT|DECIMAL|NUMBER"
-			+ "|VARCHAR|VARCHAR2|CHAR|TEXT|CLOB|JSON|DATETIME|TIMESTAMP|BLOB|DATE";
+			+ "|VARCHAR|VARCHAR2|CHAR|TEXT|CLOB|JSON|DATETIME|TIMESTAMP|BLOB|DATE"
+			+ "|LONGVARCHAR";
 
 	/// A column line: a name, one of the types above, and optionally a width.
 	private static final Pattern COLUMN = Pattern.compile(
@@ -298,7 +309,8 @@ class SchemaAgreementTest {
 	/// directory or the repository root.
 	private static java.nio.file.Path script(String name) {
 		Map<String, String> tried = new HashMap<>();
-		for (String prefix : new String[] { "sql/", "services/analytics/sql/", "../sql/" }) {
+		for (String prefix : new String[] { "sql/", "services/analytics/sql/", "../sql/",
+				"src/test/resources/", "services/analytics/src/test/resources/", "../src/test/resources/" }) {
 			File candidate = new File(prefix + name);
 			tried.put(prefix, candidate.getAbsolutePath());
 			if (candidate.isFile()) {

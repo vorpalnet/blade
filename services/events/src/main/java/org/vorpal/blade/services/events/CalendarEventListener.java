@@ -106,8 +106,12 @@ public class CalendarEventListener
 	public void contextInitialized(javax.servlet.ServletContextEvent event) {
 		registrar = org.vorpal.blade.framework.v3.events.SubscriptionRegistrar.start(
 				event.getServletContext(), SUBSCRIPTION, TYPES, this);
+		// deriveName, not getServletContextName: it is the derivation log files
+		// and config MBeans already use — documented as needing to agree
+		// byte-for-byte — and it cannot come back null.
 		control = org.vorpal.blade.framework.v3.events.EventBusControl.register(
-				event.getServletContext().getServletContextName());
+				org.vorpal.blade.framework.v2.config.SettingsManager.deriveName(
+						event.getServletContext()));
 	}
 
 	@Override

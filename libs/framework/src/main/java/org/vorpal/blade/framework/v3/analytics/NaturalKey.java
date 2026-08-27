@@ -38,6 +38,28 @@ import java.util.Date;
 /// `application` table computed its id "by a Java hash algorithm"), restored
 /// and extended to every table.
 ///
+/// ## An identity timestamp is not a time you read
+///
+/// Two of these keys take a timestamp, and it is worth being precise about
+/// which one. A session's key includes the call's BIRTH INSTANT, from the
+/// X-Vorpal-ID's `ts` parameter, because the Vorpal-ID itself is 32 bits and is
+/// reused over time — the instant is what turns a correlator into an identity.
+/// An application instance's key includes its start time for the same reason.
+///
+/// That is not the same thing as when something happened. An event carries its
+/// own `occurredAt`, and a `callStarted` occurs strictly after the session it
+/// belongs to was born; the schema keeps them in different columns
+/// (`sessions.created` versus `events.created`) precisely so one cannot be
+/// mistaken for the other. The identity timestamps are uniqueness material that
+/// happens to look like a time. Nobody reports on them.
+///
+/// The rule that follows is the important one: **compute a key from the wire,
+/// never from a stored value.** Nothing guarantees a timestamp round-trips
+/// bit-for-bit through a column, a driver and a time zone, and a key recomputed
+/// from a row can therefore fail to find the row it came from. Where a writer
+/// needs the identity of something already stored, it reads that row's `id`
+/// — which needs no derivation at all.
+///
 /// ## This is a wire contract
 ///
 /// Two nodes writing the same call must compute the same key, and a node

@@ -39,11 +39,19 @@ Edit and publish through the [Configurator](../../admin/configurator/README.md).
 ## Database
 
 The persistence unit is `BladeAnalytics`, bound to the `jdbc/BladeAnalytics` data source.
-Schema DDL generation is off by design: `sql/MySQL-database-schema.sql` is the single
-source of truth (the Oracle variant is regenerated from it). WLST helpers for provisioning
-MySQL, Oracle ADB, and the schema live in `notes/`. (`notes/design.md` is historical
-JPA/JMS working notes from the pre-CloudEvents design — read `package-info.java` for the
-current architecture.)
+Schema DDL generation is off by design. `sql/MySQL-database-schema.sql` and
+`sql/Oracle-database-schema.sql` are maintained side by side and kept in step by
+`SchemaAgreementTest`, which also checks them against the entities — that test exists
+because a mismatch between the two once meant the Oracle write path had never worked at
+all. WLST helpers for provisioning MySQL, Oracle ADB, and the schema live in `notes/`.
+(`notes/design.md` is historical JPA/JMS working notes from the pre-CloudEvents design —
+read `package-info.java` for the current architecture.)
+
+**Retention is yours, and the default is unbounded growth.** Nothing in BLADE deletes a
+row. `sql/retention.sql` holds the time-based DELETE and the partitioning recipes ready to
+run, but scheduling them is an operator's deliberate act: a job whose purpose is destroying
+data should not start because a WAR was deployed, on every node of a cluster at once, under
+a window nobody chose.
 
 ## Related modules
 

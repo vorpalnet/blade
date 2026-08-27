@@ -43,6 +43,20 @@ public final class EventBus {
 	/// JNDI name of the default uniform distributed topic.
 	public static final String TOPIC_JNDI = "jms/BladeEventBusTopic";
 
+	/// JNDI name of the destination the broker moves a message to when a
+	/// consumer will not accept it.
+	///
+	/// A message lands here after exhausting the topic's redelivery limit — a
+	/// payload nobody can parse, or an event that fails every time it is
+	/// applied. **Anything on this queue is an event that was not processed**,
+	/// which makes a non-zero depth one of the few unambiguous "something is
+	/// wrong" signals this system produces. It is reported by
+	/// [EventBusControl#getStatus].
+	///
+	/// Provisioned by `services/events/notes/configure-messaging-jms.py`, where
+	/// this string used to live alone.
+	public static final String ERROR_QUEUE_JNDI = "jms/BladeEventBusErrorQueue";
+
 	/// Publishers by destination JNDI name, installed at web-app startup. Empty
 	/// until the events service has initialized — or if its JMS resources are
 	/// missing, in which case publishing is a no-op rather than an error.
@@ -198,6 +212,12 @@ public final class EventBus {
 			SUBSCRIBER_METERS.put(subscriptionName,
 					new org.vorpal.blade.framework.v3.metrics.Counter.Series[] { received, handled, failed });
 		}
+	}
+
+	/// This subscription's meters, or null when nobody is counting. Package
+	/// private: [EventBusControl] reports them, nothing else needs them.
+	static org.vorpal.blade.framework.v3.metrics.Counter.Series[] metersFor(String subscriptionName) {
+		return SUBSCRIBER_METERS.get(subscriptionName);
 	}
 
 	/// Install a subscriber, keyed by its subscription name.
