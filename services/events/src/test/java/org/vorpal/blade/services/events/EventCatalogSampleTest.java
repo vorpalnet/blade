@@ -130,9 +130,12 @@ class EventCatalogSampleTest {
 				String mdb = EventSourceGenerator.consumerSource(subscription, SAMPLE);
 
 				assertTrue(mdb.contains("public class " + subscription.effectiveJavaClassName()
-						+ "Listener implements MessageListener"), subscription.getName());
-				assertTrue(mdb.contains("propertyName = \"clientId\", propertyValue = \""
-						+ subscription.clientId() + "\""), subscription.getName());
+						+ "Listener"), subscription.getName());
+				// The identity is a constant in the generated source now rather
+				// than an activation property, but it is still the SUBSCRIBER's
+				// name and still has to be unique — see below.
+				assertTrue(mdb.contains("SUBSCRIPTION = \"" + subscription.clientId() + "\""),
+						subscription.getName());
 
 				assertFalse(clientIds.contains(subscription.clientId()),
 						subscription.getName() + " shares a client id with another subscription");

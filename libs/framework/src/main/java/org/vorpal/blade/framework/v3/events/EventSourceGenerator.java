@@ -252,15 +252,13 @@ public final class EventSourceGenerator {
 			sb.append("package ").append(subscription.getJavaPackage()).append(";").append(NL).append(NL);
 		}
 
-		sb.append("import javax.ejb.ActivationConfigProperty;").append(NL);
-		sb.append("import javax.ejb.MessageDriven;").append(NL);
-		sb.append("import javax.ejb.TransactionManagement;").append(NL);
-		sb.append("import javax.ejb.TransactionManagementType;").append(NL);
-		sb.append("import javax.jms.Message;").append(NL);
-		sb.append("import javax.jms.MessageListener;").append(NL);
-		sb.append("import javax.jms.TextMessage;").append(NL);
+		sb.append("import javax.servlet.ServletContextEvent;").append(NL);
+		sb.append("import javax.servlet.ServletContextListener;").append(NL);
+		sb.append("import javax.servlet.annotation.WebListener;").append(NL);
 		sb.append(NL);
+		sb.append("import java.util.Arrays;").append(NL);
 		sb.append("import java.util.Collections;").append(NL);
+		sb.append("import java.util.List;").append(NL);
 		if (versionGuard) {
 			sb.append("import java.util.HashSet;").append(NL);
 		}
@@ -277,56 +275,78 @@ public final class EventSourceGenerator {
 			sb.append("import ").append(payloadImport).append(";").append(NL);
 		}
 		sb.append(NL);
+		sb.append("import org.vorpal.blade.framework.v3.events.EventSubscriber;").append(NL);
+		sb.append("import org.vorpal.blade.framework.v3.events.SubscriptionRegistrar;").append(NL);
+		sb.append(NL);
 		sb.append("import com.fasterxml.jackson.databind.ObjectMapper;").append(NL);
 		sb.append(NL);
 
 		appendConsumerJavadoc(sb, subscription, resolved, durableTopic, selector, handled);
 
-		sb.append("@TransactionManagement(TransactionManagementType.BEAN)").append(NL);
-		sb.append("@MessageDriven(mappedName = \"")
-				.append(escape(resolved.destinationForSubscription(subscription))).append("\", activationConfig = {")
+		sb.append("@WebListener").append(NL);
+		sb.append("public class ").append(listenerName).append(NL);
+		sb.append("\t\timplements EventSubscriber.Handler, ServletContextListener {").append(NL);
+		sb.append(NL);
+
+		sb.append("\t/// This SUBSCRIBER's name, never an event type's. Two applications")
 				.append(NL);
-		sb.append("\t\t@ActivationConfigProperty(propertyName = \"destinationType\", propertyValue = \"")
-				.append(resolved.destinationKindForSubscription(subscription).activationDestinationType())
-				.append("\"),").append(NL);
-		sb.append("\t\t// Named explicitly. Left out, the container falls back to a default")
+		sb.append("\t/// consuming the same event MUST differ here, or they share one")
 				.append(NL);
-		sb.append("\t\t// connection factory — which works, and quietly means the factory the")
+		sb.append("\t/// subscription and compete for messages instead of each getting a copy.")
 				.append(NL);
-		sb.append("\t\t// bus provisions (and its prefetch settings) applies to nothing.")
+		sb.append("\tpublic static final String SUBSCRIPTION = \"")
+				.append(escape(subscription.getName())).append("\";").append(NL);
+		sb.append(NL);
+
+		sb.append("\t/// The types this consumer was generated for, used when the catalog")
 				.append(NL);
-		sb.append("\t\t@ActivationConfigProperty(propertyName = \"connectionFactoryJndiName\", propertyValue = \"")
-				.append(escape(resolved.getConnectionFactoryJndi())).append("\"),").append(NL);
-		if (durableTopic) {
-			sb.append("\t\t@ActivationConfigProperty(propertyName = \"subscriptionDurability\", propertyValue = \"Durable\"),")
-					.append(NL);
-			sb.append("\t\t// Both of these are the SUBSCRIPTION's name, never an event type's. Two")
-					.append(NL);
-			sb.append("\t\t// applications consuming the same event MUST differ here, or they share")
-					.append(NL);
-			sb.append("\t\t// one subscription and compete for messages instead of each getting a copy.")
-					.append(NL);
-			sb.append("\t\t@ActivationConfigProperty(propertyName = \"subscriptionName\", propertyValue = \"")
-					.append(escape(subscription.subscriptionName())).append("\"),").append(NL);
-			sb.append("\t\t@ActivationConfigProperty(propertyName = \"clientId\", propertyValue = \"")
-					.append(escape(subscription.clientId())).append("\"),").append(NL);
-			sb.append("\t\t@ActivationConfigProperty(propertyName = \"topicMessagesDistributionMode\", propertyValue = \"One-Copy-Per-Application\"),")
-					.append(NL);
-			sb.append("\t\t@ActivationConfigProperty(propertyName = \"distributedDestinationConnection\", propertyValue = \"EveryMember\"),")
-					.append(NL);
+		sb.append("\t/// has nothing to say about this subscription. Change the catalog to")
+				.append(NL);
+		sb.append("\t/// change what a DEPLOYED consumer receives -- these are the fallback,")
+				.append(NL);
+		sb.append("\t/// not the authority.").append(NL);
+		appendWrapped(sb, "\t", "/// ", subscription.selectorRationale());
+		// From what the SUBSCRIPTION asked for, not from `handled`. A type the
+		// catalog has not declared yet has no payload class, so it cannot be
+		// dispatched below — but the operator still asked to receive it, and
+		// dropping it here would silently widen this consumer to everything
+		// else instead.
+		List<String> requested = subscription.typesOrEmpty();
+		sb.append("\tpublic static final List<String> TYPES = Collections.unmodifiableList(Arrays.asList(")
+				.append(NL);
+		for (int i = 0; i < requested.size(); i++) {
+			sb.append("\t\t\t\"").append(escape(requested.get(i))).append("\"")
+					.append(i + 1 < requested.size() ? "," : "").append(NL);
 		}
-		appendWrapped(sb, "\t\t", "// ", subscription.selectorRationale());
-		if (selector != null) {
-			sb.append("\t\t@ActivationConfigProperty(propertyName = \"messageSelector\", propertyValue = \"")
-					.append(escape(selector)).append("\"),").append(NL);
+		if (requested.isEmpty()) {
+			sb.append("\t\t\t// no types declared: this consumer receives nothing until the")
+					.append(NL);
+			sb.append("\t\t\t// catalog names some for it").append(NL);
 		}
-		sb.append("\t\t@ActivationConfigProperty(propertyName = \"acknowledgeMode\", propertyValue = \"Auto-acknowledge\") })")
-				.append(NL);
-		sb.append("public class ").append(listenerName).append(" implements MessageListener {").append(NL);
+		sb.append("\t\t\t));").append(NL);
+		sb.append(NL);
 		sb.append(NL);
 		sb.append("\tprivate static final Logger logger = Logger.getLogger(").append(listenerName)
 				.append(".class.getName());").append(NL);
 		sb.append("\tprivate static final ObjectMapper MAPPER = new ObjectMapper();").append(NL);
+		sb.append(NL);
+
+		sb.append("\t/// Keeps the live subscription matching the catalog for as long as")
+				.append(NL);
+		sb.append("\t/// this application is deployed.").append(NL);
+		sb.append("\tprivate SubscriptionRegistrar registrar;").append(NL);
+		sb.append(NL);
+		sb.append("\t@Override").append(NL);
+		sb.append("\tpublic void contextInitialized(ServletContextEvent event) {").append(NL);
+		sb.append("\t\tregistrar = SubscriptionRegistrar.start(SUBSCRIPTION, TYPES, this);").append(NL);
+		sb.append("\t}").append(NL);
+		sb.append(NL);
+		sb.append("\t@Override").append(NL);
+		sb.append("\tpublic void contextDestroyed(ServletContextEvent event) {").append(NL);
+		sb.append("\t\tif (registrar != null) {").append(NL);
+		sb.append("\t\t\tregistrar.stop();").append(NL);
+		sb.append("\t\t}").append(NL);
+		sb.append("\t}").append(NL);
 		sb.append(NL);
 
 		appendDedupe(sb);
@@ -492,15 +512,14 @@ public final class EventSourceGenerator {
 			String selector) {
 
 		sb.append("\t@Override").append(NL);
-		sb.append("\tpublic void onMessage(Message message) {").append(NL);
-		sb.append("\t\tif (!(message instanceof TextMessage)) {").append(NL);
-		sb.append("\t\t\tlogger.warning(\"ignoring non-TextMessage \" + message.getClass().getName());").append(NL);
-		sb.append("\t\t\treturn;").append(NL);
+		sb.append("\tpublic void handle(List<CloudEvent> batch) throws Exception {").append(NL);
+		sb.append("\t\tfor (CloudEvent event : batch) {").append(NL);
+		sb.append("\t\t\thandle(event);").append(NL);
 		sb.append("\t\t}").append(NL);
+		sb.append("\t}").append(NL);
 		sb.append(NL);
+		sb.append("\tprivate void handle(CloudEvent event) {").append(NL);
 		sb.append("\t\ttry {").append(NL);
-		sb.append("\t\t\tCloudEvent event = CloudEvent.fromJson(((TextMessage) message).getText());").append(NL);
-		sb.append(NL);
 		sb.append("\t\t\tif (!firstSight(event.getId())) {").append(NL);
 		sb.append("\t\t\t\tlogger.fine(\"already handled \" + event.getId());").append(NL);
 		sb.append("\t\t\t\treturn;").append(NL);
@@ -540,8 +559,12 @@ public final class EventSourceGenerator {
 		}
 
 		sb.append("\t\t} catch (Exception e) {").append(NL);
-		sb.append("\t\t\t// Consume rather than force redelivery: a malformed payload will").append(NL);
-		sb.append("\t\t\t// not fix itself on retry.").append(NL);
+		sb.append("\t\t\t// Swallowed rather than rethrown, and the distinction matters:").append(NL);
+		sb.append("\t\t\t// throwing would roll this event back and the broker would redeliver").append(NL);
+		sb.append("\t\t\t// it until the redelivery limit moved it to the error destination.").append(NL);
+		sb.append("\t\t\t// That is right for a failure that might succeed next time; a payload").append(NL);
+		sb.append("\t\t\t// this consumer cannot parse is not one of those. Rethrow here if the").append(NL);
+		sb.append("\t\t\t// action is worth retrying.").append(NL);
 		sb.append("\t\t\tlogger.log(Level.SEVERE, \"failed to handle an event on ")
 				.append(escape(nullToEmpty(subscription.getName()))).append("\", e);").append(NL);
 		sb.append("\t\t}").append(NL);

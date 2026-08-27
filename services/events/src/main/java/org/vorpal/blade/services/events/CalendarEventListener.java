@@ -1,12 +1,5 @@
 package org.vorpal.blade.services.events;
 
-import javax.ejb.ActivationConfigProperty;
-import javax.ejb.MessageDriven;
-import javax.ejb.TransactionManagement;
-import javax.ejb.TransactionManagementType;
-import javax.jms.Message;
-import javax.jms.MessageListener;
-import javax.jms.TextMessage;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -15,6 +8,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.vorpal.blade.framework.v3.events.CloudEvent;
+import org.vorpal.blade.framework.v3.events.EventSubscriber;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -47,26 +41,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /// restart, a failover or a rollback all replay. A redelivered fact is
 /// harmless; a redelivered *action* is not. The event carries no delivery
 /// contract, so idempotency is this consumer's job — see `firstSight`.
-@TransactionManagement(TransactionManagementType.BEAN)
-@MessageDriven(mappedName = "jms/BladeEventBusTopic", activationConfig = {
-		@ActivationConfigProperty(propertyName = "destinationType", propertyValue = "javax.jms.Topic"),
-		// Named explicitly. Left out, the container falls back to a default
-		// connection factory — which works, and quietly means the factory the
-		// bus provisions (and its prefetch settings) applies to nothing.
-		@ActivationConfigProperty(propertyName = "connectionFactoryJndiName", propertyValue = "jms/BladeEventBusConnectionFactory"),
-		@ActivationConfigProperty(propertyName = "subscriptionDurability", propertyValue = "Durable"),
-		// Both of these are the SUBSCRIPTION's name, never an event type's. Two
-		// applications consuming the same event MUST differ here, or they share
-		// one subscription and compete for messages instead of each getting a copy.
-		@ActivationConfigProperty(propertyName = "subscriptionName", propertyValue = "calendar"),
-		@ActivationConfigProperty(propertyName = "clientId", propertyValue = "calendar"),
-		@ActivationConfigProperty(propertyName = "topicMessagesDistributionMode", propertyValue = "One-Copy-Per-Application"),
-		@ActivationConfigProperty(propertyName = "distributedDestinationConnection", propertyValue = "EveryMember"),
-		// Selector derived from the 1 type this subscription declares. The broker filters, so this app
-		// never wakes for an event it would ignore.
-		@ActivationConfigProperty(propertyName = "messageSelector", propertyValue = "eventType IN ('net.vorpal.attendant.meeting.scheduled')"),
-		@ActivationConfigProperty(propertyName = "acknowledgeMode", propertyValue = "Auto-acknowledge") })
-public class CalendarEventListener implements MessageListener {
+@javax.servlet.annotation.WebListener
+public class CalendarEventListener
+		implements EventSubscriber.Handler, javax.servlet.ServletContextListener {
 
 	private static final Logger logger = Logger.getLogger(CalendarEventListener.class.getName());
 	private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -99,16 +76,50 @@ public class CalendarEventListener implements MessageListener {
 		return id == null || RECENT.put(id, Boolean.TRUE) == null;
 	}
 
+	/// The types this consumer was generated for. Used when the catalog has
+	/// nothing to say about this subscription — a fresh domain, or one whose
+	/// operator has not touched it.
+	public static final java.util.List<String> TYPES =
+			java.util.Collections.singletonList("net.vorpal.attendant.meeting.scheduled");
+
+	/// The subscription's name. This SUBSCRIBER's name, never an event type's:
+	/// two applications consuming the same event MUST differ here, or they
+	/// share one subscription and compete for messages instead of each getting
+	/// a copy.
+	public static final String SUBSCRIPTION = "calendar";
+
+	/// Keeps the live subscription matching the catalog for as long as this
+	/// application is deployed.
+	///
+	/// **The consumer is its own lifecycle.** It was an `@MessageDriven` class,
+	/// where the container owned activation and the selector was a compile-time
+	/// constant — so changing which events this application woke for meant
+	/// regenerating and redeploying it. Owning the subscription here is what
+	/// makes that an operator's edit instead.
+	private org.vorpal.blade.framework.v3.events.SubscriptionRegistrar registrar;
+
 	@Override
-	public void onMessage(Message message) {
-		if (!(message instanceof TextMessage)) {
-			logger.warning("ignoring non-TextMessage " + message.getClass().getName());
-			return;
+	public void contextInitialized(javax.servlet.ServletContextEvent event) {
+		registrar = org.vorpal.blade.framework.v3.events.SubscriptionRegistrar.start(
+				SUBSCRIPTION, TYPES, this);
+	}
+
+	@Override
+	public void contextDestroyed(javax.servlet.ServletContextEvent event) {
+		if (registrar != null) {
+			registrar.stop();
 		}
+	}
 
+	@Override
+	public void handle(java.util.List<CloudEvent> batch) throws Exception {
+		for (CloudEvent event : batch) {
+			handle(event);
+		}
+	}
+
+	private void handle(CloudEvent event) {
 		try {
-			CloudEvent event = CloudEvent.fromJson(((TextMessage) message).getText());
-
 			if (!firstSight(event.getId())) {
 				logger.fine("already handled " + event.getId());
 				return;
@@ -126,8 +137,11 @@ public class CalendarEventListener implements MessageListener {
 				break;
 			}
 		} catch (Exception e) {
-			// Consume rather than force redelivery: a malformed payload will
-			// not fix itself on retry.
+			// Swallowed rather than rethrown, and the distinction now matters:
+			// throwing would roll the batch back and the broker would redeliver
+			// it until the redelivery limit moved it to the error destination.
+			// That is right for a failure that might succeed next time; a
+			// payload this consumer cannot parse is not one of those.
 			logger.log(Level.SEVERE, "failed to handle an event on calendar", e);
 		}
 	}

@@ -277,24 +277,37 @@ class EventSourceGeneratorTest {
 		private final String mdb = EventSourceGenerator.consumerSource(subscription, catalog);
 
 		@Test
-		void isAMessageListenerBoundToTheTypesDestination() {
-			assertTrue(mdb.contains("public class AttendantMeetingsListener implements MessageListener"));
-			assertTrue(mdb.contains("@MessageDriven(mappedName = \"jms/BladeEventBusTopic\""));
+		void isAHandlerThatOwnsItsOwnSubscription() {
+			// The consumer is no longer an EJB. It handles batches and starts
+			// its own subscription, which is what lets an operator change what
+			// it listens to without a rebuild.
+			assertTrue(mdb.contains("public class AttendantMeetingsListener"), mdb);
+			assertTrue(mdb.contains("implements EventSubscriber.Handler, ServletContextListener"), mdb);
+			assertTrue(mdb.contains("@WebListener"), mdb);
+			assertFalse(mdb.contains("@MessageDriven"),
+					"an MDB's selector is a compile-time constant, which is the defect this replaced");
 		}
 
 		@Test
 		@DisplayName("carries the derived selector — the drift this whole design exists to prevent")
 		void carriesTheDerivedSelector() {
-			assertTrue(mdb.contains("propertyValue = \"" + subscription.selector() + "\""),
-					"the selector must be the one the subscription derives, not a hand-typed copy");
+			// The selector is now built at runtime from these types rather than
+			// baked in as a string, so what the generator must get right is the
+			// TYPE LIST the registrar derives it from.
+			assertTrue(mdb.contains("\"net.vorpal.attendant.meeting.scheduled\""), mdb);
+			assertTrue(mdb.contains("public static final List<String> TYPES"), mdb);
 			assertTrue(subscription.selector().contains("net.vorpal.attendant.meeting.scheduled"));
 		}
 
 		@Test
-		void aDurableTopicSubscribesDurablyAndOncePerCluster() {
-			assertTrue(mdb.contains("propertyValue = \"javax.jms.Topic\""));
-			assertTrue(mdb.contains("propertyValue = \"Durable\""));
-			assertTrue(mdb.contains("One-Copy-Per-Application"));
+		void handsItsLifecycleToTheRegistrar() {
+			// Durability, destination and one-copy-per-application are the
+			// registrar's business now, decided from the catalog at runtime.
+			// What the generated file must do is start and stop cleanly.
+			assertTrue(mdb.contains("SubscriptionRegistrar.start(SUBSCRIPTION, TYPES, this)"), mdb);
+			assertTrue(mdb.contains("registrar.stop()"), mdb);
+			assertTrue(mdb.contains("public void contextInitialized(ServletContextEvent event)"), mdb);
+			assertTrue(mdb.contains("public void contextDestroyed(ServletContextEvent event)"), mdb);
 		}
 
 		/// Omitting this is not a compile error and not a deployment error — the
@@ -304,23 +317,29 @@ class EventSourceGeneratorTest {
 		@Test
 		@DisplayName("names the connection factory rather than letting the container pick one")
 		void namesTheConnectionFactory() {
-			assertTrue(mdb.contains("propertyName = \"connectionFactoryJndiName\", propertyValue = \""
-					+ catalog.getConnectionFactoryJndi() + "\""), mdb);
+			// The connection factory is no longer named in generated source at
+			// all: the registrar takes it from EventBus, so there is only one
+			// place it can be wrong. Assert the generator does NOT hand-copy it.
+			assertFalse(mdb.contains("connectionFactoryJndiName"), mdb);
+			assertTrue(EventBus.CONNECTION_FACTORY_JNDI.equals(catalog.getConnectionFactoryJndi()),
+					"the catalog default and the bus constant must agree, or a consumer and its "
+							+ "publisher would open different factories");
 		}
 
 		@Test
 		@DisplayName("subscription identity comes from the subscription, never from the event type")
 		void identityComesFromTheSubscription() {
-			assertTrue(mdb.contains("propertyName = \"subscriptionName\", propertyValue = \"attendant-meetings\""));
-			assertTrue(mdb.contains("propertyName = \"clientId\", propertyValue = \"attendant-meetings\""));
+			assertTrue(mdb.contains("public static final String SUBSCRIPTION = \"attendant-meetings\""), mdb);
 			assertFalse(mdb.contains("ScheduledSub"),
 					"deriving the identity from the event type is exactly the defect this replaced");
 		}
 
 		@Test
 		void parsesTheEnvelopeThenTheTypedPayload() {
-			assertTrue(mdb.contains("CloudEvent.fromJson"));
-			assertTrue(mdb.contains("MAPPER.treeToValue(event.getData(), Scheduled.class)"));
+			// The envelope is parsed by the subscriber now; the consumer is
+			// handed CloudEvents and only decodes the typed payload.
+			assertTrue(mdb.contains("public void handle(List<CloudEvent> batch)"), mdb);
+			assertTrue(mdb.contains("MAPPER.treeToValue(event.getData(), Scheduled.class)"), mdb);
 		}
 
 		@Test
@@ -346,8 +365,11 @@ class EventSourceGeneratorTest {
 			queueCatalog.setTypes(Arrays.asList(queued));
 
 			String queueMdb = EventSourceGenerator.consumerSource(subscription, queueCatalog);
-			assertTrue(queueMdb.contains("propertyValue = \"javax.jms.Queue\""));
-			assertFalse(queueMdb.contains("subscriptionDurability"));
+			// Destination kind and durability are resolved at runtime, so a
+			// queue consumer's SOURCE is identical — it must simply not carry
+			// activation config of any kind.
+			assertFalse(queueMdb.contains("ActivationConfigProperty"), queueMdb);
+			assertTrue(queueMdb.contains("SubscriptionRegistrar.start"), queueMdb);
 		}
 
 		@Test
@@ -377,10 +399,12 @@ class EventSourceGeneratorTest {
 			String actor = EventSourceGenerator.consumerSource(subscription("transfer", type), catalog);
 			String sink = EventSourceGenerator.consumerSource(subscription("analytics-db", type), catalog);
 
-			assertTrue(actor.contains("propertyName = \"clientId\", propertyValue = \"transfer\""));
-			assertTrue(sink.contains("propertyName = \"clientId\", propertyValue = \"analytics-db\""));
-			assertTrue(actor.contains("propertyName = \"subscriptionName\", propertyValue = \"transfer\""));
-			assertTrue(sink.contains("propertyName = \"subscriptionName\", propertyValue = \"analytics-db\""));
+			// Two consumers of the same event must be two subscriptions, or they
+			// share one stream and each sees only part of it.
+			assertTrue(actor.contains("SUBSCRIPTION = \"transfer\""), actor);
+			assertTrue(sink.contains("SUBSCRIPTION = \"analytics-db\""), sink);
+			assertFalse(actor.contains("analytics-db"));
+			assertFalse(sink.contains("\"transfer\""));
 		}
 
 		@Test
@@ -389,8 +413,8 @@ class EventSourceGeneratorTest {
 			String actor = EventSourceGenerator.consumerSource(subscription("transfer", type), catalog);
 			String sink = EventSourceGenerator.consumerSource(subscription("analytics-db", type), catalog);
 
-			assertTrue(actor.contains("public class TransferListener implements MessageListener"));
-			assertTrue(sink.contains("public class AnalyticsDbListener implements MessageListener"));
+			assertTrue(actor.contains("public class TransferListener"), actor);
+			assertTrue(sink.contains("public class AnalyticsDbListener"), sink);
 		}
 
 		@Test
@@ -819,9 +843,10 @@ class EventSourceGeneratorTest {
 			EventSubscription subscription = subscription("early-bird", "not.yet.declared");
 			String mdb = EventSourceGenerator.consumerSource(subscription, catalog());
 
-			assertTrue(mdb.contains("public class EarlyBirdListener implements MessageListener"));
-			assertTrue(mdb.contains("propertyValue = \"" + subscription.selector() + "\""),
-					"the operator asked for this type; the selector must still narrow to it");
+			assertTrue(mdb.contains("public class EarlyBirdListener"), mdb);
+			assertTrue(mdb.contains("\"not.yet.declared\""),
+					"the operator asked for this type; it must still reach the type list the "
+							+ "selector is derived from");
 			assertFalse(mdb.contains("case \"not.yet.declared\""),
 					"an undeclared type has no payload class, so it cannot be dispatched");
 

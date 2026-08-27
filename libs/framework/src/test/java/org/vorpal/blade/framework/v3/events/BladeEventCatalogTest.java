@@ -186,9 +186,12 @@ class BladeEventCatalogTest {
 			subscription.setJavaPackage("com.example.consumer");
 
 			String mdb = EventSourceGenerator.consumerSource(subscription, catalog);
-			assertTrue(mdb.contains("propertyValue = \"" + subscription.selector() + "\""),
-					type.getType() + " consumer selector does not match its declared type");
-			assertTrue(mdb.contains("'" + type.getType() + "'"), type.getType() + " is not named in the selector");
+			// The selector is derived at runtime from this list, so the list is
+			// what the generated source has to get right.
+			assertTrue(mdb.contains("\"" + type.getType() + "\""),
+					type.getType() + " is not in the generated consumer's type list");
+			assertTrue(mdb.contains("SubscriptionRegistrar.start(SUBSCRIPTION, TYPES, this)"),
+					type.getType() + " consumer does not start its own subscription");
 			assertTrue(mdb.contains("on" + type.effectiveJavaClassName() + "(CloudEvent event"),
 					type.getType() + " has no handler stub");
 		}
@@ -205,14 +208,21 @@ class BladeEventCatalogTest {
 		EventSubscription sink = BladeEventCatalog.analyticsSubscription();
 		catalog.setSubscriptions(java.util.Collections.singletonList(sink));
 
-		assertNull(sink.selector(), "a selector would freeze the persisted set at generation time");
+		// The sink still declares SelectorMode.NONE, which is now a statement
+		// about generation rather than about runtime: it names no types, so a
+		// generated file cannot derive a selector for it. The deployed sink
+		// derives one from the catalog's persist flags every few seconds
+		// instead — see AnalyticsSubscription — which is what removed the
+		// "takes everything and discards most of it" cost.
+		assertNull(sink.selector(), "a generated selector would freeze the persisted set");
 		assertEquals(BladeEventCatalog.ANALYTICS_SUBSCRIPTION, sink.clientId());
 		assertEquals(BladeEventCatalog.ANALYTICS_SUBSCRIPTION, sink.subscriptionName());
 		assertTrue(catalog.validate().isEmpty(), catalog.validate().toString());
 
 		String mdb = EventSourceGenerator.consumerSource(sink, catalog);
 		assertFalse(mdb.contains("messageSelector"));
-		assertTrue(mdb.contains("public class AnalyticsEventListener implements MessageListener"));
+		assertTrue(mdb.contains("public class AnalyticsEventListener"), mdb);
+		assertTrue(mdb.contains("implements EventSubscriber.Handler, ServletContextListener"), mdb);
 	}
 
 	@Test
