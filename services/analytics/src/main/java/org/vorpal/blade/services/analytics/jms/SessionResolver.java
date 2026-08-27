@@ -130,6 +130,15 @@ public final class SessionResolver {
 	private static Long insert(EntityManager em, Session row, long id) {
 		try {
 			em.persist(row);
+			// Flush so this row exists before anything referencing it is
+			// written. **This is about ordering, not about reading the key
+			// back** — the key was known before the insert. These entities
+			// declare no JPA relationships (see persistence.xml: every foreign
+			// key is a plain column the writer populates), so the provider has
+			// no dependency graph to order inserts by and is free to write an
+			// event before the session it points at. Dropping this flush cost
+			// a live run to ORA-02291 on EVENT_FK2.
+			em.flush();
 			return id;
 		} catch (RuntimeException raced) {
 			em.clear();

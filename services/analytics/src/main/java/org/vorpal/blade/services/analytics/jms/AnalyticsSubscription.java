@@ -85,12 +85,27 @@ public class AnalyticsSubscription implements ServletContextListener {
 			List<String> types = AnalyticsCatalog.persistedTypes();
 			String selector = selectorFor(types);
 
+			// NOT durable, and this is a known regression rather than a choice.
+			//
+			// The bus destination is a partitioned distributed topic, and a
+			// durable subscription on the logical topic is refused outright
+			// ("[JMSClientExceptions:055030] This topic does not support
+			// durable subscriptions"). An MDB gets durability there because the
+			// container subscribes to each physical member for it; doing the
+			// same here means enumerating members and holding one durable
+			// subscriber per member, which is not written yet.
+			//
+			// What that costs until it is: events published while this service
+			// is down are missed rather than held. The pause-on-database-outage
+			// path is unaffected — that keeps the subscription connected and
+			// simply stops consuming, so the backlog still accumulates on the
+			// broker for the case that actually happens in service.
 			boolean rebuilt = EventBus.reconcileSubscriber(
 					BladeEventCatalog.ANALYTICS_SUBSCRIPTION,
 					EventBus.CONNECTION_FACTORY_JNDI,
 					EventBus.TOPIC_JNDI,
 					selector,
-					true,
+					false,
 					handler);
 
 			if (rebuilt || announce) {

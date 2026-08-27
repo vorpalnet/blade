@@ -50,6 +50,36 @@ import org.vorpal.blade.framework.v3.metrics.Counter;
 /// (I have not verified shared durable consumers against OCCAS, so the code
 /// does not assume them.)
 ///
+/// ## Durable subscriptions and the distributed topic — READ THIS FIRST
+///
+/// **Asking for `durable` against the bus topic fails today.** The bus
+/// destination is a Uniform Distributed Topic with `ForwardingPolicy`
+/// `Partitioned`, and creating a durable subscriber on the *logical* topic is
+/// rejected outright:
+///
+/// ```
+/// [JMSClientExceptions:055030] This topic does not support durable subscriptions.
+/// ```
+///
+/// That is observed behaviour on OCCAS 8.3, not a documented limit I can cite.
+/// An MDB gets durability on the same destination because the container
+/// subscribes to each *physical member* on the app's behalf — which is exactly
+/// what `distributedDestinationConnection=EveryMember` means — and this class
+/// subscribes to the logical name instead.
+///
+/// So `durable=true` is honoured only where the destination supports it (a
+/// queue, or a plain topic). Making it work on a distributed topic means
+/// enumerating the members and holding one durable subscriber per member, with
+/// a per-member subscription name. That is the right fix and it is not written
+/// yet; until it is, a subscriber on the bus topic is non-durable and will miss
+/// events published while it is down.
+///
+/// The cost of getting this wrong is worth stating plainly, because the failure
+/// is silent in the worst way: a failed `init` that leaves the connection open
+/// binds the client id, and every retry then fails with "Client id is in use"
+/// — a different error, pointing somewhere else entirely. [#closeQuietly]
+/// exists for that reason.
+///
 /// ## Delivery and failure
 ///
 /// The session is **transacted**, which is the other reason for leaving the
@@ -204,25 +234,67 @@ public class EventSubscriber {
 		ConnectionFactory factory = (ConnectionFactory) ctx.lookup(connectionFactoryJndi);
 		Destination destination = (Destination) ctx.lookup(destinationJndi);
 
-		connection = factory.createConnection();
-		if (durable) {
-			// The client id is the subscription's identity to the broker. Two
-			// apps that shared one would not be two subscriptions competing —
-			// they would be one subscription named twice, each app receiving
-			// part of the stream. See EventSubscription.
-			connection.setClientID(subscriptionName);
-		}
-		session = connection.createSession(true, Session.SESSION_TRANSACTED);
-		if (durable && destination instanceof Topic) {
-			consumer = session.createDurableSubscriber((Topic) destination, subscriptionName, selector, false);
-		} else {
-			consumer = session.createConsumer(destination, selector);
-		}
-		connection.start();
+		boolean started = false;
+		try {
+			connection = factory.createConnection();
+			if (durable) {
+				// The client id is the subscription's identity to the broker.
+				// Two apps that shared one would not be two subscriptions
+				// competing — they would be one subscription named twice, each
+				// app receiving part of the stream. See EventSubscription.
+				connection.setClientID(subscriptionName);
+			}
+			session = connection.createSession(true, Session.SESSION_TRANSACTED);
+			if (durable && destination instanceof Topic) {
+				consumer = session.createDurableSubscriber((Topic) destination, subscriptionName, selector, false);
+			} else {
+				consumer = session.createConsumer(destination, selector);
+			}
+			connection.start();
 
-		pump = new Thread(this::pump, "blade-events-" + subscriptionName);
-		pump.setDaemon(true);
-		pump.start();
+			pump = new Thread(this::pump, "blade-events-" + subscriptionName);
+			pump.setDaemon(true);
+			pump.start();
+			started = true;
+		} finally {
+			if (!started) {
+				// A half-built subscriber must not keep the connection. The
+				// client id is bound to it the moment setClientID succeeds, so
+				// leaking one connection makes EVERY later attempt fail with
+				// "Client id is in use" — turning one recoverable error into a
+				// permanent one that looks like a different problem entirely.
+				closeQuietly();
+			}
+		}
+	}
+
+	/// Release the JMS objects without reporting anything. Used on a failed
+	/// init, where the caller is already handling the real exception.
+	private void closeQuietly() {
+		try {
+			if (consumer != null) {
+				consumer.close();
+			}
+		} catch (JMSException e) {
+			// Already failing; nothing to add.
+		}
+		try {
+			if (session != null) {
+				session.close();
+			}
+		} catch (JMSException e) {
+			// Same.
+		}
+		try {
+			if (connection != null) {
+				connection.close();
+			}
+		} catch (JMSException e) {
+			// Same.
+		}
+		consumer = null;
+		session = null;
+		connection = null;
 	}
 
 	/// Receive, batch, hand off, commit. One thread, for the durable-consumer

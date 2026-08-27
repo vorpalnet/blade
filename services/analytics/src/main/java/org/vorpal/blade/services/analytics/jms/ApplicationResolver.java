@@ -100,6 +100,9 @@ public final class ApplicationResolver {
 	private static Long insert(EntityManager em, Application row, long id) {
 		try {
 			em.persist(row);
+			// Ordering, not key retrieval — see the same flush in
+			// [SessionResolver#insert] for why it is load-bearing.
+			em.flush();
 			return Long.valueOf(id);
 		} catch (RuntimeException raced) {
 			em.clear();
