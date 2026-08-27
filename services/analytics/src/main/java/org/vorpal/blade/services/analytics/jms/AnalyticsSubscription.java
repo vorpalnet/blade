@@ -36,10 +36,13 @@ public class AnalyticsSubscription implements ServletContextListener {
 
 	private final AnalyticsEventListener handler = new AnalyticsEventListener();
 	private SubscriptionRegistrar registrar;
+	private org.vorpal.blade.framework.v3.events.EventBusControl control;
 
 	@Override
 	public void contextInitialized(ServletContextEvent event) {
 		handler.start();
+		control = org.vorpal.blade.framework.v3.events.EventBusControl.register("analytics");
+		SubscriptionRegistrar.meter(event.getServletContext(), BladeEventCatalog.ANALYTICS_SUBSCRIPTION);
 		registrar = SubscriptionRegistrar.start(
 				BladeEventCatalog.ANALYTICS_SUBSCRIPTION,
 				AnalyticsCatalog::persistedTypes,
@@ -53,6 +56,9 @@ public class AnalyticsSubscription implements ServletContextListener {
 	public void contextDestroyed(ServletContextEvent event) {
 		if (registrar != null) {
 			registrar.stop();
+		}
+		if (control != null) {
+			control.unregister();
 		}
 		handler.stop();
 	}

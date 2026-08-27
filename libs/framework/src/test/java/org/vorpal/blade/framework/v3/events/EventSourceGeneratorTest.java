@@ -304,7 +304,8 @@ class EventSourceGeneratorTest {
 			// Durability, destination and one-copy-per-application are the
 			// registrar's business now, decided from the catalog at runtime.
 			// What the generated file must do is start and stop cleanly.
-			assertTrue(mdb.contains("SubscriptionRegistrar.start(SUBSCRIPTION, TYPES, this)"), mdb);
+			assertTrue(mdb.contains("SubscriptionRegistrar.start(event.getServletContext(), SUBSCRIPTION,"), mdb);
+			assertTrue(mdb.contains("TYPES, this);"), mdb);
 			assertTrue(mdb.contains("registrar.stop()"), mdb);
 			assertTrue(mdb.contains("public void contextInitialized(ServletContextEvent event)"), mdb);
 			assertTrue(mdb.contains("public void contextDestroyed(ServletContextEvent event)"), mdb);

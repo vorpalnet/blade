@@ -129,16 +129,25 @@ public class TransferEventListener
 	/// makes that an operator's edit instead.
 	private org.vorpal.blade.framework.v3.events.SubscriptionRegistrar registrar;
 
+	/// This application's event-bus control surface: what it is doing, and a
+	/// self-test that publishes one event and waits for it to come back.
+	private org.vorpal.blade.framework.v3.events.EventBusControl control;
+
 	@Override
 	public void contextInitialized(javax.servlet.ServletContextEvent event) {
 		registrar = org.vorpal.blade.framework.v3.events.SubscriptionRegistrar.start(
-				SUBSCRIPTION, TYPES, this);
+				event.getServletContext(), SUBSCRIPTION, TYPES, this);
+		control = org.vorpal.blade.framework.v3.events.EventBusControl.register(
+				event.getServletContext().getServletContextName());
 	}
 
 	@Override
 	public void contextDestroyed(javax.servlet.ServletContextEvent event) {
 		if (registrar != null) {
 			registrar.stop();
+		}
+		if (control != null) {
+			control.unregister();
 		}
 	}
 

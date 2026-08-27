@@ -338,7 +338,9 @@ public final class EventSourceGenerator {
 		sb.append(NL);
 		sb.append("\t@Override").append(NL);
 		sb.append("\tpublic void contextInitialized(ServletContextEvent event) {").append(NL);
-		sb.append("\t\tregistrar = SubscriptionRegistrar.start(SUBSCRIPTION, TYPES, this);").append(NL);
+		sb.append("\t\tregistrar = SubscriptionRegistrar.start(event.getServletContext(), SUBSCRIPTION,")
+				.append(NL);
+		sb.append("\t\t\t\tTYPES, this);").append(NL);
 		sb.append("\t}").append(NL);
 		sb.append(NL);
 		sb.append("\t@Override").append(NL);

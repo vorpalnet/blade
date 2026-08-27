@@ -190,7 +190,7 @@ class BladeEventCatalogTest {
 			// what the generated source has to get right.
 			assertTrue(mdb.contains("\"" + type.getType() + "\""),
 					type.getType() + " is not in the generated consumer's type list");
-			assertTrue(mdb.contains("SubscriptionRegistrar.start(SUBSCRIPTION, TYPES, this)"),
+			assertTrue(mdb.contains("SubscriptionRegistrar.start(event.getServletContext(), SUBSCRIPTION,"),
 					type.getType() + " consumer does not start its own subscription");
 			assertTrue(mdb.contains("on" + type.effectiveJavaClassName() + "(CloudEvent event"),
 					type.getType() + " has no handler stub");

@@ -56,6 +56,50 @@ public final class SubscriptionRegistrar {
 		this.batchMillis = batchMillis;
 	}
 
+	/// Start a subscription and count what it consumes.
+	///
+	/// The counters are the answer to "is this consumer actually doing
+	/// anything", which the log alone cannot give once an application has been
+	/// up for a week. **`failed` is the one worth watching**: it counts
+	/// messages in a batch that was rolled back, each of which the broker will
+	/// redeliver and eventually park on the error destination.
+	///
+	/// @param context this application's servlet context, for its metrics
+	///                registry
+	public static SubscriptionRegistrar start(javax.servlet.ServletContext context, String subscriptionName,
+			List<String> declaredTypes, EventSubscriber.Handler handler) {
+		meter(context, subscriptionName);
+		return start(subscriptionName, declaredTypes, handler);
+	}
+
+	/// Register this subscription's counters with the application's metrics.
+	///
+	/// Counters are named per subscription rather than labelled, because two
+	/// subscriptions in one application would otherwise have to agree on a
+	/// label set at registration time — and the second one to register would
+	/// silently get the first one's. Never fatal: an application that cannot
+	/// count must still consume.
+	public static void meter(javax.servlet.ServletContext context, String subscriptionName) {
+		try {
+			org.vorpal.blade.framework.v3.metrics.MetricsRegistry metrics =
+					org.vorpal.blade.framework.v3.metrics.MetricsRegistry.from(context);
+			if (metrics == null) {
+				return;
+			}
+			EventBus.setSubscriberMeters(subscriptionName,
+					metrics.counter("events.received." + subscriptionName,
+							"CloudEvents taken off the bus by this subscription").series(),
+					metrics.counter("events.handled." + subscriptionName,
+							"CloudEvents this subscription committed").series(),
+					metrics.counter("events.failed." + subscriptionName,
+							"CloudEvents in a batch this subscription rolled back. Each one is "
+									+ "redelivered, and repeats end up on the error destination.")
+							.series());
+		} catch (Throwable t) {
+			warning("events: '" + subscriptionName + "' consume counters unavailable: " + t);
+		}
+	}
+
 	/// Start a subscription whose wanted types come from the catalog, falling
 	/// back to what the consumer was built with.
 	///

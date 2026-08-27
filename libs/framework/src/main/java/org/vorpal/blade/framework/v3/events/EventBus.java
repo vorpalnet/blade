@@ -174,6 +174,32 @@ public final class EventBus {
 		return true;
 	}
 
+	/// Meters to attach to each subscription's subscriber, by subscription
+	/// name.
+	///
+	/// Held here rather than on the subscriber for the same reason the
+	/// publisher meters are: [#reconcileSubscriber] replaces the subscriber
+	/// whenever the selector changes, and meters attached to the instance would
+	/// stop counting at the first catalog edit — silently, which is the failure
+	/// mode this whole area had too much of.
+	private static final ConcurrentMap<String, org.vorpal.blade.framework.v3.metrics.Counter.Series[]>
+			SUBSCRIBER_METERS = new ConcurrentHashMap<>();
+
+	/// Remember the meters for one subscription, now and after any rebuild.
+	///
+	/// @param received incremented per message taken off the destination
+	/// @param handled  incremented per message in a committed batch
+	/// @param failed   incremented per message in a rolled-back batch
+	public static void setSubscriberMeters(String subscriptionName,
+			org.vorpal.blade.framework.v3.metrics.Counter.Series received,
+			org.vorpal.blade.framework.v3.metrics.Counter.Series handled,
+			org.vorpal.blade.framework.v3.metrics.Counter.Series failed) {
+		if (subscriptionName != null) {
+			SUBSCRIBER_METERS.put(subscriptionName,
+					new org.vorpal.blade.framework.v3.metrics.Counter.Series[] { received, handled, failed });
+		}
+	}
+
 	/// Install a subscriber, keyed by its subscription name.
 	///
 	/// @param subscriber an initialized subscriber
@@ -251,6 +277,10 @@ public final class EventBus {
 
 		EventSubscriber subscriber = new EventSubscriber(connectionFactoryJndi, destinationJndi, subscriptionName,
 				wanted, durable, handler, batchSize, batchMillis);
+		org.vorpal.blade.framework.v3.metrics.Counter.Series[] meters = SUBSCRIBER_METERS.get(subscriptionName);
+		if (meters != null) {
+			subscriber.meter(meters[0], meters[1], meters[2]);
+		}
 		subscriber.init();
 		SUBSCRIBERS.put(subscriptionName, subscriber);
 		return true;
