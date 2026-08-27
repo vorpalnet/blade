@@ -11,8 +11,9 @@
 --     DATETIME(3) -> TIMESTAMP (which is fractional by default, 6 digits);
 --     DEFAULT CURRENT_TIMESTAMP(3) -> DEFAULT SYSTIMESTAMP.
 --   * NO identity columns and NO sequences, by design. Every id is a 64-bit
---     hash of the row's natural key computed by the writer (see
---     model/NaturalKey.java). This is not merely a preference on Oracle: with
+--     hash of the row's natural key computed by the writer (see the
+--     framework's v3.analytics.NaturalKey). This is not merely a preference
+--     on Oracle: with
 --     DB-assigned keys the provider cannot use identity columns here at all —
 --     no EclipseLink Oracle platform reports native identity support, so it
 --     silently substitutes one default sequence shared by every table.
@@ -34,7 +35,11 @@ BEGIN
              WHERE table_name IN
                ('ATTRIBUTES','ATTRIBUTE_NAMES','EVENTS','EVENT_TYPES',
                 'SESSION_KEYS','SESSIONS','APPLICATIONS')) LOOP
-      EXECUTE IMMEDIATE 'DROP TABLE '||t.table_name||' CASCADE CONSTRAINTS';
+      -- PURGE, not just DROP. Without it the table goes to the recycle bin and
+      -- takes its system-generated identity sequence (ISEQ$$_nnnnn) with it,
+      -- so re-running this over an older deployment leaves a growing pile of
+      -- orphaned sequences behind every time.
+      EXECUTE IMMEDIATE 'DROP TABLE '||t.table_name||' CASCADE CONSTRAINTS PURGE';
    END LOOP;
    -- SEQ_GEN_IDENTITY was the provider's own fallback sequence, needed only
    -- because the schema used to ask for identity columns. Nothing generates

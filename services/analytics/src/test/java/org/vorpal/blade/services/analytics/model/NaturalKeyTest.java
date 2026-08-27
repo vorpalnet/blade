@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import org.vorpal.blade.framework.v3.analytics.NaturalKey;
+
 import java.util.Date;
 
 import org.junit.jupiter.api.Test;

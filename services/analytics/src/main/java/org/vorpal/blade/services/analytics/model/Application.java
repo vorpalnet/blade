@@ -13,6 +13,8 @@ import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
 import javax.servlet.sip.SipServletContextEvent;
 
+import org.vorpal.blade.framework.v3.analytics.NaturalKey;
+
 /// One application instance — one app, on one server, with one configuration.
 /// A restart is a new instance, deliberately.
 ///

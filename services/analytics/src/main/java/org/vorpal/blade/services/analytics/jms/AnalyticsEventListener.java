@@ -105,7 +105,7 @@ public class AnalyticsEventListener implements EventSubscriber.Handler {
 	/// **Everything in the batch commits or nothing does.** Re-applying a batch
 	/// whose middle failed is safe because every key in this schema is computed
 	/// from the event's own identity, so a row written twice is written to the
-	/// same place — see `model/NaturalKey.java`. That property is what makes
+	/// same place — see `framework v3.analytics.NaturalKey`. That property is what makes
 	/// batching worth doing at all: without it, a rollback would have to be a
 	/// per-event affair and the round trip per row would come straight back.
 	@Override

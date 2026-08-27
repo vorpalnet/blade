@@ -115,6 +115,65 @@ public final class EventBus {
 		defaultDestinationJndi = TOPIC_JNDI;
 	}
 
+	/// Meters applied to any publisher this class creates. Set once by the
+	/// application at startup so a publisher rebuilt on a later config reload
+	/// keeps being counted — otherwise the counters silently stop at the first
+	/// reload, which is exactly the kind of quiet gap this whole area had too
+	/// much of.
+	private static volatile org.vorpal.blade.framework.v3.metrics.Counter.Series publishedMeter;
+	private static volatile org.vorpal.blade.framework.v3.metrics.Counter.Series failedMeter;
+
+	/// Remember the meters to attach to publishers, now and after any rebuild.
+	public static void setPublisherMeters(org.vorpal.blade.framework.v3.metrics.Counter.Series published,
+			org.vorpal.blade.framework.v3.metrics.Counter.Series failed) {
+		publishedMeter = published;
+		failedMeter = failed;
+	}
+
+	/// Bring this node's default publisher into line with the configuration.
+	///
+	/// **Why this is a reconcile rather than a one-shot.** An application's
+	/// publisher used to be built once, during servlet initialization, and was
+	/// never revisited. Turning the bus on in an application's config therefore
+	/// did nothing until somebody redeployed the application — the config said
+	/// enabled, the log said nothing, and [#publish(CloudEvent)] went on being a
+	/// silent no-op because no publisher was ever registered. That is a
+	/// genuinely hard failure to see, and it is the reason this exists.
+	///
+	/// Diff, not rebuild: an unchanged destination keeps its connection, so
+	/// editing an unrelated part of the config does not disturb publishing.
+	///
+	/// @param enabled         whether this application should publish at all
+	/// @param connectionFactoryJndi the factory to publish through
+	/// @param destinationJndi the destination to publish to
+	/// @return true if a publisher was created or removed
+	/// @throws NamingException if a JNDI lookup fails
+	/// @throws JMSException    if the publisher cannot be created
+	public static boolean reconcilePublisher(boolean enabled, String connectionFactoryJndi, String destinationJndi)
+			throws javax.naming.NamingException, javax.jms.JMSException {
+
+		String destination = (destinationJndi == null || destinationJndi.isEmpty())
+				? TOPIC_JNDI : destinationJndi;
+
+		if (!enabled) {
+			// Turning the bus off has to actually close the connection, or
+			// "disabled" means "still publishing until the next restart".
+			return unregister(destination);
+		}
+
+		if (PUBLISHERS.containsKey(destination)) {
+			setDefaultDestinationJndi(destination);
+			return false;
+		}
+
+		EventPublisher publisher = new EventPublisher(connectionFactoryJndi, destination);
+		publisher.init();
+		publisher.meter(publishedMeter, failedMeter);
+		PUBLISHERS.put(destination, publisher);
+		setDefaultDestinationJndi(destination);
+		return true;
+	}
+
 	/// Install a subscriber, keyed by its subscription name.
 	///
 	/// @param subscriber an initialized subscriber

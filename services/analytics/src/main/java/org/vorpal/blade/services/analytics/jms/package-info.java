@@ -11,7 +11,7 @@
 ///   flag
 /// - [ApplicationResolver] / [SessionResolver] — the two foreign keys every row
 ///   needs, computed from the natural keys on the wire rather than looked up.
-///   See `model/NaturalKey.java`: no key in this schema is assigned by the
+///   See `framework v3.analytics.NaturalKey`: no key in this schema is assigned by the
 ///   database, so resolving is a primary-key `find` and creating needs no
 ///   round trip to discover what id the row got.
 /// - [Wire] — reading the payload; pure, and the only part of this package that

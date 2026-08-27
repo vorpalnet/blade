@@ -7,9 +7,10 @@
 --
 -- Design notes:
 --   * NO key is assigned by the database. Every id is a 64-bit hash of the
---     row's natural key, computed by the writer — see
---     model/NaturalKey.java, which also explains why. The natural-key UNIQUE
---     constraints below are retained on purpose: they are what turns a hash
+--     row's natural key, computed by the writer — see the framework's
+--     v3.analytics.NaturalKey, which also explains why. The natural-key
+--     UNIQUE constraints below are retained on purpose: they are what turn a
+--     hash
 --     collision into a failed insert instead of two calls silently becoming
 --     one row.
 --   * created/destroyed are DATETIME (not TIMESTAMP) to dodge the 2038 limit.

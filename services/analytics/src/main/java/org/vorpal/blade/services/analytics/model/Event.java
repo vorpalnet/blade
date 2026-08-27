@@ -14,6 +14,8 @@ import javax.persistence.TemporalType;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
+import org.vorpal.blade.framework.v3.analytics.NaturalKey;
+
 /// One recorded fact about a call.
 ///
 /// **The key is [#idFor] of the CloudEvent id**, which makes redelivery a

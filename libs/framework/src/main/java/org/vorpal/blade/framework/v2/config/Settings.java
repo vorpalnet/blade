@@ -364,11 +364,13 @@ public class Settings<T> implements SettingsMXBean {
 			SessionParameters sp = null;
 			LogParameters lp = null;
 			Analytics an = null;
+			org.vorpal.blade.framework.v3.events.EventBusSettings eb = null;
 
 			if (this.getConfiguration() instanceof Configuration) {
 				sp = ((Configuration) this.getConfiguration()).getSession();
 				lp = ((Configuration) this.getConfiguration()).getLogging();
 				an = ((Configuration) this.getConfiguration()).getAnalytics();
+				eb = ((Configuration) this.getConfiguration()).getEvents();
 			}
 			sp = (sp != null) ? sp : new SessionParametersDefault();
 			SettingsManager.setSessionParameters(sp);
@@ -378,6 +380,14 @@ public class Settings<T> implements SettingsMXBean {
 
 			an = (an != null) ? an : new AnalyticsB2buaSample();
 			SettingsManager.setAnalytics(an);
+
+			// The events block was the one member of this set that reload did
+			// not refresh, so an edit to it did nothing until a redeploy — the
+			// config said one thing and the running application did another,
+			// with nothing anywhere reporting the disagreement.
+			eb = (eb != null) ? eb : new org.vorpal.blade.framework.v3.events.EventBusSettings();
+			SettingsManager.setEventBus(eb);
+			reconcileEventBus(eb, an);
 
 			settingsManager.initialize(config);
 
@@ -412,6 +422,38 @@ public class Settings<T> implements SettingsMXBean {
 	/// and server overlays are not affected.
 	protected File domainFile() {
 		return domain.toFile();
+	}
+
+	/// Make this node's publisher match what the configuration now says, and
+	/// say out loud which way it went.
+	///
+	/// **Both outcomes are logged, including "off".** A disabled bus used to be
+	/// an early return with no message at all, which is indistinguishable in a
+	/// log from a healthy one — and since publishing is a deliberate no-op when
+	/// no publisher is registered, every layer above stayed quiet too. One line
+	/// here is the difference between "the pipeline is dead and nobody can tell"
+	/// and "the pipeline is off and the log says so."
+	///
+	/// Analytics shares this publisher, so either switch turns it on. Requiring
+	/// both would let an application with analytics enabled and events not
+	/// build every event and publish none of them, silently.
+	private void reconcileEventBus(org.vorpal.blade.framework.v3.events.EventBusSettings events,
+			Analytics analytics) {
+		boolean enabled = Boolean.TRUE.equals(events.isEnabled())
+				|| (analytics != null && Boolean.TRUE.equals(analytics.isEnabled()));
+		try {
+			boolean changed = org.vorpal.blade.framework.v3.events.EventBus.reconcilePublisher(
+					enabled, events.getConnectionFactoryJndi(), events.getDestinationJndi());
+			if (changed) {
+				sipLogger.info(enabled
+						? "event bus: publishing to " + events.getDestinationJndi()
+						: "event bus: DISABLED; nothing this application produces will be published");
+			}
+		} catch (Exception e) {
+			sipLogger.severe("event bus: cannot reach " + events.getDestinationJndi() + " through "
+					+ events.getConnectionFactoryJndi() + " — publishing will be a no-op until both are"
+					+ " provisioned: " + e.getMessage());
+		}
 	}
 
 	public Path getPath(String configType) {

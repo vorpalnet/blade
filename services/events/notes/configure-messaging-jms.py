@@ -89,6 +89,9 @@
 #   BLADE_EVENT_TTL_MILLIS (optional) time-to-live override stamped on every
 #                          message on the topic; default 24 hours. 0 would mean
 #                          never expire — see the topic section before choosing it.
+#   BLADE_REDELIVERY_LIMIT (optional) how many times the broker retries a
+#                          message a consumer will not accept before moving it
+#                          to jms/BladeEventBusErrorQueue; default 5.
 #
 #   $MW_HOME/oracle_common/common/bin/wlst.sh configure-messaging-jms.py
 
@@ -110,6 +113,7 @@ wl_admin = os.environ.get('WL_ADMIN')
 blade_cluster = os.environ.get('BLADE_ENGINE_CLUSTER', 'BEA_ENGINE_TIER_CLUST')
 blade_quota_bytes = long(os.environ.get('BLADE_QUOTA_BYTES', '1073741824'))
 blade_event_ttl_millis = long(os.environ.get('BLADE_EVENT_TTL_MILLIS', '86400000'))
+blade_redelivery_limit = int(os.environ.get('BLADE_REDELIVERY_LIMIT', '5'))
 
 connect(wl_user, wl_pass, wl_admin)
 
@@ -346,13 +350,52 @@ cmo.setQuota(getMBean(eventbus_quota))
 # counter and one warning line are the only trace).
 #
 # THE TRADE: a subscriber down longer than the TTL loses the events older than
-# it. That is deliberately the lesser evil — the analytics sink already
-# discards while its database is unreachable rather than queue forever, and an
-# ACTOR that wakes up to day-old facts should not act on them anyway (its
-# subscriptions are advised non-durable for exactly that reason). Losing
-# yesterday's analytics beats dropping today's live events for everyone.
+# it. That is deliberately the lesser evil — an ACTOR that wakes up to day-old
+# facts should not act on them anyway (its subscriptions are advised
+# non-durable for exactly that reason), and losing yesterday's analytics beats
+# dropping today's live events for everyone.
+#
+# Note this bounds the analytics sink too, and now it is the only thing that
+# does. The sink used to discard while its database was unreachable; it pauses
+# instead, which is better in every respect except that a backlog now really
+# does accumulate here. A database out for longer than the TTL loses the
+# difference — so on a domain where that matters, raise the TTL rather than
+# assuming the sink is still self-limiting.
 cd('%s/UniformDistributedTopics/BladeEventBusTopic/DeliveryParamsOverrides/BladeEventBusTopic' % RESOURCE)
 cmo.setTimeToLive(blade_event_ttl_millis)
+
+# ── Where a message goes when it cannot be consumed ─────────────────────────
+#
+# Without these two settings a consumer has exactly two options for a message
+# it cannot process: acknowledge it (destroying the event) or refuse it
+# forever (blocking every event behind it). The analytics sink took the first
+# option -- it logged a persistence failure and acknowledged anyway -- so any
+# database trouble that was not a connection error silently destroyed events
+# while every other indicator reported the pipeline healthy.
+#
+# With a redelivery limit and an error destination the broker resolves that
+# for us: a message is retried, and if it still cannot be consumed it is MOVED
+# to the error queue rather than discarded. A poison message stops blocking the
+# stream, and nothing is lost -- it is sitting somewhere an operator can look
+# at it, count it, and replay it.
+#
+# This is NOT the mechanism for a database outage. A consumer that pauses
+# itself (see EventSubscriber.pause) leaves messages on the destination
+# untouched, so an outage costs latency and none of these retries; burning the
+# redelivery limit during a database restart would send perfectly good events
+# to the error queue for arriving at the wrong moment.
+cd(RESOURCE)
+if cmo.lookupUniformDistributedQueue('BladeEventBusErrorQueue') is None:
+    cmo.createUniformDistributedQueue('BladeEventBusErrorQueue')
+cd('%s/UniformDistributedQueues/BladeEventBusErrorQueue' % RESOURCE)
+cmo.setJNDIName('jms/BladeEventBusErrorQueue')
+cmo.setSubDeploymentName(SUBDEPLOYMENT)
+cmo.setQuota(getMBean(eventbus_quota))
+
+cd('%s/UniformDistributedTopics/BladeEventBusTopic/DeliveryFailureParams/BladeEventBusTopic' % RESOURCE)
+cmo.setRedeliveryLimit(blade_redelivery_limit)
+cmo.setErrorDestination(getMBean('%s/UniformDistributedQueues/BladeEventBusErrorQueue' % RESOURCE))
+
 save()
 activate()
 
@@ -364,6 +407,8 @@ print('  module        %s' % MODULE)
 print('  subdeployment %s' % SUBDEPLOYMENT)
 print('  destination   jms/BladeEventBusTopic (topic, quota %d bytes, ttl %d ms)'
       % (blade_quota_bytes, blade_event_ttl_millis))
+print('  error queue   jms/BladeEventBusErrorQueue (after %d redeliveries)'
+      % blade_redelivery_limit)
 if ADOPTED:
     print('')
     print('The event topic was adopted into the existing analytics module. If a separate')

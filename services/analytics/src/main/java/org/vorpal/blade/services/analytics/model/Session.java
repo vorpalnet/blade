@@ -13,6 +13,8 @@ import javax.persistence.Table;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
 
+import org.vorpal.blade.framework.v3.analytics.NaturalKey;
+
 /// One call, as it flows through every application in a chain.
 ///
 /// The key is [#idFor] of the correlator the producer already sends — the

@@ -125,10 +125,14 @@ try:
     print('')
     print('tables now present:')
     blade_st = blade_conn.createStatement()
+    # The schema's four tables, plus the three it used to have. Listing the
+    # retired ones is deliberate: re-running this over an older deployment
+    # should show them GONE, and a leftover here means the drop block did not
+    # reach them.
     blade_rs = blade_st.executeQuery(
         "SELECT table_name FROM user_tables WHERE table_name IN "
-        "('APPLICATIONS','SESSIONS','SESSION_KEYS','EVENT_TYPES','EVENTS',"
-        "'ATTRIBUTE_NAMES','ATTRIBUTES') ORDER BY table_name")
+        "('APPLICATIONS','SESSIONS','SESSION_KEYS','EVENTS',"
+        "'EVENT_TYPES','ATTRIBUTE_NAMES','ATTRIBUTES') ORDER BY table_name")
     blade_found = []
     while blade_rs.next():
         blade_found.append(blade_rs.getString(1))
@@ -137,6 +141,10 @@ try:
     for blade_t in blade_found:
         print('  %s' % blade_t)
     print('')
-    print('%d ok, %d failed, %d of 7 tables present' % (blade_ok, blade_failed, len(blade_found)))
+    print('%d ok, %d failed, %d of 4 tables present' % (blade_ok, blade_failed, len(blade_found)))
+    if len(blade_found) != 4:
+        print('WARNING: expected exactly the four tables APPLICATIONS, EVENTS,')
+        print('         SESSIONS, SESSION_KEYS. Anything else listed above is a')
+        print('         retired table the drop block failed to remove.')
 finally:
     blade_conn.close()

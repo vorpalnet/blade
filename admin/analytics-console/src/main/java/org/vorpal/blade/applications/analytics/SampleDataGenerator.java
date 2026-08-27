@@ -2,7 +2,6 @@ package org.vorpal.blade.applications.analytics;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
@@ -17,11 +16,20 @@ import javax.naming.InitialContext;
 import javax.naming.NamingException;
 import javax.sql.DataSource;
 
+import org.vorpal.blade.framework.v3.analytics.NaturalKey;
+
 import com.fasterxml.jackson.databind.JsonNode;
 
 /// Generates synthetic analytics data for the BLADE analytics schema
-/// (`applications` / `sessions` / `session_keys` / `event_types` / `events` /
-/// `attribute_names` / `attributes`), modelled on the `transfer` service.
+/// (`applications` / `sessions` / `session_keys` / `events`), modelled on the
+/// `transfer` service.
+///
+/// **Every key here is computed exactly as the live writer computes it**, via
+/// [NaturalKey]. That is not tidiness: this tool writes over raw JDBC, beside a
+/// service that writes through JPA, and it is the one place where a second
+/// opinion about where a row belongs would go unnoticed. Sample rows land where
+/// recorded rows would, so a query written against generated data behaves the
+/// same against real data — which is the entire point of generating any.
 ///
 /// Every "call" becomes a closed `session` row (so `open_key` is NULL and the
 /// open-session unique guard never trips) carrying the `(cluster_name,
@@ -123,16 +131,17 @@ final class SampleDataGenerator {
 
 	private static Result run(Connection conn, Params p, Random rnd) throws SQLException {
 		Result r = new Result();
-		Map<String, Short> eventTypes = new HashMap<>();
-		Map<String, Short> attrNames = new HashMap<>();
-
 		// 1) application instances (engine1..engineN)
 		long[] appIds = new long[p.servers];
 		long appCreated = p.startMs - 3_600_000L; // an hour before the window
 		for (int i = 0; i < p.servers; i++) {
-			long id = positiveLong(rnd);
 			String server = "engine" + (i + 1);
 			String host = server + "." + p.clusterName + ".vorpal.net";
+			// The same key the live writer would compute for this instance. A
+			// random id here would put sample rows somewhere the service could
+			// never reach, so a generated call and a real one would not share
+			// an application even when they describe the same instance.
+			long id = NaturalKey.idFor(p.appName, p.clusterName, server, new java.util.Date(appCreated));
 			insertApplication(conn, id, p.appName, p.appVersion, host, p.clusterName, server, p.tenant, appCreated);
 			appIds[i] = id;
 		}
@@ -205,14 +214,9 @@ final class SampleDataGenerator {
 			}
 
 			for (Ev ev : evs) {
-				short typeId = lookupId(conn, eventTypes, "event_types", ev.name);
-				long eventId = insertEvent(conn, appId, sessionId, typeId, ev.when);
+				insertEvent(conn, appId, sessionId, ev.name, ev.when, payloadOf(ev.attrs));
 				events++;
-				for (Map.Entry<String, String> a : ev.attrs.entrySet()) {
-					short nameId = lookupId(conn, attrNames, "attribute_names", a.getKey());
-					insertAttribute(conn, eventId, nameId, a.getValue());
-					attributes++;
-				}
+				attributes += ev.attrs.size();
 			}
 
 			if ((c + 1) % commitEvery == 0) {
@@ -224,9 +228,10 @@ final class SampleDataGenerator {
 		r.counts.put("sessions", sessions);
 		r.counts.put("sessionKeys", sessionKeys);
 		r.counts.put("events", events);
+		// Attributes are no longer rows of their own — they are keys inside each
+		// event's JSON payload. Still counted, because "how much did this
+		// generate" is the question this number answers.
 		r.counts.put("attributes", attributes);
-		r.counts.put("eventTypes", (long) eventTypes.size());
-		r.counts.put("attributeNames", (long) attrNames.size());
 		return r;
 	}
 
@@ -277,16 +282,18 @@ final class SampleDataGenerator {
 
 	private static long insertSession(Connection conn, long appId, String clusterName, long vorpalId,
 			long createdMs, long destroyedMs) throws SQLException {
-		String sql = "INSERT INTO sessions(application_id, cluster_name, vorpal_id, created, destroyed) "
-				+ "VALUES (?,?,?,?,?)";
-		try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-			ps.setLong(1, appId);
-			ps.setString(2, clusterName);
-			ps.setLong(3, vorpalId);
-			ps.setTimestamp(4, new Timestamp(createdMs));
-			ps.setTimestamp(5, new Timestamp(destroyedMs));
+		long id = NaturalKey.idFor(clusterName, vorpalId, new java.util.Date(createdMs));
+		String sql = "INSERT INTO sessions(id, application_id, cluster_name, vorpal_id, created, destroyed) "
+				+ "VALUES (?,?,?,?,?,?)";
+		try (PreparedStatement ps = conn.prepareStatement(sql)) {
+			ps.setLong(1, id);
+			ps.setLong(2, appId);
+			ps.setString(3, clusterName);
+			ps.setLong(4, vorpalId);
+			ps.setTimestamp(5, new Timestamp(createdMs));
+			ps.setTimestamp(6, new Timestamp(destroyedMs));
 			ps.executeUpdate();
-			return generatedKey(ps);
+			return id;
 		}
 	}
 
@@ -301,66 +308,56 @@ final class SampleDataGenerator {
 		}
 	}
 
-	private static long insertEvent(Connection conn, long appId, long sessionId, short eventTypeId, long whenMs)
-			throws SQLException {
-		String sql = "INSERT INTO events(application_id, session_id, event_type_id, created) VALUES (?,?,?,?)";
-		try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-			ps.setLong(1, appId);
-			ps.setLong(2, sessionId);
-			ps.setShort(3, eventTypeId);
-			ps.setTimestamp(4, new Timestamp(whenMs));
+	private static void insertEvent(Connection conn, long appId, long sessionId, String type, long whenMs,
+			String payload) throws SQLException {
+		// Sample rows get a real CloudEvent id and the key derived from it, the
+		// same as a live event, so a generated row is indistinguishable from a
+		// recorded one to anything reading the table.
+		String eventUid = java.util.UUID.randomUUID().toString();
+		String sql = "INSERT INTO events(id, application_id, session_id, type, event_uid, created, payload) "
+				+ "VALUES (?,?,?,?,?,?,?)";
+		try (PreparedStatement ps = conn.prepareStatement(sql)) {
+			ps.setLong(1, NaturalKey.idFor(eventUid));
+			ps.setLong(2, appId);
+			ps.setLong(3, sessionId);
+			ps.setString(4, type);
+			ps.setString(5, eventUid);
+			ps.setTimestamp(6, new Timestamp(whenMs));
+			ps.setString(7, payload);
 			ps.executeUpdate();
-			return generatedKey(ps);
 		}
 	}
 
-	private static void insertAttribute(Connection conn, long eventId, short attrNameId, String value)
-			throws SQLException {
-		String sql = "INSERT INTO attributes(event_id, attribute_name_id, value) VALUES (?,?,?)";
-		try (PreparedStatement ps = conn.prepareStatement(sql)) {
-			ps.setLong(1, eventId);
-			ps.setShort(2, attrNameId);
-			ps.setString(3, value);
-			ps.executeUpdate();
+	/// An event's attributes as the JSON object the `payload` column holds.
+	///
+	/// Values are quoted strings, matching what the live writer stores: the
+	/// wire carries attribute values as text and this keeps sample data honest
+	/// about that, so a query written against generated rows behaves the same
+	/// against recorded ones.
+	private static String payloadOf(Map<String, String> attrs) {
+		if (attrs == null || attrs.isEmpty()) {
+			return "{}";
 		}
+		StringBuilder json = new StringBuilder(64).append('{');
+		boolean first = true;
+		for (Map.Entry<String, String> a : attrs.entrySet()) {
+			if (!first) {
+				json.append(',');
+			}
+			first = false;
+			json.append('"').append(escape(a.getKey())).append("\":\"")
+					.append(escape(a.getValue())).append('"');
+		}
+		return json.append('}').toString();
 	}
+
+	private static String escape(String text) {
+		return text.replace("\\", "\\\\").replace("\"", "\\\"");
+	}
+
 
 	/// SELECT-first, INSERT-on-miss for the normalized lookup tables
-	/// (`event_type`, `attribute_name`), cached per run.
-	private static short lookupId(Connection conn, Map<String, Short> cache, String table, String name)
-			throws SQLException {
-		Short cached = cache.get(name);
-		if (cached != null) {
-			return cached;
-		}
-		try (PreparedStatement sel = conn.prepareStatement("SELECT id FROM " + table + " WHERE name = ?")) {
-			sel.setString(1, name);
-			try (ResultSet rs = sel.executeQuery()) {
-				if (rs.next()) {
-					short id = rs.getShort(1);
-					cache.put(name, id);
-					return id;
-				}
-			}
-		}
-		try (PreparedStatement ins = conn.prepareStatement(
-				"INSERT INTO " + table + "(name) VALUES (?)", Statement.RETURN_GENERATED_KEYS)) {
-			ins.setString(1, name);
-			ins.executeUpdate();
-			short id = (short) generatedKey(ins);
-			cache.put(name, id);
-			return id;
-		}
-	}
 
-	private static long generatedKey(PreparedStatement ps) throws SQLException {
-		try (ResultSet keys = ps.getGeneratedKeys()) {
-			if (keys.next()) {
-				return keys.getLong(1);
-			}
-		}
-		throw new SQLException("no generated key returned");
-	}
 
 	private static void safeRollback(Connection conn) {
 		try {
@@ -376,9 +373,6 @@ final class SampleDataGenerator {
 		return "sip:+1" + n + "@pstn.example.net";
 	}
 
-	private static long positiveLong(Random rnd) {
-		return rnd.nextLong() & Long.MAX_VALUE;
-	}
 
 	// ─── JSON field readers ──────────────────────────────────────────────────
 	private static String text(JsonNode j, String f, String dflt) {

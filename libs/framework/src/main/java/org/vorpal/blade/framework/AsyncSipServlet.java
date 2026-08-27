@@ -399,17 +399,26 @@ public abstract class AsyncSipServlet extends SipServlet
 		// publish exactly nothing — with no error anywhere, because
 		// EventBus.publish is a deliberate no-op when no publisher is
 		// registered. One system, so one thing to turn on.
-		if (!Boolean.TRUE.equals(settings.isEnabled()) && !analyticsEnabled()) {
-			return;
-		}
+		boolean enabled = Boolean.TRUE.equals(settings.isEnabled()) || analyticsEnabled();
+
+		// Register the meters BEFORE the publisher exists, so a publisher this
+		// call creates and any publisher a later config reload rebuilds are
+		// both counted. Attaching them afterwards counted only the first one.
+		meterEventBus();
+
 		try {
-			EventPublisher publisher = new EventPublisher(settings.getConnectionFactoryJndi(),
+			boolean changed = EventBus.reconcilePublisher(enabled, settings.getConnectionFactoryJndi(),
 					settings.getDestinationJndi());
-			publisher.init();
-			meterEventBus(publisher);
-			EventBus.register(publisher);
-			EventBus.setDefaultDestinationJndi(settings.getDestinationJndi());
-			sipLogger.info("AsyncSipServlet.initializeEventBus - publishing to " + settings.getDestinationJndi());
+			if (enabled) {
+				sipLogger.info("AsyncSipServlet.initializeEventBus - publishing to "
+						+ settings.getDestinationJndi() + (changed ? "" : " (already open)"));
+			} else {
+				// Say it. An application whose bus is off looked exactly like
+				// one whose bus was broken: no line here, and publishing is a
+				// deliberate no-op further down, so nothing ever reported it.
+				sipLogger.info("AsyncSipServlet.initializeEventBus - DISABLED. Nothing this application"
+						+ " produces will be published; set \"events\": {\"enabled\": true} to change that.");
+			}
 		} catch (Exception e) {
 			sipLogger.severe("AsyncSipServlet.initializeEventBus - cannot reach the event bus. Ensure "
 					+ settings.getConnectionFactoryJndi() + " and " + settings.getDestinationJndi()
@@ -426,13 +435,17 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// exception so call processing survives, which used to make the drop
 	/// invisible. Never fatal, same as [#initializeMetrics]: an app that cannot
 	/// count must still publish.
-	private void meterEventBus(EventPublisher publisher) {
+	///
+	/// Handed to the bus rather than to one publisher, so a publisher rebuilt
+	/// by a later config reload is counted too. Metering the instance directly
+	/// counted only the publisher that happened to exist at startup.
+	private void meterEventBus() {
 		try {
 			MetricsRegistry metrics = MetricsRegistry.from(getServletContext());
 			if (metrics == null) {
 				return;
 			}
-			publisher.meter(
+			EventBus.setPublisherMeters(
 					metrics.counter("events.published", "CloudEvents successfully handed to the bus").series(),
 					metrics.counter("events.publish.failures",
 							"Sends the bus refused — broker down or destination quota full. Each one is a dropped event.")

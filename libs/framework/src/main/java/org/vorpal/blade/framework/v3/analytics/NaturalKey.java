@@ -1,4 +1,4 @@
-package org.vorpal.blade.services.analytics.model;
+package org.vorpal.blade.framework.v3.analytics;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -6,6 +6,13 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Date;
 
 /// Turns the facts that identify a row into the row's primary key.
+///
+/// **In the framework, not beside the entities, because two modules have to
+/// agree with it.** The analytics service writes these keys and the analytics
+/// console's sample-data generator writes rows over raw JDBC alongside it. A
+/// second implementation of a hash that decides where a row lives is not a
+/// duplication that drifts slowly — it is two tools writing the same call to
+/// two different rows the first time either one changes.
 ///
 /// Every table in this schema has a natural key already on the wire — an
 /// application is `(name, domain, server, created)`, a session is
