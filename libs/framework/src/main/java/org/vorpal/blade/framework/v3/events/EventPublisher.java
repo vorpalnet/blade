@@ -95,11 +95,11 @@ public class EventPublisher {
 
 	/// A session and its producer, borrowed and returned as one unit.
 	private final class Sender {
-		private final Session session;
+		private final Session jmsSession;
 		private final MessageProducer producer;
 
-		private Sender(Session session, MessageProducer producer) {
-			this.session = session;
+		private Sender(Session jmsSession, MessageProducer producer) {
+			this.jmsSession = jmsSession;
 			this.producer = producer;
 		}
 
@@ -110,7 +110,7 @@ public class EventPublisher {
 				// Nothing useful to do: we are discarding this sender anyway.
 			}
 			try {
-				session.close();
+				jmsSession.close();
 			} catch (JMSException e) {
 				// Same.
 			}
@@ -201,7 +201,7 @@ public class EventPublisher {
 			String json = event.toJson();
 			Sender sender = borrow();
 			try {
-				TextMessage message = sender.session.createTextMessage(json);
+				TextMessage message = sender.jmsSession.createTextMessage(json);
 				if (event.getType() != null) {
 					message.setStringProperty(PROP_TYPE, event.getType());
 				}

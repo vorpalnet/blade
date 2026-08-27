@@ -124,7 +124,7 @@ public class EventSubscriber {
 	private final long batchMillis;
 	private final Handler handler;
 
-	private final ConcurrentMap<String, Leg> legs = new ConcurrentHashMap<>();
+	private final ConcurrentMap<String, Member> members = new ConcurrentHashMap<>();
 	private ConnectionFactory factory;
 	private Object membership;
 	private volatile boolean closed;
@@ -187,7 +187,7 @@ public class EventSubscriber {
 	/// How many members are being consumed right now. One for an ordinary
 	/// destination; one per live member of a distributed one.
 	public int getConsumerCount() {
-		return legs.size();
+		return members.size();
 	}
 
 	/// Stop taking messages off the destination without giving up the
@@ -260,7 +260,7 @@ public class EventSubscriber {
 		// consumer on the destination as looked up.
 		boolean started = false;
 		try {
-			legs.put(SOLE, open(SOLE, destination, subscriptionName));
+			members.put(SOLE, open(SOLE, destination, subscriptionName));
 			started = true;
 		} finally {
 			if (!started) {
@@ -273,7 +273,7 @@ public class EventSubscriber {
 	/// others keep running and this one is retried when the container next
 	/// reports it available.
 	private void addMember(String memberName, Destination member) {
-		if (closed || legs.containsKey(memberName)) {
+		if (closed || members.containsKey(memberName)) {
 			return;
 		}
 		try {
@@ -281,42 +281,42 @@ public class EventSubscriber {
 			// they ARE the subscription's identity to the broker, and reusing
 			// one across members would make several consumers fight over a
 			// single stream instead of each covering its own partition.
-			legs.put(memberName, open(memberName, member, subscriptionName + "@" + memberName));
+			members.put(memberName, open(memberName, member, subscriptionName + "@" + memberName));
 		} catch (Exception e) {
-			legs.remove(memberName);
+			members.remove(memberName);
 		}
 	}
 
 	private void removeMember(String memberName) {
-		Leg leg = legs.remove(memberName);
-		if (leg != null) {
-			leg.close();
+		Member member = members.remove(memberName);
+		if (member != null) {
+			member.close();
 		}
 	}
 
 	/// One member's connection, session, consumer and thread.
-	private Leg open(String memberName, Destination destination, String name)
+	private Member open(String memberName, Destination destination, String name)
 			throws JMSException {
-		Leg leg = new Leg(memberName, name);
+		Member member = new Member(memberName, name);
 		boolean started = false;
 		try {
-			leg.connection = factory.createConnection();
+			member.connection = factory.createConnection();
 			if (durable) {
-				leg.connection.setClientID(name);
+				member.connection.setClientID(name);
 			}
-			leg.session = leg.connection.createSession(true, Session.SESSION_TRANSACTED);
+			member.jmsSession = member.connection.createSession(true, Session.SESSION_TRANSACTED);
 			if (durable && destination instanceof Topic) {
-				leg.consumer = leg.session.createDurableSubscriber((Topic) destination, name, selector, false);
+				member.consumer = member.jmsSession.createDurableSubscriber((Topic) destination, name, selector, false);
 			} else {
-				leg.consumer = leg.session.createConsumer(destination, selector);
+				member.consumer = member.jmsSession.createConsumer(destination, selector);
 			}
-			leg.connection.start();
+			member.connection.start();
 
-			leg.pump = new Thread(leg::pump, "blade-events-" + name);
-			leg.pump.setDaemon(true);
-			leg.pump.start();
+			member.pump = new Thread(member::pump, "blade-events-" + name);
+			member.pump.setDaemon(true);
+			member.pump.start();
 			started = true;
-			return leg;
+			return member;
 		} finally {
 			if (!started) {
 				// A half-built consumer must not keep its connection. The
@@ -324,20 +324,20 @@ public class EventSubscriber {
 				// leaking one makes EVERY later attempt fail with "Client id is
 				// in use" — turning one recoverable error into a permanent one
 				// that points somewhere else entirely.
-				leg.closeQuietly();
+				member.closeQuietly();
 			}
 		}
 	}
 
-	private final class Leg {
+	private final class Member {
 
 		private final String memberName;
 		private final String name;
 		private Connection connection;
-		private Session session;
+		private Session jmsSession;
 		private MessageConsumer consumer;
 		private Thread pump;
-		private volatile boolean legClosed;
+		private volatile boolean memberClosed;
 
 		/// How many events this member batches right now.
 		///
@@ -355,7 +355,7 @@ public class EventSubscriber {
 		/// and is parked alone while its neighbours commit.
 		private int currentBatchSize = batchSize;
 
-		private Leg(String memberName, String name) {
+		private Member(String memberName, String name) {
 			this.memberName = memberName;
 			this.name = name;
 		}
@@ -365,7 +365,7 @@ public class EventSubscriber {
 			List<CloudEvent> batch = new ArrayList<>();
 			long deadline = 0L;
 
-			while (!closed && !legClosed) {
+			while (!closed && !memberClosed) {
 				try {
 					if (paused) {
 						// Commit anything already in hand before going quiet,
@@ -403,7 +403,7 @@ public class EventSubscriber {
 					// broker failure. Anything uncommitted is redelivered, and
 					// the member is re-opened if the container reports it
 					// available again.
-					if (!closed && !legClosed) {
+					if (!closed && !memberClosed) {
 						rollback();
 					}
 					return;
@@ -428,7 +428,7 @@ public class EventSubscriber {
 			int size = batch.size();
 			try {
 				handler.handle(batch);
-				session.commit();
+				jmsSession.commit();
 				count(handled, size);
 				if (currentBatchSize != batchSize) {
 					// A clean pass: whatever was poisoning this stream is past,
@@ -448,8 +448,8 @@ public class EventSubscriber {
 
 		private void rollback() {
 			try {
-				if (session != null) {
-					session.rollback();
+				if (jmsSession != null) {
+					jmsSession.rollback();
 				}
 			} catch (JMSException e) {
 				// Nothing further to do: the broker redelivers whatever this
@@ -458,7 +458,7 @@ public class EventSubscriber {
 		}
 
 		private void close() {
-			legClosed = true;
+			memberClosed = true;
 			try {
 				if (consumer != null) {
 					consumer.close();
@@ -479,7 +479,7 @@ public class EventSubscriber {
 		/// Release everything without reporting anything. Used on a failed
 		/// open, where the caller already has the real exception.
 		private void closeQuietly() {
-			legClosed = true;
+			memberClosed = true;
 			try {
 				if (consumer != null) {
 					consumer.close();
@@ -492,8 +492,8 @@ public class EventSubscriber {
 
 		private void closeConnection() {
 			try {
-				if (session != null) {
-					session.close();
+				if (jmsSession != null) {
+					jmsSession.close();
 				}
 			} catch (JMSException e) {
 				// Shutting down regardless.
@@ -505,7 +505,7 @@ public class EventSubscriber {
 			} catch (JMSException e) {
 				// Same.
 			}
-			session = null;
+			jmsSession = null;
 			connection = null;
 			consumer = null;
 		}
@@ -517,8 +517,8 @@ public class EventSubscriber {
 					consumer.close();
 					consumer = null;
 				}
-				if (durable && session != null) {
-					session.unsubscribe(name);
+				if (durable && jmsSession != null) {
+					jmsSession.unsubscribe(name);
 				}
 			} catch (JMSException e) {
 				// Best effort: it may already be gone.
@@ -573,10 +573,10 @@ public class EventSubscriber {
 	}
 
 	private void closeAll() {
-		for (String member : new ArrayList<>(legs.keySet())) {
-			Leg leg = legs.remove(member);
-			if (leg != null) {
-				leg.close();
+		for (String name : new ArrayList<>(members.keySet())) {
+			Member member = members.remove(name);
+			if (member != null) {
+				member.close();
 			}
 		}
 	}
@@ -590,8 +590,8 @@ public class EventSubscriber {
 		closed = true;
 		DistributedMembers.unregister(membership);
 		membership = null;
-		for (Leg leg : legs.values()) {
-			leg.unsubscribe();
+		for (Member member : members.values()) {
+			member.unsubscribe();
 		}
 		closeAll();
 	}
