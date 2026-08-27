@@ -10,6 +10,7 @@ import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v3.events.BladeEventCatalog;
 import org.vorpal.blade.framework.v3.events.EventBus;
+import org.vorpal.blade.framework.v3.events.EventSubscriber;
 import org.vorpal.blade.framework.v3.events.EventSubscription;
 import org.vorpal.blade.framework.v3.events.SelectorMode;
 
@@ -85,37 +86,33 @@ public class AnalyticsSubscription implements ServletContextListener {
 			List<String> types = AnalyticsCatalog.persistedTypes();
 			String selector = selectorFor(types);
 
-			// NOT durable, and this is a known regression rather than a choice.
-			//
-			// The bus destination is a partitioned distributed topic, and a
-			// durable subscription on the logical topic is refused outright
-			// ("[JMSClientExceptions:055030] This topic does not support
-			// durable subscriptions"). An MDB gets durability there because the
-			// container subscribes to each physical member for it; doing the
-			// same here means enumerating members and holding one durable
-			// subscriber per member, which is not written yet.
-			//
-			// What that costs until it is: events published while this service
-			// is down are missed rather than held. The pause-on-database-outage
-			// path is unaffected — that keeps the subscription connected and
-			// simply stops consuming, so the backlog still accumulates on the
-			// broker for the case that actually happens in service.
+			// Durable: this is the one consumer that must not miss an event
+			// because it happened to be redeploying. The subscriber holds one
+			// durable subscription per member of the distributed topic, which
+			// is what the logical destination refuses to do — see
+			// EventSubscriber.
 			boolean rebuilt = EventBus.reconcileSubscriber(
 					BladeEventCatalog.ANALYTICS_SUBSCRIPTION,
 					EventBus.CONNECTION_FACTORY_JNDI,
 					EventBus.TOPIC_JNDI,
 					selector,
-					false,
+					true,
 					handler);
 
 			if (rebuilt || announce) {
+				// Report the consumer count, because zero is the interesting
+				// case and it is otherwise invisible: member discovery is
+				// asynchronous, so a subscription can be "established" and
+				// consuming nothing.
+				EventSubscriber live = EventBus.subscriberFor(BladeEventCatalog.ANALYTICS_SUBSCRIPTION);
 				log().info("analytics: subscribed to " + EventBus.TOPIC_JNDI + " as '"
 						+ BladeEventCatalog.ANALYTICS_SUBSCRIPTION + "', "
 						+ (selector == null
 								? "taking every event and filtering in code (" + types.size()
 										+ " types wanted, too many for a selector)"
 								: "filtering at the broker for " + types.size() + " event type"
-										+ (types.size() == 1 ? "" : "s")));
+										+ (types.size() == 1 ? "" : "s"))
+						+ (live == null ? "" : "; consumers=" + live.getConsumerCount()));
 			}
 		} catch (Exception e) {
 			// A subscription that cannot be established must say so. Failing

@@ -2,6 +2,8 @@ package org.vorpal.blade.framework.v3.events;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import javax.jms.Connection;
 import javax.jms.ConnectionFactory;
@@ -38,53 +40,43 @@ import org.vorpal.blade.framework.v3.metrics.Counter;
 /// selector is re-derived from the catalog on reload and the sink can filter at
 /// the broker like every other consumer.
 ///
-/// ## What it costs
+/// ## One consumer per member, not one per subscription
 ///
-/// The container's MDB pool is given up along with the annotation, and this
-/// owns its own consumer thread. That is a straight improvement for a sink —
-/// one thread committing a batch beats N threads committing a row each — but
-/// it is a real constraint to know about: **a durable topic subscription
-/// permits one active consumer**, so this runs a single consumer thread per
-/// subscription. A consumer that needs more parallelism than one thread
-/// wants a queue rather than a topic, or JMS 2.0 shared durable consumers.
-/// (I have not verified shared durable consumers against OCCAS, so the code
-/// does not assume them.)
-///
-/// ## Durable subscriptions and the distributed topic — READ THIS FIRST
-///
-/// **Asking for `durable` against the bus topic fails today.** The bus
-/// destination is a Uniform Distributed Topic with `ForwardingPolicy`
-/// `Partitioned`, and creating a durable subscriber on the *logical* topic is
-/// rejected outright:
+/// The bus destination is a *partitioned distributed topic*, and a durable
+/// subscription cannot be created on its logical name — the broker refuses:
 ///
 /// ```
 /// [JMSClientExceptions:055030] This topic does not support durable subscriptions.
 /// ```
 ///
-/// That is observed behaviour on OCCAS 8.3, not a documented limit I can cite.
-/// An MDB gets durability on the same destination because the container
-/// subscribes to each *physical member* on the app's behalf — which is exactly
-/// what `distributedDestinationConnection=EveryMember` means — and this class
-/// subscribes to the logical name instead.
+/// An MDB does not meet this because the container subscribes to every physical
+/// member for it. This does the same explicitly: [DistributedMembers] reports
+/// the members, and each gets its own connection, session, durable subscriber
+/// and consumer thread, under a subscription name derived from this
+/// subscription's name and the member's. Members arriving and leaving — a
+/// server restarting, a migration — add and remove consumers while the rest
+/// keep running.
 ///
-/// So `durable=true` is honoured only where the destination supports it (a
-/// queue, or a plain topic). Making it work on a distributed topic means
-/// enumerating the members and holding one durable subscriber per member, with
-/// a per-member subscription name. That is the right fix and it is not written
-/// yet; until it is, a subscriber on the bus topic is non-durable and will miss
-/// events published while it is down.
+/// Where members cannot be discovered (a plain topic, a queue, or a container
+/// that does not expose the extensions) it falls back to a single consumer on
+/// the destination as looked up. That fallback is also the non-durable path,
+/// which needs no member handling at all.
 ///
-/// The cost of getting this wrong is worth stating plainly, because the failure
-/// is silent in the worst way: a failed `init` that leaves the connection open
-/// binds the client id, and every retry then fails with "Client id is in use"
-/// — a different error, pointing somewhere else entirely. [#closeQuietly]
-/// exists for that reason.
+/// ## What it costs
+///
+/// The container's MDB pool is given up along with the annotation. A durable
+/// topic subscription permits one active consumer, so there is one thread per
+/// member rather than a pool — a straight improvement for a sink, where one
+/// thread committing a batch beats N threads committing a row each, but a real
+/// constraint for a consumer that needs parallelism within a member. That one
+/// wants a queue, or JMS 2.0 shared durable consumers, which are not assumed
+/// here because I have not verified them against OCCAS.
 ///
 /// ## Delivery and failure
 ///
-/// The session is **transacted**, which is the other reason for leaving the
-/// MDB behind. A handler that throws rolls the batch back and the broker
-/// redelivers it; a message that can never succeed is caught by the
+/// Each member's session is **transacted**, which is the other reason for
+/// leaving the MDB behind. A handler that throws rolls its batch back and the
+/// broker redelivers it; a message that can never succeed is caught by the
 /// destination's redelivery limit and moved to its error destination. Nothing
 /// is silently discarded — the previous consumer logged a persistence failure
 /// and acknowledged the message anyway, so a database hiccup that was not a
@@ -102,6 +94,9 @@ public class EventSubscriber {
 	/// A batch arrives as one unit and is acknowledged as one unit: return
 	/// normally and the whole batch is committed, throw and the whole batch is
 	/// redelivered.
+	///
+	/// **Called from one thread per member**, so an implementation that keeps
+	/// mutable state needs to say how it is shared.
 	public interface Handler {
 
 		/// @param batch one or more events, in the order they were received
@@ -117,6 +112,9 @@ public class EventSubscriber {
 	/// anyway. This is the latency an event can sit for, so it is short.
 	public static final long DEFAULT_BATCH_MILLIS = 250L;
 
+	/// The key the single non-distributed consumer is held under.
+	private static final String SOLE = "";
+
 	private final String connectionFactoryJndi;
 	private final String destinationJndi;
 	private final String subscriptionName;
@@ -126,10 +124,9 @@ public class EventSubscriber {
 	private final long batchMillis;
 	private final Handler handler;
 
-	private Connection connection;
-	private Session session;
-	private MessageConsumer consumer;
-	private Thread pump;
+	private final ConcurrentMap<String, Leg> legs = new ConcurrentHashMap<>();
+	private ConnectionFactory factory;
+	private Object membership;
 	private volatile boolean closed;
 	private volatile boolean paused;
 
@@ -141,8 +138,8 @@ public class EventSubscriber {
 	/// @param connectionFactoryJndi the connection factory JNDI name
 	/// @param destinationJndi       the topic or queue JNDI name
 	/// @param subscriptionName      this SUBSCRIBER's name — never an event
-	///                              type's; used as both the durable
-	///                              subscription name and the JMS client id
+	///                              type's; the durable subscription name and
+	///                              JMS client id are derived from it
 	/// @param selector              a JMS message selector, or null for all
 	/// @param durable               whether the subscription survives a restart
 	/// @param handler               what to do with each batch
@@ -167,7 +164,7 @@ public class EventSubscriber {
 	}
 
 	/// The subscription's name — the key the bus registers it under, and the
-	/// identity the broker knows it by.
+	/// stem of the name the broker knows each member's subscription by.
 	public String getSubscriptionName() {
 		return subscriptionName;
 	}
@@ -185,6 +182,12 @@ public class EventSubscriber {
 
 	public boolean isDurable() {
 		return durable;
+	}
+
+	/// How many members are being consumed right now. One for an ordinary
+	/// destination; one per live member of a distributed one.
+	public int getConsumerCount() {
+		return legs.size();
 	}
 
 	/// Stop taking messages off the destination without giving up the
@@ -225,163 +228,282 @@ public class EventSubscriber {
 		this.failed = failed;
 	}
 
-	/// Open the connection, establish the subscription, and start consuming.
+	/// Establish the subscription and start consuming.
 	///
 	/// @throws NamingException if a JNDI lookup fails
 	/// @throws JMSException    if the subscription cannot be established
 	public void init() throws NamingException, JMSException {
 		InitialContext ctx = new InitialContext();
-		ConnectionFactory factory = (ConnectionFactory) ctx.lookup(connectionFactoryJndi);
+		factory = (ConnectionFactory) ctx.lookup(connectionFactoryJndi);
 		Destination destination = (Destination) ctx.lookup(destinationJndi);
 
+		if (durable) {
+			membership = DistributedMembers.register(destinationJndi, new DistributedMembers.Listener() {
+				@Override
+				public void onAvailable(String memberName, Destination member) {
+					addMember(memberName, member);
+				}
+
+				@Override
+				public void onUnavailable(String memberName) {
+					removeMember(memberName);
+				}
+			});
+			if (membership != null) {
+				// Members arrive through the listener, including the ones that
+				// already exist. There is nothing to open here.
+				return;
+			}
+		}
+
+		// Not distributed, not durable, or no member discovery available: one
+		// consumer on the destination as looked up.
 		boolean started = false;
 		try {
-			connection = factory.createConnection();
-			if (durable) {
-				// The client id is the subscription's identity to the broker.
-				// Two apps that shared one would not be two subscriptions
-				// competing — they would be one subscription named twice, each
-				// app receiving part of the stream. See EventSubscription.
-				connection.setClientID(subscriptionName);
-			}
-			session = connection.createSession(true, Session.SESSION_TRANSACTED);
-			if (durable && destination instanceof Topic) {
-				consumer = session.createDurableSubscriber((Topic) destination, subscriptionName, selector, false);
-			} else {
-				consumer = session.createConsumer(destination, selector);
-			}
-			connection.start();
-
-			pump = new Thread(this::pump, "blade-events-" + subscriptionName);
-			pump.setDaemon(true);
-			pump.start();
+			legs.put(SOLE, open(SOLE, destination, subscriptionName));
 			started = true;
 		} finally {
 			if (!started) {
-				// A half-built subscriber must not keep the connection. The
-				// client id is bound to it the moment setClientID succeeds, so
-				// leaking one connection makes EVERY later attempt fail with
-				// "Client id is in use" — turning one recoverable error into a
-				// permanent one that looks like a different problem entirely.
-				closeQuietly();
+				closeAll();
 			}
 		}
 	}
 
-	/// Release the JMS objects without reporting anything. Used on a failed
-	/// init, where the caller is already handling the real exception.
-	private void closeQuietly() {
-		try {
-			if (consumer != null) {
-				consumer.close();
-			}
-		} catch (JMSException e) {
-			// Already failing; nothing to add.
+	/// Start consuming one member. Failure is contained to that member: the
+	/// others keep running and this one is retried when the container next
+	/// reports it available.
+	private void addMember(String memberName, Destination member) {
+		if (closed || legs.containsKey(memberName)) {
+			return;
 		}
 		try {
-			if (session != null) {
-				session.close();
-			}
-		} catch (JMSException e) {
-			// Same.
+			// The subscription name and client id must be unique per member —
+			// they ARE the subscription's identity to the broker, and reusing
+			// one across members would make several consumers fight over a
+			// single stream instead of each covering its own partition.
+			legs.put(memberName, open(memberName, member, subscriptionName + "@" + memberName));
+		} catch (Exception e) {
+			legs.remove(memberName);
 		}
-		try {
-			if (connection != null) {
-				connection.close();
-			}
-		} catch (JMSException e) {
-			// Same.
-		}
-		consumer = null;
-		session = null;
-		connection = null;
 	}
 
-	/// Receive, batch, hand off, commit. One thread, for the durable-consumer
-	/// reason in the class comment.
-	private void pump() {
-		List<CloudEvent> batch = new ArrayList<>();
-		long deadline = 0L;
+	private void removeMember(String memberName) {
+		Leg leg = legs.remove(memberName);
+		if (leg != null) {
+			leg.close();
+		}
+	}
 
-		while (!closed) {
-			try {
-				if (paused) {
-					// Commit anything already in hand before going quiet, so a
-					// pause does not hold a batch open across an outage.
-					if (!batch.isEmpty()) {
+	/// One member's connection, session, consumer and thread.
+	private Leg open(String memberName, Destination destination, String name)
+			throws JMSException {
+		Leg leg = new Leg(memberName, name);
+		boolean started = false;
+		try {
+			leg.connection = factory.createConnection();
+			if (durable) {
+				leg.connection.setClientID(name);
+			}
+			leg.session = leg.connection.createSession(true, Session.SESSION_TRANSACTED);
+			if (durable && destination instanceof Topic) {
+				leg.consumer = leg.session.createDurableSubscriber((Topic) destination, name, selector, false);
+			} else {
+				leg.consumer = leg.session.createConsumer(destination, selector);
+			}
+			leg.connection.start();
+
+			leg.pump = new Thread(leg::pump, "blade-events-" + name);
+			leg.pump.setDaemon(true);
+			leg.pump.start();
+			started = true;
+			return leg;
+		} finally {
+			if (!started) {
+				// A half-built consumer must not keep its connection. The
+				// client id is bound the moment setClientID succeeds, so
+				// leaking one makes EVERY later attempt fail with "Client id is
+				// in use" — turning one recoverable error into a permanent one
+				// that points somewhere else entirely.
+				leg.closeQuietly();
+			}
+		}
+	}
+
+	private final class Leg {
+
+		private final String memberName;
+		private final String name;
+		private Connection connection;
+		private Session session;
+		private MessageConsumer consumer;
+		private Thread pump;
+		private volatile boolean legClosed;
+
+		private Leg(String memberName, String name) {
+			this.memberName = memberName;
+			this.name = name;
+		}
+
+		/// Receive, batch, hand off, commit.
+		private void pump() {
+			List<CloudEvent> batch = new ArrayList<>();
+			long deadline = 0L;
+
+			while (!closed && !legClosed) {
+				try {
+					if (paused) {
+						// Commit anything already in hand before going quiet,
+						// so a pause does not hold a batch open across an
+						// outage.
+						if (!batch.isEmpty()) {
+							flush(batch);
+						}
+						Thread.sleep(batchMillis);
+						continue;
+					}
+
+					long wait = batch.isEmpty() ? batchMillis
+							: Math.max(1L, deadline - System.currentTimeMillis());
+					Message message = consumer.receive(wait);
+
+					if (message != null) {
+						if (batch.isEmpty()) {
+							deadline = System.currentTimeMillis() + batchMillis;
+						}
+						count(received);
+						CloudEvent event = parse(message);
+						if (event != null) {
+							batch.add(event);
+						}
+					}
+
+					boolean full = batch.size() >= batchSize;
+					boolean expired = !batch.isEmpty() && System.currentTimeMillis() >= deadline;
+					if (full || expired || (message == null && !batch.isEmpty())) {
 						flush(batch);
 					}
-					Thread.sleep(batchMillis);
-					continue;
-				}
-
-				long wait = batch.isEmpty() ? batchMillis : Math.max(1L, deadline - System.currentTimeMillis());
-				Message message = consumer.receive(wait);
-
-				if (message != null) {
-					if (batch.isEmpty()) {
-						deadline = System.currentTimeMillis() + batchMillis;
+				} catch (JMSException e) {
+					// This member is going away — a shutdown, a migration, or a
+					// broker failure. Anything uncommitted is redelivered, and
+					// the member is re-opened if the container reports it
+					// available again.
+					if (!closed && !legClosed) {
+						rollback();
 					}
-					count(received);
-					CloudEvent event = parse(message);
-					if (event != null) {
-						batch.add(event);
-					}
-				}
-
-				boolean full = batch.size() >= batchSize;
-				boolean expired = !batch.isEmpty() && System.currentTimeMillis() >= deadline;
-				if (full || expired || (message == null && !batch.isEmpty())) {
-					flush(batch);
-				}
-			} catch (JMSException e) {
-				// The connection is going away — either a shutdown, which is
-				// expected, or a broker failure, which the container's own
-				// connection handling deals with. Either way this thread is
-				// done; anything uncommitted is redelivered.
-				if (!closed) {
+					return;
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					return;
+				} catch (RuntimeException e) {
 					rollback();
+					batch.clear();
 				}
-				return;
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-				return;
-			} catch (RuntimeException e) {
+			}
+			if (!batch.isEmpty()) {
+				flush(batch);
+			}
+		}
+
+		/// Hand a batch to the handler and commit it, or roll it back.
+		///
+		/// The batch is cleared either way: a rolled-back batch is redelivered
+		/// by the broker, so keeping it here would process every message twice.
+		private void flush(List<CloudEvent> batch) {
+			int size = batch.size();
+			try {
+				handler.handle(batch);
+				session.commit();
+				count(handled, size);
+			} catch (Exception e) {
+				count(failed, size);
 				rollback();
+			} finally {
 				batch.clear();
 			}
 		}
-		if (!batch.isEmpty()) {
-			flush(batch);
-		}
-	}
 
-	/// Hand a batch to the handler and commit it, or roll it back.
-	///
-	/// The batch is cleared either way: a rolled-back batch is redelivered by
-	/// the broker, so keeping it here would process every message twice.
-	private void flush(List<CloudEvent> batch) {
-		int size = batch.size();
-		try {
-			handler.handle(batch);
-			session.commit();
-			count(handled, size);
-		} catch (Exception e) {
-			count(failed, size);
-			rollback();
-		} finally {
-			batch.clear();
-		}
-	}
-
-	private void rollback() {
-		try {
-			if (session != null) {
-				session.rollback();
+		private void rollback() {
+			try {
+				if (session != null) {
+					session.rollback();
+				}
+			} catch (JMSException e) {
+				// Nothing further to do: the broker redelivers whatever this
+				// session did not commit.
 			}
-		} catch (JMSException e) {
-			// Nothing further to do: the broker redelivers whatever this
-			// session did not commit.
+		}
+
+		private void close() {
+			legClosed = true;
+			try {
+				if (consumer != null) {
+					consumer.close();
+				}
+			} catch (JMSException e) {
+				// Shutting down regardless.
+			}
+			if (pump != null) {
+				try {
+					pump.join(batchMillis * 4);
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+				}
+			}
+			closeConnection();
+		}
+
+		/// Release everything without reporting anything. Used on a failed
+		/// open, where the caller already has the real exception.
+		private void closeQuietly() {
+			legClosed = true;
+			try {
+				if (consumer != null) {
+					consumer.close();
+				}
+			} catch (JMSException e) {
+				// Already failing.
+			}
+			closeConnection();
+		}
+
+		private void closeConnection() {
+			try {
+				if (session != null) {
+					session.close();
+				}
+			} catch (JMSException e) {
+				// Shutting down regardless.
+			}
+			try {
+				if (connection != null) {
+					connection.close();
+				}
+			} catch (JMSException e) {
+				// Same.
+			}
+			session = null;
+			connection = null;
+			consumer = null;
+		}
+
+		/// Remove this member's durable subscription from the broker.
+		private void unsubscribe() {
+			try {
+				if (consumer != null) {
+					consumer.close();
+					consumer = null;
+				}
+				if (durable && session != null) {
+					session.unsubscribe(name);
+				}
+			} catch (JMSException e) {
+				// Best effort: it may already be gone.
+			}
+		}
+
+		@Override
+		public String toString() {
+			return name + (memberName.isEmpty() ? "" : " on " + memberName);
 		}
 	}
 
@@ -421,47 +543,32 @@ public class EventSubscriber {
 	/// [#unsubscribe] to actually remove it.
 	public void close() {
 		closed = true;
-		try {
-			if (consumer != null) {
-				consumer.close();
+		DistributedMembers.unregister(membership);
+		membership = null;
+		closeAll();
+	}
+
+	private void closeAll() {
+		for (String member : new ArrayList<>(legs.keySet())) {
+			Leg leg = legs.remove(member);
+			if (leg != null) {
+				leg.close();
 			}
-		} catch (JMSException e) {
-			// Shutting down regardless.
-		}
-		if (pump != null) {
-			try {
-				pump.join(batchMillis * 4);
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-			}
-		}
-		try {
-			if (connection != null) {
-				connection.close();
-			}
-		} catch (JMSException e) {
-			// Shutting down regardless.
 		}
 	}
 
-	/// Close, then remove the durable subscription from the broker.
+	/// Close, then remove the durable subscriptions from the broker.
 	///
 	/// Only for a subscription that is genuinely going away. Calling this on a
 	/// redeploy would discard everything the broker held while the app was
 	/// down, which is the one thing durability is for.
 	public void unsubscribe() {
 		closed = true;
-		try {
-			if (consumer != null) {
-				consumer.close();
-			}
-			if (durable && session != null) {
-				session.unsubscribe(subscriptionName);
-			}
-		} catch (JMSException e) {
-			// Best effort: the subscription may already be gone.
-		} finally {
-			close();
+		DistributedMembers.unregister(membership);
+		membership = null;
+		for (Leg leg : legs.values()) {
+			leg.unsubscribe();
 		}
+		closeAll();
 	}
 }
