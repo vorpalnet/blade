@@ -104,7 +104,7 @@ response. **`sendResponse(response, lambda)`** sends a response; the lambda
 receives the acknowledgement (the ACK or PRACK) — for after you answer, what
 you wait for is not a response but a request.
 **`sendAcknowledgement(ackOrPrack, response)`** forwards an acknowledgement
-received on one call leg to the other, whichever kind it is.
+received on one call dialog to the other, whichever kind it is.
 
 Here is a complete two-party bridge — Alice calls, we invite Bob:
 

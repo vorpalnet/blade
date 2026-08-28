@@ -4,7 +4,7 @@ Javadocs: `/blade/javadoc/test-b2bua/` on the Admin Portal
 
 The starter B2BUA — the first app to read when you begin writing BLADE, and the one most
 developers copy to start a new project. It is a working back-to-back user agent that links
-two call legs and passes the call through unchanged. It carries no business logic, so
+two call dialogs and passes the call through unchanged. It carries no business logic, so
 nothing hides the one thing it exists to teach: **how a whole SIP conversation becomes
 readable, top-to-bottom code.**
 
@@ -16,7 +16,7 @@ framework hold it for you.
 
 ## The one idea
 
-A B2BUA is two legs — the caller's and the callee's — and the job is to keep them in step:
+A B2BUA is two dialogs — the caller's and the callee's — and the job is to keep them in step:
 Alice's INVITE out to Bob, Bob's 200 OK back to Alice, Alice's ACK on to Bob.
 
 Classic SIP Servlet code scatters that one exchange across three handlers — `doInvite`,
@@ -41,7 +41,7 @@ A BLADE application is a servlet that **dispatches** and callflows that do the *
 |---|---|
 | `TestB2buaSipServlet` | Extends `AsyncSipServlet`. `chooseCallflow` maps each inbound method to a callflow; `servletCreated` starts the config manager. |
 | `TestB2buaInvite` | The INVITE callflow — the nested-lambda exchange that sets up the call. The heart of the app. |
-| `TestB2buaCancel` | Forwards a CANCEL to the outbound leg. |
+| `TestB2buaCancel` | Forwards a CANCEL to the outbound dialog. |
 | `TestB2buaPassthru` | Everything else (BYE, INFO, OPTIONS, …): forward the request, return the response. |
 | `TestB2buaConfiguration` / `TestB2buaSettingsManager` | The config shape and its manager (seed + reload hook). |
 
@@ -116,7 +116,7 @@ Four v3 helpers do the building, so the callflow stays this small:
   through `sendResponse`, the transaction is complete and no further responses arrive.
 - **The link is completed on the response, not the request, on purpose.** `createRequest`
   links Alice to Bob one way; `createResponse` completes it the other. The gap is deliberate:
-  you may fan out several outbound INVITEs at once, but only one answers — the leg whose
+  you may fan out several outbound INVITEs at once, but only one answers — the dialog whose
   response you build back to Alice is the one that gets linked, and the losers are discarded.
 
 With PRACK in the network, the same doubling reaches deeper: `sendResponse` can hand you a
@@ -125,7 +125,7 @@ walks the sequence line by line.
 
 ## The other two callflows
 
-**`TestB2buaCancel`** forwards a cancellation to the outbound leg:
+**`TestB2buaCancel`** forwards a cancellation to the outbound dialog:
 
 ```java
 SipServletRequest bobCancel = createCancel(aliceCancel);
@@ -180,7 +180,7 @@ Builds with everything else (`./build.sh`) and deploys as `test-b2bua.war`
 Drive it with its own siblings: [test-uac](../test-uac/README.md) originates calls and
 [test-uas](../test-uas/README.md) answers them, so a call runs Alice → **test-b2bua** → Bob
 end to end. Point test-uac at test-b2bua with test-uas behind it, place a call, and watch the
-lifecycle log trace the exchange leg by leg. Standalone SIPp scenarios live in `testing/`
+lifecycle log trace the exchange dialog by dialog. Standalone SIPp scenarios live in `testing/`
 for driving the app without the pair.
 
 ## Related modules

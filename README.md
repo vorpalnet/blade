@@ -91,7 +91,7 @@ Deployed to the OCCAS cluster as individual WARs — one per service — and als
 | [CRUD](services/crud/README.md) | Rule-based SIP message rewriting — headers and bodies (XML/JSON/SDP), no code |
 | [Events](services/events/README.md) | The BLADE CloudEvents bus — one pipeline for analytics and integrations |
 | [Gateway](services/gateway/README.md) | SIP trunk gateway — registration and routing to carrier trunks |
-| [Hold](services/hold/README.md) | Call parking — answers with RFC 3264 inactive SDP until the far end resumes the leg |
+| [Hold](services/hold/README.md) | Call parking — answers with RFC 3264 inactive SDP until the far end resumes the dialog |
 | [iRouter](services/irouter/README.md) | Universal, config-driven SIP proxy; two-phase enrichment + routing pipeline edited in the Configurator |
 | [Options](services/options/README.md) | SIP OPTIONS handling and node lifecycle signaling |
 | [Presence](services/presence/README.md) | SIP/SIMPLE presence endpoint (skeleton — accepts SUBSCRIBE/PUBLISH; NOTIFY fan-out on the roadmap) |

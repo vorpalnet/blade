@@ -1,7 +1,7 @@
 /// The starter B2BUA — the first application to read when you begin writing BLADE,
 /// and the one most developers copy to start a new project.
 ///
-/// It is a working back-to-back user agent that links two call legs and passes the
+/// It is a working back-to-back user agent that links two call dialogs and passes the
 /// call through unchanged. It carries no business logic, so nothing hides the one
 /// thing it exists to teach: how a whole SIP conversation becomes readable,
 /// top-to-bottom code.
@@ -21,12 +21,12 @@
 ///   manager.
 /// - {@link TestB2buaInvite} — the INVITE callflow, the nested-lambda exchange that
 ///   sets up the call. The heart of the app.
-/// - {@link TestB2buaCancel} — forwards a CANCEL to the outbound leg.
+/// - {@link TestB2buaCancel} — forwards a CANCEL to the outbound dialog.
 /// - {@link TestB2buaPassthru} — everything else (BYE, INFO, OPTIONS, …): forward
 ///   the request, return the response.
 ///
 /// Each callflow extends {@link org.vorpal.blade.framework.v3.Callflow} and drives
-/// its legs with lambda callbacks — `sendRequest`/`sendResponse` hand your lambda
+/// its dialogs with lambda callbacks — `sendRequest`/`sendResponse` hand your lambda
 /// the next message, and the callflow's state serializes into the SIP session
 /// between messages, so a call survives a node dropping mid-conversation.
 ///
