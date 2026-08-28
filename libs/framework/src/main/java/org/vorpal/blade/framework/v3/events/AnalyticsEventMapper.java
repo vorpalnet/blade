@@ -51,8 +51,15 @@ public final class AnalyticsEventMapper {
 	}
 
 	/// `application.started` / `application.stopped`.
+	///
+	/// `host`, `tenant` and `version` ride only on these two events, never on a
+	/// call-scoped one — they describe the instance, and repeating them on every
+	/// call would pay for them thousands of times over. The consumer therefore
+	/// learns them only when an application event arrives, which may be *after*
+	/// the first call event has already created the instance's row; see the
+	/// backfill in the analytics service's `ApplicationResolver`.
 	public static CloudEvent application(String source, String appName, String domain, String server, String host,
-			String tenant, Date started, Date stopped) {
+			String tenant, String version, Date started, Date stopped) {
 
 		ObjectNode data = MAPPER.createObjectNode();
 		data.put("appName", appName);
@@ -60,6 +67,7 @@ public final class AnalyticsEventMapper {
 		data.put("server", server);
 		put(data, "host", host);
 		put(data, "tenant", tenant);
+		put(data, "version", version);
 		put(data, "appStartedAt", started);
 
 		String type = BladeEventTypes.APPLICATION_STARTED;

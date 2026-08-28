@@ -301,7 +301,7 @@ public class Analytics implements Serializable {
 		applicationStartedAt = new Date();
 		publish(AnalyticsEventMapper.application(source(), SettingsManager.getApplicationName(),
 				SettingsManager.getDomainName(), SettingsManager.getServerName(), SettingsManager.getHostname(),
-				SettingsManager.getTenant(), applicationStartedAt, null));
+				SettingsManager.getTenant(), SettingsManager.getApplicationVersion(), applicationStartedAt, null));
 	}
 
 	/// Publish this application instance's stop.
@@ -312,7 +312,8 @@ public class Analytics implements Serializable {
 		}
 		publish(AnalyticsEventMapper.application(source(), SettingsManager.getApplicationName(),
 				SettingsManager.getDomainName(), SettingsManager.getServerName(), SettingsManager.getHostname(),
-				SettingsManager.getTenant(), applicationStartedAt, new Date()));
+				SettingsManager.getTenant(), SettingsManager.getApplicationVersion(), applicationStartedAt,
+				new Date()));
 	}
 
 	public static void sessionStart(SipServletMessage msg) {
@@ -321,6 +322,29 @@ public class Analytics implements Serializable {
 
 	public static void sessionStop(SipServletMessage msg) {
 		publishSession(msg, new Date());
+	}
+
+	/// Publish a call's end from a thread that has no SIP message.
+	///
+	/// **This exists because not every call ends on a container thread.** An
+	/// application that tears a call down from its own timer — a media anchor
+	/// reaping a caller who vanished without a BYE — has the correlator and the
+	/// birth instant in its own state, but no `SipServletMessage` and no safe way
+	/// to reach the application session from off-container. Without this, such an
+	/// application can never close a call, and its rows sit open forever with a
+	/// null `destroyed`: every duration null, "live calls" counting the dead.
+	///
+	/// The two arguments are exactly what [#publishSession] extracts from a
+	/// message, so the event is indistinguishable on the wire from one published
+	/// the ordinary way.
+	///
+	/// @param vorpalId  the call's correlator
+	/// @param startedAt the call's birth instant — identity, not a report time, so
+	///                  it must be the same value the start was published with
+	public static void sessionStop(long vorpalId, Date startedAt) {
+		publish(AnalyticsEventMapper.session(source(), vorpalId, startedAt, new Date(),
+				SettingsManager.getApplicationName(), SettingsManager.getDomainName(),
+				SettingsManager.getServerName(), applicationStartedAt));
 	}
 
 	private static void publishSession(SipServletMessage msg, Date stoppedAt) {

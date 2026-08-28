@@ -268,7 +268,8 @@ public class AnalyticsEventListener implements EventSubscriber.Handler {
 	private void persistApplicationStart(EntityManager em, CloudEvent event) {
 		JsonNode data = event.getData();
 		Long id = ApplicationResolver.resolveOrCreate(em, Wire.text(data, "appName"), Wire.text(data, "domain"),
-				Wire.text(data, "server"), Wire.instant(data, "appStartedAt"), Wire.text(data, "host"), Wire.text(data, "tenant"));
+				Wire.text(data, "server"), Wire.instant(data, "appStartedAt"), Wire.text(data, "host"),
+				Wire.text(data, "tenant"), Wire.text(data, "version"));
 		logFine("AnalyticsEventListener: Application start id=" + id + " " + Wire.text(data, "appName"));
 	}
 
@@ -403,9 +404,14 @@ public class AnalyticsEventListener implements EventSubscriber.Handler {
 
 	/// Resolve the publishing application instance from the identity every
 	/// call-scoped event carries.
+	///
+	/// Nulls for host, tenant and version because a call-scoped event does not
+	/// carry them — only `application.started` does. If this call is what creates
+	/// the row, those columns stay null until that event arrives and the resolver
+	/// backfills them.
 	private static Long applicationId(EntityManager em, JsonNode data) {
 		return ApplicationResolver.resolveOrCreate(em, Wire.text(data, "appName"), Wire.text(data, "domain"),
-				Wire.text(data, "server"), Wire.instant(data, "appStartedAt"), null, null);
+				Wire.text(data, "server"), Wire.instant(data, "appStartedAt"), null, null, null);
 	}
 
 	// ────────────────────────────────────────────── backpressure and health

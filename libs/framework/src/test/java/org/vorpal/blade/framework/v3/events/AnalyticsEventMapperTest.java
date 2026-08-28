@@ -81,9 +81,9 @@ class AnalyticsEventMapperTest {
 
 		@Test
 		void applicationStartAndStopDiffer() {
-			CloudEvent start = AnalyticsEventMapper.application("/blade/app", "app", "d", "s", "h", "t", APP_STARTED,
+			CloudEvent start = AnalyticsEventMapper.application("/blade/app", "app", "d", "s", "h", "t", "1.2.3", APP_STARTED,
 					null);
-			CloudEvent stop = AnalyticsEventMapper.application("/blade/app", "app", "d", "s", "h", "t", APP_STARTED,
+			CloudEvent stop = AnalyticsEventMapper.application("/blade/app", "app", "d", "s", "h", "t", "1.2.3", APP_STARTED,
 					new Date());
 			assertEquals(BladeEventTypes.APPLICATION_STARTED, start.getType());
 			assertEquals(BladeEventTypes.APPLICATION_STOPPED, stop.getType());
@@ -92,7 +92,7 @@ class AnalyticsEventMapperTest {
 		@Test
 		@DisplayName("application lifecycle is not call-scoped, so it carries no subject")
 		void applicationHasNoSubject() {
-			CloudEvent event = AnalyticsEventMapper.application("/blade/app", "app", "d", "s", null, null,
+			CloudEvent event = AnalyticsEventMapper.application("/blade/app", "app", "d", "s", null, null, null,
 					APP_STARTED, null);
 			assertNull(event.getSubject());
 		}
@@ -207,9 +207,9 @@ class AnalyticsEventMapperTest {
 			attributes.put("caller", "alice");
 
 			CloudEvent[] events = {
-					AnalyticsEventMapper.application("/blade/app", "app", "dom", "srv", "host", "tenant",
+					AnalyticsEventMapper.application("/blade/app", "app", "dom", "srv", "host", "tenant", "1.2.3",
 							APP_STARTED, null),
-					AnalyticsEventMapper.application("/blade/app", "app", "dom", "srv", "host", "tenant",
+					AnalyticsEventMapper.application("/blade/app", "app", "dom", "srv", "host", "tenant", "1.2.3",
 							APP_STARTED, new Date()),
 					AnalyticsEventMapper.session("/blade/app", VORPAL_ID, STARTED, null, "app", "dom", "srv",
 							APP_STARTED),

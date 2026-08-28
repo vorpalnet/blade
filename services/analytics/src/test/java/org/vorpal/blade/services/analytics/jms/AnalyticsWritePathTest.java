@@ -2,6 +2,7 @@ package org.vorpal.blade.services.analytics.jms;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -188,7 +189,61 @@ class AnalyticsWritePathTest {
 				"the attribute the demo query reads must survive the write");
 	}
 
+	@Test
+	@DisplayName("an application event backfills host and version onto a row a call event created")
+	void applicationFactsArriveLate() throws Exception {
+		// The order that produced null hosts in the live database: a call event
+		// reaches the sink first and creates the application row from the
+		// identity it carries, which does not include host, tenant or version.
+		listener.handle(Collections.singletonList(callEvent(UUID.randomUUID().toString(), 0x66660001L)));
+
+		assertEquals(1, count("applications"));
+		assertNull(text("SELECT host FROM applications"), "a call event cannot know the host");
+
+		// Then the instance's own application.started arrives, describing itself.
+		listener.handle(Collections.singletonList(applicationStarted()));
+
+		assertEquals(1, count("applications"), "same instance, same identity, same row");
+		assertEquals("engine1.example", text("SELECT host FROM applications"));
+		assertEquals("3.0.6", text("SELECT version FROM applications"));
+	}
+
+	@Test
+	@DisplayName("a later call event does not blank out what the application event established")
+	void backfillNeverOverwrites() throws Exception {
+		// The common order — application first — must survive the call events
+		// that follow it, every one of which carries nulls for these columns.
+		listener.handle(Collections.singletonList(applicationStarted()));
+		listener.handle(Collections.singletonList(callEvent(UUID.randomUUID().toString(), 0x66660002L)));
+
+		assertEquals("engine1.example", text("SELECT host FROM applications"),
+				"a call event's null must not erase a known host");
+		assertEquals("3.0.6", text("SELECT version FROM applications"));
+	}
+
 	// ─────────────────────────────────────────────────────────────── fixtures
+
+	/// An `application.started` for the same instance the call events name, so
+	/// both resolve to one `applications` row.
+	private CloudEvent applicationStarted() {
+		long birth = 1_787_780_167_411L;
+
+		ObjectNode data = MAPPER.createObjectNode();
+		data.put("appName", "conference");
+		data.put("domain", CLUSTER);
+		data.put("server", "engine1");
+		data.put("appStartedAt", iso(birth - 3_600_000L));
+		// The three the instance knows about itself and a call event never carries.
+		data.put("host", "engine1.example");
+		data.put("version", "3.0.6");
+
+		CloudEvent event = new CloudEvent();
+		event.setType(BladeEventTypes.APPLICATION_STARTED);
+		event.setId(UUID.randomUUID().toString());
+		event.setSource("//blade/conference/test");
+		event.setData(data);
+		return event;
+	}
 
 	/// A `callRiskAssessed` on the wire, shaped the way the framework's mapper
 	/// publishes one.

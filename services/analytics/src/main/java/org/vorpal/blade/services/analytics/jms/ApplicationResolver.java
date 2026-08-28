@@ -39,16 +39,19 @@ public final class ApplicationResolver {
 	/// @param domain  the WebLogic domain
 	/// @param server  the server this instance runs on
 	/// @param started when this instance started — the rest of its identity
-	/// @param host    hostname, recorded on creation only
-	/// @param tenant  tenant code, recorded on creation only
+	/// @param host    hostname, or null when the caller does not know it
+	/// @param tenant  tenant code, or null when the caller does not know it
+	/// @param version application version, or null when the caller does not know it
 	/// @return the application's database primary key
 	public static Long resolveOrCreate(EntityManager em, String name, String domain, String server, Date started,
-			String host, String tenant) {
+			String host, String tenant, String version) {
 
 		Date created = (started != null) ? started : new Date();
 		long id = Application.idFor(name, domain, server, created);
 
-		if (em.find(Application.class, id) != null) {
+		Application existing = em.find(Application.class, id);
+		if (existing != null) {
+			backfill(em, existing, host, tenant, version);
 			return Long.valueOf(id);
 		}
 
@@ -60,7 +63,42 @@ public final class ApplicationResolver {
 		row.setCreated(created);
 		row.setHost(host);
 		row.setTenant(tenant);
+		row.setVersion(version);
 		return insert(em, row, id);
+	}
+
+	/// Fill in instance facts that were not known when the row was created.
+	///
+	/// **Creation order is not publication order.** `host`, `tenant` and
+	/// `version` ride only on `application.started`; a call-scoped event carries
+	/// the instance's *identity* but none of its description. So whichever event
+	/// reaches the sink first wins the insert, and when that is a call event the
+	/// row is created with those three columns null. Before this, they stayed
+	/// null forever — the later `application.started` found the row present and
+	/// returned early — which is why live `applications` rows had a name and a
+	/// server but no host at all.
+	///
+	/// Only null columns are written, so a call event arriving after the
+	/// application event (the common order) cannot blank out what is already
+	/// known. Identity columns are never touched: a differing value there is a
+	/// different instance with a different key, not an update to this one.
+	private static void backfill(EntityManager em, Application row, String host, String tenant, String version) {
+		boolean changed = false;
+		if (row.getHost() == null && host != null) {
+			row.setHost(host);
+			changed = true;
+		}
+		if (row.getTenant() == null && tenant != null) {
+			row.setTenant(tenant);
+			changed = true;
+		}
+		if (row.getVersion() == null && version != null) {
+			row.setVersion(version);
+			changed = true;
+		}
+		if (changed) {
+			em.merge(row);
+		}
 	}
 
 	/// Record an instance's stop.
