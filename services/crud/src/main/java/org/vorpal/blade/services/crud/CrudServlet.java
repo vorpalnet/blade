@@ -4,6 +4,7 @@ import java.io.IOException;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
+import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
@@ -20,11 +21,10 @@ import org.vorpal.blade.framework.v3.crud.CrudSettings;
 import org.vorpal.blade.framework.v3.crud.RuleSet;
 
 /**
- * B2BUA servlet that applies configurable CRUD rules to SIP messages
- * at every lifecycle point. On an initial request the v3 enrichment
- * pipeline runs and selects a rule set by writing the `ruleSet`
- * context variable; rule application happens in the B2BUA lifecycle
- * callbacks.
+ * B2BUA servlet that applies configurable CRUD rules to SIP messages at every
+ * lifecycle point. On an initial request the v3 enrichment pipeline runs and
+ * selects a rule set by writing the `ruleSet` context variable; rule
+ * application happens in the B2BUA lifecycle callbacks.
  */
 @WebListener
 @SipApplication(distributable = true)
@@ -41,6 +41,11 @@ public class CrudServlet extends B2buaServlet {
 			@Override
 			protected CrudSettings sample() {
 				return new CrudConfigurationSample();
+			}
+
+			@Override
+			protected void refreshed(CrudSettings config) throws ServletParseException {
+				// do nothing;
 			}
 		};
 	}

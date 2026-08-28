@@ -43,7 +43,11 @@ and both are always labelled in words, never colour alone.
 
 **Self-contained.** No external fonts, scripts, images or stylesheets: these are published
 under a content policy that blocks every external host, and a linked asset fails silently.
-The Vorpal mark is inlined in the shell for that reason.
+The Vorpal mark is inlined in the shell for that reason — a copy of the canonical
+`admin/portal/src/main/webapp/brand/vorpal_logo.svg`, filled through the `--brand` token so
+it tracks the light/dark theme instead of a fixed purple or white. **When the logo changes
+in `brand/`, re-sync the inline copies** in `deck-template.html` and `tutorial-template.html`
+(the paths and `viewBox` are what change; keep the `class="vorpal-mark"`/`cls-1` wrapper).
 
 ## Classes worth knowing
 

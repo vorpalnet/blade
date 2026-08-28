@@ -46,21 +46,15 @@ public class TestB2buaSipServlet extends AsyncSipServlet {
 	public static TestB2buaSettingsManager settingsManager;
 
 	@Override
-	protected Callflow chooseCallflow(SipServletRequest inboundRequest) throws ServletException, IOException {
-		Callflow callflow = null;
-
-		switch (inboundRequest.getMethod()) {
+	protected Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException {
+		switch (request.getMethod()) {
 		case Callflow.INVITE:
-			callflow = new TestB2buaInvite();
-			break;
+			return new TestB2buaInvite();
 		case Callflow.CANCEL:
-			callflow = new TestB2buaCancel();
-			break;
+			return new TestB2buaCancel();
 		default:
-			callflow = new TestB2buaPassthru();
+			return new TestB2buaPassthru();
 		}
-
-		return callflow;
 	}
 
 	/*
