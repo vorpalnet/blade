@@ -30,9 +30,10 @@ public class PlayerSettings extends Configuration implements Serializable {
 	private boolean loop = false;
 	private boolean record = false;
 	private String recordUri;
+	private boolean conference = false;
 
 	@JsonPropertyDescription("JSR-309 driver name to obtain the media-server factory from "
-			+ "(DriverManager). Leave blank to use the single registered driver.")
+			+ "(the registered Driver SPI). Leave blank to use the single registered driver.")
 	public String getDriverName() {
 		return driverName;
 	}
@@ -88,5 +89,17 @@ public class PlayerSettings extends Configuration implements Serializable {
 
 	public void setRecordUri(String recordUri) {
 		this.recordUri = recordUri;
+	}
+
+	@JsonPropertyDescription("Conference mode: callers to the same dialed user (the To user part) share "
+			+ "one audio mix on the media server instead of each hearing the prompt. The room opens "
+			+ "with the first caller and closes when the last one leaves. mediaUri/loop/record do not "
+			+ "apply in this mode.")
+	public boolean isConference() {
+		return conference;
+	}
+
+	public void setConference(boolean conference) {
+		this.conference = conference;
 	}
 }

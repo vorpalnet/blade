@@ -102,10 +102,9 @@ import org.vorpal.blade.framework.v3.Callflow;
 /// `doAction` is a cheap re-entrant no-op) or on a foreign thread (where `doAction`
 /// must acquire it). The JSR-309 media controller driver — which we control — will fire
 /// events under the lock; this defensive `doAction` makes the API correct for
-/// arbitrary drivers too. **Failover re-attach** (re-resolving live media objects
-/// by URI and re-registering dispatchers on the node that takes over) is not yet
-/// implemented here — the continuations survive in the replicated SAS, but the
-/// live media objects/listeners must be rebuilt on failover.
+/// arbitrary drivers too. **Failover re-attach** is [#reattach]: the continuations
+/// survive in the replicated SAS, and the driver rebuilds the live media session from
+/// its own recovery record through [MediaSessionRecovery].
 public abstract class MediaCallflow extends Callflow {
 	private static final long serialVersionUID = 1L;
 
@@ -114,8 +113,20 @@ public abstract class MediaCallflow extends Callflow {
 	/// session from any media event.
 	public static final String SIP_APP_SESSION_ID = "org.vorpal.blade.v3.media.sasId";
 
+	/// [MediaObject] parameter (String value): the id of the [SipApplicationSession] that owns one
+	/// resource container — a [NetworkConnection] or [MediaGroup] — when several calls share a
+	/// [MediaSession]. Stamped by [#bindMediaObject]; consulted by the verbs before the session-level
+	/// binding. `Parameter` is an empty interface in JSR-309, so a framework constant is a legal key.
+	public static final javax.media.mscontrol.Parameter SIP_APP_SESSION_ID_PARAMETER = new javax.media.mscontrol.Parameter() {
+		@Override
+		public String toString() {
+			return SIP_APP_SESSION_ID;
+		}
+	};
+
 	/// Prefix for the [SipApplicationSession] attribute under which a verb stashes
-	/// its continuation. Full key is `MEDIA_CB_ + <mediaSessionUri> + ":" + <verb>`.
+	/// its continuation. Full key is `MEDIA_CB_ + <uri> + ":" + <verb>`, where `<uri>` is the
+	/// MediaSession's, or the resource container's when the app bound one ([#bindMediaObject]).
 	private static final String MEDIA_CB_ = "org.vorpal.blade.v3.media.cb.";
 
 	/// Prefix for the [SipApplicationSession] marker recording that `<mediaSessionUri>` is bound to
@@ -169,6 +180,23 @@ public abstract class MediaCallflow extends Callflow {
 	protected static void bindMediaSession(MediaSession ms, SipApplicationSession app) {
 		ms.setAttribute(SIP_APP_SESSION_ID, app.getId());
 		app.setAttribute(MEDIA_MS_ + ms.getURI(), ms.getURI().toString());
+	}
+
+	/// Bind one resource container — a [NetworkConnection] or [MediaGroup] — to the
+	/// [SipApplicationSession] of the call it serves, for the case where several calls
+	/// share one [MediaSession]: a conference. In JSR-309 a [javax.media.mscontrol.mixer.MediaMixer]
+	/// and every leg joined to it belong to the same MediaSession (one media-server context), so
+	/// the session-level binding of [#bindMediaSession] would name only one of the callers. With
+	/// this binding, an event on the container's resources — the SDP answer for its leg, a play
+	/// completion on its group — continues under *its* caller's app session, and the continuation
+	/// is keyed by the container's URI, so concurrent verbs on different legs of one session never
+	/// collide.
+	///
+	/// Unbound containers fall back to the session binding, so single-call apps need nothing new.
+	protected static void bindMediaObject(javax.media.mscontrol.MediaObject container, SipApplicationSession app) {
+		Parameters p = container.createParameters();
+		p.put(SIP_APP_SESSION_ID_PARAMETER, app.getId());
+		container.setParameters(p);
 	}
 
 	// ==================================================================== verbs
@@ -335,6 +363,9 @@ public abstract class MediaCallflow extends Callflow {
 	/// asynchronous [Joinable#joinInitiate] variant (with a `JoinEvent` continuation)
 	/// is a future addition; the synchronous form matches how the reference
 	/// conference sample joins dialogs.
+	///
+	/// A mixer and its legs share one [MediaSession]; bind each caller's leg to its own app
+	/// session with [#bindMediaObject] before using the other verbs on it.
 	protected void join(Joinable from, Joinable.Direction direction, Joinable to)
 			throws MsControlException {
 		from.join(direction, to);
@@ -471,7 +502,14 @@ public abstract class MediaCallflow extends Callflow {
 	private <E extends MediaEvent<?>> void arm(MediaEventNotifier<E> notifier, String verb, Callback<E> callback)
 			throws MsControlException {
 		MediaSession ms = notifier.getMediaSession();
-		String appId = (String) ms.getAttribute(SIP_APP_SESSION_ID);
+		// The continuation is keyed by, and the app resolved from, the resource's container when the
+		// app bound one (a shared conference session); otherwise by the MediaSession.
+		javax.media.mscontrol.MediaObject container = containerOf(notifier);
+		String appId = (container == null) ? null : boundAppId(container);
+		String keyUri = (appId == null) ? ms.getURI().toString() : container.getURI().toString();
+		if (appId == null) {
+			appId = (String) ms.getAttribute(SIP_APP_SESSION_ID);
+		}
 		if (appId == null) {
 			throw new MsControlException(
 					"MediaCallflow: MediaSession is not bound to a SipApplicationSession "
@@ -481,10 +519,29 @@ public abstract class MediaCallflow extends Callflow {
 		if (app == null) {
 			throw new MsControlException("MediaCallflow: SipApplicationSession " + appId + " no longer valid");
 		}
-		app.setAttribute(cbKey(ms.getURI().toString(), verb), callback);
-		notifier.addListener(new MediaDispatcher<E>(appId, ms.getURI().toString(), verb));
+		app.setAttribute(cbKey(keyUri, verb), callback);
+		notifier.addListener(new MediaDispatcher<E>(appId, keyUri, verb));
 		// Keep the failover recovery record current with whatever media coordinates now exist.
 		captureRecovery(app, ms);
+	}
+
+	/// The resource container ([NetworkConnection] / [MediaGroup]) a notifier belongs to, or null
+	/// when the notifier is not a contained resource.
+	private static javax.media.mscontrol.MediaObject containerOf(MediaEventNotifier<?> notifier) {
+		if (notifier instanceof javax.media.mscontrol.resource.Resource) {
+			Object c = ((javax.media.mscontrol.resource.Resource<?>) notifier).getContainer();
+			if (c instanceof javax.media.mscontrol.MediaObject) {
+				return (javax.media.mscontrol.MediaObject) c;
+			}
+		}
+		return null;
+	}
+
+	/// The app-session id stamped on a container by [#bindMediaObject], or null.
+	private static String boundAppId(javax.media.mscontrol.MediaObject container) {
+		Parameters p = container.getParameters(new javax.media.mscontrol.Parameter[] { SIP_APP_SESSION_ID_PARAMETER });
+		Object v = (p == null) ? null : p.get(SIP_APP_SESSION_ID_PARAMETER);
+		return (v == null) ? null : v.toString();
 	}
 
 	/// Resolve the [SipApplicationSession] that owns `ms` from the id stamped by [#bindMediaSession],

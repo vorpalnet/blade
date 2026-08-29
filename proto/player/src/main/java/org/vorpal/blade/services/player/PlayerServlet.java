@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import javax.media.mscontrol.MediaSession;
 import javax.media.mscontrol.MsControlFactory;
 import javax.media.mscontrol.mediagroup.MediaGroup;
+import javax.media.mscontrol.networkconnection.NetworkConnection;
 import javax.media.mscontrol.spi.Driver;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
@@ -24,7 +25,9 @@ import org.vorpal.blade.framework.v3.AsyncSipServlet;
 import org.vorpal.blade.framework.v3.media.MediaCallflow;
 
 /// A **vendor-neutral JSR-309** player/recorder service: it answers an inbound call, anchors the
-/// call's media on a 309 media server, plays a prompt/music, and optionally records the caller.
+/// call's media on a 309 media server, plays a prompt/music, and optionally records the caller. In
+/// conference mode ([PlayerSettings#isConference]) callers to the same dialed user share one
+/// [javax.media.mscontrol.mixer.MediaMixer] instead — see [Room].
 ///
 /// It speaks only `javax.media.mscontrol.*`. At startup it obtains the [MsControlFactory] from a
 /// registered 309 [Driver] (any JSR-309 media controller driver works)
@@ -44,10 +47,13 @@ public class PlayerServlet extends AsyncSipServlet {
 	/// rebuilt, not migrated (matches MediaCallflow's reattach TODO).
 	public static final Map<String, Anchor> LIVE = new ConcurrentHashMap<>();
 
-	/// The live media objects for one call — the session (owns the pipeline) and its media group.
+	/// The live media objects for one call — the session (owns the pipeline) and its media group; or,
+	/// in conference mode, the caller's leg and the room it is in (the room owns the session).
 	public static final class Anchor {
 		public final MediaSession ms;
 		public volatile MediaGroup mg;
+		public volatile NetworkConnection nc;
+		public volatile String room;
 
 		public Anchor(MediaSession ms) {
 			this.ms = ms;
@@ -112,12 +118,26 @@ public class PlayerServlet extends AsyncSipServlet {
 			// Best-effort teardown of any media still anchored on this node.
 			for (Anchor a : LIVE.values()) {
 				try {
-					a.ms.release();
+					if (a.room == null) {
+						a.ms.release(); // a room's session is released with the room below
+					}
 				} catch (Exception ignore) {
 					// best effort
 				}
 			}
 			LIVE.clear();
+			Room.closeAll();
+			// A driver may own threads (node probes); an undeploy must stop them or the old
+			// classloader lives on. Vendor-neutral: only the standard AutoCloseable is assumed.
+			MsControlFactory factory = MediaCallflow.getMsControlFactory();
+			if (factory instanceof AutoCloseable) {
+				try {
+					((AutoCloseable) factory).close();
+				} catch (Exception ignore) {
+					// best effort
+				}
+			}
+			MediaCallflow.setMsControlFactory(null);
 			if (settings != null) {
 				settings.unregister();
 			}

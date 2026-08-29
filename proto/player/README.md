@@ -9,8 +9,9 @@ prompt or music** to the caller (optionally recording the caller). The obvious p
 This app speaks **only `javax.media.mscontrol.*`** — the standard JSR-309 media API — via the
 framework's lambda media verbs ([`MediaCallflow`](../../libs/framework/src/main/java/org/vorpal/blade/framework/v3/media/MediaCallflow.java)).
 It has **no idea what media server is behind it**. At startup it asks the JSR-309 SPI
-(`DriverManager`) for a driver by name (or the sole registered one) and installs its factory on
-`MediaCallflow`. Nothing here is tied to any particular media server — that lives entirely behind the driver.
+(`ServiceLoader` over `javax.media.mscontrol.spi.Driver`) for a driver by name (or the sole
+registered one) and installs its factory on `MediaCallflow`. Nothing here is tied to any particular
+media server — that lives entirely behind the driver.
 
 In the Vorpal deployment the driver is a **JSR-309 media controller driver**, deployed
 alongside as a runtime artifact. The app has **zero compile dependency on the driver** —
@@ -32,8 +33,28 @@ offer(nc, callerSdp, answer -> {          // feed caller SDP to the media server
 ```
 
 `PlayerServlet` bootstraps the 309 factory in `servletCreated` and dispatches INVITE → `PlayerCallflow`,
-BYE/CANCEL → `PlayerBye` (releases the media anchor). Live media objects are held in a node-local
-registry (they aren't serializable); failover rebuilds rather than migrates the anchor.
+BYE/CANCEL → `PlayerBye` (releases the media anchor), INFO → `PlayerInfo` (DTMF). Live media objects
+are held in a node-local registry (they aren't serializable); failover rebuilds rather than migrates
+the anchor.
+
+### Conference mode
+
+With `conference=true` the same app is an N-party audio bridge: callers to the same dialed user
+(`sip:daily@…` → room `daily`) share one `MediaMixer`:
+
+```
+offer(nc, callerSdp, answer -> {          // the leg is created on the ROOM's media session
+    sendResponse(200 with answer);
+    on ACK:
+        join(nc, DUPLEX, room.mixer);      // into the mix; N-1 mixing, nobody hears themself
+});
+```
+
+A `Room` (node-local, like the anchor registry) holds the shared `MediaSession` and mixer; the first
+caller opens it, the last BYE closes it. Because the legs share one session, each is bound to its own
+caller with `MediaCallflow.bindMediaObject` so its SDP answer continues under the right app session.
+Two callers to one room on different cluster nodes get two rooms — steering a room's calls to one
+node is routing, not this app.
 
 ## Config (`PlayerSettings`)
 
@@ -43,14 +64,15 @@ registry (they aren't serializable); failover rebuilds rather than migrates the 
   Music, or a TTS prompt pre-rendered to a file.
 - `loop` — replay on completion (music-on-answer) vs. play once then hang up.
 - `record` / `recordUri` — record the caller's audio.
+- `conference` — conference mode (above); `mediaUri` / `loop` / `record` do not apply.
 
 ## Status
 
-- **Built:** config model, the `offer → join → play/record` callflow, BYE teardown, vendor-neutral SPI
-  bootstrap. `PlayerConfigTest` **2/2**; skinny WAR (`player.war`, framework jar only).
+- **Built:** config model, the `offer → join → play/record` callflow, DTMF over INFO, conference
+  mode, BYE teardown, vendor-neutral SPI bootstrap. `PlayerConfigTest` **2/2**; skinny WAR
+  (`player.war`, framework jar + the driver jars).
 - **Deploy-time (OCCAS + a JSR-309 media controller):** the media path itself — SDP anchor, playback,
-  recording — needs a live media server and is verified there.
-- **Not yet:** DTMF collect (`prompt`) and conference (`MediaMixer`) — the driver throws for those.
+  recording, the mix — needs a live media server and is verified there.
 
 ## Build / test
 

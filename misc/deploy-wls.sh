@@ -53,7 +53,8 @@ case "$WLS_ACTION" in
     deploy)   [ -n "$WLS_NAME" ] && [ -f "$WLS_SOURCE" ] && [ -n "$WLS_TARGETS" ] || { echo "deploy needs WLS_NAME + WLS_SOURCE(file) + WLS_TARGETS" >&2; exit 1; } ;;
     undeploy) [ -n "$WLS_NAME" ] || { echo "undeploy needs WLS_NAME" >&2; exit 1; } ;;
     status)   : ;;
-    *) echo "WLS_ACTION must be deploy|undeploy|status" >&2; exit 1 ;;
+    start|stop) [ -n "$WLS_NAME" ] || { echo "$WLS_ACTION needs WLS_NAME" >&2; exit 1; } ;;
+    *) echo "WLS_ACTION must be deploy|undeploy|status|start|stop" >&2; exit 1 ;;
 esac
 
 # Jython booleans for the WLST kwargs.
@@ -105,6 +106,17 @@ try:
             try:    tg = ','.join([t.getName() for t in a.getTargets()])
             except: tg = ''
             print('  [app] ' + a.getName() + ' @ ' + tg)
+        print('DEPLOY_OK')
+    elif action in ('start', 'stop'):
+        # An app the container left PREPARED (activation deferred) is started in
+        # place; stop is the mirror. Both need the deployed name (Name#Version).
+        m = app_map()
+        if name in m:
+            if action == 'start': startApplication(m[name], block='true')
+            else:                 stopApplication(m[name], block='true')
+            print(action.upper() + 'ED ' + m[name])
+        else:
+            print('NOT_DEPLOYED ' + name)
         print('DEPLOY_OK')
     elif action == 'undeploy':
         m = lib_map() if isLib else app_map()

@@ -25,6 +25,23 @@ public class PlayerBye extends Callflow {
 	/// release the session/pipeline). No-op if already torn down.
 	static void teardown(String appId) {
 		PlayerServlet.Anchor anchor = PlayerServlet.LIVE.remove(appId);
+		if (anchor != null && anchor.room != null) {
+			// Conference leg: leave the mix and release the leg; the room's session outlives the
+			// caller and is released by the last one out.
+			Room room = Room.get(anchor.room);
+			try {
+				if (room != null) {
+					anchor.nc.unjoin(room.mixer);
+				}
+				anchor.nc.release();
+			} catch (Exception ignore) {
+				// best effort
+			}
+			if (room != null) {
+				room.leave(appId);
+			}
+			return;
+		}
 		if (anchor != null) {
 			// Local node: the live media objects are in hand — release them directly.
 			try {

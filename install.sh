@@ -466,13 +466,20 @@ load_profile() {
     [ "$NM_TYPE" = "ssl" ] || { warn "nm.type='${NM_TYPE}' is no longer supported — Node Manager is always SSL with its own certificate."; NM_TYPE=ssl; }
     DCOUNT="$(d dynamic.server.count "")"
     # DYN_MAX is the dynamic cluster's MaximumDynamicServerCount — a high FIXED
-    # ceiling (default 1000), NOT the machine count. The actual running engines
+    # ceiling (default 800), NOT the machine count. The actual running engines
     # follow the match expression (machine1..N), so "add a machine" just extends
     # the expression; the ceiling never needs resizing. setMaxDynamicClusterSize is
     # a no-op per the RE'd OCCAS code and the WLS setter rejects INT_MAX, so the
     # template line is commented out at stage time; MaximumDynamicServerCount alone
-    # governs.
-    DYN_MAX="$(d dynamic.server.max 1000)"
+    # governs. 800 is the hard WLS ceiling: the setter rejects anything outside
+    # [0, 800] (IllegalArgumentException), so don't raise this above 800.
+    DYN_MAX="$(d dynamic.server.max 800)"
+    # Clamp a stored value from an older profile that recorded the illegal 1000
+    # ceiling — the WLS setter rejects anything above 800.
+    if [ "${DYN_MAX:-0}" -gt 800 ] 2>/dev/null; then
+        warn "dynamic.server.max=${DYN_MAX} exceeds the WLS ceiling of 800 — clamping to 800."
+        DYN_MAX=800
+    fi
     # STATIC machine0/engine0/AdminServer: the admin box runs a configured engine0
     # (created by emit_static_engine0_block), OUTSIDE the dynamic template. The
     # DYNAMIC range therefore starts at 1 — engine1 on machine1, engine2 on
@@ -566,7 +573,7 @@ load_profile() {
 #     admin box (the off-by-one that put engine1 on machine0). Empty on a
 #     single-box install — then the static engine0 is the whole tier.
 #   * server.name.starting.index = 1 (the dynamic range starts at engine1).
-#   * dynamic.server.max defaults to 1000 (a fixed ceiling, NOT the machine count).
+#   * dynamic.server.max defaults to 800 (a fixed ceiling, NOT the machine count).
 migrate_profile() {
     [ -f "$OCCAS_CONF" ] || return 0
     local changed=0 want_static want_match i
@@ -590,10 +597,10 @@ migrate_profile() {
         SRV_START_INDEX=1; changed=1
     fi
     if [ -z "$(read_prop "$OCCAS_CONF" dynamic.server.max)" ]; then
-        set_conf_prop "$OCCAS_CONF" dynamic.server.max "${DYN_MAX:-1000}"
-        DYN_MAX="${DYN_MAX:-1000}"; changed=1
+        set_conf_prop "$OCCAS_CONF" dynamic.server.max "${DYN_MAX:-800}"
+        DYN_MAX="${DYN_MAX:-800}"; changed=1
     fi
-    [ "$changed" = 1 ] && warn "profile migrated: static ${want_static}; dynamic engines = ${want_match:-<none>} (start index 1, ceiling ${DYN_MAX:-1000})."
+    [ "$changed" = 1 ] && warn "profile migrated: static ${want_static}; dynamic engines = ${want_match:-<none>} (start index 1, ceiling ${DYN_MAX:-800})."
     return 0
 }
 
@@ -1104,7 +1111,7 @@ save_profile() {
         echo "# server.name.starting.index = the DYNAMIC range start (1); engine0 is static, index 0"
         echo "server.name.starting.index=${SRV_START_INDEX:-1}"
         echo "# dynamic.server.max = MaximumDynamicServerCount, a fixed ceiling (NOT the machine count)"
-        echo "dynamic.server.max=${DYN_MAX:-1000}"
+        echo "dynamic.server.max=${DYN_MAX:-800}"
         echo "dynamic.server.count=${DCOUNT}"
         echo ""
         echo "# --- Node Manager: its own basic domain '${NM_DOMAIN}', stable across app"
@@ -2664,7 +2671,7 @@ do_add_machine() {
     DCOUNT="${#H_NAME[@]}"
     # ENGINE machines only (index 1..N); machine0/engine0 is static, outside the
     # dynamic template, so it is never in the match expression. The ceiling stays
-    # fixed at DYN_MAX (default 1000) — adding a machine only extends the match.
+    # fixed at DYN_MAX (default 800) — adding a machine only extends the match.
     local newmatch="" i
     for i in "${!H_NAME[@]}"; do
         [ "$i" -eq 0 ] && continue
@@ -2675,7 +2682,7 @@ do_add_machine() {
     # 1. the DOMAIN first. The new server has to exist before the host can be told
     #    to start it, and the rsync in step 2 copies this domain -- so the engine
     #    receives a config that already knows about itself.
-    if ! cluster_resize "$name" "$addr" "$newmatch" "${DYN_MAX:-1000}"; then
+    if ! cluster_resize "$name" "$addr" "$newmatch" "${DYN_MAX:-800}"; then
         warn "could not add ${name} to the domain — nothing changed."
         local last=$(( ${#H_NAME[@]} - 1 ))
         unset "H_NAME[$last]" "H_ADDR[$last]" "H_PORT[$last]" "H_TYPE[$last]" "H_PUB[$last]" "H_FQDN[$last]" "H_ROLE[$last]"
@@ -2718,7 +2725,7 @@ do_remove_machine() {
     # static admin box and never in the expression. Ceiling stays DYN_MAX.
     local newmatch="" i
     for i in $(seq 1 $((n - 1))); do newmatch="${newmatch:+${newmatch},}${H_NAME[$i]}"; done
-    cluster_resize "" "" "$newmatch" "${DYN_MAX:-1000}" "$name" || warn "domain not updated — continuing with host teardown."
+    cluster_resize "" "" "$newmatch" "${DYN_MAX:-800}" "$name" || warn "domain not updated — continuing with host teardown."
 
     # Host: reuse the guarded teardown, which stops running servers first.
     local keep_name=("${H_NAME[@]}") keep_addr=("${H_ADDR[@]}") keep_role=("${H_ROLE[@]}")
@@ -4424,7 +4431,7 @@ emit_tls_block() {
     # machine0 is deliberately excluded. Empty on a single-box install — then the
     # dynamic set is empty and the static engine0 is the whole tier.
     #
-    # MaximumDynamicServerCount is a high fixed CEILING (default 1000), not the
+    # MaximumDynamicServerCount is a high fixed CEILING (default 800), not the
     # machine count: the actual running engines follow the match expression, so
     # "add a machine" just extends the expression — no count resize, no rebuild.
     #
@@ -4441,7 +4448,7 @@ for _dsn in ['${prefix:-engine}','${1}']:
         set('ServerNameStartingIndex',${SRV_START_INDEX:-1})
         set('CalculatedListenPorts','$([ "${DYN_CALC_PORTS:-false}" = true ] && echo true || echo false)')
         set('MachineNameMatchExpression','${match}')
-        set('MaximumDynamicServerCount',${DYN_MAX:-1000})
+        set('MaximumDynamicServerCount',${DYN_MAX:-800})
         break
     except:
         pass
@@ -4614,10 +4621,13 @@ do_configure() {
     auser="$(read_prop "$OCCAS_CONF" admin.username)";     auser="${auser:-weblogic}"
     prefix="$(read_prop "$OCCAS_CONF" server.name.prefix)"
     match="$(read_prop "$OCCAS_CONF" machine.match.expression)"
-    # DYNAMIC ceiling (fixed, default 1000). match may be EMPTY on a single-box
+    # DYNAMIC ceiling (fixed, default 800). match may be EMPTY on a single-box
     # install — then the dynamic set is empty and the static engine0 is the tier —
     # so match is NOT required.
-    local dynmax; dynmax="$(read_prop "$OCCAS_CONF" dynamic.server.max)"; dynmax="${dynmax:-1000}"
+    local dynmax; dynmax="$(read_prop "$OCCAS_CONF" dynamic.server.max)"; dynmax="${dynmax:-800}"
+    if [ "${dynmax:-0}" -gt 800 ] 2>/dev/null; then
+        warn "dynamic.server.max=${dynmax} exceeds the WLS ceiling of 800 — clamping to 800."; dynmax=800
+    fi
     for chk in mwhome domain prefix; do
         [ -n "${!chk}" ] || { warn "occas.conf: missing $chk (required for configure)"; return 1; }
     done

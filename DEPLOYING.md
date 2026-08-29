@@ -84,6 +84,15 @@ Each WAR is self-contained exactly as it deploys standalone: framework JAR insid
 - **Goes to:** the **cluster only** (engine tier). Services handle live SIP traffic; AdminServer doesn't.
 - **Test apps** (promoted to production 2026-06-05 as live-diagnostics tools): `test-uac`, `test-uas`, `test-b2bua` in `dist/<ver>/test/`.
 
+**JSR-309 media apps** (`proto/player` today) are the one exception to "framework jar only": the
+309 driver they discover at runtime rides in `WEB-INF/lib` beside the framework jar. It cannot go
+in a shared library — a driver implements framework interfaces, and a shared library's classloader
+is the WAR's parent, so it cannot see them. The public WAR here has no driver; the driver's own
+repository builds the deployable `player.war` as a WAR overlay of this one. Deploy that WAR to the
+cluster like any service. The media server it drives is configured in the app's `driverProperties`
+(`kurento.ws.url`: one node's control URL, or a comma-separated fleet the driver places sessions
+across — use names the engines resolve to the media subnet, not public ones).
+
 ## Quick start
 
 ```bash

@@ -24,7 +24,9 @@
 #         proto/ and the root). e.g. blade-admin.ear, gateway.war, blade-services.ear
 # target  the WebLogic target (server or cluster name). If omitted, wls.target
 #         from the conf is used; with neither, deploy.sh asks for one.
-# action  deploy (default) | undeploy | status
+# action  deploy (default) | undeploy | status | start | stop
+#         start/stop act on an already-deployed app (startApplication /
+#         stopApplication) — for an app the container left PREPARED, not ACTIVE.
 #
 # Options:
 #   --all            act on the whole profile (implied when no <file> is given)
@@ -142,14 +144,14 @@ FILE_ARG="${POSITIONAL[1]:-}"
 # filename (artifacts always carry a .war/.ear/.jar extension, so a bare
 # deploy/undeploy/status is never a file). Whole-profile deploy/undeploy/status.
 case "$FILE_ARG" in
-    deploy|undeploy|status) ACTION="$FILE_ARG"; FILE_ARG="" ;;
+    deploy|undeploy|status|start|stop) ACTION="$FILE_ARG"; FILE_ARG="" ;;
 esac
 
 # Remaining positionals: an action keyword sets ACTION, anything else is target.
 for i in "${!POSITIONAL[@]}"; do
     [ "$i" -le 1 ] && continue
     case "${POSITIONAL[$i]}" in
-        deploy|undeploy|status) ACTION="${POSITIONAL[$i]}" ;;
+        deploy|undeploy|status|start|stop) ACTION="${POSITIONAL[$i]}" ;;
         *) [ -z "$TARGET_ARG" ] && TARGET_ARG="${POSITIONAL[$i]}" \
              || die "Unexpected argument: '${POSITIONAL[$i]}'" ;;
     esac
@@ -157,7 +159,7 @@ done
 # With --all there is no <file>, so a lone action keyword lands in FILE_ARG (the
 # second positional). Reassign it to ACTION so 'deploy.sh <env> --all undeploy' works.
 if [ "$DEPLOY_ALL" = true ]; then
-    case "$FILE_ARG" in deploy|undeploy|status) ACTION="$FILE_ARG"; FILE_ARG="" ;; esac
+    case "$FILE_ARG" in deploy|undeploy|status|start|stop) ACTION="$FILE_ARG"; FILE_ARG="" ;; esac
 fi
 
 # --- Resolve <env> to its ONE config file (path or name). Config + secrets live

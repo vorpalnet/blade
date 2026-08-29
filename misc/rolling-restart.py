@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # rolling-restart.py — drain-aware rolling restart of BLADE engine servers.
 #
 # For each named engine, in order:
@@ -27,7 +28,7 @@
 # Defaults: pingWaitSecs=75 (one 60s ping interval + margin), quietTimeoutSecs=120.
 
 import sys
-import time
+from java.lang import Thread  # WLST shadows the stdlib `time` with a Java package
 
 from javax.management import ObjectName, Attribute
 from java.lang import Boolean
@@ -87,7 +88,7 @@ def wait_quiet(server):
         else:
             quiet = 0
             print '  %s still working: throughput=%s' % (server, t)
-        time.sleep(10)
+        Thread.sleep(10000)
         waited = waited + 10
     print '  WARNING: %s not quiet after %ss — proceeding anyway (calls fail over)' % (server, quietTimeoutSecs)
 
@@ -103,7 +104,7 @@ for engine in engines:
 
     mbs.setAttribute(drain, Attribute('Drained', Boolean(1)))
     print '  drained: OPTIONS now answers 503 Draining; waiting %ss for the load balancer to react' % pingWaitSecs
-    time.sleep(pingWaitSecs)
+    Thread.sleep(pingWaitSecs * 1000)
 
     wait_quiet(engine)
 

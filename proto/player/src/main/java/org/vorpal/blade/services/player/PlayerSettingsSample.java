@@ -18,5 +18,6 @@ public class PlayerSettingsSample extends PlayerSettings {
 		setLoop(false);
 		setRecord(false);
 		setRecordUri("file:///tmp/kurento/recording.webm");
+		setConference(false);
 	}
 }

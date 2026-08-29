@@ -23,6 +23,19 @@
 		     name the container reports to the App Router, and the name FSMAR
 		     configs target. Do not prefix it. -->
 		<finalName>player</finalName>
+		<plugins>
+			<!-- The parent skips install for apps. This WAR is the overlay source for a
+			     driver-bearing build in another repo (the 309 driver is discovered at
+			     runtime, so it is added to WEB-INF/lib by an overlay, never here), so it
+			     must reach the local repository. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-install-plugin</artifactId>
+				<configuration>
+					<skip>false</skip>
+				</configuration>
+			</plugin>
+		</plugins>
 	</build>
 
 	<dependencies>
