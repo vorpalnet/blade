@@ -127,6 +127,7 @@ public class PlayerServlet extends AsyncSipServlet {
 			}
 			LIVE.clear();
 			Room.closeAll();
+			MediaCallflow.releaseAllReattached();
 			// A driver may own threads (node probes); an undeploy must stop them or the old
 			// classloader lives on. Vendor-neutral: only the standard AutoCloseable is assumed.
 			MsControlFactory factory = MediaCallflow.getMsControlFactory();

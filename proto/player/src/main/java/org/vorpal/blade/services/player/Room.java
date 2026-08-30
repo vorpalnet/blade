@@ -23,12 +23,18 @@ final class Room {
 	final String id;
 	final MediaSession ms;
 	final MediaMixer mixer;
+	/// The app session the room's media session is bound to (the opener's) — the one a
+	/// refresh reattaches under, and so the one whose reattached session must be released
+	/// when the room closes.
+	final String ownerAppId;
 	private final Set<String> members = ConcurrentHashMap.newKeySet(); // app-session ids
 
 	private Room(String id, MediaSession ms, MediaMixer mixer) {
 		this.id = id;
 		this.ms = ms;
 		this.mixer = mixer;
+		Object owner = ms.getAttribute(org.vorpal.blade.framework.v3.media.MediaCallflow.SIP_APP_SESSION_ID);
+		this.ownerAppId = (owner == null) ? null : owner.toString();
 	}
 
 	/// Where a room gets its [MediaSession] when it opens — the callflow's `createMediaSession(app)`,
@@ -70,6 +76,8 @@ final class Room {
 		}
 		if (ROOMS.remove(id, this)) {
 			ms.release();
+			// After a same-node refresh the room's media lives on under a reattached session.
+			org.vorpal.blade.framework.v3.media.MediaCallflow.releaseReattached(ownerAppId);
 		}
 		return true;
 	}

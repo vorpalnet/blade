@@ -113,6 +113,24 @@ public abstract class MediaCallflow extends Callflow {
 	/// session from any media event.
 	public static final String SIP_APP_SESSION_ID = "org.vorpal.blade.v3.media.sasId";
 
+	/// [MediaSession] attribute (String): the name of the application (the deployment /
+	/// context-root name) that owns the session. Stamped by [#bindMediaSession] from
+	/// [#setApplicationName]; a driver copies it onto the media server's objects so a party that
+	/// finds them later — the media server itself, when a control socket dies — knows which
+	/// application to call back ([MediaRefresh]).
+	public static final String SIP_APP_NAME = "org.vorpal.blade.v3.media.app";
+
+	/// The owning application's name, set once at servlet init (the base servlet does it).
+	private static volatile String applicationName;
+
+	public static void setApplicationName(String name) {
+		applicationName = name;
+	}
+
+	public static String getApplicationName() {
+		return applicationName;
+	}
+
 	/// [MediaObject] parameter (String value): the id of the [SipApplicationSession] that owns one
 	/// resource container — a [NetworkConnection] or [MediaGroup] — when several calls share a
 	/// [MediaSession]. Stamped by [#bindMediaObject]; consulted by the verbs before the session-level
@@ -179,6 +197,9 @@ public abstract class MediaCallflow extends Callflow {
 	/// media session on the node that takes over after failover.
 	protected static void bindMediaSession(MediaSession ms, SipApplicationSession app) {
 		ms.setAttribute(SIP_APP_SESSION_ID, app.getId());
+		if (applicationName != null) {
+			ms.setAttribute(SIP_APP_NAME, applicationName);
+		}
 		app.setAttribute(MEDIA_MS_ + ms.getURI(), ms.getURI().toString());
 	}
 
@@ -575,6 +596,10 @@ public abstract class MediaCallflow extends Callflow {
 		if (app == null || !(factory instanceof MediaSessionRecovery)) {
 			return null;
 		}
+		MediaSession cached = LIVE.get(app.getId());
+		if (cached != null) {
+			return cached; // already reattached on this node — one socket per session, not one per ask
+		}
 		String msUri = findBoundMediaSessionUri(app);
 		if (msUri == null) {
 			return null;
@@ -582,8 +607,50 @@ public abstract class MediaCallflow extends Callflow {
 		MediaSession ms = ((MediaSessionRecovery) factory).rebuild(app, msUri);
 		if (ms != null) {
 			bindMediaSession(ms, app); // re-stamp the binding on the rebuilt (fresh) live object
+			LIVE.put(app.getId(), ms);
 		}
 		return ms;
+	}
+
+	/// Node-local cache of media sessions rebuilt by [#reattach], keyed by app-session id. A
+	/// reattach may be asked for twice — a refresh from the media server, then the call's next
+	/// message — and must not open two control sockets for one session. Entries leave via
+	/// [#forget] when the app releases the session.
+	private static final java.util.concurrent.ConcurrentHashMap<String, MediaSession> LIVE = new java.util.concurrent.ConcurrentHashMap<>();
+
+	/// The media session already reattached on this node for `appId`, or null.
+	public static MediaSession liveSession(String appId) {
+		return (appId == null) ? null : LIVE.get(appId);
+	}
+
+	/// Drop the reattached session for `appId` from the node-local cache — call after releasing it.
+	public static void forget(String appId) {
+		if (appId != null) {
+			LIVE.remove(appId);
+		}
+	}
+
+	/// Release the reattached session for `appId`, if there is one, and forget it. The app calls
+	/// this when it tears a call down: after a refresh on the *same* node the app's own objects
+	/// are stale (their socket died) and this is the live one — releasing only the stale copy
+	/// would leave the media running under the reattached control session. No-op otherwise.
+	public static void releaseReattached(String appId) {
+		MediaSession ms = (appId == null) ? null : LIVE.remove(appId);
+		if (ms != null) {
+			try {
+				ms.release();
+			} catch (Exception ignore) {
+				// best effort
+			}
+		}
+	}
+
+	/// Release every reattached session on this node — servlet destroy, so a redeploy leaves no
+	/// control socket (and no media) behind.
+	public static void releaseAllReattached() {
+		for (String appId : new java.util.ArrayList<>(LIVE.keySet())) {
+			releaseReattached(appId);
+		}
 	}
 
 	/// Convenience overload that resolves the app session by id first (for callers that hold only the

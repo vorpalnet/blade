@@ -253,6 +253,9 @@ public abstract class AsyncSipServlet extends SipServlet
 			String title = pkg.getSpecificationTitle();
 			String version = pkg.getImplementationVersion();
 			String application = event.getServletContext().getServletContextName();
+			// The media verbs stamp this onto every media session so the media server can name
+			// the application to call back when a control socket dies (MediaRefresh).
+			org.vorpal.blade.framework.v3.media.MediaCallflow.setApplicationName(application);
 
 			if (title != null) {
 				sipLogger.info(application + " compiled using " + title + " version " + version);

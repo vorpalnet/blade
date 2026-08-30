@@ -56,6 +56,8 @@ public class PlayerBye extends Callflow {
 			} catch (Exception ignore) {
 				// best effort
 			}
+			// After a same-node refresh the live media is under a reattached session, not this one.
+			MediaCallflow.releaseReattached(appId);
 			return;
 		}
 		// Failed-over node: the live media objects died with the old engine and LIVE is empty here.
@@ -66,6 +68,7 @@ public class PlayerBye extends Callflow {
 			MediaSession ms = MediaCallflow.reattach(appId);
 			if (ms != null) {
 				ms.release();
+				MediaCallflow.forget(appId);
 			}
 		} catch (Exception e) {
 			sipLogger.warning("PlayerBye.teardown: failover reclaim for " + appId + " failed: " + e.getMessage());
