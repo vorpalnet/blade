@@ -201,7 +201,7 @@ case "${1:-}" in
     -*) ;;                                  # flag: no name given, parse from $1
     *)  NAME="${1:-}"; __rest_from=2 ;;
 esac
-JUMP=""          # subcommand: wizard|preflight|install|uninstall|status|backup
+JUMP=""          # subcommand: wizard|preflight|install|uninstall|status|backup|configure|provision
 ASSUME_YES=0     # -y/--yes: auto-answer every yesno prompt
 BACKUP=1         # snapshot before a domain teardown; --no-backup disables
 PURGE=0          # uninstall --purge: also product, dirs, user/group
@@ -465,14 +465,15 @@ load_profile() {
     NM_TYPE="$(d nm.type ssl)"
     [ "$NM_TYPE" = "ssl" ] || { warn "nm.type='${NM_TYPE}' is no longer supported — Node Manager is always SSL with its own certificate."; NM_TYPE=ssl; }
     DCOUNT="$(d dynamic.server.count "")"
-    # DYN_MAX is the dynamic cluster's MaximumDynamicServerCount — a high FIXED
-    # ceiling (default 800), NOT the machine count. The actual running engines
-    # follow the match expression (machine1..N), so "add a machine" just extends
-    # the expression; the ceiling never needs resizing. setMaxDynamicClusterSize is
-    # a no-op per the RE'd OCCAS code and the WLS setter rejects INT_MAX, so the
-    # template line is commented out at stage time; MaximumDynamicServerCount alone
-    # governs. 800 is the hard WLS ceiling: the setter rejects anything outside
-    # [0, 800] (IllegalArgumentException), so don't raise this above 800.
+    # DYN_MAX is the WLS HARD CEILING on dynamic servers, not the running count.
+    # WebLogic enforces it: setMaximumDynamicServerCount runs LegalChecks.checkInRange
+    # (0, 800), so 800 is the maximum and cannot be raised. The ACTUAL count is
+    # MaximumDynamicServerCount (== DynamicClusterSize — the customizer forwards one
+    # to the other), which the installer sets to the number of engine machines; that
+    # is what materializes the servers, so a fixed 800 there would create engine0..
+    # engine799. Adding a machine bumps the count by one. MaxDynamicClusterSize is
+    # inert (the customizer never reads it), so its template line is left commented
+    # out at stage time. DYN_MAX exists only to clamp an out-of-range stored value.
     DYN_MAX="$(d dynamic.server.max 800)"
     # Clamp a stored value from an older profile that recorded the illegal 1000
     # ceiling — the WLS setter rejects anything above 800.
@@ -1110,7 +1111,8 @@ save_profile() {
         echo "machine.match.expression=${match}"
         echo "# server.name.starting.index = the DYNAMIC range start (1); engine0 is static, index 0"
         echo "server.name.starting.index=${SRV_START_INDEX:-1}"
-        echo "# dynamic.server.max = MaximumDynamicServerCount, a fixed ceiling (NOT the machine count)"
+        echo "# dynamic.server.max = the WLS hard ceiling on dynamic servers (max 800);"
+        echo "# the ACTUAL server count is the number of engine machines in the match."
         echo "dynamic.server.max=${DYN_MAX:-800}"
         echo "dynamic.server.count=${DCOUNT}"
         echo ""
@@ -2670,8 +2672,9 @@ do_add_machine() {
     H_PUB+=("$pub");   H_FQDN+=("$fqdn");  H_ROLE+=("engine")
     DCOUNT="${#H_NAME[@]}"
     # ENGINE machines only (index 1..N); machine0/engine0 is static, outside the
-    # dynamic template, so it is never in the match expression. The ceiling stays
-    # fixed at DYN_MAX (default 800) — adding a machine only extends the match.
+    # dynamic template, so it is never in the match expression. The dynamic server
+    # count equals the number of engine machines, so adding one extends the match
+    # AND bumps MaximumDynamicServerCount by one (cluster_resize derives it).
     local newmatch="" i
     for i in "${!H_NAME[@]}"; do
         [ "$i" -eq 0 ] && continue
@@ -2682,7 +2685,7 @@ do_add_machine() {
     # 1. the DOMAIN first. The new server has to exist before the host can be told
     #    to start it, and the rsync in step 2 copies this domain -- so the engine
     #    receives a config that already knows about itself.
-    if ! cluster_resize "$name" "$addr" "$newmatch" "${DYN_MAX:-800}"; then
+    if ! cluster_resize "$name" "$addr" "$newmatch"; then
         warn "could not add ${name} to the domain — nothing changed."
         local last=$(( ${#H_NAME[@]} - 1 ))
         unset "H_NAME[$last]" "H_ADDR[$last]" "H_PORT[$last]" "H_TYPE[$last]" "H_PUB[$last]" "H_FQDN[$last]" "H_ROLE[$last]"
@@ -2722,10 +2725,11 @@ do_remove_machine() {
 
     # Domain first: stop targeting the machine before tearing the host down. The
     # remaining match is the ENGINE machines only (index 1..n-1); machine0 is the
-    # static admin box and never in the expression. Ceiling stays DYN_MAX.
+    # static admin box and never in the expression. Removing one drops the match
+    # entry AND lowers MaximumDynamicServerCount by one (cluster_resize derives it).
     local newmatch="" i
     for i in $(seq 1 $((n - 1))); do newmatch="${newmatch:+${newmatch},}${H_NAME[$i]}"; done
-    cluster_resize "" "" "$newmatch" "${DYN_MAX:-800}" "$name" || warn "domain not updated — continuing with host teardown."
+    cluster_resize "" "" "$newmatch" "$name" || warn "domain not updated — continuing with host teardown."
 
     # Host: reuse the guarded teardown, which stops running servers first.
     local keep_name=("${H_NAME[@]}") keep_addr=("${H_ADDR[@]}") keep_role=("${H_ROLE[@]}")
@@ -2741,6 +2745,10 @@ do_remove_machine() {
     return 0
 }
 
+# Count comma-separated entries (0 when empty). The dynamic cluster's server
+# count is exactly the number of engine machines in the match expression.
+csv_count() { [ -z "$1" ] && { printf 0; return; }; printf '%s' "$1" | awk -F, '{print NF}'; }
+
 # Online WLST: create/drop a Machine and resize the dynamic cluster.
 # Empty machine name = resize only (used by remove).
 #
@@ -2754,10 +2762,15 @@ do_remove_machine() {
 # Also: any STALE server JVM from a previous config will hang the second
 # activation in STATE_DISTRIBUTING until it times out. Stop dead servers first.
 cluster_resize() {
-    local mname="$1" maddr="$2" newmatch="$3" count="$4" delname="${5:-}"
+    local mname="$1" maddr="$2" newmatch="$3" delname="${4:-}"
+    # The dynamic server count IS the number of engine machines in the match --
+    # NOT DYN_MAX. MaximumDynamicServerCount (== DynamicClusterSize) is the count
+    # of servers WebLogic materializes, so a fixed 800 here would create engine0..
+    # engine799. Derive it from newmatch so the tree only ever holds real engines.
+    local ecount; ecount="$(csv_count "$newmatch")"
     if [ "$DRY" = "on" ]; then
         log "${C_DIM}  [dry-run] online WLST, phase 1: ${mname:+create/reuse Machine ${mname} (${maddr}) + activate}${C_RESET}"
-        log "${C_DIM}  [dry-run] online WLST, phase 2: match=${newmatch}; count=${count} + activate${C_RESET}"
+        log "${C_DIM}  [dry-run] online WLST, phase 2: match=${newmatch}; MaximumDynamicServerCount=${ecount} + activate${C_RESET}"
         [ -n "$delname" ] && log "${C_DIM}  [dry-run] online WLST, phase 3: drop Machine ${delname} + activate${C_RESET}"
         return 0
     fi
@@ -2844,16 +2857,19 @@ if not _blocked:
     cd('/Clusters/BEA_ENGINE_TIER_CLUST')
     ds = cmo.getDynamicServers()
     _changed = 0
+    # Actual server count == number of engine machines in the match (0 if empty).
+    # This is MaximumDynamicServerCount / DynamicClusterSize, NOT a fixed ceiling.
+    _wantcount = len([_x for _x in '${newmatch}'.split(',') if _x])
     if ds.getMachineNameMatchExpression() != '${newmatch}':
         ds.setMachineNameMatchExpression('${newmatch}'); _changed = 1
-    if ds.getMaximumDynamicServerCount() != int('${count}'):
-        ds.setMaximumDynamicServerCount(int('${count}')); _changed = 1
+    if ds.getMaximumDynamicServerCount() != _wantcount:
+        ds.setMaximumDynamicServerCount(_wantcount); _changed = 1
     if _changed:
         save()
         activate(block='true')
     else:
         stopEdit('y')
-    print('CLUSTER_RESIZED match=${newmatch} count=${count}')
+    print('CLUSTER_RESIZED match=${newmatch} count=' + str(_wantcount))
 
 delname = '${delname}'
 # --- phase 3: drop a removed Machine, only AFTER the cluster stopped ---------
@@ -4483,9 +4499,12 @@ emit_tls_block() {
     # machine0 is deliberately excluded. Empty on a single-box install — then the
     # dynamic set is empty and the static engine0 is the whole tier.
     #
-    # MaximumDynamicServerCount is a high fixed CEILING (default 800), not the
-    # machine count: the actual running engines follow the match expression, so
-    # "add a machine" just extends the expression — no count resize, no rebuild.
+    # MaximumDynamicServerCount is the ACTUAL number of dynamic servers WebLogic
+    # materializes (it == DynamicClusterSize; the customizer forwards one to the
+    # other), so it must equal the number of engine machines — not a fixed 800,
+    # which would create engine0..engine799. It is set to that count here; adding a
+    # machine bumps it. 800 is only the WLS hard ceiling (the setter rejects
+    # anything outside [0,800]); DYN_MAX just clamps to it.
     #
     # CalculatedListenPorts=false gives every engine the template's ports verbatim
     # (5060/5061/8001) — one engine per machine, which is what "add a machine" is.
@@ -4493,6 +4512,7 @@ emit_tls_block() {
     # The DynamicServers child is named after the server prefix in the domain this
     # template builds. Try the cluster name too rather than fail the whole domain
     # build if a future template names it differently.
+    local _mc; _mc="$(csv_count "$match")"
     cat <<PYBLOCK
 for _dsn in ['${prefix:-engine}','${1}']:
     try:
@@ -4500,7 +4520,7 @@ for _dsn in ['${prefix:-engine}','${1}']:
         set('ServerNameStartingIndex',${SRV_START_INDEX:-1})
         set('CalculatedListenPorts','$([ "${DYN_CALC_PORTS:-false}" = true ] && echo true || echo false)')
         set('MachineNameMatchExpression','${match}')
-        set('MaximumDynamicServerCount',${DYN_MAX:-800})
+        set('MaximumDynamicServerCount',${_mc})
         break
     except:
         pass
@@ -4694,14 +4714,14 @@ do_configure() {
     local pw; pw="$(get_admin_pw)" || return 1
 
     info "Configure domain '${domain}' (${mode}) — static engine0 + dynamic engine1..N"
-    log  "  prefix=${prefix}  dynamic machines=${match:-<none, single-box>}  ceiling=${dynmax}"
+    log  "  prefix=${prefix}  dynamic machines=${match:-<none, single-box>}  servers=$(csv_count "$match")  ceiling=${dynmax}"
 
     local props name addr port type idx=1
     props="ADMIN_USERNAME=${auser}
 ADMIN_PASSWORD=__PW__
 ServerNamePrefix=${prefix}
 MachineNameMatchExpression=${match}
-MaximumDynamicServerCount=${dynmax}"
+MaximumDynamicServerCount=$(csv_count "$match")"
     for m in "${machines[@]}"; do
         IFS=: read -r name addr port type <<< "$m"
         [ -n "$name" ] && [ -n "$addr" ] && [ -n "$port" ] && [ -n "$type" ] \
@@ -6155,8 +6175,10 @@ else
         uninstall) _need_profile; start_logging uninstall; trap_interrupt; run_uninstall_ladder; exit 0 ;;
         status)    _need_profile; do_status; exit 0 ;;
         backup)    _need_profile; load_profile; do_backup; exit $? ;;
+        configure) _need_profile; load_profile; do_configure; exit $? ;;
+        provision) _need_profile; load_profile; do_provision_engines; exit $? ;;
         ""|menu|dashboard) : ;;
-        *) die "unknown command '${JUMP}' — try: wizard, preflight, install, uninstall, status, backup" ;;
+        *) die "unknown command '${JUMP}' — try: wizard, preflight, install, uninstall, status, backup, configure, provision" ;;
     esac
     dashboard
 fi
