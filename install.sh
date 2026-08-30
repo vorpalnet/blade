@@ -2766,6 +2766,35 @@ cluster_resize() {
     cat > "${work}/resize.py" <<PYEOF
 # -*- coding: utf-8 -*-
 connect('${ADMIN_USER:-weblogic}', '${pw}', '${ADMINURL:-t3://${H_ADDR[0]}:7001}')
+
+# --- pre-flight (read-only): refuse an ONLINE re-home of a RUNNING member ----
+# When the match expression is empty, no dynamic member has a calculated machine
+# (BEA-141287). But a member left RUNNING from a prior config still has no home,
+# so assigning a machine now RE-HOMES it -- a non-dynamic change to a live server
+# that WebLogic refuses online (BEA-141238 "must be rebooted"), surfacing only as
+# the generic [Management:141191]. This is exactly the trap a domain built with
+# ServerNameStartingIndex=0 (engine0 a dynamic member, not the intended static
+# pair) walks into after removing every engine down to one. Detect it up front --
+# before phase 1 creates anything -- so a blocked add really does change nothing.
+# The operator shuts the named engine down (it restarts onto the new machine) or
+# reboots it after the resize.
+_prefix = '${prefix:-engine}'
+_oldmatch = ''
+serverConfig()
+try:
+    cd('/Clusters/BEA_ENGINE_TIER_CLUST')
+    _oldmatch = cmo.getDynamicServers().getMachineNameMatchExpression() or ''
+except:
+    pass
+domainRuntime()
+_running = []
+for _slr in cmo.getServerLifeCycleRuntimes():
+    if _slr.getState() == 'RUNNING' and _slr.getName().startswith(_prefix):
+        _running.append(_slr.getName())
+_blocked = (_oldmatch == '' and '${newmatch}' != '' and len(_running) > 0)
+if _blocked:
+    print('RESIZE_BLOCKED_RUNNING ' + ','.join(_running))
+
 edit()
 try:
     stopEdit('y')
@@ -2774,7 +2803,7 @@ except:
 
 mname = '${mname}'
 # --- phase 1: the Machine, committed on its own -----------------------------
-if mname:
+if mname and not _blocked:
     startEdit()
     cd('/')
     # Reuse an existing Machine rather than re-create it. A prior 'remove' that
@@ -2808,21 +2837,23 @@ if mname:
 # so a re-run against an already-sized cluster fails even though nothing needs to
 # change. Set only what differs, and release the edit without activating when the
 # cluster is already at the target -- reconciling the profile/host is then free.
-edit()
-startEdit()
-cd('/Clusters/BEA_ENGINE_TIER_CLUST')
-ds = cmo.getDynamicServers()
-_changed = 0
-if ds.getMachineNameMatchExpression() != '${newmatch}':
-    ds.setMachineNameMatchExpression('${newmatch}'); _changed = 1
-if ds.getMaximumDynamicServerCount() != int('${count}'):
-    ds.setMaximumDynamicServerCount(int('${count}')); _changed = 1
-if _changed:
-    save()
-    activate(block='true')
-else:
-    stopEdit('y')
-print('CLUSTER_RESIZED match=${newmatch} count=${count}')
+# Skipped entirely when the pre-flight blocked the resize (a running re-home).
+if not _blocked:
+    edit()
+    startEdit()
+    cd('/Clusters/BEA_ENGINE_TIER_CLUST')
+    ds = cmo.getDynamicServers()
+    _changed = 0
+    if ds.getMachineNameMatchExpression() != '${newmatch}':
+        ds.setMachineNameMatchExpression('${newmatch}'); _changed = 1
+    if ds.getMaximumDynamicServerCount() != int('${count}'):
+        ds.setMaximumDynamicServerCount(int('${count}')); _changed = 1
+    if _changed:
+        save()
+        activate(block='true')
+    else:
+        stopEdit('y')
+    print('CLUSTER_RESIZED match=${newmatch} count=${count}')
 
 delname = '${delname}'
 # --- phase 3: drop a removed Machine, only AFTER the cluster stopped ---------
@@ -2848,8 +2879,29 @@ PYEOF
     if printf '%s' "$out" | grep -q "CLUSTER_RESIZED"; then
         return 0
     fi
+    # A running member the resize would re-home online: WebLogic refuses this,
+    # and the pre-flight caught it before a doomed activate. Say what to do.
+    local blocked
+    blocked="$(printf '%s\n' "$out" | sed -n 's/^RESIZE_BLOCKED_RUNNING //p')"
+    if [ -n "$blocked" ]; then
+        warn "cannot resize the cluster online:"
+        warn "    ${blocked} is RUNNING with no calculated machine, and this change"
+        warn "    would re-home it -- which WebLogic refuses live (BEA-141238)."
+        warn "    Stop it (it restarts onto the new machine), then re-run -- or reboot"
+        warn "    it after the resize."
+        return 1
+    fi
     warn "cluster resize FAILED:"
-    printf '%s\n' "$out" | grep -iE "Exception|Error|STATE_DISTRIBUTING" | head -3 | sed 's/^/    /'
+    # WLST truncates the prepare-phase cause to [Management:141191]; the real
+    # reason is logged as a WARNING in the AdminServer log (never in the WLST
+    # output), so surface WebLogic's own verdict from there.
+    local dlog="${DOMAINS_DIR}/${DOMAIN}/servers/AdminServer/logs/AdminServer.log"
+    if [ -f "$dlog" ]; then
+        local why
+        why="$(grep -oE 'affects the server [^.]+\. This server must be rebooted|No matching machines were found[^<]*' "$dlog" | tail -2)"
+        [ -n "$why" ] && printf '%s\n' "$why" | sed 's/^/    /'
+    fi
+    printf '%s\n' "$out" | grep -iE "Exception|Error|141191|141238|STATE_DISTRIBUTING" | head -5 | sed 's/^/    /'
     return 1
 }
 
