@@ -82,7 +82,8 @@ public class PlayerSettings extends Configuration implements Serializable {
 	}
 
 	@JsonPropertyDescription("Destination URI the caller's audio is recorded to when recording is on "
-			+ "(e.g. file:///var/recordings/${callId}.webm).")
+			+ "(e.g. file:///var/recordings/{id}.webm — {id} becomes the call's session id, so "
+			+ "concurrent calls record to separate files; braces only, ${...} is reserved by the config layer).")
 	public String getRecordUri() {
 		return recordUri;
 	}

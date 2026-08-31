@@ -129,7 +129,13 @@ public class PlayerCallflow extends MediaCallflow {
 			join(mg, Joinable.Direction.DUPLEX, nc); // player -> caller, caller -> recorder
 
 			if (cfg.isRecord() && cfg.getRecordUri() != null && !cfg.getRecordUri().isEmpty()) {
-				record(mg, URI.create(cfg.getRecordUri()), rec -> {
+				// {id} in the configured URI becomes this call's app-session id, so concurrent
+				// calls never record into one file. (Braces without a dollar sign on purpose:
+				// ${...} is the config layer's own variable syntax and is expanded — to nothing,
+				// for unknown names — before the application ever sees the value.)
+				String dest = cfg.getRecordUri().replace("{id}",
+						appId.replaceAll("[^A-Za-z0-9._-]", "_"));
+				record(mg, URI.create(dest), rec -> {
 					// recording continues until teardown flushes the file; nothing to do here
 				});
 			}
