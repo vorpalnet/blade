@@ -65,6 +65,7 @@ public class PlayerServlet extends AsyncSipServlet {
 		settings = new SettingsManager<>(event, PlayerSettings.class, new PlayerSettingsSample());
 		try {
 			MediaCallflow.setMsControlFactory(obtainFactory(settings.getCurrent()));
+			MediaCallflow.setMediaLostListener(PlayerRehome::mediaLost);
 			sipLogger.info("PlayerServlet: JSR-309 MsControlFactory installed");
 		} catch (Exception e) {
 			// Don't fail deployment — log and let the first call surface the misconfig. The factory
@@ -128,6 +129,7 @@ public class PlayerServlet extends AsyncSipServlet {
 			LIVE.clear();
 			Room.closeAll();
 			MediaCallflow.releaseAllReattached();
+			MediaCallflow.setMediaLostListener(null);
 			// A driver may own threads (node probes); an undeploy must stop them or the old
 			// classloader lives on. Vendor-neutral: only the standard AutoCloseable is assumed.
 			MsControlFactory factory = MediaCallflow.getMsControlFactory();

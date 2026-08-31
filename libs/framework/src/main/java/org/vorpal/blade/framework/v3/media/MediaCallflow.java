@@ -653,6 +653,36 @@ public abstract class MediaCallflow extends Callflow {
 		}
 	}
 
+	// ============================================================ media-server loss
+
+	/// What an application registers to hear that a call's **media server** went away under it —
+	/// the engine's control socket died and it was not this side closing. Engine loss looks
+	/// nothing like this (the media keeps running and another engine reattaches); media-server
+	/// loss means the pipeline is gone, the phones are streaming at a dead address, and the only
+	/// recovery is to re-anchor on another node and re-INVITE every leg. That re-anchoring is the
+	/// listener's job — the framework only delivers the fact.
+	public interface MediaLostListener {
+		/// `appId` owns the lost media session `msUri`. Called on a dedicated thread, outside
+		/// any SIP lock — take it ([com.bea.wcp.sip.WlssSipApplicationSession#doAction]) before
+		/// touching call state.
+		void mediaSessionLost(String appId, String msUri);
+	}
+
+	private static volatile MediaLostListener mediaLostListener;
+
+	/// Register the application's media-server-loss handler (servlet init; clear at destroy).
+	public static void setMediaLostListener(MediaLostListener listener) {
+		mediaLostListener = listener;
+	}
+
+	/// Driver entry point: report a lost media session to the application, if it registered.
+	public static void mediaSessionLost(String appId, String msUri) {
+		MediaLostListener listener = mediaLostListener;
+		if (listener != null && appId != null) {
+			listener.mediaSessionLost(appId, msUri);
+		}
+	}
+
 	/// Convenience overload that resolves the app session by id first (for callers that hold only the
 	/// id, e.g. a BYE handler keyed by app-session id). Returns null if the session is gone.
 	public static MediaSession reattach(String appId) throws MsControlException {

@@ -67,6 +67,21 @@ final class Room {
 		members.add(appId);
 	}
 
+	/// The app-session ids currently in the room (copy).
+	java.util.List<String> members() {
+		return new java.util.ArrayList<>(members);
+	}
+
+	/// Swap the room's media backing after a rehome: the registry entry keeps the id, the fresh
+	/// room inherits the membership. The caller releases the old media session (best effort — its
+	/// server is gone).
+	static Room replace(Room old, MediaSession freshMs, MediaMixer freshMixer) {
+		Room fresh = new Room(old.id, freshMs, freshMixer);
+		fresh.members.addAll(old.members);
+		ROOMS.replace(old.id, old, fresh);
+		return fresh;
+	}
+
 	/// Drop a member; when the room is empty, release its media session (the mixer and every leg
 	/// with it) and forget the room. Returns true if the room closed.
 	boolean leave(String appId) {
