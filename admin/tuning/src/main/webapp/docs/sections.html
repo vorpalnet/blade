@@ -68,7 +68,7 @@
 					<h1>Sections Reference</h1>
 
 					<h2>JVM</h2>
-					<p>Per-server JVM arguments — what the JVM starts with on the next boot. <strong>All restart-required.</strong></p>
+					<p>JVM arguments per target: what the JVM starts with on the next boot. <strong>All restart-required.</strong></p>
 					<table>
 						<tr><th>Knob</th><th>Typical value</th><th>Effect</th></tr>
 						<tr><td><code>-Xms</code></td><td>same as <code>-Xmx</code></td><td>Initial heap size; pinning to max avoids reallocation pauses.</td></tr>
@@ -76,7 +76,10 @@
 						<tr><td>GC algorithm</td><td><code>-XX:+UseG1GC</code> for most</td><td>Picks the GC strategy. G1 for low-pause requirements; ZGC for very large heaps.</td></tr>
 						<tr><td>GC log</td><td><code>-Xlog:gc*:file=...</code></td><td>Where GC events get written; essential for any sizing investigation.</td></tr>
 					</table>
-					<p>Each server card has two tabs. <strong>Settings</strong> is the structured form — heap, GC, assertions, JIT, and the modeled WebLogic/OCCAS <code>-D</code> properties, each with a hover description; saving edits only the changed fields and leaves every other argument untouched. <strong>Arguments</strong> shows the raw <code>ServerStart.Arguments</code> string for hand editing, saved verbatim. Both write the same <code>ServerStart.Arguments</code> field that Node Manager uses to launch the server — including the AdminServer.</p>
+					<p>A <strong>profile</strong> is a named set of arguments. The structured form (heap, GC, the modeled WebLogic/OCCAS <code>-D</code> properties, JFR) and the raw Arguments box edit the same string and stay in sync; unmodeled arguments are kept.</p>
+					<p>A <strong>target</strong> is a ServerStart owner in <code>config.xml</code>: a static server (the AdminServer, engine0) or the engine server template. A dynamic engine has no ServerStart of its own; it boots from its cluster's template, so the template is the row to assign. Assign a profile to each target, then <strong>Preview</strong>. The preview shows, per target, which knobs are added, removed or changed, which existing arguments are kept, and any warnings (a Metaspace cap where the server had none, a pinned heap sum the admin box cannot hold, a classpath without the SIP jars). <strong>Apply</strong> writes the same diff. A profile is an overlay: an argument it does not mention stays as it was, which is what keeps <code>-Dwls.home</code> and the call-state manager on the line when a profile is silent about them.</p>
+					<p><strong>Details</strong> on a target row shows its live arguments, JDK and <strong>ClassPath</strong>. The ClassPath is editable there because in MBean-mode start Node Manager builds the java line from ServerStart alone: a classpath without <code>weblogic_sip.jar</code> boots a server with no SIP container.</p>
+					<p><strong>History &amp; baseline.</strong> The baseline is every target's ServerStart as install.sh left it, pinned the first time the page sees the domain and rewritten only by <strong>Re-baseline</strong>. Every apply, restore and classpath save first records the state it is about to replace; the last twenty are kept. <strong>Restore baseline</strong> on a row, or <strong>Restore&hellip;</strong> on a history entry, writes ClassPath and Arguments back verbatim, no merge. That is the way back when a tuning change stops a server coming up.</p>
 
 					<h2>SIP Timer</h2>
 					<p>The SIP timer table per RFC 3261 §A. Tuning these affects retransmission cadence and dialog teardown. <strong>Restart-required</strong> — the engine reads the timers once at startup (a static initializer in the transaction layer), so a change is persisted to <code>sipserver.xml</code> on activate but does not affect a running engine until that node restarts.</p>

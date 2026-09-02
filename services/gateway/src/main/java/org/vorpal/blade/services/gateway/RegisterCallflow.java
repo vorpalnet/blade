@@ -25,14 +25,13 @@ public class RegisterCallflow extends TrunkRegistrar {
 	/// Re‑REGISTER this many seconds before the lifetime lapses.
 	private static final long REFRESH_MARGIN_SECONDS = 30;
 
-	private final VirtualGateway gateway;
 	private final RegisterDigestStyle style;
 	private InetSocketAddress outboundInterface; // may be null → container default
 	private String sasId;
 	private String timerId;
 
 	public RegisterCallflow(VirtualGateway gateway, RegisterDigestStyle style) {
-		this.gateway = gateway;
+		super(gateway);
 		this.style = style;
 	}
 

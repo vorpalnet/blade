@@ -136,6 +136,19 @@
 						know a planned restart is needed.
 					</p>
 
+					<h2>ServerStart writes record what they replace</h2>
+					<p>
+						A JVM apply, a restore, or a classpath save is the
+						one kind of change here that can stop a server
+						booting, so before the edit session opens the page
+						records every target's live ServerStart to
+						<code>config/custom/vorpal/blade-tuning-history.json</code>
+						(last twenty kept in <code>.versions/</code>). The
+						snapshot is taken from the activated configuration,
+						not the edit tree, so it is what Node Manager would
+						launch right now. See the JVM section.
+					</p>
+
 					<h2>Multi-server attributes</h2>
 					<p>
 						Many tuning attributes are per-server (each server

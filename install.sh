@@ -548,6 +548,16 @@ load_profile() {
     # on|off|auto — auto emits the naxsi includes only when the core ruleset is
     # present (naxsi is a compiled nginx module + rule files: a separate prereq).
     NGX_NAXSI="$(d nginx.naxsi auto)"
+    # --- JMS event bus + analytics database (STEP 5 'jms' / 'db' / 'dbc' rows) -
+    # The event-bus knobs feed services/events/notes/configure-messaging-jms.py;
+    # the jdbc.* keys describe the operator's OWN database for jdbc/BladeAnalytics
+    # (password is an ENC() secret, read where it's used).
+    JMS_QUOTA_BYTES="$(d jms.quota.bytes 1073741824)"
+    JMS_EVENT_TTL="$(d jms.event.ttl.millis 86400000)"
+    JMS_REDELIVERY="$(d jms.redelivery.limit 5)"
+    DB_DIALECT="$(d jdbc.analytics.dialect mysql)"
+    DB_URL="$(d jdbc.analytics.url "")"
+    DB_USER="$(d jdbc.analytics.user blade)"
     # hosts → arrays. machine.N = name:addr:port:type; pub/fqdn in host.N.*
     H_NAME=(); H_ADDR=(); H_PORT=(); H_TYPE=(); H_PUB=(); H_FQDN=(); H_ROLE=()
     local i=1 m nm na np nt
@@ -858,6 +868,32 @@ EOF
     ask NGX_PRIVKEY   "  TLS private-key PEM path"  "${NGX_PRIVKEY:-${certbase:+/etc/letsencrypt/live/${certbase}/privkey.pem}}"
     ask NGX_MAXBODY   "  client_max_body_size (admin uploads)" "${NGX_MAXBODY:-500m}"
     ask NGX_NAXSI     "  naxsi WAF includes (on|off|auto)" "${NGX_NAXSI:-auto}"
+    return 0
+}
+
+# ----- phase: analytics database (jdbc/BladeAnalytics) ------------------------
+phase_db() {
+    log ""; log "${C_BOLD}Analytics database (jdbc/BladeAnalytics)${C_RESET}"
+    help <<'EOF'
+Where analytics events land: one WebLogic data source (jdbc/BladeAnalytics)
+pointing at YOUR database. install.sh never creates the database or its schema.
+Run services/analytics/sql/<Dialect>-database-schema.sql yourself, once.
+Leave the URL blank to skip persistence for now: events still flow on the JMS
+topic and are held there (bounded by the topic quota and TTL) until a database
+comes up.
+EOF
+    ask DB_DIALECT "  dialect (mysql|oracle|mssql)" "${DB_DIALECT:-mysql}"
+    case "$DB_DIALECT" in
+        oracle) log "  ${C_DIM}e.g. jdbc:oracle:thin:@dbname_tp?TNS_ADMIN=/path/to/wallet${C_RESET}" ;;
+        mssql)  log "  ${C_DIM}e.g. jdbc:weblogic:sqlserver://db.example_co.internal:1433;databaseName=vorpal;encryptionMethod=SSL;validateServerCertificate=true${C_RESET}" ;;
+        *)      log "  ${C_DIM}e.g. jdbc:mysql://db.example_co.internal:3306/vorpal${C_RESET}" ;;
+    esac
+    ask DB_URL  "  JDBC URL (blank = none yet)" "$DB_URL"
+    [ -n "$DB_URL" ] || { log "  ${C_DIM}no URL — analytics persistence stays unconfigured.${C_RESET}"; return 0; }
+    ask DB_USER "  database user" "${DB_USER:-blade}"
+    local dbp=""
+    ask_secret dbp "  database password (Enter = keep current)"
+    [ -z "$dbp" ] || { write_secret "$WLS_SECRET" jdbc.analytics.password "$dbp" && ok "saved jdbc.analytics.password to the config (600)"; }
     return 0
 }
 
@@ -1220,6 +1256,19 @@ save_profile() {
         echo "nginx.client.max.body.size=${NGX_MAXBODY}"
         echo "# naxsi WAF includes: on|off|auto (auto = on only if naxsi_core.rules exists)"
         echo "nginx.naxsi=${NGX_NAXSI}"
+        echo ""
+        echo "# --- JMS event bus + analytics database (the 'jms' / 'dbc' rows) --------"
+        echo "# The event-bus resources (jms/BladeEventBusTopic + its error queue) are"
+        echo "# provisioned online by services/events/notes/configure-messaging-jms.py;"
+        echo "# the jms.* knobs feed it. jdbc/BladeAnalytics points at YOUR database:"
+        echo "# the password lives in this file as an ENC() secret, and the schema is"
+        echo "# yours to create once (services/analytics/sql/)."
+        echo "jms.quota.bytes=${JMS_QUOTA_BYTES}"
+        echo "jms.event.ttl.millis=${JMS_EVENT_TTL}"
+        echo "jms.redelivery.limit=${JMS_REDELIVERY}"
+        echo "jdbc.analytics.dialect=${DB_DIALECT}"
+        echo "jdbc.analytics.url=${DB_URL}"
+        echo "jdbc.analytics.user=${DB_USER}"
     } >> "$DEPLOY_CONF"
     # Restore the secrets captured before the rewrite (ENC()-wrapped, mode 600).
     [ -n "$_secrets" ] && printf '%s\n' "$_secrets" >> "$BLADE_CONF"
@@ -1343,6 +1392,17 @@ build_menu_rows() {
     _row action E "Re-provision every engine host"               "$(_sum_engines)" "-"
     _row action verify "Verify the cluster (health-check every node)" "" "-"
     _row action o "Deploy WebLogic Remote Console (/rconsole)" "" "-"
+    # JMS/JDBC: "done" read from the domain's own config.xml, like the boot-unit
+    # probes — cheap, local, and true after a re-image or a hand-run of the
+    # notes scripts. Adopted BladeAnalytics* naming counts (adopt-never-rename).
+    local domcfg="${DOMAINS_DIR}/${DOMAIN}/config/config.xml"
+    local a_jms=0; grep -qsE 'BladeMessagingSystemModule|BladeAnalyticsSystemModule' "$domcfg" && a_jms=1
+    local a_dbc=0; grep -qs '<name>BladeAnalytics</name>' "$domcfg" && a_dbc=1
+    _row action jms "Provision the JMS event bus (topic + error queue)" "jms/BladeEventBusTopic on BEA_ENGINE_TIER_CLUST" "$a_jms"
+    local p_db dbsum
+    if [ -n "$DB_URL" ]; then p_db=1; dbsum="${DB_DIALECT} · ${DB_URL}"; else p_db=-; dbsum="not configured — events hold on the topic"; fi
+    _row phase  db  "Analytics database (jdbc/BladeAnalytics)" "$dbsum" "$p_db"
+    _row action dbc "Create the analytics data source" "$([ "$a_dbc" = 1 ] && echo 'jdbc/BladeAnalytics')" "$a_dbc"
     _row action f "Open firewall ports (firewalld)"              "NM/admin/ssl$([ "${SIP_TLS:-false}" = true ] && printf /sip)" "-"
     local p_nginx ngxsum
     if [ -n "${NGX_ADMIN_SN}${NGX_APPS_SN}" ]; then p_nginx=1; ngxsum="${NGX_ADMIN_SN:-—}${NGX_APPS_SN:+, ${NGX_APPS_SN}}"; else p_nginx=-; ngxsum="not configured"; fi
@@ -1399,6 +1459,9 @@ dispatch_row() {
         remm) do_remove_machine   || true ;;
         E) do_provision_engines   || true ;;
         o) do_console             || true ;;
+        jms) do_jms               || true ;;
+        db)  phase_db; _save ;;
+        dbc) do_dbc               || true ;;
         f) do_open_firewall || true ;;
         ngx) do_install_nginx || true ;;
         x) stop_admin  "$MWHOME" "$DOMAIN" "$ADMIN_USER" || true ;;
@@ -2509,95 +2572,11 @@ provision_one_host() {
         return 1
     fi
 
-    # The units name User=/Group= from the ADMIN box's owner, so BOTH have to
-    # exist there. A missing group is not a warning you get to ignore: systemd
-    # refuses the unit with 216/GROUP ("Failed to determine group
-    # credentials"), which says nothing about which group or which host.
-    # Create both — engine hosts have no repo clone, so "run 'u' over there"
-    # was never an instruction anyone could follow. Numeric ids are pinned to
-    # the local ones when free; ownership itself travels BY NAME (xfer_rsync
-    # --chown), so a differing uid is cosmetic, not a failure.
-    local ggid; ggid="$(getent group "$grp" 2>/dev/null | cut -d: -f3)"
-    if ! ssh -o BatchMode=yes "$tgt" "getent group '${grp}' >/dev/null 2>&1"; then
-        info "  group '${grp}' missing there — creating it${ggid:+ (gid ${ggid})}"
-        if ! ssh -o BatchMode=yes "$tgt" "sudo groupadd ${ggid:+-g ${ggid}} '${grp}'"; then
-            warn "${name}: could not create group '${grp}' — the boot services would fail with 216/GROUP. Skipped."
-            return 1
-        fi
-    fi
-    if ! ssh -o BatchMode=yes "$tgt" "id '${user}' >/dev/null 2>&1"; then
-        local luid; luid="$(id -u "$user" 2>/dev/null || true)"
-        info "  user '${user}' missing there — creating${luid:+ (uid ${luid})}"
-        if ! ssh -o BatchMode=yes "$tgt" "sudo useradd ${luid:+-u ${luid}} -g '${grp}' -m '${user}' \
-                || sudo useradd -g '${grp}' -m '${user}'"; then
-            warn "${name}: could not create user '${user}' — the boot services would fail. Skipped."
-            return 1
-        fi
-    else
-        ssh -o BatchMode=yes "$tgt" "id -nG '${user}' | tr ' ' '\n' | grep -qx '${grp}' || sudo usermod -aG '${grp}' '${user}'" \
-            || warn "${name}: could not ensure '${user}' is in '${grp}'."
-    fi
+    # Owner + full install copy. Other provisioners that source this file as a
+    # library reuse these two steps.
+    ensure_remote_owner "$name" "$tgt" "$user" "$grp" || return 1
 
-    # --- landing zone -----------------------------------------------------
-    # ORACLE_HOME is a symlink; ship the REAL versioned directory it resolves to
-    # and repoint the link on the far side. rsync'ing the link path itself would
-    # land a real directory called 'current' on the engine and destroy the flip.
-    local real_home ver
-    real_home="$(readlink -f "$mw" 2>/dev/null || printf '%s' "$mw")"
-    ver="$(basename "$real_home")"
-    # Install trees land under the install user; only the cert staging dir
-    # (inside the login user's own home) stays the ssh user's.
-    if ! ssh -o BatchMode=yes "$tgt" \
-         "sudo install -d -o '${user}' -g '${grp}' '$(dirname "$real_home")' '${DOMAINS_DIR}' '${LOG_DIR:-/var/log/weblogic}/nodemanager'${jdk_real:+ '$(dirname "$jdk_real")'}${jdk_link:+ '$(dirname "$jdk_link")'} \
-          && sudo install -d -o '${sshu}' '$(dirname "$cdir")'" 2>/dev/null; then
-        warn "${name}: could not create target dirs — skipped."
-        return 1
-    fi
-    do_open_firewall_remote "$tgt" || warn "${name}: firewall opening failed — cluster ports may be blocked."
-
-    # --- copy -------------------------------------------------------------
-    # Binaries and domains are separate trees now, so they are separate copies.
-    # This is also the whole patch story for an engine: it never runs OPatch, it
-    # receives a home that was patched and validated once, on machine0.
-    # The owner's trees go through xfer_rsync: local root reads the 0600
-    # secrets, remote root writes them, --chown keeps the owner by name.
-    info "  rsync OCCAS home ${ver} (~1GB) …"
-    if ! xfer_rsync "${user}:${grp}" "${real_home}/" "${tgt}:${real_home}/"; then
-        warn "${name}: rsync of ${real_home} failed — skipped."; return 1
-    fi
-    if ! ssh -o BatchMode=yes "$tgt" "sudo ln -sfn '${real_home}' '${mw}'"; then
-        warn "${name}: could not point ${mw} at ${ver} — skipped."; return 1
-    fi
-    info "  rsync domains …"
-    local _d
-    for _d in "$dom" "$nmdom"; do
-        [ -d "${DOMAINS_DIR}/${_d}" ] || continue
-        if ! xfer_rsync "${user}:${grp}" \
-              "${DOMAINS_DIR}/${_d}/" "${tgt}:${DOMAINS_DIR}/${_d}/" \
-              --exclude 'servers/*/logs/' --exclude 'servers/*/tmp/' \
-              --exclude 'servers/*/cache/' --exclude 'nodemanager/*.log*' \
-              --exclude 'nodemanager/*.pid'; then
-            warn "${name}: rsync of domain ${_d} failed — skipped."; return 1
-        fi
-    done
-    if [ -n "$jdk_real" ] && ! xfer_rsync "${user}:${grp}" "$jdk_real" "${tgt}:$(dirname "$jdk_real")/"; then
-        warn "${name}: rsync of ${jdk_real} failed — skipped."; return 1
-    fi
-    if [ -n "$jdk_link" ] && ! ssh -o BatchMode=yes "$tgt" "sudo ln -sfn '${jdk_real}' '${jdk_link}'"; then
-        warn "${name}: could not point ${jdk_link} at $(basename "$jdk_real") — skipped."; return 1
-    fi
-    # The cert staging dir is the invoker's on both sides — plain copy.
-    if [ -d "$cdir" ] && ! rsync -a "${cdir}/" "${tgt}:${cdir}/"; then
-        warn "${name}: rsync of ${cdir} failed — skipped."; return 1
-    fi
-    # Keystores live outside the Oracle home, so they are their own copy.
-    local ksd="${KEYSTORE_DIR:-}"
-    if [ -n "$ksd" ] && [ -d "$ksd" ]; then
-        ssh -o BatchMode=yes "$tgt" "sudo install -d -o '${user}' -g '${grp}' '${ksd}'" 2>/dev/null
-        if ! xfer_rsync "${user}:${grp}" "${ksd}/" "${tgt}:${ksd}/"; then
-            warn "${name}: rsync of keystores (${ksd}) failed — skipped."; return 1
-        fi
-    fi
+    sync_host_tree "$name" "$tgt" "$user" "$grp" || return 1
     ssh -o BatchMode=yes "$tgt" \
         "sudo chmod -R g-w,o-rwx '${domhome}'; f='${domhome}/config/nodemanager/nm_password.properties'; [ -f \"\$f\" ] && sudo chmod 600 \"\$f\"; true" \
         || warn "${name}: domain permission hardening failed (non-fatal)."
@@ -3327,6 +3306,131 @@ do_provision_engines() {
         return 1
     fi
     [ "$DRY" = "on" ] || ok "All engine hosts provisioned and started."
+    return 0
+}
+
+# ============================================================================
+# Shared host-provisioning pieces — used by the engine provisioner, and by
+# scripts that source this installer as a library (the entry guard below
+# returns before the interactive flow when BASH_SOURCE != $0).
+# ============================================================================
+
+# Make sure the install owner (the user:group the boot units will name) exists
+# on a remote host. The units name User=/Group= from the ADMIN box's owner, so
+# BOTH have to exist there. A missing group is not a warning you get to ignore:
+# systemd refuses the unit with 216/GROUP ("Failed to determine group
+# credentials"), which says nothing about which group or which host. Create
+# both — provisioned hosts have no repo clone, so "run 'u' over there" was
+# never an instruction anyone could follow. Numeric ids are pinned to the local
+# ones when free; ownership itself travels BY NAME (xfer_rsync --chown), so a
+# differing uid is cosmetic, not a failure.
+ensure_remote_owner() {
+    local name="$1" tgt="$2" user="$3" grp="$4"
+    local ggid; ggid="$(getent group "$grp" 2>/dev/null | cut -d: -f3)"
+    if ! ssh -o BatchMode=yes "$tgt" "getent group '${grp}' >/dev/null 2>&1"; then
+        info "  group '${grp}' missing there — creating it${ggid:+ (gid ${ggid})}"
+        # Same fallback ladder as useradd below: prefer the local gid, but a
+        # host whose image already spent it (Ubuntu hands 1001 to its default
+        # user) gets the name with whatever gid is free — ownership travels BY
+        # NAME, so the number is cosmetic.
+        if ! ssh -o BatchMode=yes "$tgt" "sudo groupadd ${ggid:+-g ${ggid}} '${grp}' \
+                || sudo groupadd '${grp}'"; then
+            warn "${name}: could not create group '${grp}' — the boot services would fail with 216/GROUP. Skipped."
+            return 1
+        fi
+    fi
+    if ! ssh -o BatchMode=yes "$tgt" "id '${user}' >/dev/null 2>&1"; then
+        local luid; luid="$(id -u "$user" 2>/dev/null || true)"
+        info "  user '${user}' missing there — creating${luid:+ (uid ${luid})}"
+        if ! ssh -o BatchMode=yes "$tgt" "sudo useradd ${luid:+-u ${luid}} -g '${grp}' -m '${user}' \
+                || sudo useradd -g '${grp}' -m '${user}'"; then
+            warn "${name}: could not create user '${user}' — the boot services would fail. Skipped."
+            return 1
+        fi
+    else
+        ssh -o BatchMode=yes "$tgt" "id -nG '${user}' | tr ' ' '\n' | grep -qx '${grp}' || sudo usermod -aG '${grp}' '${user}'" \
+            || warn "${name}: could not ensure '${user}' is in '${grp}'."
+    fi
+    return 0
+}
+
+# Copy the whole install onto a remote host: the versioned Oracle home (+ the
+# 'current' symlink flip), both domains, the JDK (+ its 'current' link), the
+# cert staging dir and the keystores. ORACLE_HOME is a symlink; ship the REAL
+# versioned directory it resolves to and repoint the link on the far side —
+# rsync'ing the link path itself would land a real directory called 'current'
+# and destroy the flip. This is also the whole patch story for a provisioned
+# host: it never runs OPatch, it receives a home that was patched and validated
+# once, on machine0. The owner's trees go through xfer_rsync: local root reads
+# the 0600 secrets, remote root writes them, --chown keeps the owner by name.
+sync_host_tree() {
+    local name="$1" tgt="$2" user="$3" grp="$4"
+    local mw="$MWHOME" sshu="${tgt%@*}"
+    local cdir; cdir="$(read_prop "$OCCAS_CONF" certs.dir)"
+    cdir="${cdir/#\~/$HOME}"; cdir="${cdir:-$(blade_certs_dir_for_conf "$OCCAS_CONF")}"
+    local jdk; jdk="$(java_home_stable)"
+    local jdk_real="" jdk_link=""
+    if [ -n "$jdk" ]; then
+        jdk_real="$(readlink -f "$jdk" 2>/dev/null || printf '%s' "$jdk")"
+        [ "$jdk_real" != "$jdk" ] && jdk_link="$jdk"
+    fi
+    local real_home ver
+    real_home="$(readlink -f "$mw" 2>/dev/null || printf '%s' "$mw")"
+    ver="$(basename "$real_home")"
+    # Install trees land under the install user; only the cert staging dir
+    # (inside the login user's own home) stays the ssh user's.
+    if ! ssh -o BatchMode=yes "$tgt" \
+         "sudo install -d -o '${user}' -g '${grp}' '$(dirname "$real_home")' '${DOMAINS_DIR}' '${LOG_DIR:-/var/log/weblogic}/nodemanager'${jdk_real:+ '$(dirname "$jdk_real")'}${jdk_link:+ '$(dirname "$jdk_link")'} \
+          && sudo install -d -o '${sshu}' '$(dirname "$cdir")'" 2>/dev/null; then
+        warn "${name}: could not create target dirs — skipped."
+        return 1
+    fi
+    do_open_firewall_remote "$tgt" || warn "${name}: firewall opening failed — cluster ports may be blocked."
+    info "  rsync OCCAS home ${ver} (~1GB) …"
+    if ! xfer_rsync "${user}:${grp}" "${real_home}/" "${tgt}:${real_home}/"; then
+        warn "${name}: rsync of ${real_home} failed — skipped."; return 1
+    fi
+    if ! ssh -o BatchMode=yes "$tgt" "sudo ln -sfn '${real_home}' '${mw}'"; then
+        warn "${name}: could not point ${mw} at ${ver} — skipped."; return 1
+    fi
+    info "  rsync domains …"
+    local _d
+    for _d in "$DOMAIN" "$NM_DOMAIN"; do
+        [ -d "${DOMAINS_DIR}/${_d}" ] || continue
+        if ! xfer_rsync "${user}:${grp}" \
+              "${DOMAINS_DIR}/${_d}/" "${tgt}:${DOMAINS_DIR}/${_d}/" \
+              --exclude 'servers/*/logs/' --exclude 'servers/*/tmp/' \
+              --exclude 'servers/*/cache/' --exclude 'nodemanager/*.log*' \
+              --exclude 'nodemanager/*.pid'; then
+            warn "${name}: rsync of domain ${_d} failed — skipped."; return 1
+        fi
+    done
+    if [ -n "$jdk_real" ] && ! xfer_rsync "${user}:${grp}" "$jdk_real" "${tgt}:$(dirname "$jdk_real")/"; then
+        warn "${name}: rsync of ${jdk_real} failed — skipped."; return 1
+    fi
+    if [ -n "$jdk_link" ] && ! ssh -o BatchMode=yes "$tgt" "sudo ln -sfn '${jdk_real}' '${jdk_link}'"; then
+        warn "${name}: could not point ${jdk_link} at $(basename "$jdk_real") — skipped."; return 1
+    fi
+    # The cert staging dir is the invoker's on both sides — plain copy, with a
+    # tar-over-ssh fallback for hosts whose image ships no rsync binary (the
+    # big trees above go through xfer_rsync's transport, so only THIS copy
+    # notices; a minimal Ubuntu image is exactly that host).
+    if [ -d "$cdir" ]; then
+        if ! rsync -a "${cdir}/" "${tgt}:${cdir}/" 2>/dev/null \
+           && ! sudo tar -C "$cdir" -cf - . | ssh -o BatchMode=yes "$tgt" \
+                  "sudo install -d -o '${sshu}' '${cdir}' && sudo tar -C '${cdir}' -xf - \
+                   && sudo chown -R '${sshu}' '${cdir}'"; then
+            warn "${name}: copy of ${cdir} failed — skipped."; return 1
+        fi
+    fi
+    # Keystores live outside the Oracle home, so they are their own copy.
+    local ksd="${KEYSTORE_DIR:-}"
+    if [ -n "$ksd" ] && [ -d "$ksd" ]; then
+        ssh -o BatchMode=yes "$tgt" "sudo install -d -o '${user}' -g '${grp}' '${ksd}'" 2>/dev/null
+        if ! xfer_rsync "${user}:${grp}" "${ksd}/" "${tgt}:${ksd}/"; then
+            warn "${name}: rsync of keystores (${ksd}) failed — skipped."; return 1
+        fi
+    fi
     return 0
 }
 
@@ -4653,6 +4757,140 @@ PYE0S
 }
 
 # Admin password: env > the config > prompt (skipped under dry-run).
+# ----- JMS event bus + analytics data source (STEP 5, online WLST) -----------
+# Provision the BLADE messaging stack (file store, JMS server, system module,
+# connection factory, distributed topic + error queue) by running the canonical
+# WLST helper that ships with the service: services/events/notes/
+# configure-messaging-jms.py. It is idempotent, adopts an existing
+# BladeAnalytics module rather than renaming it, and sets the topic's
+# ForwardingPolicy to Partitioned (a cluster-targeted JMS server refuses a
+# Replicated distributed topic at save()). install.sh supplies only the
+# connection and the knobs; the resource shapes stay with the service that
+# owns them, so the runbook and the installer cannot drift apart.
+do_jms() {
+    local script="${SCRIPT_DIR}/services/events/notes/configure-messaging-jms.py"
+    [ -f "$script" ] || { warn "missing ${script} — full BLADE checkout required."; return 1; }
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] online WLST: provision the JMS event bus (quota ${JMS_QUOTA_BYTES} bytes, TTL ${JMS_EVENT_TTL} ms, redelivery ${JMS_REDELIVERY}) on BEA_ENGINE_TIER_CLUST${C_RESET}"
+        return 0
+    fi
+    admin_running || { warn "the AdminServer is not running — JMS is provisioned online."; next_step s "start the AdminServer"; return 1; }
+    local pw; pw="$(get_admin_pw)" || return 1
+    local aurl="${ADMINURL:-t3://${H_ADDR[0]:-localhost}:7001}"
+    info "Provisioning the JMS event bus via ${aurl} ..."
+    local out
+    out="$(WL_USER="$ADMIN_USER" WL_PASS="$pw" WL_ADMIN="$aurl"            BLADE_ENGINE_CLUSTER="BEA_ENGINE_TIER_CLUST"            BLADE_QUOTA_BYTES="$JMS_QUOTA_BYTES"            BLADE_EVENT_TTL_MILLIS="$JMS_EVENT_TTL"            BLADE_REDELIVERY_LIMIT="$JMS_REDELIVERY"            "${MWHOME}/oracle_common/common/bin/wlst.sh" "$script" 2>&1)"
+    # The script prints its own receipt on success; anything else is a failure
+    # (returning 0 unconditionally is how a failed resize once got masked).
+    if printf '%s' "$out" | grep -q "BLADE messaging provisioned"; then
+        printf '%s\n' "$out" | sed -n '/BLADE messaging provisioned/,$p' | sed 's/^/  /'
+        ok "JMS event bus ready: jms/BladeEventBusTopic + jms/BladeEventBusErrorQueue."
+        return 0
+    fi
+    warn "JMS provisioning FAILED:"
+    printf '%s\n' "$out" | tail -15 | sed 's/^/  /'
+    return 1
+}
+
+# One JDBC system resource: BladeAnalytics -> jdbc/BladeAnalytics, targeted at
+# the engine cluster AND the AdminServer (the analytics sink in the admin EAR
+# needs the datasource in the AdminServer's JNDI too). The dialect picks the
+# driver, transaction protocol and test SQL; URL and credentials come from the
+# profile ('db' page). The schema is NEVER created here — it lives in the
+# operator's database; the hand-off command is printed on success. Credentials
+# reach WLST through the environment, never through the script file or argv.
+do_dbc() {
+    if [ -z "$DB_URL" ]; then
+        log "  ${C_DIM}no analytics database configured — skipping (set it on the 'db' page; events hold on the JMS topic meanwhile).${C_RESET}"
+        return 0
+    fi
+    local driver proto testsql
+    case "$DB_DIALECT" in
+        mysql)  driver="com.mysql.cj.jdbc.MysqlXADataSource"
+                proto="TwoPhaseCommit"; testsql="SQL SELECT 1" ;;
+        oracle) driver="oracle.jdbc.OracleDriver"
+                proto="OnePhaseCommit"; testsql="SQL SELECT 1 FROM DUAL" ;;
+        mssql)  driver="weblogic.jdbcx.sqlserver.SQLServerDataSource"
+                proto="OnePhaseCommit"; testsql="SQL SELECT 1" ;;
+        *) warn "unknown jdbc.analytics.dialect '${DB_DIALECT}' — mysql, oracle, or mssql."; return 1 ;;
+    esac
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] online WLST: create data source BladeAnalytics (${DB_DIALECT}, ${DB_URL}) -> BEA_ENGINE_TIER_CLUST + AdminServer${C_RESET}"
+        return 0
+    fi
+    local dbpass; dbpass="$(read_prop "$WLS_SECRET" jdbc.analytics.password)"
+    [ -n "$dbpass" ] || { warn "no database password saved — set it on the 'db' page."; next_step db "configure the analytics database"; return 1; }
+    admin_running || { warn "the AdminServer is not running — the data source is created online."; next_step s "start the AdminServer"; return 1; }
+    local pw; pw="$(get_admin_pw)" || return 1
+    local aurl="${ADMINURL:-t3://${H_ADDR[0]:-localhost}:7001}"
+    local work; work="$(mktemp -d /tmp/blade-jdbc.XXXXXX)"
+    # Everything variable rides the environment; the file itself holds no secret.
+    cat > "${work}/datasource.py" <<'PYDS'
+import os
+wl_user = os.environ['WL_USER']; wl_pass = os.environ['WL_PASS']; wl_admin = os.environ['WL_ADMIN']
+db_url = os.environ['DB_URL']; db_user = os.environ['DB_USER']; db_pass = os.environ['DB_PASS']
+db_driver = os.environ['DB_DRIVER']; db_proto = os.environ['DB_PROTO']; db_test = os.environ['DB_TEST']
+blade_cluster = os.environ.get('BLADE_ENGINE_CLUSTER', 'BEA_ENGINE_TIER_CLUST')
+connect(wl_user, wl_pass, wl_admin)
+edit()
+# Discard any stale edit session first: startEdit() silently continues in one,
+# and a prior failure would poison every later attempt.
+try:
+    stopEdit('y')
+except:
+    pass
+startEdit()
+cd('/')
+# Check-existence, never try/except a create: a caught BeanAlreadyExists still
+# taints the edit session and the activate() dies with [Management:141191].
+if cmo.lookupJDBCSystemResource('BladeAnalytics') is None:
+    cmo.createJDBCSystemResource('BladeAnalytics')
+blade_base = '/JDBCSystemResources/BladeAnalytics/JDBCResource/BladeAnalytics'
+cd(blade_base)
+cmo.setName('BladeAnalytics')
+cmo.setDatasourceType('GENERIC')
+cd(blade_base + '/JDBCDataSourceParams/BladeAnalytics')
+set('JNDINames', jarray.array([String('jdbc/BladeAnalytics')], String))
+cmo.setGlobalTransactionsProtocol(db_proto)
+cd(blade_base + '/JDBCDriverParams/BladeAnalytics')
+cmo.setUrl(db_url)
+cmo.setDriverName(db_driver)
+set('Password', db_pass)
+cd(blade_base + '/JDBCConnectionPoolParams/BladeAnalytics')
+cmo.setTestTableName(db_test)
+cmo.setTestConnectionsOnReserve(true)
+cd(blade_base + '/JDBCDriverParams/BladeAnalytics/Properties/BladeAnalytics')
+# WLS seeds a 'user' property when the resource is created, so create only if absent.
+if cmo.lookupProperty('user') is None:
+    cmo.createProperty('user')
+cd(blade_base + '/JDBCDriverParams/BladeAnalytics/Properties/BladeAnalytics/Properties/user')
+cmo.setValue(db_user)
+cd('/JDBCSystemResources/BladeAnalytics')
+set('Targets', jarray.array([
+    ObjectName('com.bea:Name=%s,Type=Cluster' % blade_cluster),
+    ObjectName('com.bea:Name=AdminServer,Type=Server')
+], ObjectName))
+save()
+activate(block='true')
+print('DATASOURCE_READY jdbc/BladeAnalytics -> %s' % db_url)
+disconnect()
+PYDS
+    chmod 600 "${work}/datasource.py"
+    info "Creating data source BladeAnalytics (${DB_DIALECT}) via ${aurl} ..."
+    local out
+    out="$(WL_USER="$ADMIN_USER" WL_PASS="$pw" WL_ADMIN="$aurl"            DB_URL="$DB_URL" DB_USER="$DB_USER" DB_PASS="$dbpass"            DB_DRIVER="$driver" DB_PROTO="$proto" DB_TEST="$testsql"            BLADE_ENGINE_CLUSTER="BEA_ENGINE_TIER_CLUST"            "${MWHOME}/oracle_common/common/bin/wlst.sh" "${work}/datasource.py" 2>&1)"
+    rm -rf "$work"
+    if printf '%s' "$out" | grep -q "DATASOURCE_READY"; then
+        printf '%s\n' "$out" | grep "DATASOURCE_READY" | sed 's/^/  /'
+        ok "jdbc/BladeAnalytics ready on BEA_ENGINE_TIER_CLUST + AdminServer."
+        log "  ${C_DIM}Schema is yours: run services/analytics/sql/$(case "$DB_DIALECT" in mysql) echo MySQL;; oracle) echo Oracle;; mssql) echo MSSQL;; esac)-database-schema.sql against ${DB_URL} once.${C_RESET}"
+        return 0
+    fi
+    warn "data-source creation FAILED:"
+    printf '%s\n' "$out" | tail -15 | sed 's/^/  /'
+    return 1
+}
+
 get_admin_pw() {
     local v="${BLADE_WLS_PASSWORD:-}"
     [ -z "$v" ] && [ -f "$WLS_SECRET" ] && v="$(read_prop "$WLS_SECRET" admin.password)"
@@ -5851,7 +6089,7 @@ run_install_ladder() {
         || { warn "aborted."; return 1; }
     local id cert_step=g
     [ "${CERT_SOURCE:-generate}" = supply ] && cert_step=sup
-    for id in u m dl i "$cert_step" n c f s e w o; do
+    for id in u m dl i "$cert_step" n c f s e w o jms dbc; do
         rule; info "install step '${id}'"
         dispatch_row "$id"
     done
@@ -6181,8 +6419,10 @@ else
         backup)    _need_profile; load_profile; do_backup; exit $? ;;
         configure) _need_profile; load_profile; do_configure; exit $? ;;
         provision) _need_profile; load_profile; do_provision_engines; exit $? ;;
+        jms)        _need_profile; load_profile; do_jms; exit $? ;;
+        datasource) _need_profile; load_profile; do_dbc; exit $? ;;
         ""|menu|dashboard) : ;;
-        *) die "unknown command '${JUMP}' — try: wizard, preflight, install, uninstall, status, backup, configure, provision" ;;
+        *) die "unknown command '${JUMP}' — try: wizard, preflight, install, uninstall, status, backup, configure, provision, jms, datasource" ;;
     esac
     dashboard
 fi

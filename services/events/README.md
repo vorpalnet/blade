@@ -6,7 +6,7 @@ The designer and the JMS administration console are the other half, on the admin
 tier, in `admin/events-console`.
 
 ```
-  Gumball attendant (Python)              BLADE (OCCAS engine tier)
+  Attendant sidecar (Python)              BLADE (OCCAS engine tier)
   ┌────────────────────┐   HTTP POST     ┌──────────────────────────────────────┐
   │ ASR→extract→gate→  │  CloudEvents    │  EventIngestResource  (JAX-RS)       │
   │ confirm→emit_task  ├────────────────►│    POST /events/api/v1/events        │
@@ -81,8 +81,10 @@ the next reload; publishers for destinations that did not change are left alone.
 
 ## Deploy
 
-1. **Provision the JMS resources.** The Events console can create them, or use
-   the WLST fallback:
+1. **Provision the JMS resources.** `install.sh` runs this for you (the
+   "Provision the JMS event bus" row in STEP 5, or headless
+   `./install.sh <env> jms`) by executing the script below. The Events console
+   can also create them, or run the WLST directly:
    ```bash
    export WL_USER=weblogic WL_PASS=... WL_ADMIN=t3://<admin>:7001
    # engine-tier cluster name; defaults to BEA_ENGINE_TIER_CLUST.
@@ -129,7 +131,7 @@ curl -i -u weblogic:<password> -X POST \
   http://<engine>:<port>/events/api/v1/events \
   -H 'Content-Type: application/cloudevents+json' \
   -d '{"specversion":"1.0","type":"net.vorpal.attendant.meeting.scheduled",
-       "source":"/gumball/attendant","subject":"demo-1",
+       "source":"/attendant","subject":"demo-1",
        "data":{"who":"Sarah","when_text":"next Tuesday at 3"}}'
 # => 202 Accepted, {"id":"..."}
 ```

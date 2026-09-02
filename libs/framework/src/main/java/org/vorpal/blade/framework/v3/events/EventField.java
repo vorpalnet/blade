@@ -19,7 +19,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 /// cannot represent.
 ///
 /// **Wire names versus Java names.** Event payloads on this bus are commonly
-/// snake_case — the Gumball attendant emits `when_text` — while Java wants
+/// snake_case — a Python producer emits `when_text` — while Java wants
 /// `whenText`. [#getName] is always the wire name, exactly as it appears in the
 /// JSON. [#javaName] derives the Java identifier, and the generator emits a
 /// `@JsonProperty` binding whenever the two differ, so the wire form is never

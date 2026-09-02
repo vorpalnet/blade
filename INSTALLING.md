@@ -89,6 +89,12 @@ Everything below is how the installer delivers those five properties.
   yourself first — with the naxsi module if you want the WAF — and have a TLS
   certificate on disk (e.g. Let's Encrypt); `install.sh` references the cert, it
   does not obtain or renew it.
+- **Messaging + analytics (optional):** STEP 5 provisions the JMS event bus
+  (`jms/BladeEventBusTopic` + its error queue) against the running AdminServer,
+  and creates the `jdbc/BladeAnalytics` data source once you point it at your
+  database on the "Analytics database" page. The database and its schema are
+  yours: run `services/analytics/sql/<Dialect>-database-schema.sql` once.
+  Headless: `./install.sh <env> jms` and `./install.sh <env> datasource`.
 
 ---
 

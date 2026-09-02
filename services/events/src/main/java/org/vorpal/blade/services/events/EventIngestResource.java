@@ -27,9 +27,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 
 /// HTTP → JMS ingress for the event bus, at `POST /events/api/v1/events`.
 ///
-/// This is the seam that lets a non-Java producer publish. The Gumball attendant
-/// (a Python sidecar) already emits CloudEvents 1.0 over HTTP; pointing its
-/// `ATTENDANT_SINK` at this URL requires **no change to the producer** — the same
+/// This is the seam that lets a non-Java producer publish. A voice-attendant
+/// sidecar (Python) already emits CloudEvents 1.0 over HTTP; pointing its
+/// event sink at this URL requires **no change to the producer** — the same
 /// bytes it POSTs become a JSON `TextMessage` on the destination, and every
 /// subscribing BLADE app receives its own copy.
 ///

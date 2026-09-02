@@ -27,10 +27,20 @@ db_url = os.environ.get('DB_URL')       # jdbc:oracle:thin:@<db>_tp?TNS_ADMIN=<w
 
 connect(wl_user, wl_pass, wl_admin)
 edit()
+
+# Discard an edit session left open by an earlier failed run, so startEdit()
+# starts clean instead of silently continuing in the stale session.
+try:
+    stopEdit('y')
+    print('NOTE: discarded a pre-existing edit session')
+except:
+    pass
+
 startEdit()
 
 cd('/')
-cmo.createJDBCSystemResource('BladeAnalytics')
+if cmo.lookupJDBCSystemResource('BladeAnalytics') is None:
+    cmo.createJDBCSystemResource('BladeAnalytics')
 
 cd('/JDBCSystemResources/BladeAnalytics/JDBCResource/BladeAnalytics')
 cmo.setName('BladeAnalytics')
@@ -56,13 +66,21 @@ cmo.setMinCapacity(0)
 cmo.setMaxCapacity(15)
 
 cd('/JDBCSystemResources/BladeAnalytics/JDBCResource/BladeAnalytics/JDBCDriverParams/BladeAnalytics/Properties/BladeAnalytics')
-cmo.createProperty('user')
+# WLS seeds a 'user' property when the resource is created, so create it only if absent.
+if cmo.lookupProperty('user') is None:
+    cmo.createProperty('user')
 
 cd('/JDBCSystemResources/BladeAnalytics/JDBCResource/BladeAnalytics/JDBCDriverParams/BladeAnalytics/Properties/BladeAnalytics/Properties/user')
 cmo.setValue(db_user)
 
 cd('/JDBCSystemResources/BladeAnalytics')
-set('Targets',jarray.array([ObjectName('com.bea:Name=BEA_ENGINE_TIER_CLUST,Type=Cluster')], ObjectName))
+# Targets: the engine cluster (the analytics WAR) AND the AdminServer (the
+# blade-analytics EAR sink deploys there, so its persistence unit needs the
+# datasource in the AdminServer's JNDI too).
+set('Targets',jarray.array([
+    ObjectName('com.bea:Name=BEA_ENGINE_TIER_CLUST,Type=Cluster'),
+    ObjectName('com.bea:Name=AdminServer,Type=Server')
+], ObjectName))
 
 save()
 activate()

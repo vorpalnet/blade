@@ -26,7 +26,7 @@ import org.vorpal.blade.framework.v3.events.ValidationPolicy;
 /// able to generate from it immediately.
 ///
 /// The example is the attendant's meeting event, which is a real one: the
-/// Gumball attendant already emits this envelope over HTTP, so pointing its sink
+/// attendant sidecar already emits this envelope over HTTP, so pointing its sink
 /// at this service publishes it with no producer change.
 ///
 /// **Every declaration here matches code that actually ships**, rather than
@@ -51,7 +51,7 @@ public class EventCatalogSample extends EventCatalog {
 		meeting.setTitle("Meeting Scheduled");
 		meeting.setDescription(
 				"Emitted when the attendant has confirmed a meeting with the caller. A calendar app subscribes to this and creates the appointment.");
-		meeting.setOwner("gumball-attendant");
+		meeting.setOwner("attendant");
 		meeting.setVersion(1);
 		meeting.setDestinationJndi(EventBus.TOPIC_JNDI);
 		meeting.setDestinationKind(DestinationKind.TOPIC);
@@ -85,7 +85,7 @@ public class EventCatalogSample extends EventCatalog {
 		EventSubscription calendar = new EventSubscription("calendar");
 		calendar.setDescription(
 				"Creates the appointment when the attendant confirms a meeting. An actor: it names the one type it handles, so the broker filters and this app never wakes for anything else.");
-		calendar.setOwner("gumball-attendant");
+		calendar.setOwner("attendant");
 		calendar.setTypes(Arrays.asList("net.vorpal.attendant.meeting.scheduled"));
 		calendar.setDurable(true);
 		calendar.setJavaPackage("org.vorpal.blade.services.events");

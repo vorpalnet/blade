@@ -22,7 +22,7 @@
 /// framework jar is the only one a skinny WAR carries.
 ///
 /// **Why the ingress exists at all.** A BLADE app can publish natively through
-/// `EventBus`. This endpoint is for producers that are not BLADE apps — the
-/// Gumball attendant is a Python sidecar that already emits exactly this
+/// `EventBus`. This endpoint is for producers that are not BLADE apps — a
+/// voice-attendant sidecar in Python, for instance, already emits exactly this
 /// envelope, so pointing its sink here needs no producer change whatsoever.
 package org.vorpal.blade.services.events;

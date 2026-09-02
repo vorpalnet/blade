@@ -100,7 +100,6 @@ declare -a SRC_JARS=(
     "$OCCAS_HOME/wlserver/sip/server/lib/sipservlet-api.jar"
     "$OCCAS_HOME/wlserver/sip/server/lib/wlss.jar"
     "$OCCAS_HOME/wlserver/sip/server/lib/wlssapi.jar"
-    "$PLUGIN_BASE/$WL_VERSION/weblogic-maven-plugin-$WL_VERSION.jar"
 )
 missing=()
 for f in "${SRC_JARS[@]}"; do [ -f "$f" ] || missing+=("$f"); done
@@ -146,11 +145,19 @@ install_jar com.oracle.occas wlssapi "$OCCAS_VERSION" jar \
     "$OCCAS_HOME/wlserver/sip/server/lib/wlssapi.jar"
 install_jar com.oracle.occas mscontrol "$OCCAS_VERSION" jar \
     "$OCCAS_HOME/occas/server/modules/mscontrol.jar"
-install_jar com.oracle.weblogic weblogic-maven-plugin "$WL_VERSION" maven-plugin \
-    "$PLUGIN_BASE/$WL_VERSION/weblogic-maven-plugin-$WL_VERSION.jar" \
-    "$PLUGIN_BASE/$WL_VERSION/weblogic-maven-plugin-$WL_VERSION.pom"
+
+# The weblogic-maven-plugin (for remote `deploy.sh` via the Maven engine) needs
+# its whole dependency closure, and its real coordinate is <WL_VERSION>-0-0, not
+# the stripped directory version. Oracle's `oracle-maven-sync` installs that set
+# but isn't shipped with every OCCAS; the provisioner reproduces it from the
+# install's plugins/maven trees. (The curated jars above are the compile-time
+# deps the BLADE poms reference at <WL_VERSION>; deploy is a separate closure.)
+echo ""
+echo "Provisioning the WebLogic Maven deploy plugin + dependencies ..."
+bash "$SCRIPT_DIR/misc/oracle-maven-provision.sh" "$OCCAS_HOME"
 
 echo ""
 echo "Done. OCCAS JARs and plugins installed to local Maven repository."
-echo "  WebLogic: com.oracle.weblogic:*:$WL_VERSION"
-echo "  OCCAS:    com.oracle.occas:*:$OCCAS_VERSION"
+echo "  WebLogic:     com.oracle.weblogic:*:$WL_VERSION"
+echo "  OCCAS:        com.oracle.occas:*:$OCCAS_VERSION"
+echo "  deploy plugin: com.oracle.weblogic:weblogic-maven-plugin:${WL_VERSION}-0-0"

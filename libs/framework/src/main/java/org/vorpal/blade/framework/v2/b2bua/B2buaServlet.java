@@ -44,8 +44,8 @@ import org.vorpal.blade.framework.Callflow;
 ///
 /// @author Jeff McDonald
 /// @deprecated Superseded by [org.vorpal.blade.framework.v3.B2buaServlet], which
-///             every application now extends. Nothing in blade, optum, gryphon
-///             or bond subclasses this one. It is kept for v2 applications
+///             every application now extends. Nothing in this repository
+///             subclasses this one. It is kept for v2 applications
 ///             outside this workspace, and for the record — the v2 b2bua
 ///             *callflows* beside it are very much alive, since
 ///             `v3.B2buaServlet.chooseCallflow` still builds [InitialInvite] and

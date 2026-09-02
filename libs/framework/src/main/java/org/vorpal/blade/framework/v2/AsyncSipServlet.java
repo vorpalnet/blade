@@ -11,8 +11,8 @@ package org.vorpal.blade.framework.v2;
  *             class adds nothing — the whole implementation moved to the
  *             baseline, and this name remains only so existing servlets keep
  *             compiling and serialized state naming it still resolves on
- *             failover. Blade's own 14 subclasses have been migrated; att-tao
- *             (21), gryphon (2) and optum (1) have not, and will warn until
+ *             failover. BLADE's own subclasses have been migrated; applications
+ *             outside this repository that still extend it will warn until
  *             they are.
  */
 @Deprecated

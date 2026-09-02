@@ -10,8 +10,8 @@ package org.vorpal.blade.framework.v3.analytics;
 /// @deprecated Import [org.vorpal.blade.framework.v2.analytics.Analytics] — the one that
 ///             holds the implementation — until analytics moves to the baseline. This face
 ///             exists only so a v3 application's imports could stay `v3.*`, a distinction
-///             the framework is collapsing. Nothing imports it in blade, optum, gryphon or
-///             att-tao. It stays so any application that does keeps compiling.
+///             the framework is collapsing. Nothing in this repository imports it. It
+///             stays so any application that does keeps compiling.
 @Deprecated
 public class Analytics extends org.vorpal.blade.framework.v2.analytics.Analytics {
 

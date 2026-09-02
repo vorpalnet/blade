@@ -16,8 +16,33 @@ Coherence settings, JDBC pools, SNMP, kernel tunables (read through the framewor
 resume, and restart of individual servers — for rolling maintenance.
 
 Most knobs live where WebLogic keeps them: in the domain's own MBeans. The app's config
-file (`./config/custom/vorpal/tuning.json`) persists only what WebLogic has no home for —
-named JVM profiles and their per-node assignments.
+file (`./config/custom/vorpal/blade-tuning.json`) persists only what WebLogic has no home
+for: named JVM profiles and which target each one is assigned to.
+
+## JVM profiles, targets and the baseline
+
+A target is a ServerStart owner in config.xml: a static server (the AdminServer, engine0)
+or the engine server template. Dynamic engines are not targets; they boot from the template.
+Applying a profile overlays it knob by knob onto the target's `ServerStart.Arguments`, and
+the page shows that diff as a preview before anything is written.
+
+Two files beside the config answer "what was it before?": `blade-tuning-baseline.json`,
+pinned the first time the app sees the domain (what install.sh wrote) and rewritten only by
+an explicit re-baseline, and `blade-tuning-history.json`, rewritten with the live state
+before every write, with the last twenty kept in `.versions/`. Either can be written back
+to a target verbatim from the page, ClassPath included. The ClassPath is editable per
+target for the same reason: it is the field whose loss produces the least obvious failure,
+a server that boots with no SIP container.
+
+| Endpoint (under `api/v1/jvm`) | Does |
+|---|---|
+| `GET /targets` | every target with its live ServerStart and baseline status |
+| `GET` / `POST /baseline` | read / re-pin the baseline |
+| `GET /history`, `GET /history/{id}` | the retained pre-write snapshots |
+| `POST /preview` | the per-target diff an apply would make, without an edit session |
+| `POST /apply` | overlay each assigned profile; returns the same diff |
+| `POST /restore` | `{source: "baseline" \| id, targets: [...]}`, written back verbatim |
+| `PUT /targets/{name}` | `{classPath}` |
 
 ## A JMX subtlety
 

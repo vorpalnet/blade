@@ -13,8 +13,8 @@ package org.vorpal.blade.framework.v3;
 /// @param <T> the callback input, typically a `SipServletRequest` or `SipServletResponse`
 /// @deprecated Import the baseline [org.vorpal.blade.framework.Callback] instead. There is
 ///             one callback type; this name adds nothing but a second way to spell it, and
-///             the two generations are collapsing onto the baseline. Nothing imports this
-///             face in blade, optum, gryphon or att-tao. It stays so any application that
+///             the two generations are collapsing onto the baseline. Nothing in this
+///             repository imports this face. It stays so any application that
 ///             does keeps compiling — and so a serialized lambda naming this interface
 ///             still resolves on failover.
 @Deprecated

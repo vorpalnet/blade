@@ -13,8 +13,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /// A CloudEvents 1.0 envelope — the on-the-wire message the BLADE v3 event bus
 /// carries.
 ///
-/// This is deliberately the *same* envelope the Gumball attendant already emits
-/// (`action/emit.py:to_cloudevent`), so a producer speaking HTTP CloudEvents and
+/// This is deliberately the *same* envelope a non-Java producer emits over HTTP
+/// (the reference producer is a Python sidecar), so a producer speaking HTTP CloudEvents and
 /// a BLADE app publishing natively put identical bytes on the topic. Unlike the
 /// analytics queue — which sends Java-serialized JPA entities as `ObjectMessage`
 /// and so binds every consumer to BLADE's classpath — the event bus carries this

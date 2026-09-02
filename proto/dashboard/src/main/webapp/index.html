@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>BLADE Dashboard</title>
+	<link rel="icon" href="/blade/portal/brand/favicon.svg" type="image/svg+xml">
+	<link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+
+	<header class="topbar">
+		<a class="brand" href="/blade/portal/">
+			<img class="brand__logo" src="/blade/portal/brand/vorpal_logo_lightpurple.svg" alt="Vorpal">
+			<span class="brand__name">Dashboard<small>OCCAS &middot; BLADE</small></span>
+		</a>
+		<div class="spacer"></div>
+		<nav class="nav">
+			<a href="/blade/portal/">Portal</a>
+			<a href="/blade/tuning/">Tuning</a>
+			<a href="/blade/balancer/">Balancer</a>
+		</nav>
+		<span class="status" id="status"><span class="dot"></span><span id="statusText">loading…</span></span>
+	</header>
+
+	<main>
+		<p class="eyebrow">Live operations</p>
+		<h1>OCCAS &amp; BLADE at a glance</h1>
+		<p class="lede">Call analytics drawn from the analytics reporting views. Cluster health from the
+		runtime MBeans (node state, sessions, CPS, heap, pools) is the next panel to land.</p>
+
+		<section class="tiles">
+			<div class="tile accent"><div class="tile__l">Calls today</div><div class="tile__v" id="t-callsToday">—</div></div>
+			<div class="tile"><div class="tile__l">Live calls</div><div class="tile__v" id="t-activeCalls">—</div></div>
+			<div class="tile"><div class="tile__l">Avg duration</div><div class="tile__v" id="t-avgDurationSec">—</div></div>
+			<div class="tile"><div class="tile__l">Apps (7d)</div><div class="tile__v" id="t-apps">—</div></div>
+		</section>
+
+		<section class="grid">
+			<div class="card card--wide">
+				<div class="card__head"><span class="card__title">Calls per day</span><span class="card__sub">last 30 days</span></div>
+				<div class="card__body" id="chart-calls-per-day"></div>
+			</div>
+			<div class="card">
+				<div class="card__head"><span class="card__title">Calls by application</span><span class="card__sub">last 7 days</span></div>
+				<div class="card__body" id="chart-calls-by-app"></div>
+			</div>
+			<div class="card">
+				<div class="card__head"><span class="card__title">Avg call duration</span><span class="card__sub">seconds &middot; last 30 days</span></div>
+				<div class="card__body" id="chart-avg-duration"></div>
+			</div>
+		</section>
+
+		<p class="foot">Reading <code>jdbc/BladeAnalytics</code> &middot; updated <span id="updated">—</span></p>
+	</main>
+
+	<script src="dashboard.js"></script>
+</body>
+</html>

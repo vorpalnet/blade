@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.vorpal.blade</groupId>
+		<artifactId>vorpal-blade</artifactId>
+		<version>${revision}</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>vorpal-blade-proto-dashboard</artifactId>
+	<packaging>war</packaging>
+	<name>BLADE Dashboard</name>
+	<description>Live OCCAS/BLADE performance dashboard: cluster health from runtime MBeans and call analytics from the reporting views. Fills the gap left when the WebLogic Console became the Remote Console.</description>
+
+	<dependencies>
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-library-framework</artifactId>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<!-- Module dir is "dashboard"; finalName/context/card are all "dashboard".
+		     Skinny WAR: only the framework jar rides inside; every third-party jar
+		     comes from the blade-shared library. -->
+		<finalName>blade-dashboard</finalName>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-war-plugin</artifactId>
+				<configuration>
+					<!-- Portal master login page injected at build time; never add a
+					     per-app login page (SECURITY.md). -->
+					<webResources>
+						<resource>
+							<directory>${project.basedir}/../../admin/portal/src/main/webapp</directory>
+							<includes>
+								<include>login.jsp</include>
+							</includes>
+							<targetPath>login</targetPath>
+						</resource>
+					</webResources>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>

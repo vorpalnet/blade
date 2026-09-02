@@ -150,6 +150,36 @@
 		.jvm-argissues .issue .tok { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-weight: 700; text-decoration: underline wavy #d6336c; text-decoration-skip-ink: none; white-space: nowrap; }
 		.jvm-argissues .issue .why { color: #555; }
 
+		/* Targets table + preview diff. Every state cue leads with a glyph or a
+		   word (= baseline / ≠ baseline, + − ~ markers, "kept"), never colour
+		   alone. */
+		.jvm-targets td.mono { font-size: 12px; }
+		.jvm-targets .members { font-size: 11px; color: #777; font-family: 'SFMono-Regular', Consolas, Menlo, monospace; }
+		.jvm-targets .base-same { color: #555; }
+		.jvm-targets .base-diff { font-weight: 700; }
+		.jvm-targets .base-none { color: #999; font-style: italic; }
+		.jvm-target-detail { background: #f8f9fb; }
+		.jvm-target-detail pre { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 11px; white-space: pre-wrap; word-break: break-all; background: #fff; border: 1px solid #e2e2e8; padding: 6px 8px; margin: 0 0 8px; max-height: 160px; overflow: auto; }
+		.jvm-target-detail textarea.mono { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 11px; }
+		.jvm-target-detail textarea.mono.is-set { font-weight: 700; box-shadow: inset 3px 0 0 #2f6fed; background-color: #eef3ff; }
+		.jvm-diff-panel { border: 1px solid #ced4da; border-radius: 4px; margin-top: 12px; overflow: hidden; }
+		.jvm-diff-panel .hdr { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #f1f3f5; border-bottom: 1px solid #ced4da; font-size: 13px; }
+		.jvm-diff-panel .hdr .summary { color: #666; font-size: 12px; }
+		.jvm-diff-target { padding: 8px 12px; border-bottom: 1px solid #e9ecef; }
+		.jvm-diff-target:last-child { border-bottom: 0; }
+		.jvm-diff-target .who { font-size: 13px; margin-bottom: 4px; }
+		.jvm-diff-target .who .kind { color: #777; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; margin-left: 4px; }
+		.jvm-diff-lines { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 12px; line-height: 1.5; }
+		.jvm-diff-line { display: flex; white-space: pre-wrap; word-break: break-all; }
+		.jvm-diff-line .marker { flex: 0 0 18px; user-select: none; font-weight: 700; }
+		.jvm-diff-line.add { background: #eef8ee; }
+		.jvm-diff-line.del { background: #fbeeee; text-decoration: line-through; text-decoration-color: #999; }
+		.jvm-diff-line.chg { background: #fff8e5; }
+		.jvm-diff-line.kept { color: #888; }
+		.jvm-diff-target .warn { margin: 6px 0; }
+		.jvm-history table td { vertical-align: top; }
+		.jvm-history pre { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 11px; white-space: pre-wrap; word-break: break-all; background: #fff; border: 1px solid #e2e2e8; padding: 6px 8px; margin: 4px 0 0; max-height: 200px; overflow: auto; }
+
 		/* ---- Dark-glass shell (opt-in via body.vorpal-glass) ----------
 		   "Dark shell, light document": brand.css turns the topbar + page
 		   backdrop dark/purple; the dense work content stays on LIGHT
@@ -287,12 +317,14 @@
 				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="recommendJvm()" title="Set -Xms = -Xmx on the selected profile so the heap is fully committed at startup (no runtime resize pauses), plus Fast SecureRandom (urandom), concurrent System.gc() (ExplicitGCInvokesConcurrent), Exit on OOM, and wlss.maddr.enable.">Deterministic (G1GC)</button>
 				<span class="float-right text-muted mr-2" style="font-size:12px; line-height:31px">Apply template to selected profile:</span>
 				<button class="btn btn-sm btn-outline-secondary float-right mr-3" onclick="loadJvmProfiles()">Refresh</button>
+				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="jvmToggleHistory()" title="Every write this page makes to a ServerStart first records the state it is about to replace. The baseline is what install.sh wrote. Any entry can be written back verbatim.">History &amp; baseline</button>
 			</div>
 			<div class="card-body">
 				<div class="info-box">
-					<strong>Note:</strong> A profile is a complete set of JVM arguments. Assign one to each node, then <strong>Apply</strong> to write it into that node's Server-Start arguments. Restart the engine tier to activate.
-					The <strong>Deterministic (G1GC)</strong> and <strong>Low-Latency (ZGC)</strong> buttons above are templates &mdash; each fills the selected profile with Vorpal's recommended values for that collector. Review the result, then <strong>Save</strong>.
+					<strong>Note:</strong> A profile is a set of JVM arguments. Assign one to each target, <strong>Preview</strong> to see what would change on each, then <strong>Apply</strong>. A profile is overlaid knob by knob: arguments it does not mention stay as they are. Every apply first records the state it replaces (see <strong>History &amp; baseline</strong>). Restart the affected servers to activate.
+					The <strong>Deterministic (G1GC)</strong> and <strong>Low-Latency (ZGC)</strong> buttons above are templates: each fills the selected profile with Vorpal's recommended values for that collector. Review the result, then <strong>Save</strong>.
 				</div>
+				<div id="jvm-history" class="jvm-history" style="display:none"></div>
 				<div id="jvm-container"><span class="text-muted">Loading...</span></div>
 			</div>
 		</div>
@@ -762,7 +794,7 @@
 		// In-memory model: the selected profile's `arguments` string is the single
 		// source of truth — the left-hand controls and the right-hand textarea are
 		// both views of it.
-		var jvm = { profiles: [], assignments: {}, servers: [], sel: -1 };
+		var jvm = { profiles: [], assignments: {}, servers: [], targets: [], adminServer: '', baselineCapturedAt: '', baselineReason: '', orphaned: [], sel: -1, open: {} };
 
 		// ================================================================
 		// About this deployment — BLADE / OCCAS / WebLogic versions,
@@ -845,14 +877,20 @@
 			$.getJSON('api/v1/jvm/profiles', function (d) {
 				jvm.profiles = (d && d.profiles) || [];
 				jvm.assignments = (d && d.assignments) || {};
-				$.getJSON('api/v1/jvm/servers', function (servers) {
-					jvm.servers = servers || [];
+				$.getJSON('api/v1/jvm/targets', function (t) {
+					jvm.targets = (t && t.targets) || [];
+					jvm.servers = jvm.targets.map(function (x) { return x.name; });
+					jvm.adminServer = (t && t.adminServer) || '';
+					jvm.baselineCapturedAt = (t && t.baselineCapturedAt) || '';
+					jvm.baselineReason = (t && t.baselineReason) || '';
+					jvm.orphaned = (t && t.orphanedAssignments) || [];
 					jvm.sel = jvm.profiles.length ? 0 : -1;
 					renderJvmPanel();
-				}).fail(function () {
-					jvm.servers = [];
+				}).fail(function (xhr) {
+					jvm.targets = []; jvm.servers = [];
 					jvm.sel = jvm.profiles.length ? 0 : -1;
 					renderJvmPanel();
+					showStatus('danger', 'Unable to load targets: ' + parseError(xhr));
 				});
 			}).fail(function (xhr) {
 				$('#jvm-container').html('<span class="text-danger">Unable to load profiles. ' + parseError(xhr) + '</span>');
@@ -1212,20 +1250,11 @@
 				h += '<div class="info-box">No profile selected. Click <strong>New</strong> to create one.</div>';
 			}
 
-			h += '<hr><div style="font-weight:600" class="mb-1">Node assignments</div>';
-			h += '<table class="table table-compact table-bordered" style="max-width:520px"><thead class="thead-light"><tr><th>Server</th><th>Profile</th></tr></thead><tbody>';
-			jvm.servers.forEach(function (srv) {
-				h += '<tr><td class="mono">' + he(srv) + '</td><td><select class="form-control form-control-sm jvm-assign" data-server="' + he(srv) + '">';
-				h += '<option value="">(none)</option>';
-				jvm.profiles.forEach(function (p) { h += '<option value="' + he(p.name) + '"' + (jvm.assignments[srv] === p.name ? ' selected' : '') + '>' + he(p.name) + '</option>'; });
-				h += '</select></td></tr>';
-			});
-			if (!jvm.servers.length) h += '<tr><td colspan="2" class="text-muted">No servers found.</td></tr>';
-			h += '</tbody></table>';
-			h += '<button class="btn btn-sm btn-primary" onclick="jvmApply()">Apply to cluster</button>';
-			h += ' <span class="text-muted" style="font-size:12px">Saves, then writes each assigned profile to its node ServerStart.Arguments. Restart the engine tier to activate.</span>';
+			h += '<hr>' + renderJvmTargetsHtml();
+			h += '<div id="jvm-preview"></div>';
 
 			$('#jvm-container').html(h);
+			bindJvmTargets();
 
 			$('#jvm-prof-sel').on('change', function () { jvm.sel = parseInt($(this).val(), 10); renderJvmPanel(); });
 			$('.jvm-assign').on('change', function () {
@@ -1517,24 +1546,242 @@
 			});
 		}
 
-		// Apply implies save, so what you see is what lands on the nodes.
-		function jvmApply() {
-			showStatus('info', 'Saving and applying to assigned nodes...');
-			$.ajax({
+		// ================================================================
+		// Targets: the ServerStart owners (static servers + the engine template)
+		// ================================================================
+		function jvmTarget(name) {
+			for (var i = 0; i < jvm.targets.length; i++) if (jvm.targets[i].name === name) return jvm.targets[i];
+			return null;
+		}
+		function jvmBaselineCell(t) {
+			if (!t.inBaseline) return '<span class="base-none">not in baseline</span>';
+			if (!t.argumentsDiffer && !t.classPathDiffers) return '<span class="base-same">= baseline</span>';
+			var what = [];
+			if (t.argumentsDiffer) what.push('arguments');
+			if (t.classPathDiffers) what.push('classpath');
+			return '<span class="base-diff">&ne; baseline</span> <span class="text-muted" style="font-size:11px">(' + what.join(', ') + ')</span>';
+		}
+		function renderJvmTargetsHtml() {
+			var h = '<div class="d-flex align-items-baseline mb-1" style="gap:8px;flex-wrap:wrap">';
+			h += '<span style="font-weight:600">Targets</span>';
+			h += '<span class="text-muted" style="font-size:12px">The ServerStart owners in config.xml. A dynamic engine has none of its own: it boots from its cluster\'s template.</span>';
+			h += '<span class="ml-auto text-muted" style="font-size:11px">' + (jvm.baselineCapturedAt
+				? 'Baseline pinned ' + he(fmtBuilt(jvm.baselineCapturedAt)) + (jvm.baselineReason ? ' (' + he(jvm.baselineReason) + ')' : '')
+				: 'No baseline pinned yet') + '</span></div>';
+			if (jvm.orphaned.length) {
+				h += '<div class="warning-box"><strong>Ignored assignments:</strong> <span class="mono">' + jvm.orphaned.map(he).join('</span>, <span class="mono">') + '</span> ' + (jvm.orphaned.length === 1 ? 'is' : 'are') + ' not a ServerStart owner (a dynamic engine takes its settings from its cluster\'s template). Assign the profile to the template row instead; these entries are dropped on the next Save.</div>';
+			}
+			h += '<table class="table table-compact table-bordered jvm-targets"><thead class="thead-light"><tr><th>Target</th><th>Kind</th><th>Profile</th><th>Baseline</th><th></th></tr></thead><tbody>';
+			jvm.targets.forEach(function (t) {
+				var id = esc(t.name), open = !!jvm.open[t.name];
+				h += '<tr><td class="mono">' + he(t.name);
+				if (t.kind === 'template' && t.members && t.members.length) h += '<div class="members">&rarr; ' + t.members.map(he).join(', ') + '</div>';
+				if (t.name === jvm.adminServer) h += '<div class="members">admin server</div>';
+				h += '</td><td>' + he(t.kind) + '</td>';
+				h += '<td><select class="form-control form-control-sm jvm-assign" data-server="' + he(t.name) + '"' + (t.hasServerStart ? '' : ' disabled') + '><option value="">(none)</option>';
+				jvm.profiles.forEach(function (p) { h += '<option value="' + he(p.name) + '"' + (jvm.assignments[t.name] === p.name ? ' selected' : '') + '>' + he(p.name) + '</option>'; });
+				h += '</select></td>';
+				h += '<td>' + (t.hasServerStart ? jvmBaselineCell(t) : '<span class="base-none">no ServerStart</span>') + (t.classPathWarning ? '<div style="font-size:11px"><strong>&#9888; classpath</strong></div>' : '') + '</td>';
+				h += '<td style="white-space:nowrap"><button class="btn btn-sm btn-outline-secondary jvm-tgt-toggle" data-target="' + he(t.name) + '" title="Show this target\'s live arguments, JDK and classpath.">' + (open ? 'Hide' : 'Details') + '</button> ';
+				h += '<button class="btn btn-sm btn-outline-secondary" onclick="jvmRestoreTarget(' + JSON.stringify(t.name).replace(/"/g, '&quot;') + ')"' + (t.inBaseline && (t.argumentsDiffer || t.classPathDiffers) ? '' : ' disabled') + ' title="Write this target\'s baseline ClassPath and Arguments back verbatim (no merge). The current state is recorded in History first.">Restore baseline</button></td></tr>';
+				if (open) h += '<tr class="jvm-target-detail"><td colspan="5">' + renderJvmTargetDetail(t, id) + '</td></tr>';
+			});
+			if (!jvm.targets.length) h += '<tr><td colspan="5" class="text-muted">No targets found.</td></tr>';
+			h += '</tbody></table>';
+			h += '<button class="btn btn-sm btn-outline-primary" onclick="jvmPreview()" title="Saves the profiles, then shows what Apply would change on each assigned target. Nothing is written to the domain.">Preview</button> ';
+			h += '<button class="btn btn-sm btn-primary" onclick="jvmApply()" title="Saves the profiles, records the current ServerStart of every target in History, then overlays each assigned profile onto its target.">Apply to targets</button>';
+			h += ' <span class="text-muted" style="font-size:12px">Restart the affected servers to activate.</span>';
+			return h;
+		}
+		function renderJvmTargetDetail(t, id) {
+			var h = '<div class="row"><div class="col-md-6">';
+			h += '<div class="field-group"><label>Arguments (live)</label><pre>' + he(t.arguments || '(empty)') + '</pre></div>';
+			h += '<div class="field-group"><label>JavaHome</label><div class="mono" style="font-size:12px">' + he(t.javaHome || 'default (Node Manager\'s JDK)') + '</div></div>';
+			if (t.javaVendor) h += '<div class="field-group"><label>JavaVendor</label><div class="mono" style="font-size:12px">' + he(t.javaVendor) + '</div></div>';
+			if (t.cluster) h += '<div class="field-group"><label>Cluster</label><div class="mono" style="font-size:12px">' + he(t.cluster) + '</div></div>';
+			if (t.machine) h += '<div class="field-group"><label>Machine</label><div class="mono" style="font-size:12px">' + he(t.machine) + '</div></div>';
+			h += '</div><div class="col-md-6">';
+			h += '<div class="field-group"><label>ClassPath</label>';
+			h += '<textarea id="jvm-cp-' + id + '" class="form-control mono' + (t.classPathDiffers ? ' is-set' : '') + '" rows="6" spellcheck="false">' + he(t.classPath || '') + '</textarea>';
+			h += '<div class="hint">What Node Manager puts on the java line. OCCAS needs weblogic.jar and the SIP jars (weblogic_sip.jar) here, or the server boots with no SIP container.' + (t.classPathDiffers ? ' Differs from the baseline.' : '') + '</div>';
+			if (t.classPathWarning) h += '<div class="warning-box mt-1"><strong>&#9888;</strong> ' + he(t.classPathWarning) + '</div>';
+			h += '<div class="mt-1"><button class="btn btn-sm btn-primary" onclick="jvmSaveClassPath(' + JSON.stringify(t.name).replace(/"/g, '&quot;') + ')">Save classpath</button> ';
+			h += '<button class="btn btn-sm btn-outline-secondary" onclick="jvmResetClassPath(' + JSON.stringify(t.name).replace(/"/g, '&quot;') + ')"' + (t.inBaseline ? '' : ' disabled') + ' title="Put the baseline classpath in the box (not saved until you click Save classpath).">Reset to baseline</button></div>';
+			h += '</div></div></div>';
+			return h;
+		}
+		function bindJvmTargets() {
+			$('.jvm-tgt-toggle').on('click', function () {
+				var n = $(this).data('target');
+				jvm.open[n] = !jvm.open[n];
+				renderJvmPanel();
+			});
+		}
+		function jvmResetClassPath(name) {
+			$.getJSON('api/v1/jvm/baseline', function (b) {
+				var e = b && b.targets && b.targets[name];
+				if (!e) { showStatus('danger', 'No baseline entry for ' + name + '.'); return; }
+				$('#jvm-cp-' + esc(name)).val(e.classPath || '');
+				showStatus('info', 'Baseline classpath loaded into the box. Click Save classpath to write it.');
+			}).fail(function (xhr) { showStatus('danger', 'Could not read the baseline: ' + parseError(xhr)); });
+		}
+		function jvmSaveClassPath(name) {
+			var cp = $('#jvm-cp-' + esc(name)).val();
+			showStatus('info', 'Saving classpath on ' + name + '...');
+			$.ajax({ url: 'api/v1/jvm/targets/' + encodeURIComponent(name), method: 'PUT', contentType: 'application/json', data: JSON.stringify({ classPath: cp }), dataType: 'json' })
+				.done(function (r) {
+					showStatus(r.warning ? 'warning' : 'success', 'Classpath saved on ' + name + '.' + (r.warning ? ' ' + r.warning : ''));
+					notifyRestart('ClassPath changed on ' + name + '. Restart it to activate.');
+					loadJvmProfiles();
+				})
+				.fail(function (xhr) { showStatus('danger', 'Classpath save failed: ' + parseError(xhr)); });
+		}
+		function jvmRestoreTarget(name) {
+			if (!confirm('Write the baseline ClassPath and Arguments back onto ' + name + '?\n\nThis replaces them verbatim (no merge). The current state is recorded in History first.')) return;
+			jvmRestore('baseline', [name]);
+		}
+		function jvmRestore(source, targets) {
+			showStatus('info', 'Restoring...');
+			$.ajax({ url: 'api/v1/jvm/restore', method: 'POST', contentType: 'application/json', data: JSON.stringify({ source: source, targets: targets || [] }), dataType: 'json' })
+				.done(function (r) {
+					var rows = r.restored || [], bad = rows.filter(function (x) { return !x.ok; });
+					var msg = 'Restored ' + (rows.length - bad.length) + ' target(s) from ' + (source === 'baseline' ? 'the baseline' : 'the snapshot of ' + fmtBuilt(r.capturedAt)) + '.';
+					if (bad.length) msg += ' Failed: ' + bad.map(function (x) { return x.target + ' (' + x.error + ')'; }).join(', ');
+					showStatus(bad.length ? 'warning' : 'success', msg);
+					notifyRestart('ServerStart restored. Restart the affected servers to activate.');
+					$('#jvm-preview').empty();
+					loadJvmProfiles();
+					if ($('#jvm-history').is(':visible')) jvmLoadHistory();
+				})
+				.fail(function (xhr) { showStatus('danger', 'Restore failed: ' + parseError(xhr)); });
+		}
+
+		// ---- preview / apply --------------------------------------------------
+		function jvmSaveThen(next) {
+			return $.ajax({
 				url: 'api/v1/jvm/profiles', method: 'PUT', contentType: 'application/json',
 				data: JSON.stringify({ profiles: jvm.profiles, assignments: jvm.assignments }), dataType: 'json'
-			}).done(function () {
+			}).done(next).fail(function (xhr) { showStatus('danger', 'Save step failed: ' + parseError(xhr)); });
+		}
+		// Preview implies save, like Apply, so the diff is of what would actually land.
+		function jvmPreview() {
+			showStatus('info', 'Saving and computing the preview...');
+			jvmSaveThen(function () {
+				$.ajax({ url: 'api/v1/jvm/preview', method: 'POST', dataType: 'json' })
+					.done(function (res) { renderJvmChanges(res, false); showStatus('success', 'Preview ready. Nothing has been written.'); })
+					.fail(function (xhr) { showStatus('danger', 'Preview failed: ' + parseError(xhr)); });
+			});
+		}
+		// Apply implies save, so what you see is what lands on the targets.
+		function jvmApply() {
+			showStatus('info', 'Saving and applying to assigned targets...');
+			jvmSaveThen(function () {
 				$.ajax({ url: 'api/v1/jvm/apply', method: 'POST', dataType: 'json' })
 					.done(function (res) {
-						var applied = res.applied || [];
-						var ok = applied.filter(function (r) { return r.ok; }).length;
-						var bad = applied.filter(function (r) { return !r.ok; });
-						var msg = 'Applied to ' + ok + ' node(s). Restart the engine tier to activate.';
-						if (bad.length) msg += ' Failed: ' + bad.map(function (r) { return r.server + ' (' + r.error + ')'; }).join(', ');
+						var ch = res.changes || [];
+						var bad = ch.filter(function (c) { return !c.ok; });
+						var wrote = ch.filter(function (c) { return c.ok && !c.unchanged; }).length;
+						var msg = wrote ? 'Applied to ' + wrote + ' target(s). Restart the affected servers to activate.' : 'Nothing to write: every assigned target already carries its profile.';
+						if (bad.length) msg += ' Failed: ' + bad.map(function (c) { return c.target + ' (' + c.error + ')'; }).join(', ');
 						showStatus(bad.length ? 'warning' : 'success', msg);
+						if (wrote) notifyRestart('ServerStart.Arguments changed on ' + wrote + ' target(s). Restart them to activate.');
+						renderJvmChanges(res, true);
+						loadJvmProfiles();
 					})
 					.fail(function (xhr) { showStatus('danger', 'Apply failed: ' + parseError(xhr)); });
-			}).fail(function (xhr) { showStatus('danger', 'Apply failed (save step): ' + parseError(xhr)); });
+			});
+		}
+		function jvmDiffLine(cls, marker, text) {
+			return '<div class="jvm-diff-line ' + cls + '"><span class="marker">' + marker + '</span><span class="text">' + text + '</span></div>';
+		}
+		function renderJvmChanges(res, applied) {
+			var ch = (res && res.changes) || [];
+			var h = '<div class="jvm-diff-panel"><div class="hdr"><strong>' + (applied ? 'Applied' : 'Preview') + '</strong>';
+			var n = ch.filter(function (c) { return c.ok && !c.unchanged; }).length;
+			h += '<span class="summary">' + ch.length + ' target(s) assigned, ' + n + ' with changes' + (applied ? ', written to config.xml' : ', nothing written yet') + '</span>';
+			if (!applied && n) h += '<button class="btn btn-sm btn-primary ml-auto" onclick="jvmApply()">Apply these changes</button>';
+			h += '<button class="btn btn-sm btn-outline-secondary' + (applied || !n ? ' ml-auto' : ' ml-2') + '" onclick="$(\'#jvm-preview\').empty()">Close</button></div>';
+			if (!ch.length) h += '<div class="jvm-diff-target text-muted">No profile is assigned to any target.</div>';
+			ch.forEach(function (c) {
+				h += '<div class="jvm-diff-target"><div class="who"><strong class="mono">' + he(c.target) + '</strong><span class="kind">' + he(c.kind) + '</span>';
+				if (c.ok) h += ' &larr; ' + he(c.profile) + (c.unchanged ? ' <span class="text-muted">(already applied, nothing to write)</span>' : '');
+				else h += ' <strong>&#9888; skipped:</strong> ' + he(c.error || 'error');
+				h += '</div>';
+				(c.warnings || []).forEach(function (w) { h += '<div class="warning-box warn"><strong>&#9888;</strong> ' + he(w) + '</div>'; });
+				if (c.ok && !c.unchanged) {
+					h += '<div class="jvm-diff-lines">';
+					(c.removed || []).forEach(function (t) { h += jvmDiffLine('del', '&minus;', he(t)); });
+					(c.changed || []).forEach(function (d) { h += jvmDiffLine('chg', '~', he(d.from) + '  &rarr;  ' + he(d.to)); });
+					(c.added || []).forEach(function (t) { h += jvmDiffLine('add', '+', he(t)); });
+					var kept = c.preserved || [];
+					if (kept.length) {
+						var kid = 'jvm-kept-' + esc(c.target);
+						h += '<div class="jvm-diff-line kept"><span class="marker">=</span><span class="text">' + kept.length + ' argument(s) kept as they were <a href="#" onclick="$(\'#' + kid + '\').toggle();return false">show</a></span></div>';
+						h += '<div id="' + kid + '" style="display:none">' + kept.map(function (t) { return jvmDiffLine('kept', '&nbsp;', he(t)); }).join('') + '</div>';
+					}
+					h += '</div>';
+				}
+				h += '</div>';
+			});
+			h += '</div>';
+			$('#jvm-preview').html(h);
+		}
+
+		// ---- history & baseline ------------------------------------------------
+		function jvmToggleHistory() {
+			var el = $('#jvm-history');
+			if (el.is(':visible')) { el.hide(); return; }
+			el.show();
+			jvmLoadHistory();
+		}
+		function jvmLoadHistory() {
+			var el = $('#jvm-history');
+			el.html('<span class="text-muted">Loading history...</span>');
+			$.getJSON('api/v1/jvm/history', function (rows) {
+				var h = '<div class="d-flex align-items-center mb-1" style="gap:8px"><strong>History &amp; baseline</strong>';
+				h += '<span class="text-muted" style="font-size:12px">Each entry is the state of every target just before a write. Restore writes it back verbatim.</span>';
+				h += '<button class="btn btn-sm btn-outline-secondary ml-auto" onclick="jvmViewSnapshot(\'baseline\')" title="Show the pinned baseline: every target\'s ServerStart as install.sh left it.">View baseline</button> ';
+				h += '<button class="btn btn-sm btn-outline-secondary" onclick="jvmRestoreAll(\'baseline\')" title="Write the baseline ClassPath and Arguments back onto every target, verbatim. The current state is recorded first.">Restore baseline on all</button> ';
+				h += '<button class="btn btn-sm btn-outline-secondary" onclick="jvmRebaseline()" title="Pin the current live ServerStart of every target as the new baseline (the old baseline is kept as a version beside it). Do this after re-running install.sh or after a change you want treated as the new normal.">Re-baseline</button>';
+				h += '<button class="btn btn-sm btn-outline-secondary" onclick="$(\'#jvm-history\').hide()">Close</button></div>';
+				h += '<div id="jvm-snapshot"></div>';
+				rows = rows || [];
+				if (!rows.length) h += '<div class="text-muted" style="font-size:12px">No writes recorded yet.</div>';
+				else {
+					h += '<table class="table table-compact table-bordered"><thead class="thead-light"><tr><th>When</th><th>Reason</th><th>Targets</th><th></th></tr></thead><tbody>';
+					rows.forEach(function (r) {
+						h += '<tr><td class="mono">' + he(fmtBuilt(r.capturedAt)) + '</td><td>' + he(r.reason) + '</td><td class="mono">' + (r.targets || []).map(he).join(', ') + '</td>';
+						h += '<td style="white-space:nowrap"><button class="btn btn-sm btn-outline-secondary" onclick="jvmViewSnapshot(\'' + r.id + '\')">View</button> ';
+						h += '<button class="btn btn-sm btn-outline-secondary" onclick="jvmRestoreAll(\'' + r.id + '\')" title="Write this snapshot\'s ClassPath and Arguments back onto every target it holds.">Restore&hellip;</button></td></tr>';
+					});
+					h += '</tbody></table>';
+				}
+				el.html(h);
+			}).fail(function (xhr) { el.html('<span class="text-danger">Unable to load history: ' + he(parseError(xhr)) + '</span>'); });
+		}
+		function jvmViewSnapshot(id) {
+			$.getJSON(id === 'baseline' ? 'api/v1/jvm/baseline' : 'api/v1/jvm/history/' + id, function (s) {
+				var h = '<div class="info-box"><strong>' + (id === 'baseline' ? 'Baseline' : 'Snapshot') + '</strong> captured ' + he(fmtBuilt(s.capturedAt)) + ' (' + he(s.reason) + ') <a href="#" class="float-right" onclick="$(\'#jvm-snapshot\').empty();return false">close</a>';
+				Object.keys(s.targets || {}).forEach(function (name) {
+					var e = s.targets[name];
+					h += '<div class="mt-2"><strong class="mono">' + he(name) + '</strong> <span class="text-muted" style="font-size:11px">' + he(e.kind) + (e.javaHome ? ' &middot; ' + he(e.javaHome) : '') + '</span>';
+					h += '<div style="font-size:11px;font-weight:600;margin-top:2px">Arguments</div><pre>' + he(e.arguments || '(empty)') + '</pre>';
+					h += '<div style="font-size:11px;font-weight:600;margin-top:2px">ClassPath</div><pre>' + he(e.classPath || '(empty)') + '</pre></div>';
+				});
+				h += '</div>';
+				$('#jvm-snapshot').html(h);
+			}).fail(function (xhr) { showStatus('danger', 'Could not read the snapshot: ' + parseError(xhr)); });
+		}
+		function jvmRestoreAll(id) {
+			var what = id === 'baseline' ? 'the baseline' : 'that snapshot';
+			if (!confirm('Write ' + what + '\'s ClassPath and Arguments back onto every target it holds?\n\nThis replaces them verbatim (no merge). The current state is recorded in History first.')) return;
+			jvmRestore(id, []);
+		}
+		function jvmRebaseline() {
+			if (!confirm('Pin the current live ServerStart of every target as the new baseline?\n\nThe previous baseline is kept as a version beside it.')) return;
+			$.ajax({ url: 'api/v1/jvm/baseline', method: 'POST', dataType: 'json' })
+				.done(function () { showStatus('success', 'Baseline re-pinned from the live domain.'); loadJvmProfiles(); jvmLoadHistory(); })
+				.fail(function (xhr) { showStatus('danger', 'Re-baseline failed: ' + parseError(xhr)); });
 		}
 
 		// ================================================================

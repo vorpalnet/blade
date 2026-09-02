@@ -89,9 +89,9 @@ Each WAR is self-contained exactly as it deploys standalone: framework JAR insid
 in a shared library — a driver implements framework interfaces, and a shared library's classloader
 is the WAR's parent, so it cannot see them. The public WAR here has no driver; the driver's own
 repository builds the deployable `player.war` as a WAR overlay of this one. Deploy that WAR to the
-cluster like any service. The media server it drives is configured in the app's `driverProperties`
-(`kurento.ws.url`: one node's control URL, or a comma-separated fleet the driver places sessions
-across — use names the engines resolve to the media subnet, not public ones).
+cluster like any service. The media server it drives is configured in the app's `driverProperties`,
+whose keys are the driver's own (typically its control URL: one node, or a comma-separated fleet the
+driver places sessions across — use names the engines resolve to the media subnet, not public ones).
 
 ## Quick start
 

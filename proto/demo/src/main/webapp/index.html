@@ -348,7 +348,7 @@
         <div class="chip"><span class="g ready"></span><div class="body"><div class="name">SSO / JWT admin security</div><div class="sub">The whole admin tier behind bearer-token single sign-on.</div></div></div>
         <div class="chip"><span class="g ready"></span><div class="body"><div class="name">Header hygiene &amp; recovery</div><div class="sub">Sanitize/normalize headers in-flight (CRUD); recover headers a cloud trunk scrubbed (Context).</div></div></div>
         <div class="chip"><span class="g ready"></span><div class="body"><div class="name">Engine overload protection</div><div class="sub">Self-protecting 503 drain under load &mdash; resilience built into the core.</div></div></div>
-        <div class="chip"><span class="g roadmap"></span><div class="body"><div class="name">On-net deepfake detection</div><div class="sub">Spot synthetic/spoofed voices on-CPU in the media server &mdash; no audio egress. Gryphon W2: infra ready, model pending.</div><span class="tag roadmap">roadmap &mdash; the in-core answer</span></div></div>
+        <div class="chip"><span class="g roadmap"></span><div class="body"><div class="name">On-net deepfake detection</div><div class="sub">Spot synthetic/spoofed voices on-CPU in the media server &mdash; no audio egress. Infra ready, model pending.</div><span class="tag roadmap">roadmap &mdash; the in-core answer</span></div></div>
       </div></div>
 
       <div class="cell"><div class="chips">
@@ -448,7 +448,7 @@
 
   <div class="guard">
     <ul>
-      <li><span class="badge">Cloud LLM</span><span><strong>Alice's answers use the cloud Claude API.</strong> <span class="why">The two-way agent is live &mdash; on-net ASR and TTS run on CPU and the call audio never egresses &mdash; but the <em>thinking</em> step sends the transcript text to the Claude API in the cloud. A fully on-net LLM (Gryphon W2) is the roadmap. Say it plainly; Alice does.</span></span></li>
+      <li><span class="badge">Cloud LLM</span><span><strong>Alice's answers use the cloud Claude API.</strong> <span class="why">The two-way agent is live &mdash; on-net ASR and TTS run on CPU and the call audio never egresses &mdash; but the <em>thinking</em> step sends the transcript text to the Claude API in the cloud. A fully on-net LLM is the roadmap. Say it plainly; Alice does.</span></span></li>
       <li><span class="badge no">Not built</span><span><strong>Media node-kill recovery.</strong> <span class="why">The media-server <code>reattach</code> handshake is still a TODO &mdash; failover isn't shown on the media plane yet.</span></span></li>
       <li><span class="badge">Prep first</span><span><strong>On-net ASR: use clean audio.</strong> <span class="why">8&nbsp;kHz narrowband degrades ("sales" &rarr; "SAILS"); policy-file aliases mitigate it, but don't tempt it live.</span></span></li>
       <li><span class="badge">Prep first</span><span><strong>Pre-stage the OCCAS install.</strong> <span class="why">The one-time eDelivery media fetch needs a manual Oracle license click &mdash; run <code>download</code> beforehand so the live run is genuinely one hands-off command. The nft keepalive shield is still the live backstop.</span></span></li>

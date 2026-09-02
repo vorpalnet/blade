@@ -59,8 +59,9 @@ var TUNING_REC = {
 };
 
 /*
- * Static findings over the /api/v1/jvm payload (one entry per server:
- * rawArguments, heapInitial, heapMax, javaHome). Returns
+ * Static findings over the /api/v1/jvm payload (one entry per target, a static
+ * server or a server template: rawArguments, heapInitial, heapMax, javaHome,
+ * classPath). Returns
  * [{server, sev, msg, fix}] — rendered by the dashboard's Health Check panel
  * and reprinted verbatim in the report's Findings section. sev is 'critical'
  * only for boot-blockers (the JVM will refuse to start on its next restart);
@@ -77,6 +78,14 @@ function computeJvmFindings(jvmList) {
 		var maj = vm ? parseInt(vm[1]) : 0;
 		function advise(msg, fix) { issues.push({ server: name, sev: 'advisory', msg: msg, fix: fix }); }
 		function critical(msg, fix) { issues.push({ server: name, sev: 'critical', msg: msg, fix: fix }); }
+		// Boot-blocker: in MBean-mode start Node Manager builds the java line
+		// from ServerStart alone, so a classpath without the SIP jars launches
+		// a server with no SIP container (SipServerBean ClassNotFound).
+		if (typeof s.classPath === 'string') {
+			var cp = s.classPath.trim();
+			if (!cp) critical('ServerStart.ClassPath is empty: the server would launch with no SIP jars and no SIP container', 'Restore the baseline classpath from the JVM Profiles targets table.');
+			else if (cp.indexOf('weblogic_sip.jar') < 0) critical('ServerStart.ClassPath has no weblogic_sip.jar: the server would boot with no SIP container', 'Restore the baseline classpath, or add the OCCAS SIP jars (wlserver/sip/server/lib).');
+		}
 		if (s.heapMax && s.heapInitial !== s.heapMax) {
 			advise('Heap not pinned: -Xms (' + (s.heapInitial || 'unset') + ') != -Xmx (' + s.heapMax + ')', 'Set initial = max to avoid heap-resize pauses.');
 		}

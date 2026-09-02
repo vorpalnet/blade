@@ -44,7 +44,9 @@ Schema DDL generation is off by design. Three dialects ship —
 `sql/MSSQL-database-schema.sql` — maintained side by side and kept in step by
 `SchemaAgreementTest`, which also checks each against the entities. That test exists
 because a mismatch between two of them once meant the Oracle write path had never worked
-at all. WLST helpers for provisioning MySQL, Oracle ADB, SQL Server, and the schema live
+at all. `install.sh` creates the data source for you (the "Analytics database" page +
+"Create the analytics data source" row, or headless `./install.sh <env> datasource`);
+WLST helpers for provisioning MySQL, Oracle ADB, SQL Server, and the schema live
 in `notes/`. (`notes/design.md` is historical JPA/JMS working notes from the
 pre-CloudEvents design — read `package-info.java` for the current architecture.)
 

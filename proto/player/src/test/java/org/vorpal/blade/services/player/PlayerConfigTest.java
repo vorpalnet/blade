@@ -21,8 +21,8 @@ public class PlayerConfigTest {
 	@Test
 	public void sampleNamesADriverAndMedia() {
 		PlayerSettings s = new PlayerSettingsSample();
-		assertEquals("org.vorpal.gryphon.kurento", s.getDriverName());
-		assertEquals("ws://localhost:8888/kurento", s.getDriverProperties().get("kurento.ws.url"));
+		assertEquals("the sole registered driver", "", s.getDriverName());
+		assertEquals("ws://localhost:8888/", s.getDriverProperties().get("media.server.url"));
 		assertNotNull("sample plays something", s.getMediaUri());
 		assertFalse(s.isLoop());
 		assertFalse(s.isRecord());
@@ -32,7 +32,7 @@ public class PlayerConfigTest {
 	public void settingsRoundTrip() throws Exception {
 		PlayerSettings s = new PlayerSettings();
 		s.setDriverName("some.driver");
-		s.getDriverProperties().put("kurento.ws.url", "ws://media:8888/kurento");
+		s.getDriverProperties().put("media.server.url", "ws://media:8888/");
 		s.setMediaUri("http://media.example.com/greeting.wav");
 		s.setLoop(true);
 		s.setRecord(true);
@@ -41,7 +41,7 @@ public class PlayerConfigTest {
 		PlayerSettings back = M.readValue(M.writeValueAsString(s), PlayerSettings.class);
 
 		assertEquals("some.driver", back.getDriverName());
-		assertEquals("ws://media:8888/kurento", back.getDriverProperties().get("kurento.ws.url"));
+		assertEquals("ws://media:8888/", back.getDriverProperties().get("media.server.url"));
 		assertEquals("http://media.example.com/greeting.wav", back.getMediaUri());
 		assertTrue(back.isLoop());
 		assertTrue(back.isRecord());

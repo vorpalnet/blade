@@ -14,8 +14,8 @@ package org.vorpal.blade.framework.v3.sdp;
 /// @deprecated Import [org.vorpal.blade.framework.v2.sdp.Sdp] — the one that holds the
 ///             implementation — until the SDP model moves to the baseline. This face
 ///             exists only so a v3 application's imports could stay `v3.*`, a distinction
-///             the framework is collapsing. Nothing imports it in blade, optum, gryphon or
-///             att-tao. It stays so any application that does keeps compiling, and so
+///             the framework is collapsing. Nothing in this repository imports it. It
+///             stays so any application that does keeps compiling, and so
 ///             serialized SDP call-state naming this class still resolves on failover.
 @Deprecated
 public class Sdp extends org.vorpal.blade.framework.v2.sdp.Sdp {

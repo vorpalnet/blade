@@ -14,8 +14,9 @@ import org.vorpal.blade.framework.v2.config.Configuration;
 
 /// Settings for the Tuning admin app. Most per-knob settings live in WLS /
 /// OCCAS MBeans (Tuning reads/writes those directly), but JVM **profiles** and
-/// their per-node assignments are persisted here, in
-/// `config/custom/vorpal/tuning.json`.
+/// their per-target assignments are persisted here, in
+/// `config/custom/vorpal/blade-tuning.json`. The ServerStart baseline and
+/// history live beside it (see [ServerStartSnapshot]).
 @SchemaAbout(
 		name = "Tuning",
 		tagline = "OCCAS Performance Dashboard",
@@ -26,7 +27,7 @@ public class TuningSettings extends Configuration implements Serializable {
 	protected List<JvmProfile> jvmProfiles = new ArrayList<>();
 	protected Map<String, String> jvmProfileAssignments = new LinkedHashMap<>();
 
-	@JsonPropertyDescription("Named, complete sets of JVM Server-Start arguments. Assign one to each node, then Apply to write it into that node's ServerStart.Arguments.")
+	@JsonPropertyDescription("Named sets of JVM Server-Start arguments. Assign one to each target (a static server or a server template), then Apply to overlay it onto that target's ServerStart.Arguments.")
 	public List<JvmProfile> getJvmProfiles() {
 		return jvmProfiles;
 	}
@@ -36,7 +37,7 @@ public class TuningSettings extends Configuration implements Serializable {
 		return this;
 	}
 
-	@JsonPropertyDescription("Maps each server name to the name of the JVM profile it uses.")
+	@JsonPropertyDescription("Maps each target name (a static server such as engine0, or a server template) to the name of the JVM profile it uses.")
 	public Map<String, String> getJvmProfileAssignments() {
 		return jvmProfileAssignments;
 	}

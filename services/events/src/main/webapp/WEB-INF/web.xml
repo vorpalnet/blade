@@ -11,7 +11,7 @@
 	  lived in proto/ and the only producer was a trusted in-network sidecar;
 	  that does not survive the move to services/.
 
-	  BASIC rather than FORM: the callers are machines (the Gumball attendant
+	  BASIC rather than FORM: the callers are machines (an attendant
 	  sidecar), not browsers. services/analytics and services/context already
 	  establish this pattern for service-tier APIs.
 	-->

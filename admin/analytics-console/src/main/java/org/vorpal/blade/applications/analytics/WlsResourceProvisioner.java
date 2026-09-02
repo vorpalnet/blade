@@ -123,6 +123,11 @@ final class WlsResourceProvisioner {
 						"createUniformDistributedTopic", TOPIC, "uniform distributed topic", log);
 				editMbs.setAttribute(topic, new Attribute("JNDIName", WlsResourceAudit.EXPECTED_TOPIC_JNDI));
 				editMbs.setAttribute(topic, new Attribute("SubDeploymentName", SUBDEPLOYMENT));
+				// Partitioned is mandatory here, not a tuning choice: a
+				// cluster-targeted JMS server cannot host a Replicated
+				// Distributed Topic (JMSExceptions:045116), and the refusal
+				// lands at save() — after every other resource was created.
+				editMbs.setAttribute(topic, new Attribute("ForwardingPolicy", "Partitioned"));
 
 				editMbs.invoke(cfgMgr, "save", null, null);
 				editMbs.invoke(cfgMgr, "activate", new Object[]{120000L}, new String[]{"long"});

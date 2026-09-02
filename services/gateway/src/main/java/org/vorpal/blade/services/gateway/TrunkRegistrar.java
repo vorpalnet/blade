@@ -11,6 +11,20 @@ import org.vorpal.blade.framework.v2.callflow.ClientCallflow;
 public abstract class TrunkRegistrar extends ClientCallflow {
 	private static final long serialVersionUID = 1L;
 
+	/// The trunk this registrar keeps registered. Held on the base so the settings
+	/// manager can match a running registrar to a config entry (by name) and compare
+	/// the old settings against the new ones on a config reload.
+	protected final VirtualGateway gateway;
+
+	protected TrunkRegistrar(VirtualGateway gateway) {
+		this.gateway = gateway;
+	}
+
+	/// The trunk this registrar was built from.
+	public VirtualGateway getGateway() {
+		return gateway;
+	}
+
 	/// Begin registration and keep‑alive. `outboundInterface` is the local address the
 	/// gateway's Contact IP resolved to (from the container's SIP outbound interfaces),
 	/// or `null` to use the container default.

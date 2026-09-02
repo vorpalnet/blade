@@ -34,6 +34,10 @@ public class TuningSettingsStartup implements ServletContextListener {
 			settingsManager = new SettingsManager<>(sce, TuningSettings.class, new TuningSettingsSample());
 			logger.info("tuning SettingsManager registered");
 			materializeDomainConfigIfMissing(sce);
+			// Pin what install.sh wrote before anyone can change it. If the DomainRuntime
+			// MBeanServer is not reachable yet (the AdminServer is still booting) the first
+			// read of the JVM card pins it instead.
+			JvmSettings.captureBaselineIfMissing(Paths.get(CONFIG_BASE_PATH));
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "tuning SettingsManager failed to register", e);
 		}

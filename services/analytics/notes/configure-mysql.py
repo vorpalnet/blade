@@ -17,11 +17,13 @@ db_pass = os.environ.get('DB_PASS')   # blade123
 
 connect(wl_user, wl_pass, wl_admin)
 edit()
+startEdit()
 
 
 #---
 cd('/')
-cmo.createJDBCSystemResource('BladeAnalytics')
+if cmo.lookupJDBCSystemResource('BladeAnalytics') is None:
+    cmo.createJDBCSystemResource('BladeAnalytics')
 
 cd('/JDBCSystemResources/BladeAnalytics/JDBCResource/BladeAnalytics')
 cmo.setName('BladeAnalytics')
@@ -41,7 +43,9 @@ cd('/JDBCSystemResources/BladeAnalytics/JDBCResource/BladeAnalytics/JDBCConnecti
 cmo.setTestTableName('SQL SELECT 1\r\n\r\n')
 
 cd('/JDBCSystemResources/BladeAnalytics/JDBCResource/BladeAnalytics/JDBCDriverParams/BladeAnalytics/Properties/BladeAnalytics')
-cmo.createProperty('user')
+# WLS seeds a 'user' property when the resource is created, so create only if absent.
+if cmo.lookupProperty('user') is None:
+    cmo.createProperty('user')
 
 cd('/JDBCSystemResources/BladeAnalytics/JDBCResource/BladeAnalytics/JDBCDriverParams/BladeAnalytics/Properties/BladeAnalytics/Properties/user')
 cmo.setValue(db_user)

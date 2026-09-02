@@ -23,14 +23,14 @@ public class WebrtcConfigTest {
 		// them without repacking the WAR. Losing them in serialization would put the gateway back
 		// to having no media plane, silently.
 		WebrtcSettings s = new WebrtcSettings();
-		s.setDriverName("org.vorpal.gryphon.kurento");
-		s.getDriverProperties().put("kurento.ws.url", "ws://media:8888/kurento");
+		s.setDriverName("com.example.media.driver");
+		s.getDriverProperties().put("media.server.url", "ws://media:8888/");
 		s.getDriverProperties().put("external.ipv4", "203.0.113.10");
 
 		WebrtcSettings back = M.readValue(M.writeValueAsString(s), WebrtcSettings.class);
 
-		assertEquals("org.vorpal.gryphon.kurento", back.getDriverName());
-		assertEquals("ws://media:8888/kurento", back.getDriverProperties().get("kurento.ws.url"));
+		assertEquals("com.example.media.driver", back.getDriverName());
+		assertEquals("ws://media:8888/", back.getDriverProperties().get("media.server.url"));
 		assertEquals("203.0.113.10", back.getDriverProperties().get("external.ipv4"));
 	}
 

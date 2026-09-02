@@ -133,7 +133,7 @@
 		}
 
 		var API = 'api/v1/';
-		var KEYS = ['about', 'os', 'server-tuning', 'jdbc', 'work-managers', 'sip-timers', 'domain-mode', 'jvm', 'jvm/profiles'];
+		var KEYS = ['about', 'os', 'server-tuning', 'jdbc', 'work-managers', 'sip-timers', 'domain-mode', 'jvm', 'jvm/profiles', 'jvm/targets'];
 
 		Promise.allSettled(KEYS.map(function (k) {
 			return fetch(API + k).then(function (r) {
@@ -162,7 +162,7 @@
 			renderEnvironment(d['os'], d['jvm']);
 			renderScorecard(d);
 			renderFindings(d['jvm']);
-			renderProfiles(d['jvm/profiles']);
+			renderProfiles(d['jvm/profiles'], d['jvm/targets']);
 		}
 
 		// ============================================================
@@ -397,18 +397,24 @@
 			el.className = ''; el.innerHTML = h;
 		}
 
-		function renderProfiles(pd) {
+		function renderProfiles(pd, td) {
 			var el = document.getElementById('rpt-profiles');
 			if (!pd || !pd.profiles || !pd.profiles.length) { el.textContent = 'No JVM profiles defined.'; return; }
 			var assignments = pd.assignments || {};
-			var h = '<h3>Node assignments</h3><table style="max-width:420px"><thead><tr><th>Server</th><th>Profile</th></tr></thead><tbody>';
-			var servers = Object.keys(assignments);
-			if (servers.length) {
-				servers.forEach(function (srv) {
-					h += '<tr><td class="mono">' + he(srv) + '</td><td>' + he(assignments[srv]) + '</td></tr>';
+			var targets = (td && td.targets) || [];
+			var h = '<h3>Targets</h3>';
+			if (td && td.baselineCapturedAt) h += '<div class="muted" style="font-size:11px">Baseline pinned ' + he(td.baselineCapturedAt) + ' (' + he(td.baselineReason || '') + ')</div>';
+			h += '<table style="max-width:560px"><thead><tr><th>Target</th><th>Kind</th><th>Profile</th><th>Baseline</th></tr></thead><tbody>';
+			if (targets.length) {
+				targets.forEach(function (t) {
+					var base = !t.inBaseline ? 'not in baseline' : (t.argumentsDiffer || t.classPathDiffers) ? '&ne; baseline' : '= baseline';
+					h += '<tr><td class="mono">' + he(t.name) + (t.members && t.members.length ? ' <span class="muted">&rarr; ' + t.members.map(he).join(', ') + '</span>' : '') + '</td><td>' + he(t.kind) + '</td><td>' + he(assignments[t.name] || '(none)') + '</td><td>' + base + '</td></tr>';
 				});
 			} else {
-				h += '<tr><td colspan="2" class="muted">No profiles assigned to nodes.</td></tr>';
+				Object.keys(assignments).forEach(function (srv) {
+					h += '<tr><td class="mono">' + he(srv) + '</td><td></td><td>' + he(assignments[srv]) + '</td><td></td></tr>';
+				});
+				if (!Object.keys(assignments).length) h += '<tr><td colspan="4" class="muted">No profiles assigned to targets.</td></tr>';
 			}
 			h += '</tbody></table>';
 			pd.profiles.forEach(function (p) {

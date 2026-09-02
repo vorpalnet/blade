@@ -7,11 +7,14 @@
 /// ## REST Endpoints
 ///
 /// ### JVM Settings
-/// [JvmSettings] exposes `/api/v1/jvm` for reading and updating JVM arguments on managed
-/// servers including heap sizes (`-Xms`, `-Xmx`), metaspace limits, garbage collector
-/// selection (G1GC, ZGC, ShenandoahGC, ParallelGC), GC tuning flags, and additional
-/// JVM arguments. Parses `ServerStartMBean.Arguments` into structured JSON and reconstructs
-/// the arguments string on update.
+/// [JvmSettings] exposes `/api/v1/jvm`: named JVM profiles overlaid onto the
+/// `ServerStart.Arguments` of each **target**. A target is a ServerStart owner in config.xml,
+/// a static server or a server template ([ServerStartTargets]); dynamic engines boot from
+/// their template and are never targets. `preview` returns the per-target knob diff and
+/// warnings an apply would produce ([ApplyPlan]); `apply` writes it. Every write first
+/// records the live state to a history file, and the first read pins the install-time state
+/// as the baseline ([ServerStartSnapshot]); `restore` writes either back verbatim, and
+/// `PUT /targets/{name}` edits a target's `ServerStart.ClassPath`.
 ///
 /// ### SIP Timers
 /// [SipTimerSettings] exposes `/api/v1/sip-timers` for reading and updating SIP protocol
@@ -41,6 +44,9 @@
 /// URLs are `/blade/tuning/api/v1/jvm`, `/blade/tuning/api/v1/cluster`, and so on.
 ///
 /// @see JvmSettings
+/// @see ServerStartTargets
+/// @see ServerStartSnapshot
+/// @see ApplyPlan
 /// @see SipTimerSettings
 /// @see WorkManagerSettings
 /// @see ServerTuningSettings

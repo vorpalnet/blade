@@ -77,7 +77,9 @@ DEPLOY_DIR="${PROFILES_DIR}/deploy"
 #   2. weblogic.version from the platform conf build.sh copied into dist/
 #   3. WLS_PLUGIN_VERSION_DEFAULT below           (last-resort fallback + warn)
 WLS_PLUGIN_ARTIFACT="com.oracle.weblogic:weblogic-maven-plugin"
-WLS_PLUGIN_VERSION_DEFAULT="14.1.1"
+# The plugin's real Maven coordinate is <weblogic.version>-0-0 (its jar descriptor
+# carries the -0-0; the stripped 14.1.1 form is rejected by Maven 3.9+).
+WLS_PLUGIN_VERSION_DEFAULT="14.1.1-0-0"
 WLS_PLUGIN=""
 
 # --- Colors (disabled if NO_COLOR set or not a tty) ---
@@ -429,7 +431,9 @@ if [ "$NEEDS_WLS" = true ] && [ "$ENGINE" = maven ]; then
         plat_conf=$(ls -1 "$DIST_DIR"/occas-*.conf 2>/dev/null | head -1)
         if [ -n "$plat_conf" ]; then
             WLS_PLUGIN_VERSION=$(read_prop "$plat_conf" "weblogic.version")
-            [ -n "$WLS_PLUGIN_VERSION" ] && WLS_PLUGIN_VERSION_SOURCE="$(basename "$plat_conf")"
+            # weblogic.version is the bare 14.1.1; the plugin coordinate is -0-0.
+            case "$WLS_PLUGIN_VERSION" in ""|*-*) : ;; *) WLS_PLUGIN_VERSION="${WLS_PLUGIN_VERSION}-0-0" ;; esac
+            [ -n "$WLS_PLUGIN_VERSION" ] && WLS_PLUGIN_VERSION_SOURCE="$(basename "$plat_conf") (+-0-0)"
         fi
     fi
     if [ -z "$WLS_PLUGIN_VERSION" ]; then

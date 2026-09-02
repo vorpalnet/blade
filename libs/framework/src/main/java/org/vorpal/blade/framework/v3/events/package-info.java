@@ -29,7 +29,7 @@
 /// exercisable in a plain JVM — see `EventSourceGeneratorSmokeTest`.
 ///
 /// The deployables that front this are the `services/events` runtime (the
-/// HTTP→JMS ingress that lets a non-Java producer such as the Gumball attendant
+/// HTTP→JMS ingress that lets a non-Java producer such as a voice-attendant sidecar
 /// publish) and the `admin/events-console` designer and JMS administration
 /// console.
 package org.vorpal.blade.framework.v3.events;
