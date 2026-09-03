@@ -22,8 +22,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 /// REST API for the Sample Data Generator — a dev/test tool that writes
-/// synthetic analytics rows (modelled on the `transfer` service) directly into
-/// the analytics schema. See [SampleDataGenerator].
+/// synthetic analytics rows directly into the analytics schema, using the
+/// framework's own call/transfer disposition vocabulary. See
+/// [SampleDataGenerator].
 ///
 /// `POST /sample/generate` with a JSON body of generation parameters; returns
 /// the row counts written. Writes go through the `jdbc/BladeAnalytics` data
@@ -39,7 +40,7 @@ public class SampleDataAPI {
 	@Path("/generate")
 	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON)
-	@Operation(summary = "Generate randomized sample calls (transfers, abandons, attributes) into the analytics DB.")
+	@Operation(summary = "Generate randomized sample calls (answered/abandoned/declined, transfers, optional risk) into the analytics DB.")
 	public Response generate(String body) {
 		SampleDataGenerator.Params params;
 		try {

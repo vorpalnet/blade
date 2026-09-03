@@ -159,8 +159,10 @@ public class AiConfigService {
 	}
 
 	static boolean isCredentialValue(String value) {
-		return value != null
-				&& (value.startsWith("{AES}") || value.startsWith("{3DES}") || value.startsWith("{CLEARTEXT}"));
+		// Any {SCHEME} prefix marks a credential: {CLEARTEXT} awaiting encryption, or an
+		// encrypted form. WebLogic 14.1 emits {AES256}, so match the shape, not a fixed
+		// list, or an {AES256} secret slips past unredacted.
+		return value != null && value.matches("^\\{[A-Za-z0-9]+\\}.*");
 	}
 
 	/// Replaces secret values in `config` with `{REDACTED}`, in place, and

@@ -244,9 +244,12 @@ public class LoadEngine {
 			invite.setHeader(h.getKey(), h.getValue());
 		}
 
-		// References and variables for lifecycle callbacks, rules, and
-		// assertions.
-		appSession.setAttribute(ATTR, this);
+		// Variables for lifecycle callbacks, rules, and assertions. The engine
+		// itself is NOT stored on the session: it is a per-node object held on the
+		// ServletContext (see #from), and a distributable app rejects a
+		// non-serializable session attribute ("Attribute must be serializable for
+		// distributable application: loadEngine"). TesterServlet.engineFor reads it
+		// from the ServletContext instead.
 		appSession.setAttribute(DURATION_ATTR, effectiveDurationSeconds);
 		appSession.setAttribute("index", String.valueOf(index));
 		if (effectiveScenarioName != null) {

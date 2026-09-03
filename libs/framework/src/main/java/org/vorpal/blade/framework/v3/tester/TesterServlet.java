@@ -281,7 +281,10 @@ public abstract class TesterServlet extends B2buaServlet {
 	/// Forwards completion notifications for originated calls to the
 	/// [LoadEngine], same wiring the original test-uac used.
 	private LoadEngine engineFor(SipServletMessage message) {
-		Object attr = message.getApplicationSession().getAttribute(LoadEngine.ATTR);
+		// The engine is a per-node object on the ServletContext, not a session
+		// attribute: a distributable app cannot replicate the non-serializable
+		// LoadEngine, and load generation is node-local anyway.
+		Object attr = getServletContext().getAttribute(LoadEngine.ATTR);
 		return (attr instanceof LoadEngine) ? (LoadEngine) attr : null;
 	}
 

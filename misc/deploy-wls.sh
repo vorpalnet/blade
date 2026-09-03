@@ -148,8 +148,12 @@ try:
         else:
             m = app_map()
             if name in m:
+                # redeploy()'s 2nd positional is planPath (a deployment-plan XML),
+                # NOT the archive. Passing the .war there makes WLST parse the ZIP
+                # as XML: "Malformed UTF-8 char -- is an XML encoding declaration
+                # missing?". The new archive goes in the appPath option instead.
                 print('redeploy ' + m[name] + ' from ${WLS_SOURCE} ...')
-                redeploy(m[name], '${WLS_SOURCE}', upload='true', block='true')
+                redeploy(m[name], upload='true', block='true', appPath='${WLS_SOURCE}')
                 print('REDEPLOYED ' + m[name])
             else:
                 print('deploy ' + name + ' -> ${WLS_TARGETS} ...')

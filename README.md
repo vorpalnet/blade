@@ -9,6 +9,7 @@ aid in the development of real-time, audio-visual streaming applications.
 
 The documentation lives in this repository's READMEs — start with the module tables below.
 To write a service, read the **[Framework Developer's Guide](DEVELOPING.md)**; to deploy one, read **[DEPLOYING.md](DEPLOYING.md)**.
+For how callers authenticate, read **[SECURITY.md](SECURITY.md)**; for how BLADE joins a company's identity system and decides who may hear a call, read **[IAM.md](IAM.md)**.
 The full API reference (Javadocs with UML diagrams) ships in the product itself, at `/blade/javadoc` on the [Admin Portal](admin/portal/README.md).
 The company website can be found here: https://vorpal.net
 

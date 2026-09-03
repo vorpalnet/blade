@@ -48,7 +48,6 @@ public class GatewayReconcileTest {
 	private static VirtualGateway digestTrunk(String name, String password) {
 		VirtualGateway vg = new VirtualGateway();
 		vg.setName(name);
-		vg.setContactHost("203.0.113.10");
 		vg.setRegistrarDomain("sip.example.com");
 		RegisterDigestStyle style = new RegisterDigestStyle();
 		style.setAuthName(name);

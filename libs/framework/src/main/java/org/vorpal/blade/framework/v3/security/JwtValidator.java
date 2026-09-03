@@ -104,7 +104,8 @@ public final class JwtValidator {
 		} catch (Exception e) {
 			throw new JwtAuthException("JWT validation failed: " + e.getMessage(), e);
 		}
-		return new JwtIdentity(resolveUsername(claims), mapRoles(claims), stringClaims(claims));
+		return new JwtIdentity(resolveUsername(claims), mapRoles(claims), stringClaims(claims),
+				new LinkedHashSet<>(extractRoleValues(claims)));
 	}
 
 	/// The token's string-valued claims, handed to [JwtIdentity] so a consumer
@@ -136,6 +137,12 @@ public final class JwtValidator {
 	/// holds. A configured mapping wins; otherwise the raw value is used
 	/// directly (so a token can carry `Admin`/`Operator`/… verbatim). Values
 	/// that resolve to a non-admin name are dropped.
+	///
+	/// Dropped *here* only. The unmapped values are kept on
+	/// [JwtIdentity#groups] because an access rule matches on the customer's own
+	/// group names, and those are exactly what this method discards. Admission
+	/// to the admin tier and access to call content are different questions
+	/// asked of the same claim.
 	private Set<String> mapRoles(JWTClaimsSet claims) {
 		Map<String, String> mappings = config.getRoleMappings();
 		Set<String> roles = new LinkedHashSet<>();

@@ -3,10 +3,11 @@ package org.vorpal.blade.applications.analytics;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,12 +18,12 @@ import javax.naming.NamingException;
 import javax.sql.DataSource;
 
 import org.vorpal.blade.framework.v3.analytics.NaturalKey;
+import org.vorpal.blade.framework.v3.events.BladeEventTypes;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
 /// Generates synthetic analytics data for the BLADE analytics schema
-/// (`applications` / `sessions` / `session_keys` / `events`), modelled on the
-/// `transfer` service.
+/// (`applications` / `sessions` / `session_keys` / `events`).
 ///
 /// **Every key here is computed exactly as the live writer computes it**, via
 /// [NaturalKey]. That is not tidiness: this tool writes over raw JDBC, beside a
@@ -31,18 +32,66 @@ import com.fasterxml.jackson.databind.JsonNode;
 /// recorded rows would, so a query written against generated data behaves the
 /// same against real data — which is the entire point of generating any.
 ///
-/// Every "call" becomes a closed `session` row (so `open_key` is NULL and the
-/// open-session unique guard never trips) carrying the `(cluster_name,
-/// vorpal_id)` correlator, plus a time-ordered stream of events. Calls are
-/// randomized: some are abandoned (ring, no answer), most are answered, and a
-/// configurable fraction transfer one or more times.
+/// **The event names come from the framework's closed set, not from strings
+/// invented here.** A call becomes `callStarted` → `callAnswered` →
+/// `callConnected` → `callCompleted`, or `callAbandoned` (given up while
+/// ringing), or `callDeclined` (a failure response); transfers become
+/// `transferRequested` → `transferInitiated` → `transferCompleted`/
+/// `transferDeclined`. These are the eleven names `InitialInvite`, `Terminate`,
+/// `BlindTransfer` and `ReferTransfer` publish, as recorded in
+/// [BladeEventTypes] / `BladeEventCatalog`, stored verbatim in `events.type`
+/// exactly as the live writer stores `data.eventName`. [#assertFrameworkNames]
+/// guards them against a rename: if one stops resolving to a framework type,
+/// generation fails loudly rather than seeding data the dashboard cannot match.
+///
+/// Each call becomes a closed `session` row (so the open-session guard never
+/// trips) carrying the `(cluster_name, vorpal_id)` correlator, plus a
+/// time-ordered stream of events. Session lifecycle is the `sessions` row's
+/// `created`/`destroyed`, never an `events` row. Call starts are weighted onto
+/// business hours and weekdays, so the heatmap and calls-per-hour show a
+/// call-center shape rather than uniform noise.
 ///
 /// This is a dev/test tool. It writes directly to the DB with explicit
 /// historical timestamps (the live JMS pipeline can't backdate `created`),
-/// through the `jdbc/BladeAnalytics` data source.
+/// through the `jdbc/BladeAnalytics` data source. Sample runs default their
+/// `clusterName` to `sample`, so a run is removable with
+/// `DELETE FROM sessions WHERE cluster_name = 'sample'` (and the matching
+/// `applications`/`events`).
 final class SampleDataGenerator {
 
 	private static final String DATA_SOURCE_JNDI = "jdbc/BladeAnalytics";
+
+	// The framework's closed event set, stored verbatim in events.type. Literals
+	// (there are no camelCase constants — BladeEventTypes exposes the dotted wire
+	// types and forEventName() as the inverse), guarded by assertFrameworkNames().
+	private static final String CALL_STARTED = "callStarted";
+	private static final String CALL_ANSWERED = "callAnswered";
+	private static final String CALL_CONNECTED = "callConnected";
+	private static final String CALL_COMPLETED = "callCompleted";
+	private static final String CALL_ABANDONED = "callAbandoned";
+	private static final String CALL_DECLINED = "callDeclined";
+	private static final String TRANSFER_REQUESTED = "transferRequested";
+	private static final String TRANSFER_INITIATED = "transferInitiated";
+	private static final String TRANSFER_COMPLETED = "transferCompleted";
+	private static final String TRANSFER_DECLINED = "transferDeclined";
+	private static final String TRANSFER_ABANDONED = "transferAbandoned";
+
+	private static final String[] FRAMEWORK_NAMES = {
+			CALL_STARTED, CALL_ANSWERED, CALL_CONNECTED, CALL_COMPLETED, CALL_ABANDONED, CALL_DECLINED,
+			TRANSFER_REQUESTED, TRANSFER_INITIATED, TRANSFER_COMPLETED, TRANSFER_DECLINED, TRANSFER_ABANDONED };
+
+	// Not a framework name — the GryphonRiskTap detector's assessment, which lands
+	// on BladeEventTypes.CALL_EVENT with its name in the payload, like any other
+	// operator-defined event. Emitted only when riskProbability > 0.
+	private static final String CALL_RISK_ASSESSED = "callRiskAssessed";
+
+	/// Per-hour weight (0..23) and per-weekday weight (Mon..Sun): a business-hours
+	/// diurnal shape used to place call starts, so the heatmap looks like a call
+	/// center. Weights are relative; only their ratios matter.
+	private static final double[] HOUR_WEIGHT = {
+			.02, .01, .01, .01, .02, .04, .10, .30, .65, .90, 1.0, .95,
+			.85, .90, .95, .90, .80, .60, .40, .25, .15, .10, .06, .03 };
+	private static final double[] DOW_WEIGHT = { 1.0, 1.0, 1.0, 1.0, .95, .35, .25 };
 
 	private SampleDataGenerator() {
 	}
@@ -52,16 +101,18 @@ final class SampleDataGenerator {
 		long startMs;          // earliest call-start
 		long endMs;            // latest call-start
 		int callCount = 500;
-		String clusterName = "cluster1";
+		String clusterName = "sample";   // distinct by default so a run is easy to delete
 		String appName = "transfer";
 		String appVersion = "2.9.6";
 		String tenant;         // customer code → application.tenant; blank/null = NULL (single-tenant)
 		int servers = 2;       // number of engine instances (application rows)
 
-		double abandonProbability = 0.10;  // ring, never answered
+		double abandonProbability = 0.10;  // ring, caller gives up (callAbandoned)
+		double declineProbability = 0.05;  // failure response (callDeclined)
 		double transferProbability = 0.35; // of answered calls, fraction that transfer ≥1×
 		int maxTransfers = 3;
-		double transferFailProbability = 0.10; // a transfer attempt that fails
+		double transferFailProbability = 0.10; // a transfer attempt that is declined
+		double riskProbability = 0.0;      // of calls, fraction with a callRiskAssessed event (opt-in)
 
 		int minDurationSec = 20;
 		int maxDurationSec = 1800;
@@ -80,13 +131,22 @@ final class SampleDataGenerator {
 		p.servers = Math.max(1, (int) longVal(j, "servers", p.servers));
 
 		p.abandonProbability = dbl(j, "abandonProbability", p.abandonProbability);
+		p.declineProbability = dbl(j, "declineProbability", p.declineProbability);
 		p.transferProbability = dbl(j, "transferProbability", p.transferProbability);
 		p.maxTransfers = Math.max(1, (int) longVal(j, "maxTransfers", p.maxTransfers));
 		p.transferFailProbability = dbl(j, "transferFailProbability", p.transferFailProbability);
+		p.riskProbability = dbl(j, "riskProbability", p.riskProbability);
 		p.minDurationSec = (int) longVal(j, "minDurationSec", p.minDurationSec);
 		p.maxDurationSec = (int) longVal(j, "maxDurationSec", p.maxDurationSec);
 		if (p.maxDurationSec < p.minDurationSec) {
 			p.maxDurationSec = p.minDurationSec;
+		}
+		// abandon + decline share the "not answered" budget; clamp so they never
+		// exceed all calls.
+		if (p.abandonProbability + p.declineProbability > 1.0) {
+			double scale = 1.0 / (p.abandonProbability + p.declineProbability);
+			p.abandonProbability *= scale;
+			p.declineProbability *= scale;
 		}
 
 		long now = nowMs();
@@ -112,6 +172,7 @@ final class SampleDataGenerator {
 		if (p.callCount <= 0) {
 			throw new IllegalArgumentException("callCount must be > 0");
 		}
+		assertFrameworkNames();
 		long t0 = nowMs();
 		Random rnd = new Random();
 
@@ -129,6 +190,18 @@ final class SampleDataGenerator {
 		}
 	}
 
+	/// Fail loudly if a name we emit no longer resolves to a framework CloudEvents
+	/// type — i.e. [BladeEventTypes] was renamed and this generator was not. Better
+	/// a clear error here than silently seeding data the dashboard cannot match.
+	private static void assertFrameworkNames() {
+		for (String name : FRAMEWORK_NAMES) {
+			if (BladeEventTypes.CALL_EVENT.equals(BladeEventTypes.forEventName(name))) {
+				throw new IllegalStateException("Event name '" + name
+						+ "' no longer maps to a framework type. BladeEventTypes changed; update SampleDataGenerator.");
+			}
+		}
+	}
+
 	private static Result run(Connection conn, Params p, Random rnd) throws SQLException {
 		Result r = new Result();
 		// 1) application instances (engine1..engineN)
@@ -137,28 +210,31 @@ final class SampleDataGenerator {
 		for (int i = 0; i < p.servers; i++) {
 			String server = "engine" + (i + 1);
 			String host = server + "." + p.clusterName + ".vorpal.net";
-			// The same key the live writer would compute for this instance. A
-			// random id here would put sample rows somewhere the service could
-			// never reach, so a generated call and a real one would not share
-			// an application even when they describe the same instance.
+			// The same key the live writer would compute for this instance, so a
+			// generated call and a real one describing the same instance share an
+			// application row rather than splitting into two.
 			long id = NaturalKey.idFor(p.appName, p.clusterName, server, new java.util.Date(appCreated));
 			insertApplication(conn, id, p.appName, p.appVersion, host, p.clusterName, server, p.tenant, appCreated);
 			appIds[i] = id;
 		}
 
-		long sessions = 0, events = 0, attributes = 0, sessionKeys = 0;
+		long sessions = 0, events = 0, attributes = 0, sessionKeys = 0, riskEvents = 0;
 		int commitEvery = 200;
 
 		for (int c = 0; c < p.callCount; c++) {
 			long appId = appIds[rnd.nextInt(appIds.length)];
-			long startMs = p.startMs + (long) (rnd.nextDouble() * Math.max(1, (p.endMs - p.startMs)));
+			long startMs = sampleStartMs(rnd, p.startMs, p.endMs);
 			long vorpalId = rnd.nextInt(Integer.MAX_VALUE); // 31-bit, fits the 8-hex space
 
-			boolean abandoned = rnd.nextDouble() < p.abandonProbability;
+			double roll = rnd.nextDouble();
+			boolean abandoned = roll < p.abandonProbability;
+			boolean declined = !abandoned && roll < (p.abandonProbability + p.declineProbability);
+			boolean answered = !abandoned && !declined;
+
 			int ringSec = 1 + rnd.nextInt(8);
-			int durationSec = abandoned
-					? (3 + rnd.nextInt(28))                                   // gave up while ringing
-					: (p.minDurationSec + rnd.nextInt(Math.max(1, p.maxDurationSec - p.minDurationSec + 1)));
+			int durationSec = answered
+					? (p.minDurationSec + rnd.nextInt(Math.max(1, p.maxDurationSec - p.minDurationSec + 1)))
+					: (3 + rnd.nextInt(28));          // gave up / rejected while ringing
 			long endMs = startMs + durationSec * 1000L;
 
 			long sessionId = insertSession(conn, appId, p.clusterName, vorpalId, startMs, endMs);
@@ -171,46 +247,54 @@ final class SampleDataGenerator {
 			insertSessionKey(conn, sessionId, "callee", callee);
 			sessionKeys += 2;
 
-			// build the time-ordered event list
+			// the time-ordered event stream — the framework's dispositions, no
+			// synthetic session lifecycle rows (that is the sessions row above).
 			List<Ev> evs = new ArrayList<>();
-			evs.add(new Ev("sessionStart", startMs));
-			evs.add(new Ev("ringing", startMs + 400));
+			evs.add(new Ev(CALL_STARTED, startMs));
 
 			if (abandoned) {
-				evs.add(new Ev("abandoned", endMs - 200));
+				evs.add(new Ev(CALL_ABANDONED, endMs - 200));
+			} else if (declined) {
+				Ev declinedEv = new Ev(CALL_DECLINED, endMs - 200);
+				declinedEv.attrs.put("status", String.valueOf(new int[] { 486, 480, 503, 603 }[rnd.nextInt(4)]));
+				evs.add(declinedEv);
 			} else {
 				long answeredMs = startMs + ringSec * 1000L;
 				if (answeredMs >= endMs) {
 					answeredMs = startMs + Math.min(1000L, durationSec * 1000L / 2);
 				}
-				Ev answered = new Ev("answered", answeredMs);
-				answered.attrs.put("agent", "agent" + (100 + rnd.nextInt(900)));
-				evs.add(answered);
+				Ev ans = new Ev(CALL_ANSWERED, answeredMs);
+				ans.attrs.put("agent", "agent" + (100 + rnd.nextInt(900)));
+				evs.add(ans);
+				evs.add(new Ev(CALL_CONNECTED, answeredMs + 300));
 
 				int transfers = (rnd.nextDouble() < p.transferProbability) ? (1 + rnd.nextInt(p.maxTransfers)) : 0;
 				long span = Math.max(1, endMs - answeredMs);
 				for (int k = 1; k <= transfers; k++) {
-					// spread transfer cycles across the talk time
 					long base = answeredMs + (long) (span * (k / (double) (transfers + 1)));
 					String target = randomSipUser(rnd);
 					boolean blind = rnd.nextBoolean();
 
-					Ev refer = new Ev("referReceived", base);
+					Ev refer = new Ev(TRANSFER_REQUESTED, base);
 					refer.attrs.put("transferTarget", target);
 					refer.attrs.put("transferType", blind ? "blind" : "attended");
 					evs.add(refer);
 
-					evs.add(new Ev("transferInitiated", base + 300));
+					evs.add(new Ev(TRANSFER_INITIATED, base + 300));
 
 					boolean failed = rnd.nextDouble() < p.transferFailProbability;
-					Ev outcome = new Ev(failed ? "transferFailed" : "transferAnswered", base + 1500);
+					Ev outcome = new Ev(failed ? TRANSFER_DECLINED : TRANSFER_COMPLETED, base + 1500);
 					outcome.attrs.put("transferTarget", target);
 					evs.add(outcome);
 				}
-				evs.add(new Ev("sessionStop", endMs));
+				evs.add(new Ev(CALL_COMPLETED, endMs));
 			}
-			if (abandoned) {
-				evs.add(new Ev("sessionStop", endMs));
+
+			// optional risk assessment (opt-in) — shortly after the call starts
+			if (p.riskProbability > 0 && rnd.nextDouble() < p.riskProbability) {
+				Ev risk = riskEvent(rnd, startMs + 1500);
+				evs.add(risk);
+				riskEvents++;
 			}
 
 			for (Ev ev : evs) {
@@ -228,11 +312,51 @@ final class SampleDataGenerator {
 		r.counts.put("sessions", sessions);
 		r.counts.put("sessionKeys", sessionKeys);
 		r.counts.put("events", events);
-		// Attributes are no longer rows of their own — they are keys inside each
-		// event's JSON payload. Still counted, because "how much did this
-		// generate" is the question this number answers.
+		r.counts.put("riskEvents", riskEvents);
+		// Attributes are keys inside each event's JSON payload, not rows of their
+		// own; still counted, because "how much did this generate" is the question
+		// this number answers.
 		r.counts.put("attributes", attributes);
 		return r;
+	}
+
+	/// A `callRiskAssessed` event with a plausible band/score, so the fraud panel
+	/// has something to render. Bands are weighted toward CLEAR, as real traffic is.
+	private static Ev riskEvent(Random rnd, long when) {
+		double u = rnd.nextDouble();
+		String band;
+		double score;
+		if (u < 0.80) {
+			band = "CLEAR";
+			score = rnd.nextDouble() * 0.35;
+		} else if (u < 0.95) {
+			band = "WATCH";
+			score = 0.35 + rnd.nextDouble() * 0.45;
+		} else {
+			band = "SUSPECT";
+			score = 0.80 + rnd.nextDouble() * 0.20;
+		}
+		Ev risk = new Ev(CALL_RISK_ASSESSED, when);
+		risk.attrs.put("riskBand", band);
+		risk.attrs.put("riskScore", String.format(java.util.Locale.ROOT, "%.3f", score));
+		return risk;
+	}
+
+	/// A call-start time weighted onto business hours and weekdays by rejection
+	/// sampling against [#HOUR_WEIGHT] × [#DOW_WEIGHT]; falls back to a uniform
+	/// pick if the window is so short nothing is accepted in a bounded number of
+	/// tries.
+	private static long sampleStartMs(Random rnd, long startMs, long endMs) {
+		long span = Math.max(1, endMs - startMs);
+		for (int tries = 0; tries < 64; tries++) {
+			long t = startMs + (long) (rnd.nextDouble() * span);
+			ZonedDateTime z = Instant.ofEpochMilli(t).atZone(ZoneOffset.UTC);
+			double w = HOUR_WEIGHT[z.getHour()] * DOW_WEIGHT[z.getDayOfWeek().getValue() - 1];
+			if (rnd.nextDouble() <= w) {
+				return t;
+			}
+		}
+		return startMs + (long) (rnd.nextDouble() * span);
 	}
 
 	// ─── a pending event + its attributes ──────────────────────────────────
@@ -355,10 +479,6 @@ final class SampleDataGenerator {
 		return text.replace("\\", "\\\\").replace("\"", "\\\"");
 	}
 
-
-	/// SELECT-first, INSERT-on-miss for the normalized lookup tables
-
-
 	private static void safeRollback(Connection conn) {
 		try {
 			conn.rollback();
@@ -372,7 +492,6 @@ final class SampleDataGenerator {
 		long n = 2_000_000_000L + (long) (rnd.nextDouble() * 7_999_999_999L); // 10-digit
 		return "sip:+1" + n + "@pstn.example.net";
 	}
-
 
 	// ─── JSON field readers ──────────────────────────────────────────────────
 	private static String text(JsonNode j, String f, String dflt) {

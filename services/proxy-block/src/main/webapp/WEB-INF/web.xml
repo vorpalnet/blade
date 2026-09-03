@@ -1,31 +1,40 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://xmlns.jcp.org/xml/ns/javaee" xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_3_1.xsd" id="WebApp_ID" version="3.1">
-  <display-name>block</display-name>
-	<security-constraint>
-		<web-resource-collection>
-			<web-resource-name>REST Security</web-resource-name>
-			<url-pattern>/resources/api/*</url-pattern>
-			<url-pattern>/api/*</url-pattern>
-			<url-pattern>/v1/*</url-pattern>
-			<http-method>GET</http-method>
-			<http-method>HEAD</http-method>
-			<http-method>POST</http-method>
-			<http-method>PUT</http-method>
-			<http-method>DELETE</http-method>
-			<http-method>OPTIONS</http-method>
-		</web-resource-collection>
-	</security-constraint>
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_3_1.xsd"
+	id="WebApp_ID" version="3.1">
+	<display-name>block</display-name>
 
+	<!--
+	  The pattern here must match RestApplication's @ApplicationPath. It did
+	  not: the app had no Application subclass, so LoadConfig answered under the
+	  container's default /resources base while this file constrained
+	  /resources/api/*, /api/* and /v1/*, and the first constraint carried no
+	  <auth-constraint> at all, which declares a path public.
+
+	  No <http-method>: the constraint applies to every verb, so a method nobody
+	  thought of is covered by this rule rather than by nothing.
+	-->
 	<security-constraint>
 		<web-resource-collection>
-			<web-resource-name>API</web-resource-name>
-			<url-pattern>/resources/api/*</url-pattern>
-			<http-method>GET</http-method>
-			<http-method>POST</http-method>
+			<web-resource-name>Proxy-Block API</web-resource-name>
+			<url-pattern>/api/*</url-pattern>
 		</web-resource-collection>
 		<auth-constraint>
 			<role-name>authenticated-users</role-name>
 		</auth-constraint>
+	</security-constraint>
+
+	<!--
+	  The container's default JAX-RS base, denied to everyone. An empty
+	  <auth-constraint> grants no role, so a resource that ever loses its
+	  @ApplicationPath again answers 403 instead of answering the world.
+	-->
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>Default JAX-RS base - not the API</web-resource-name>
+			<url-pattern>/resources/*</url-pattern>
+		</web-resource-collection>
+		<auth-constraint/>
 	</security-constraint>
 
 	<login-config>

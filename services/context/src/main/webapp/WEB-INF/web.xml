@@ -5,31 +5,70 @@
 	id="WebApp_ID" version="3.1">
 	<display-name>context</display-name>
 
+	<!--
+	  The patterns here must match RestApplication's @ApplicationPath. They did
+	  not: the app had no Application subclass, so the container served
+	  ContextRestAPI under its own default base and the API answered at
+	  /context/resources/v1/{key} while this file constrained
+	  /resources/api/*, /api/* and /v1/*. Nothing matched, and the first
+	  constraint carried no <auth-constraint>, which declares a path public. The
+	  whole API — including the three methods that rewrite a live call — was
+	  unauthenticated.
+	-->
+
+	<!--
+	  Every method, and the floor. A constraint with no <http-method> applies to
+	  all of them, so a verb nobody thought of is covered by the stricter rule
+	  rather than by nothing.
+
+	  Rewriting the headers of a call that is in progress is not the same act as
+	  reading them, so the two do not share a role. services/events draws the
+	  same line between publishing to the bus and reading everyone else's
+	  traffic.
+	-->
 	<security-constraint>
 		<web-resource-collection>
-			<web-resource-name>REST Security</web-resource-name>
-			<url-pattern>/resources/api/*</url-pattern>
+			<web-resource-name>Context API</web-resource-name>
 			<url-pattern>/api/*</url-pattern>
-			<url-pattern>/v1/*</url-pattern>
-			<http-method>GET</http-method>
-			<http-method>HEAD</http-method>
-			<http-method>POST</http-method>
-			<http-method>PUT</http-method>
-			<http-method>DELETE</http-method>
-			<http-method>OPTIONS</http-method>
 		</web-resource-collection>
+		<auth-constraint>
+			<role-name>Admin</role-name>
+			<role-name>Operator</role-name>
+		</auth-constraint>
 	</security-constraint>
 
+	<!--
+	  Reads widen to any authenticated caller. Where two constraints cover the
+	  same method the container takes the union of their roles, so this adds
+	  authenticated-users to GET and HEAD and leaves the writes above alone.
+	  Note what a read still returns: the raw inbound header map, which carries
+	  From, To and P-Asserted-Identity. That is caller identity, and
+	  authenticated-users means any user in the realm.
+	-->
 	<security-constraint>
 		<web-resource-collection>
-			<web-resource-name>API</web-resource-name>
-			<url-pattern>/resources/api/*</url-pattern>
+			<web-resource-name>Context API - reads</web-resource-name>
+			<url-pattern>/api/*</url-pattern>
 			<http-method>GET</http-method>
-			<http-method>POST</http-method>
+			<http-method>HEAD</http-method>
 		</web-resource-collection>
 		<auth-constraint>
 			<role-name>authenticated-users</role-name>
 		</auth-constraint>
+	</security-constraint>
+
+	<!--
+	  The container's default JAX-RS base, denied to everyone. An empty
+	  <auth-constraint> grants no role, so a resource that ever loses its
+	  @ApplicationPath again answers 403 instead of answering the world. This is
+	  the guard, not the API.
+	-->
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>Default JAX-RS base - not the API</web-resource-name>
+			<url-pattern>/resources/*</url-pattern>
+		</web-resource-collection>
+		<auth-constraint/>
 	</security-constraint>
 
 	<login-config>
@@ -38,6 +77,12 @@
 	</login-config>
 	<security-role>
 		<role-name>authenticated-users</role-name>
+	</security-role>
+	<security-role>
+		<role-name>Admin</role-name>
+	</security-role>
+	<security-role>
+		<role-name>Operator</role-name>
 	</security-role>
 
 </web-app>

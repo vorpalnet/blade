@@ -5,6 +5,10 @@ a thing that is otherwise scattered across descriptors, WebLogic realm config,
 and OCCAS domain config — written down so the next round of work starts from a
 shared picture.
 
+For what a caller is allowed to do *after* they authenticate — the permission
+model for call content, the access policy, and the audit trail — see
+**[IAM.md](IAM.md)**. This document is the mechanism; that one is the model.
+
 > Status: v3.0 work in progress. The admin-tier hardening and the inbound-JWT
 > path described here are implemented. The configurable SIP trust model is
 > documented design plus the trusted-core behavior that already exists; the
@@ -294,13 +298,20 @@ issuer. `JwtValidator` does not change, because nothing in the consumer's
 configuration says the issuer was BLADE. That symmetry is the reason the issuer
 publishes a JWKS at all rather than sharing a secret.
 
-> **Not built:** the OIDC redirect dance (authorization code + PKCE) in the
-> browser. Same position as §2 — terminate it at a reverse proxy, or point these
-> settings at the IdP directly. WebLogic cannot stand in as the issuer: its
-> Embedded LDAP is an identity *store*, and every OAuth artifact Oracle ships in
-> OCCAS 8.1 is client-side (`oauth2-client`, `oauth1-client`, the IDCS
-> integrator asserter). There is no authorization endpoint, no token endpoint and
-> no JWKS anywhere in the install.
+> **Not built in BLADE, and on 8.3 it does not need to be.** WebLogic still
+> cannot stand in as the *issuer*: its Embedded LDAP is an identity store, and
+> there is no authorization endpoint, no token endpoint and no JWKS anywhere in
+> the install. But it can be the *client*. **OCCAS 8.3 (WLS 14.1.2) ships an
+> OpenID Connect identity assertion provider** —
+> `wlserver/server/lib/mbeantypes/oidc-identity-asserter.jar`, absent from OCCAS
+> 8.1 — which runs the authorization-code + PKCE redirect itself, discovers the
+> IdP's endpoints from the issuer URL, reads a `groups` claim into realm
+> principals, and allows virtual users so nobody is provisioned twice. So on 8.3
+> the browser SSO dance is domain configuration, not a reverse proxy and not
+> BLADE code. See **[IAM.md](IAM.md)** §2 for the configuration and for the one
+> item still to confirm against Oracle's 14.1.2 security documentation. On 8.1
+> the position above stands: terminate it at a reverse proxy, or point these
+> settings at the IdP directly.
 
 ---
 
@@ -486,6 +497,38 @@ Locally verifiable (CI / build box):
 - **Anti-regression grep** — every admin WAR except `watcher`/`redirect`/
   `javadoc` contains an `<auth-constraint>`. That half passes.
 
+- **Constraint/path alignment** — `misc/check-rest-constraints.py`, and the more
+  useful of the two checks. The grep above proves a descriptor *mentions*
+  authentication. It cannot prove the pattern matches a path anything is served
+  on, and that gap is not hypothetical: `services/context` passed the grep while
+  serving its entire API unauthenticated — including the three methods that
+  rewrite a live call — because the app declared no `@ApplicationPath`, so the
+  container served it under `/resources` while the descriptor named `/api/*`.
+  The same descriptor had been copied into five other service-tier apps.
+
+  The check compares where JAX-RS actually answers (`@ApplicationPath`, or the
+  container's default `/resources` when an app declares none) against the
+  `<url-pattern>`s of the constraints that actually require a role. A
+  `<security-constraint>` with no `<auth-constraint>` declares a path *public*
+  and is not counted as protection — treating it as protection was the original
+  mistake.
+
+  **Three apps fail it today, and it is a work list, not a gate:**
+
+  | App | Why |
+  |---|---|
+  | `services/transfer` | Same copied descriptor; deferred deliberately, to be fixed with the rest of that app |
+  | `services/tpcc` | Its one constraint carries no `<auth-constraint>`, so third-party call control is declared public. Unreviewed. |
+  | `test/test-uac` | Its entire security block is commented out. Test tier, but the app can originate calls. Unreviewed. |
+
+  Fixed and passing: `services/context`, `services/proxy-block` (both now
+  declare an `@ApplicationPath` and constrain it), and `services/crud`,
+  `services/analytics`, `services/hold`, whose copied constraints guarded
+  nothing because those apps have no REST API at all. All five also now carry a
+  deny-all guard over `/resources/*` — an empty `<auth-constraint>` grants no
+  role — so a resource that ever loses its `@ApplicationPath` answers 403
+  instead of answering the world.
+
   The transport-guarantee and `cookie-secure` half is an **intent, not a
   statement of the tree**: as of 2026-08-06 no WAR in any tree carries either,
   so all 44 lines report MISSING. Closing it means editing every descriptor in
@@ -552,12 +595,14 @@ Deploy-only (Jeff, in an OCCAS domain — "after you deploy, look for…"):
    hardening (were they ever reachable unauthenticated in production?).
 2. **TODO** Corporate IdP details for JWT (issuer, JWKS, audience, roles claim,
    group→role map); wire the planned cloud OCCAS+BLADE test instance as the IdP.
-3. **Refinement** Distribute one `blade-security` JWT config to every admin WAR
-   (JMX or shared store) so JWT can guard the whole tier, not just `security`.
-   §2a now has a second consumer of `JwtAuthConfig` living in its own app's
-   settings, which makes the case for one distributed config stronger, not
-   weaker — `webrtc.json` and `blade-phone.json` currently have to agree by
-   hand on issuer and audience, and nothing checks that they do.
+3. **Closed on 8.3, still open on 8.1** Distribute one `blade-security` JWT
+   config to every admin WAR so JWT can guard the whole tier, not just
+   `security`. On OCCAS 8.3 there is nothing to distribute: the container's
+   OIDC provider is realm-level and guards the whole tier from one place, which
+   is why the target moved there. On 8.1 the item stands as written. The
+   §2a first-party pair is unaffected either way — `webrtc.json` and
+   `blade-phone.json` still have to agree by hand on issuer and audience, and
+   nothing checks that they do.
 4. **TODO** Exact OCCAS 8.1 JDBC digest provider class + install steps, for the
    edge/digest SIP mode.
 5. **Design** Ship the digest `sip.xml` variant (and decide whether it lives in

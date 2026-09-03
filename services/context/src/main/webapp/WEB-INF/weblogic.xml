@@ -18,4 +18,16 @@
 		<wls:principal-name>users</wls:principal-name>
 	</wls:security-role-assignment>
 
+	<!-- The write roles map to realm groups of the same name, as every admin app
+	     does. Without these the role names match nothing and the constraint
+	     rejects everyone, which fails safe but reads like a broken deploy. -->
+	<wls:security-role-assignment>
+		<wls:role-name>Admin</wls:role-name>
+		<wls:externally-defined/>
+	</wls:security-role-assignment>
+	<wls:security-role-assignment>
+		<wls:role-name>Operator</wls:role-name>
+		<wls:externally-defined/>
+	</wls:security-role-assignment>
+
 </wls:weblogic-web-app>

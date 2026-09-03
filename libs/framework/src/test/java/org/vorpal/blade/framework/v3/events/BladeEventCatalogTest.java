@@ -43,9 +43,19 @@ class BladeEventCatalogTest {
 		}
 	}
 
+	/// Every type the catalog declares, from both of its lists.
+	///
+	/// The catalog has two on purpose: [BladeEventCatalog#analyticsTypes] is what
+	/// the analytics database is built from, and [BladeEventCatalog#accessTypes]
+	/// is the access-audit pair, which must stay off that subscription because it
+	/// answers to a different reader under a different retention. The drift guard
+	/// below is about *declaration*, not about routing, so it looks at both.
 	private static Set<String> declaredTypes() {
 		Set<String> declared = new HashSet<>();
 		for (EventType type : BladeEventCatalog.analyticsTypes()) {
+			declared.add(type.getType());
+		}
+		for (EventType type : BladeEventCatalog.accessTypes()) {
 			declared.add(type.getType());
 		}
 		return declared;
@@ -81,7 +91,7 @@ class BladeEventCatalogTest {
 
 		assertEquals(constants, declared.size(),
 				"BladeEventCatalog declares a type that BladeEventTypes does not name");
-		assertEquals(17, constants, "a type was added or removed without updating the taxonomy");
+		assertEquals(19, constants, "a type was added or removed without updating the taxonomy");
 	}
 
 	/// Every framework event name resolves to a type the catalog declares.

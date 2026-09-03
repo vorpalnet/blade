@@ -26,9 +26,23 @@
 	<main>
 		<p class="eyebrow">Live operations</p>
 		<h1>OCCAS &amp; BLADE at a glance</h1>
-		<p class="lede">Call analytics drawn from the analytics reporting views. Cluster health from the
-		runtime MBeans (node state, sessions, CPS, heap, pools) is the next panel to land.</p>
+		<p class="lede">Cluster health from the runtime MBeans and call analytics from the reporting
+		views, in one pane. The health row reads the live cluster every 5s; the analytics refresh every 30s.</p>
 
+		<p class="eyebrow">Cluster health</p>
+		<section class="tiles">
+			<div class="tile accent"><div class="tile__l">Nodes running</div><div class="tile__v" id="t-nodes">—</div></div>
+			<div class="tile"><div class="tile__l">SIP sessions</div><div class="tile__v" id="t-sip-sessions">—</div></div>
+			<div class="tile"><div class="tile__l">App sessions</div><div class="tile__v" id="t-app-sessions">—</div></div>
+			<div class="tile"><div class="tile__l">SIP throughput</div><div class="tile__v" id="t-throughput">—</div></div>
+		</section>
+		<div class="health-controls">
+			<span class="health-controls__l">Trend · last hour</span>
+			<div class="seg" id="metric-toggle"></div>
+		</div>
+		<div id="cluster-groups"></div>
+
+		<p class="eyebrow" style="margin-top:22px">Call analytics</p>
 		<section class="tiles">
 			<div class="tile accent"><div class="tile__l">Calls today</div><div class="tile__v" id="t-callsToday">—</div></div>
 			<div class="tile"><div class="tile__l">Live calls</div><div class="tile__v" id="t-activeCalls">—</div></div>
@@ -36,10 +50,43 @@
 			<div class="tile"><div class="tile__l">Apps (7d)</div><div class="tile__v" id="t-apps">—</div></div>
 		</section>
 
+		<p class="eyebrow" style="margin-top:6px">Traffic</p>
 		<section class="grid">
 			<div class="card card--wide">
 				<div class="card__head"><span class="card__title">Calls per day</span><span class="card__sub">last 30 days</span></div>
 				<div class="card__body" id="chart-calls-per-day"></div>
+			</div>
+			<div class="card">
+				<div class="card__head"><span class="card__title">Calls per hour</span><span class="card__sub">last 48h</span></div>
+				<div class="card__body" id="chart-calls-per-hour"></div>
+			</div>
+			<div class="card">
+				<div class="card__head"><span class="card__title">Peak concurrent calls</span><span class="card__sub">per hour &middot; last 48h</span></div>
+				<div class="card__body" id="chart-concurrent"></div>
+			</div>
+			<div class="card card--wide">
+				<div class="card__head"><span class="card__title">When calls happen</span><span class="card__sub">hour &times; day &middot; last 30 days</span></div>
+				<div class="card__body" id="chart-heatmap"></div>
+			</div>
+		</section>
+
+		<p class="eyebrow" style="margin-top:22px">Outcomes</p>
+		<section class="grid">
+			<div class="card card--wide">
+				<div class="card__head"><span class="card__title">Answer-seizure &amp; abandonment</span><span class="card__sub">% of started &middot; last 30 days</span></div>
+				<div class="card__body" id="chart-asr-abandon"></div>
+			</div>
+			<div class="card">
+				<div class="card__head"><span class="card__title">Call funnel</span><span class="card__sub">last 30 days</span></div>
+				<div class="card__body" id="chart-funnel"></div>
+			</div>
+		</section>
+
+		<p class="eyebrow" style="margin-top:22px">Call experience</p>
+		<section class="grid">
+			<div class="card">
+				<div class="card__head"><span class="card__title">Duration distribution</span><span class="card__sub">last 30 days</span></div>
+				<div class="card__body" id="chart-duration-hist"></div>
 			</div>
 			<div class="card">
 				<div class="card__head"><span class="card__title">Calls by application</span><span class="card__sub">last 7 days</span></div>
@@ -48,6 +95,18 @@
 			<div class="card">
 				<div class="card__head"><span class="card__title">Avg call duration</span><span class="card__sub">seconds &middot; last 30 days</span></div>
 				<div class="card__body" id="chart-avg-duration"></div>
+			</div>
+			<div class="card">
+				<div class="card__head"><span class="card__title">Calls by tenant</span><span class="card__sub">last 30 days</span></div>
+				<div class="card__body" id="chart-calls-by-tenant"></div>
+			</div>
+		</section>
+
+		<p class="eyebrow" style="margin-top:22px">What's flowing</p>
+		<section class="grid">
+			<div class="card card--wide">
+				<div class="card__head"><span class="card__title">Event types recorded</span><span class="card__sub">v_events &middot; last 30 days</span></div>
+				<div class="card__body" id="chart-event-types"></div>
 			</div>
 		</section>
 

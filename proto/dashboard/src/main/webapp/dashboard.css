@@ -97,6 +97,54 @@ h1 { font-size: clamp(26px, 3.4vw, 40px); line-height: 1.08; letter-spacing: -.0
 .tile__v em { font-style: normal; font-size: .42em; font-weight: 700; color: var(--ink-2); letter-spacing: 0; margin-left: 2px; }
 .tile.accent .tile__v { color: var(--accent); }
 
+/* ---- live cluster health (node cards) -------------------------------- */
+.cluster-nodes { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.node { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow); }
+.node__top { display: flex; align-items: center; gap: 11px; margin-bottom: 13px; }
+.node__name { font-weight: 700; font-size: 15px; letter-spacing: -.01em; }
+.node__state {
+	display: inline-flex; align-items: center; gap: 7px;
+	font-size: 10.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+	padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line-2);
+}
+.node__state i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+.state-running  { color: var(--ok); }
+.state-starting { color: var(--warn); }
+.state-draining { color: var(--warn); }
+.state-down     { color: #e79ab0; }
+.node__metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 16px; }
+.nm { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 12.5px; border-bottom: 1px solid var(--line); padding-bottom: 7px; }
+.nm__l { color: var(--ink-3); }
+.nm b { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+.heap { grid-column: 1 / -1; }
+.heap__l { font-size: 12.5px; color: var(--ink-2); margin-bottom: 5px; }
+.heap__l b { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+.heap__l span { color: var(--ink-3); }
+.heap__l em { font-style: normal; color: var(--warn); font-weight: 700; }
+.heap__bar { height: 8px; border-radius: 4px; background: rgba(255,255,255,.08); overflow: hidden; }
+.heap__fill { height: 100%; background: linear-gradient(90deg, #7b3690, #b97cd0); border-radius: 4px; transition: width .4s ease; }
+.heap.hot .heap__fill { background: linear-gradient(90deg, #b06a2e, #dcb877); }
+.node__jdbc { margin-top: 12px; font-size: 11.5px; color: var(--ink-3); font-family: var(--mono); }
+
+/* cluster grouping + the last-hour trend controls */
+.health-controls { display: flex; align-items: center; gap: 14px; margin: 2px 0 18px; }
+.health-controls__l { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); font-weight: 700; }
+.seg { display: inline-flex; gap: 2px; padding: 3px; background: var(--panel); border: 1px solid var(--line); border-radius: 11px; }
+.seg button {
+	font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink-2);
+	background: transparent; border: 0; padding: 6px 13px; border-radius: 8px; cursor: pointer;
+}
+.seg button:hover { color: var(--ink); }
+.seg button.on { background: var(--accent-3); color: #fff; }
+
+.cluster-group { margin-bottom: 28px; }
+.cluster-group__head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+.cluster-group__name { font-size: 16px; font-weight: 700; letter-spacing: -.01em; }
+.cluster-group__meta { font-size: 12px; color: var(--ink-3); font-family: var(--mono); }
+.cluster-chart { min-height: 200px; margin-bottom: 16px; }
+.cluster-chart .card__body { min-height: 150px; }
+.cluster-group .cluster-nodes { margin-bottom: 0; }
+
 /* ---- chart cards ----------------------------------------------------- */
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; }
 .card {

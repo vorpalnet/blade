@@ -78,7 +78,7 @@ public class AuditAPI {
 	@Path("/provision/jms")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(summary = "Create the JMS resources (file store, JMS server, module, "
-			+ "connection factory, uniform distributed queue) the analytics pipeline needs. "
+			+ "connection factory, uniform distributed topic) the analytics pipeline needs. "
 			+ "Idempotent — existing resources are left alone. Requires Admin/Deployer.")
 	public Response provisionJms() {
 		try {

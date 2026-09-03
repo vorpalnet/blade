@@ -17,28 +17,23 @@ import javax.servlet.sip.annotation.SipServlet;
 
 import org.vorpal.blade.framework.v3.B2buaServlet;
 
-/// The gateway SIP servlet — **the app that terminates a SIP trunk, in both directions**.
-/// Three jobs:
+/// The gateway SIP servlet: **the outbound face of a SIP trunk**. Two jobs:
 ///
-///  1. **Registration**: at startup, register each {@link VirtualGateway} (per its
-///     {@link RegistrationStyle}) bound to its own Contact IP; de‑register at shutdown.
-///  2. **Outbound** (BLADE → carrier): FSMAR routes an outbound INVITE here, naming the trunk in
-///     the Route URI (`;vgw=<name>`). As a {@link B2buaServlet} it bridges the call and
-///     {@link #callStarted} rewrites the outbound dialog onto that virtual gateway — Request‑URI to
-///     the carrier, From to the trunk identity, source bound to the gateway's Contact IP
-///     (`setOutboundInterface`).
-///  3. **Inbound** (carrier → BLADE): the call arrives on a trunk's own Contact IP, so the
-///     **arrival interface identifies the trunk** ({@link VirtualGateway#matchesInterface}) with
-///     no `;vgw=` present. The source is checked against the trunk's
-///     {@link VirtualGateway#getSourceHosts()} and the bridge carries the call onward; FSMAR runs
-///     again on the B2BUA's second dialog (`previousApp = gateway`) and routes it to the app that
-///     answers.
+///  1. **Registration**: at startup, register each {@link VirtualGateway} per its
+///     {@link RegistrationStyle}; de-register at shutdown. This keeps the trunk
+///     authenticated so the carrier accepts our outbound calls (and, for a registered
+///     trunk, so the carrier knows where to send inbound ones).
+///  2. **Outbound** (BLADE to carrier): FSMAR routes an outbound INVITE here, naming the
+///     trunk in the Route URI (`;vgw=<name>`). As a {@link B2buaServlet} it bridges the
+///     call and {@link #callStarted} rewrites the outbound dialog onto that trunk:
+///     Request-URI to {@link VirtualGateway#getRegistrarDomain()}, From to the
+///     {@link RegistrationStyle}'s outbound identity, and (multi-homed engines only) the
+///     source pinned to the trunk's {@link VirtualGateway#getOutboundInterface()}.
 ///
-/// The two directions are told apart by the `vgw` param: FSMAR sets it going out, and a carrier
-/// never sets it coming in.
-///
-/// FSMAR owns the *policy* (which trunk, chosen by dial‑plan/conditions); this app owns the
-/// *mechanism* FSMAR structurally can't do.
+/// Inbound calls are not handled here. A carrier's INVITE lands on the engine and FSMAR
+/// routes it straight to the answering app; the gateway never sees it, so it needs no
+/// arrival-interface or source matching. FSMAR owns the policy (which trunk, by
+/// dial-plan); this app owns the outbound mechanism FSMAR structurally can't do.
 @SipApplication(distributable = true)
 @SipServlet(loadOnStartup = 1)
 @SipListener
@@ -88,51 +83,39 @@ public class GatewaySipServlet extends B2buaServlet {
 	// ============================================================ the bridge, both
 	// directions
 
-	/// The B2BUA is creating the second dialog. Which direction this call is going
-	/// decides what
-	/// happens to it:
-	///
-	/// - **`;vgw=` present** — FSMAR named a trunk, so this is BLADE → carrier:
-	/// rewrite the
-	/// outbound dialog onto that trunk ({@link #bridgeToTrunk}).
-	/// - **no `;vgw=`, but the call arrived on a trunk's Contact IP** — carrier →
-	/// BLADE: check
-	/// the source and let the call through to the rest of the chain ({@link
-	/// #bridgeFromTrunk}).
-	/// - **neither** — nothing here owns this call; reject it.
+	/// The B2BUA is creating the second dialog for an outbound trunk call. FSMAR named the
+	/// trunk in `;vgw=`, so this is BLADE to carrier: rewrite the outbound dialog onto that
+	/// trunk ({@link #bridgeToTrunk}). An INVITE with no `;vgw=` was routed here by mistake
+	/// (inbound carrier INVITEs go straight to the answering app, never to the gateway) and
+	/// is rejected.
 	@Override
 	public void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException {
 		try {
 			SipServletRequest inbound = getIncomingRequest(outboundRequest);
 			String vgwName = vgwOf(inbound != null ? inbound : outboundRequest);
 
-			if (vgwName != null) {
-				VirtualGateway vg = findGateway(vgwName);
-				if (vg == null) {
-					sipLogger.warning("gateway: outbound INVITE with unknown vgw '" + vgwName + "' — rejecting");
-					doNotProcess(outboundRequest, 404, "Unknown virtual gateway");
-					return;
-				}
-				bridgeToTrunk(vg, outboundRequest);
+			// Outbound trunk calls only: FSMAR names the trunk with ;vgw=. No vgw means
+			// this call was routed here by mistake (inbound INVITEs never reach the gateway).
+			if (vgwName == null) {
+				sipLogger.warning("gateway: INVITE with no vgw param — the gateway routes outbound trunk calls only; rejecting");
+				doNotProcess(outboundRequest, 404, "Not a gateway trunk call");
 				return;
 			}
-
-			VirtualGateway arrival = findGatewayByArrival(inbound);
-			if (arrival != null) {
-				bridgeFromTrunk(arrival, inbound, outboundRequest);
+			VirtualGateway vg = findGateway(vgwName);
+			if (vg == null) {
+				sipLogger.warning("gateway: outbound INVITE with unknown vgw '" + vgwName + "' — rejecting");
+				doNotProcess(outboundRequest, 404, "Unknown virtual gateway");
 				return;
 			}
-
-			sipLogger.warning("gateway: INVITE with no vgw param, on no configured trunk interface — rejecting");
-			doNotProcess(outboundRequest, 404, "Unknown virtual gateway");
+			bridgeToTrunk(vg, outboundRequest);
 		} catch (Exception e) {
 			sipLogger.severe("gateway: callStarted failed: " + e.getMessage());
 		}
 	}
 
-	/// BLADE → carrier. Rewrite the outbound dialog onto `vg`: Request‑URI to the
-	/// carrier trunk, From
-	/// to the trunk identity, source bound to the trunk's Contact IP.
+	/// BLADE to carrier. Rewrite the outbound dialog onto `vg`: Request-URI to the carrier
+	/// trunk, From to the trunk identity, source pinned to the trunk's outbound interface
+	/// when one is configured.
 	private void bridgeToTrunk(VirtualGateway vg, SipServletRequest outboundRequest)
 			throws ServletException, IOException {
 
@@ -156,7 +139,8 @@ public class GatewaySipServlet extends B2buaServlet {
 			}
 		}
 
-		// 3) Source -> the gateway's Contact IP.
+		// 3) Source -> the trunk's outbound interface (multi-homed engines only; unset
+		// means the container's single interface, which its public-address advertises).
 		InetSocketAddress outbound = resolveOutbound(vg);
 		if (outbound != null) {
 			try {
@@ -183,30 +167,6 @@ public class GatewaySipServlet extends B2buaServlet {
 		// createRequest(response,"INVITE") + addAuthHeader + loop guard). Add it if a
 		// carrier
 		// re-challenges INVITEs.
-	}
-
-	/// Carrier → BLADE. The trunk is already known (the call landed on its Contact
-	/// IP); confirm the
-	/// call actually came from that carrier, then leave the second dialog alone.
-	///
-	/// The dialog keeps the dialed Request-URI, so FSMAR — which runs again on this
-	/// dialog with
-	/// `previousApp = gateway` — routes it onward to whichever app answers. That
-	/// handoff is the
-	/// whole point: the answering app never learns which carrier called.
-	private void bridgeFromTrunk(VirtualGateway vg, SipServletRequest inbound, SipServletRequest outboundRequest)
-			throws ServletException, IOException {
-
-		String source = (inbound != null) ? inbound.getRemoteAddr() : null;
-		if (!vg.matchesSource(source)) {
-			sipLogger.warning("gateway " + vg.getName() + ": inbound INVITE from " + source
-					+ " is not one of this trunk's sourceHosts — rejecting");
-			doNotProcess(outboundRequest, 403, "Source not permitted on this trunk");
-			return;
-		}
-
-		sipLogger.info("gateway " + vg.getName() + ": inbound INVITE from " + source + " -> "
-				+ outboundRequest.getRequestURI());
 	}
 
 	@Override
@@ -255,28 +215,6 @@ public class GatewaySipServlet extends B2buaServlet {
 		return null;
 	}
 
-	/// The trunk an inbound request landed on. Each virtual gateway advertises its
-	/// own Contact IP,
-	/// which is the address its carrier was told to send calls to — so the local
-	/// end of the socket
-	/// names the trunk, with no knowledge of the carrier's source ranges required.
-	static VirtualGateway findGatewayByArrival(SipServletRequest inbound) {
-		if (inbound == null || settings == null) {
-			return null;
-		}
-		String host = inbound.getLocalAddr();
-		if (host == null) {
-			return null;
-		}
-		int port = inbound.getLocalPort();
-		for (VirtualGateway vg : settings.getCurrent().getGateways()) {
-			if (vg.matchesInterface(host, port)) {
-				return vg;
-			}
-		}
-		return null;
-	}
-
 	private static VirtualGateway findGateway(String name) {
 		if (name == null || settings == null) {
 			return null;
@@ -289,12 +227,16 @@ public class GatewaySipServlet extends B2buaServlet {
 		return null;
 	}
 
-	/// Resolve `vg`'s Contact IP to a container SIP outbound interface (for
-	/// `SipSession.setOutboundInterface`), or null if none matches.
+	/// Resolve `vg`'s optional {@link VirtualGateway#getOutboundInterface()} to a container
+	/// SIP outbound interface (for `SipSession.setOutboundInterface`), so an outbound
+	/// REGISTER/INVITE can be pinned to it on a multi-homed engine. Null when no interface
+	/// is requested (the common single-homed case) or the requested one isn't among the
+	/// container's interfaces; the caller then originates on the container default.
 	static InetSocketAddress resolveOutbound(VirtualGateway vg) {
 		List<SipURI> interfaces = outboundInterfaces;
-		if (vg.getContactHost() == null || interfaces == null) {
-			return null;
+		String want = vg.getOutboundInterface();
+		if (want == null || interfaces == null) {
+			return null; // single-homed / no pin requested: originate on the container default
 		}
 		for (SipURI uri : interfaces) {
 			// Accessors, not just construction, can throw on OCCAS 8.3: the
@@ -302,14 +244,14 @@ public class GatewaySipServlet extends B2buaServlet {
 			// channel with a zone id ("sips:[::1%lo]:5062") fails that parse on
 			// getHost(). One unusable interface must not kill the whole resolve.
 			try {
-				if (vg.matchesInterface(uri.getHost(), uri.getPort())) {
-					int port = uri.getPort() > 0 ? uri.getPort() : vg.getContactPort();
+				if (want.equalsIgnoreCase(uri.getHost())) {
+					int port = uri.getPort() > 0 ? uri.getPort() : 5060;
 					return new InetSocketAddress(uri.getHost(), port);
 				}
 			} catch (RuntimeException unparseable) {
 				continue;
 			}
 		}
-		return null;
+		return null; // requested interface not present: caller falls back to the default
 	}
 }

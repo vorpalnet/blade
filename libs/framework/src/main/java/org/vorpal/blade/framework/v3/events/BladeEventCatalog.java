@@ -49,6 +49,12 @@ public final class BladeEventCatalog {
 		for (EventType declaration : analyticsTypes()) {
 			versions.put(declaration.getType(), declaration.getVersion());
 		}
+		// Access events are not analytics types and must stay off that
+		// subscription, but they are framework-declared and so get a stamped
+		// dataversion like everything else the framework publishes.
+		for (EventType declaration : accessTypes()) {
+			versions.put(declaration.getType(), declaration.getVersion());
+		}
 		return versions;
 	}
 
@@ -385,4 +391,75 @@ public final class BladeEventCatalog {
 		return declaration;
 	}
 
+	/// The access-audit types: who was allowed, who was refused, and why.
+	///
+	/// **Kept out of [#analyticsTypes] on purpose.** That list is what the
+	/// analytics database is built from, and every member of it is marked
+	/// persist. An access record answers to a different reader — an access
+	/// review, not a traffic report — and is kept under a different retention,
+	/// usually a longer one. It also has an integrity requirement the analytics
+	/// tables do not: the sink that stores it should hold INSERT and SELECT and
+	/// nothing else, so that the people it records cannot edit it. Routing it
+	/// into the same subscription would quietly give it the analytics table's
+	/// grants and the analytics table's lifetime.
+	///
+	/// **Nothing here is a sensitive field.** Every other framework type masks
+	/// caller identity in the console. These do the opposite deliberately: the
+	/// actor's name *is* the record. What must never appear is the content —
+	/// naming the recording is the point, carrying the transcript would defeat
+	/// it — and that is enforced by the payload shape below, which has nowhere
+	/// to put one.
+	public static List<EventType> accessTypes() {
+		List<EventType> types = new ArrayList<>();
+		types.add(accessDecision(BladeEventTypes.ACCESS_PERMITTED, "Access Permitted",
+				"A caller was allowed to list, read, play, export or unredact call content. Carries the rule that granted it, so an access review can ask why without reconstructing the policy as it stood that day.",
+				"AccessPermitted"));
+		types.add(accessDecision(BladeEventTypes.ACCESS_DENIED, "Access Denied",
+				"A caller was refused. Published for the same reasons as the grant: a log of successes cannot show attempted overreach, and a run of denials against one record is the signal an access review exists to find.",
+				"AccessDenied"));
+		return types;
+	}
+
+	private static EventType accessDecision(String type, String title, String description, String className) {
+		EventType declaration = base(type, title, description, className);
+		// Not the analytics database's to store. The audit sink subscribes to
+		// these by selector and owns their retention.
+		declaration.setPersist(false);
+		declaration.setFields(accessFields());
+		return declaration;
+	}
+
+	private static List<EventField> accessFields() {
+		EventField actor = new EventField("actor", EventFieldType.STRING, true);
+		actor.setDescription(
+				"The authenticated caller, as the identity provider named them. Never masked: an access record whose subject is hidden records nothing.");
+
+		EventField action = new EventField("action", EventFieldType.STRING, true);
+		action.setDescription(
+				"The permission attempted, e.g. phi:play. Present on a refusal too — a denial that does not say what was attempted is not reviewable.");
+
+		EventField resourceKind = new EventField("resourceKind", EventFieldType.STRING, true);
+		resourceKind.setDescription("What sort of thing was reached for, e.g. recording, transcript, accessLog.");
+
+		EventField resourceId = new EventField("resourceId", EventFieldType.STRING, true);
+		resourceId.setDescription(
+				"Which one. An identifier, never the content: this field names the recording and must never carry a word of it.");
+
+		EventField decision = new EventField("decision", EventFieldType.STRING, true);
+		decision.setDescription("permit, deny, or breakglass.");
+
+		EventField rule = new EventField("rule", EventFieldType.STRING, false);
+		rule.setDescription(
+				"The rule that granted access, by its configured name. Absent on a refusal, because no rule did.");
+
+		EventField reason = new EventField("reason", EventFieldType.STRING, false);
+		reason.setDescription(
+				"Why it was refused, or the stated justification on a break-glass grant. Absent on an ordinary grant.");
+
+		EventField sourceAddress = new EventField("sourceAddress", EventFieldType.STRING, false);
+		sourceAddress.setDescription("The client address the request arrived from, where the caller knows it.");
+
+		return new ArrayList<>(Arrays.asList(actor, action, resourceKind, resourceId, decision, rule, reason,
+				sourceAddress));
+	}
 }

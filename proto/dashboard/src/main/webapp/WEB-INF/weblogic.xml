@@ -17,6 +17,11 @@
 		<wls:timeout-secs>3600</wls:timeout-secs>
 		<wls:cookie-name>BLADEADMINSESSION</wls:cookie-name>
 		<wls:cookie-path>/</wls:cookie-path>
+		<!-- Persist sessions to disk so a redeploy of this app does not log the
+		     operator out: WLS serializes active sessions and restores them when
+		     the new version starts. (memory sessions are dropped on redeploy.) -->
+		<wls:persistent-store-type>file</wls:persistent-store-type>
+		<wls:persistent-store-dir>blade-dashboard-sessions</wls:persistent-store-dir>
 		<wls:url-rewriting-enabled>false</wls:url-rewriting-enabled>
 	</wls:session-descriptor>
 

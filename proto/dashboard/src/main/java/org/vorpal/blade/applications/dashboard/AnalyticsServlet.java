@@ -64,6 +64,74 @@ public class AnalyticsServlet extends HttpServlet {
 						+ "FROM v_calls WHERE started_at >= SYSDATE - ? AND duration_seconds IS NOT NULL "
 						+ "GROUP BY TRUNC(started_at) ORDER BY TRUNC(started_at)");
 				break;
+			case "calls-per-hour":
+				pairs(c, out, days,
+						"SELECT TO_CHAR(TRUNC(started_at,'HH24'),'DD HH24:MI') d, COUNT(*) n "
+						+ "FROM v_calls WHERE started_at >= SYSDATE - ? "
+						+ "GROUP BY TRUNC(started_at,'HH24') ORDER BY TRUNC(started_at,'HH24')");
+				break;
+			case "concurrent":
+				// running +1 at each start, -1 at each end; the max of that running
+				// sum per hour is the peak simultaneous calls that hour. Clamp the
+				// negative dips that come from calls that started before the window.
+				pairs(c, out, days,
+						"SELECT TO_CHAR(hr,'DD HH24:MI') d, MAX(GREATEST(running,0)) n FROM ("
+						+ "SELECT TRUNC(ts,'HH24') hr, SUM(delta) OVER (ORDER BY ts, delta DESC) running FROM ("
+						+ "SELECT started_at ts, 1 delta FROM v_calls WHERE started_at >= SYSDATE - ? "
+						+ "UNION ALL "
+						+ "SELECT ended_at ts, -1 delta FROM v_calls WHERE ended_at IS NOT NULL AND ended_at >= SYSDATE - ?"
+						+ ")) GROUP BY hr ORDER BY hr");
+				break;
+			case "heatmap":
+				// dow 0=Mon .. 6=Sun (ISO week, NLS-independent), hour 0..23.
+				rows(c, out, days,
+						"SELECT TO_CHAR(TRUNC(started_at) - TRUNC(started_at,'IW')) dow, "
+						+ "TO_NUMBER(TO_CHAR(started_at,'HH24')) hh, COUNT(*) n "
+						+ "FROM v_calls WHERE started_at >= SYSDATE - ? "
+						+ "GROUP BY TRUNC(started_at) - TRUNC(started_at,'IW'), TO_NUMBER(TO_CHAR(started_at,'HH24'))");
+				break;
+			case "asr-abandon":
+				// v_events exposes event_type / occurred_at. Naming-agnostic across the
+				// short writer names, camelCase, and dotted bus types.
+				rows(c, out, days,
+						"SELECT TO_CHAR(TRUNC(occurred_at),'YYYY-MM-DD') d, "
+						+ "SUM(CASE WHEN LOWER(event_type) IN ('call.answered','callanswered','answered','call.connected','callconnected','connected') THEN 1 ELSE 0 END) answered, "
+						+ "SUM(CASE WHEN LOWER(event_type) IN ('call.abandoned','callabandoned','abandoned') THEN 1 ELSE 0 END) abandoned, "
+						+ "SUM(CASE WHEN LOWER(event_type) IN ('call.started','callstarted','session.started','sessionstarted','sessionstart','started') THEN 1 ELSE 0 END) started "
+						+ "FROM v_events WHERE occurred_at >= SYSDATE - ? "
+						+ "GROUP BY TRUNC(occurred_at) ORDER BY TRUNC(occurred_at)");
+				break;
+			case "funnel":
+				pairs(c, out, days,
+						"SELECT stage, cnt FROM ("
+						+ "SELECT 'Started' stage, 1 ord, COUNT(*) cnt FROM v_events WHERE occurred_at >= SYSDATE - ? AND LOWER(event_type) IN ('call.started','callstarted','session.started','sessionstarted','sessionstart','started') "
+						+ "UNION ALL SELECT 'Answered', 2, COUNT(*) FROM v_events WHERE occurred_at >= SYSDATE - ? AND LOWER(event_type) IN ('call.answered','callanswered','answered') "
+						+ "UNION ALL SELECT 'Connected', 3, COUNT(*) FROM v_events WHERE occurred_at >= SYSDATE - ? AND LOWER(event_type) IN ('call.connected','callconnected','connected') "
+						+ "UNION ALL SELECT 'Completed', 4, COUNT(*) FROM v_events WHERE occurred_at >= SYSDATE - ? AND LOWER(event_type) IN ('call.completed','callcompleted','completed') "
+						+ ") ORDER BY ord");
+				break;
+			case "duration-hist":
+				pairs(c, out, days,
+						"SELECT bucket, COUNT(*) n FROM ("
+						+ "SELECT CASE WHEN duration_seconds < 15 THEN '0-15s' WHEN duration_seconds < 30 THEN '15-30s' "
+						+ "WHEN duration_seconds < 60 THEN '30-60s' WHEN duration_seconds < 180 THEN '1-3m' "
+						+ "WHEN duration_seconds < 600 THEN '3-10m' ELSE '10m+' END bucket, "
+						+ "CASE WHEN duration_seconds < 15 THEN 1 WHEN duration_seconds < 30 THEN 2 WHEN duration_seconds < 60 THEN 3 "
+						+ "WHEN duration_seconds < 180 THEN 4 WHEN duration_seconds < 600 THEN 5 ELSE 6 END ord "
+						+ "FROM v_calls WHERE started_at >= SYSDATE - ? AND duration_seconds IS NOT NULL"
+						+ ") GROUP BY bucket, ord ORDER BY ord");
+				break;
+			case "calls-by-tenant":
+				pairs(c, out, days,
+						"SELECT NVL(tenant,'(single-tenant)') t, COUNT(*) n FROM v_calls "
+						+ "WHERE started_at >= SYSDATE - ? GROUP BY NVL(tenant,'(single-tenant)') "
+						+ "ORDER BY COUNT(*) DESC FETCH FIRST 12 ROWS ONLY");
+				break;
+			case "event-types":
+				pairs(c, out, days,
+						"SELECT event_type, COUNT(*) n FROM v_events WHERE occurred_at >= SYSDATE - ? "
+						+ "GROUP BY event_type ORDER BY COUNT(*) DESC FETCH FIRST 20 ROWS ONLY");
+				break;
 			default:
 				resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
 				out.write("{\"error\":\"unknown chart '" + esc(q) + "'\"}");
@@ -77,19 +145,36 @@ public class AnalyticsServlet extends HttpServlet {
 
 	/// One aggregation → a JSON array of [label, number] pairs.
 	private void pairs(Connection c, PrintWriter out, int days, String sql) throws Exception {
+		rows(c, out, days, sql);
+	}
+
+	/// A query → a JSON array of rows, each `[label, n1, n2, …]`: column 1 is the
+	/// label (quoted), the rest are numbers. Handles the single-value charts and
+	/// the multi-series ones (ASR/abandon, funnel, heatmap triples) alike. Every
+	/// `?` in the SQL is bound to `days`, so a UNION with two windows just works.
+	private void rows(Connection c, PrintWriter out, int days, String sql) throws Exception {
 		try (PreparedStatement ps = c.prepareStatement(sql)) {
-			ps.setInt(1, days);
+			bindDays(ps, sql, days);
 			try (ResultSet rs = ps.executeQuery()) {
+				int cols = rs.getMetaData().getColumnCount();
 				out.write('[');
 				boolean first = true;
 				while (rs.next()) {
 					if (!first) out.write(',');
 					first = false;
-					out.write("[\"" + esc(rs.getString(1)) + "\"," + numOrNull(rs.getString(2)) + ']');
+					out.write("[\"" + esc(rs.getString(1)) + "\"");
+					for (int i = 2; i <= cols; i++) out.write("," + numOrNull(rs.getString(i)));
+					out.write(']');
 				}
 				out.write(']');
 			}
 		}
+	}
+
+	private static void bindDays(PreparedStatement ps, String sql, int days) throws Exception {
+		int n = 0;
+		for (int i = 0; i < sql.length(); i++) if (sql.charAt(i) == '?') n++;
+		for (int i = 1; i <= n; i++) ps.setInt(i, days);
 	}
 
 	/// The headline tiles, in one round trip.

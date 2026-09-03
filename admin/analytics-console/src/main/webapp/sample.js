@@ -8,18 +8,18 @@
   // Fields sent to the server as numbers; everything else as strings.
   var NUMERIC = {
     callCount: 1, servers: 1, maxTransfers: 1, minDurationSec: 1, maxDurationSec: 1,
-    transferProbability: 1, abandonProbability: 1, transferFailProbability: 1
+    transferProbability: 1, abandonProbability: 1, declineProbability: 1,
+    transferFailProbability: 1, riskProbability: 1
   };
 
   // Result keys → display labels, in render order.
   var COUNT_LABELS = [
     ['sessions', 'Sessions (calls)'],
     ['events', 'Events'],
+    ['riskEvents', 'Risk events'],
     ['attributes', 'Attributes'],
     ['sessionKeys', 'Session keys'],
     ['applications', 'Applications'],
-    ['eventTypes', 'Event types'],
-    ['attributeNames', 'Attribute names'],
     ['elapsedMs', 'Elapsed (ms)']
   ];
 

@@ -689,8 +689,8 @@ function resolveJsonPath(obj, path) {
 /// Read a primitive input's current value for JSON extraction. For inputs
 /// marked data-password="true", cleartext values get the BLADE {CLEARTEXT}
 /// prefix so the FileManagerServlet encrypts them on save. Values that
-/// already carry an encrypted prefix ({AES}, {3DES}) or have been marked
-/// {CLEARTEXT} already are passed through unchanged.
+/// already carry an encrypted prefix ({AES}, {AES256}, {3DES}) or have been
+/// marked {CLEARTEXT} already are passed through unchanged.
 function readInputValue(input) {
     if (!input) return null;
     if (input.type === 'checkbox') return input.checked;
@@ -698,7 +698,11 @@ function readInputValue(input) {
     let v = input.value;
     if (v == null || v === '') return null;
     if (input.dataset && input.dataset.password === 'true') {
-        if (!v.startsWith('{CLEARTEXT}') && !v.startsWith('{AES}') && !v.startsWith('{3DES}')) {
+        // Any {SCHEME}... prefix means the value is already cleartext-marked or
+        // encrypted (WebLogic 14.1 emits {AES256}); only bare cleartext gets wrapped.
+        // Re-wrapping an already-encrypted value produced {CLEARTEXT}{AES256}..., which
+        // decrypts to the ciphertext and breaks the credential.
+        if (!/^\{[A-Za-z0-9]+\}/.test(v)) {
             v = '{CLEARTEXT}' + v;
         }
     }

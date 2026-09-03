@@ -132,6 +132,21 @@ public final class BladeEventTypes {
 	/// from the transferee, or a `487` from the target because of one.
 	public static final String TRANSFER_ABANDONED = "org.vorpal.blade.transfer.abandoned";
 
+	/// Somebody was allowed to touch call content — audio, a transcript, or the
+	/// call-identifying data around them.
+	///
+	/// **Not an analytics event, and deliberately not on that subscription.**
+	/// Analytics records what a call did; this records what a *person* did, and
+	/// the two answer to different readers with different retention. It is
+	/// declared here because it rides the same bus and deserves the same
+	/// versioned envelope, not because it belongs in the analytics database.
+	public static final String ACCESS_PERMITTED = "org.vorpal.blade.access.permitted";
+
+	/// Somebody was refused. The pair is what makes the log an audit log:
+	/// a record of grants alone cannot show attempted overreach, which is most
+	/// of what an access review is looking for.
+	public static final String ACCESS_DENIED = "org.vorpal.blade.access.denied";
+
 	/// The CloudEvents type for an analytics event name — one of the eleven when
 	/// the framework defines the name, [#CALL_EVENT] otherwise.
 	///

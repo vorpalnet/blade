@@ -293,6 +293,8 @@ WLS_USER=$(read_prop       "$CONF_FILE" "wls.user")
 WLS_TARGET_DEFAULT=$(read_prop "$CONF_FILE" "wls.target")
 APPROUTER_DIR=$(read_prop  "$CONF_FILE" "approuter.dir")
 WLS_PLUGIN_VERSION=$(read_prop "$CONF_FILE" "wls.plugin.version")
+WLS_INSECURE=$(read_prop "$CONF_FILE" "wls.insecure")          # rest engine: skip TLS verify
+WLS_CACERT=$(read_prop "$CONF_FILE" "wls.cacert"); WLS_CACERT="${WLS_CACERT/#\~/$HOME}"  # rest engine: PEM to verify against
 
 # Does this run talk to WebLogic? (approuter is a plain file copy — it does not.)
 NEEDS_WLS=true
@@ -416,7 +418,13 @@ OCCAS_HOME="$(read_prop "$CONF_FILE" oracle.home)"
 [ -z "$OCCAS_HOME" ] && [ -d /opt/oracle/occas/current ] && OCCAS_HOME=/opt/oracle/occas/current
 ENGINE="${BLADE_DEPLOY_ENGINE:-}"
 if [ -z "$ENGINE" ]; then
-    if [ -n "$OCCAS_HOME" ] && [ -x "${OCCAS_HOME}/oracle_common/common/bin/wlst.sh" ]; then ENGINE=wlst; else ENGINE=maven; fi
+    # An http(s) adminurl → the REST engine (misc/deploy-rest.sh): tunnel-free,
+    # the same channel the WebLogic Remote Console uses. A t3/t3s adminurl on the
+    # admin box → wlst (no Maven there); otherwise the Maven plugin.
+    case "$WLS_ADMINURL" in
+        http://*|https://*) ENGINE=rest ;;
+        *) if [ -n "$OCCAS_HOME" ] && [ -x "${OCCAS_HOME}/oracle_common/common/bin/wlst.sh" ]; then ENGINE=wlst; else ENGINE=maven; fi ;;
+    esac
 fi
 DEPLOY_JAVA_HOME="$(read_prop "$CONF_FILE" java.home)"
 [ -z "$DEPLOY_JAVA_HOME" ] && [ -d /opt/oracle/java/current ] && DEPLOY_JAVA_HOME=/opt/oracle/java/current
@@ -459,6 +467,17 @@ run_mvn() {
 # batch can abort), else non-zero.
 wls_deploy_one() {
     local action="$1" name="$2" source="$3" targets="$4" islib="${5:-false}" drc=0
+    if [ "$ENGINE" = rest ]; then
+        if [ "$DRY_RUN" = true ]; then
+            log "${C_DIM}  [dry-run] rest ${action} ${name}${source:+ src=$(basename "$source")}${targets:+ -> ${targets}}$([ "$islib" = true ] && echo ' (library)')${C_RESET}"
+            return 0
+        fi
+        WLS_ADMINURL="$WLS_ADMINURL" WLS_USER="$WLS_USER" WLS_PASSWORD="$WLS_PASSWORD" \
+            WLS_INSECURE="${WLS_INSECURE:-}" WLS_CACERT="${WLS_CACERT:-}" \
+            WLS_ACTION="$action" WLS_NAME="$name" WLS_SOURCE="$source" WLS_TARGETS="$targets" WLS_LIBRARY="$islib" \
+            bash "${SCRIPT_DIR}/misc/deploy-rest.sh" || drc=$?
+        return "$drc"
+    fi
     if [ "$ENGINE" = wlst ]; then
         if [ "$DRY_RUN" = true ]; then
             log "${C_DIM}  [dry-run] wlst ${action} ${name}${source:+ src=$(basename "$source")}${targets:+ -> ${targets}}$([ "$islib" = true ] && echo ' (library)')${C_RESET}"
@@ -616,6 +635,12 @@ log ""
 
 # Capture the domain's deployment listing (engine-native), stdout+stderr.
 query_deploy_status() {
+    if [ "$ENGINE" = rest ]; then
+        WLS_ADMINURL="$WLS_ADMINURL" WLS_USER="$WLS_USER" WLS_PASSWORD="$WLS_PASSWORD" \
+            WLS_INSECURE="${WLS_INSECURE:-}" WLS_CACERT="${WLS_CACERT:-}" WLS_ACTION=status \
+            bash "${SCRIPT_DIR}/misc/deploy-rest.sh" 2>&1
+        return
+    fi
     if [ "$ENGINE" = wlst ]; then
         MW_HOME="$OCCAS_HOME" JAVA_HOME="$DEPLOY_JAVA_HOME" JAVA_VENDOR=Oracle \
             WLS_ADMINURL="$WLS_ADMINURL" WLS_USER="$WLS_USER" WLS_PASSWORD="$WLS_PASSWORD" \

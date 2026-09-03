@@ -10,33 +10,27 @@
     <welcome-file>default.htm</welcome-file>
   </welcome-file-list>
   
-  	<security-constraint>
-		<web-resource-collection>
-			<web-resource-name>REST Security</web-resource-name>
-			<url-pattern>/resources/api/*</url-pattern>
-			<url-pattern>/api/*</url-pattern>
-			<url-pattern>/v1/*</url-pattern>
-			<http-method>GET</http-method>
-			<http-method>HEAD</http-method>
-			<http-method>POST</http-method>
-			<http-method>PUT</http-method>
-			<http-method>DELETE</http-method>
-			<http-method>OPTIONS</http-method>
-		</web-resource-collection>
-	</security-constraint>
+  	<!--
+	  This app has no HTTP API: no @Path class, no Application subclass. What
+	  stood here were two constraints over /resources/api/*, /api/* and /v1/*,
+	  copied from an app that did, and the first of them carried no
+	  <auth-constraint>, which declares a path public rather than protecting it.
+	  They guarded nothing and taught the wrong shape.
 
+	  What remains is the guard: the container's default JAX-RS base, denied to
+	  everyone. An empty <auth-constraint> grants no role, so the day someone
+	  adds a @Path class here it answers 403 instead of answering the world.
+	  Adding an API means adding an Application subclass with
+	  @ApplicationPath("/api") and a constraint over /api/* — see
+	  services/events and services/context.
+	-->
 	<security-constraint>
 		<web-resource-collection>
-			<web-resource-name>API</web-resource-name>
-			<url-pattern>/resources/api/*</url-pattern>
-			<http-method>GET</http-method>
-			<http-method>POST</http-method>
+			<web-resource-name>Default JAX-RS base - no API here</web-resource-name>
+			<url-pattern>/resources/*</url-pattern>
 		</web-resource-collection>
-		<auth-constraint>
-			<role-name>authenticated-users</role-name>
-		</auth-constraint>
+		<auth-constraint/>
 	</security-constraint>
-
 	<login-config>
 		<auth-method>BASIC</auth-method>
 		<realm-name>default</realm-name>

@@ -59,11 +59,14 @@ public class GatewaySettingsManager extends SettingsManager<GatewaySettings> {
 				sipLogger.info("gateway " + vg.getName() + ": no registration required (ip-auth or none)");
 				continue;
 			}
+			// Best-effort outbound-interface pin (multi-homed engines). outboundInterface
+			// is optional: unset means originate on the container's single interface,
+			// whose public-address stamps the Contact. If it is set but matches no
+			// container interface, that's a warning, never a skipped registration.
 			InetSocketAddress outbound = GatewaySipServlet.resolveOutbound(vg);
-			if (vg.getContactHost() != null && outbound == null) {
-				sipLogger.severe("gateway " + vg.getName() + ": contactHost " + vg.getContactHost()
-						+ " is not a configured SIP outbound interface — skipping registration");
-				continue;
+			if (vg.getOutboundInterface() != null && outbound == null) {
+				sipLogger.warning("gateway " + vg.getName() + ": outboundInterface " + vg.getOutboundInterface()
+						+ " matches no SIP outbound interface — registering on the container default");
 			}
 			try {
 				registrar.start(outbound);

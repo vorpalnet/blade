@@ -17,7 +17,9 @@ Call-ID.
 
 ## REST API
 
-Base path: `/context/v1`. BASIC auth, role `authenticated-users`.
+Base path: `/context/api/v1`. BASIC auth. Reads take any authenticated realm
+user (`authenticated-users`); the three methods that rewrite a live call take
+`Admin` or `Operator`.
 
 | Method and path | Does |
 | --- | --- |
