@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<!-- The review path: list recordings, play one, and refuse the rest. Every
+	     answer goes through AccessEvaluator and leaves an AccessEvent behind.
+	     Vendor-neutral: the archive itself is a RecordingArchive found through
+	     the 309-style SPI, so this app has no cloud dependency. -->
+	<parent>
+		<groupId>org.vorpal.blade</groupId>
+		<artifactId>vorpal-blade</artifactId>
+		<version>${revision}</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>vorpal-blade-proto-recordings</artifactId>
+	<packaging>war</packaging>
+	<name>BLADE Recordings Review</name>
+
+	<build>
+		<finalName>blade-recordings</finalName>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-install-plugin</artifactId>
+				<configuration>
+					<skip>false</skip>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
+	<dependencies>
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-library-framework</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+</project>

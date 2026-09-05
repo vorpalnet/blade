@@ -891,6 +891,11 @@ fi
 			<modules><module>proto/security</module></modules>
 		</profile>
 		<profile>
+			<id>recordings</id>
+			<activation><property><name>!skip.recordings</name></property></activation>
+			<modules><module>proto/recordings</module></modules>
+		</profile>
+		<profile>
 			<id>logs</id>
 			<activation><property><name>!skip.logs</name></property></activation>
 			<modules><module>admin/logs</module></modules>
