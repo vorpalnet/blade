@@ -896,6 +896,11 @@ fi
 			<modules><module>proto/recordings</module></modules>
 		</profile>
 		<profile>
+			<id>recorder</id>
+			<activation><property><name>!skip.recorder</name></property></activation>
+			<modules><module>proto/recorder</module></modules>
+		</profile>
+		<profile>
 			<id>logs</id>
 			<activation><property><name>!skip.logs</name></property></activation>
 			<modules><module>admin/logs</module></modules>
