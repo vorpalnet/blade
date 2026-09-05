@@ -129,15 +129,39 @@ public class PlayerCallflow extends MediaCallflow {
 			join(mg, Joinable.Direction.DUPLEX, nc); // player -> caller, caller -> recorder
 
 			if (cfg.isRecord() && cfg.getRecordUri() != null && !cfg.getRecordUri().isEmpty()) {
-				// {id} in the configured URI becomes this call's app-session id, so concurrent
-				// calls never record into one file. (Braces without a dollar sign on purpose:
-				// ${...} is the config layer's own variable syntax and is expanded — to nothing,
-				// for unknown names — before the application ever sees the value.)
-				String dest = cfg.getRecordUri().replace("{id}",
-						appId.replaceAll("[^A-Za-z0-9._-]", "_"));
-				record(mg, URI.create(dest), rec -> {
-					// recording continues until teardown flushes the file; nothing to do here
-				});
+				// Two tokens, and they answer different questions. (Braces without a
+				// dollar sign on purpose: ${...} is the config layer's own variable
+				// syntax and is expanded — to nothing, for unknown names — before the
+				// application ever sees the value.)
+				//
+				// {id}        this call's app-session id, so concurrent calls never
+				//             record into one file. Right for a file: destination.
+				// {recording} the call's logical recording name. The whole configured
+				//             value becomes "rec:<name>", which the deployment's
+				//             RecordingDestinations turns into a real destination —
+				//             for object storage, a capability minted for this
+				//             recording alone. The application never names a path.
+				//
+				// Recording is set up inside its own try. Whatever goes wrong here —
+				// no destination resolver installed, a call with no Vorpal-ID to name
+				// a recording after, object storage refusing to mint — must be said
+				// out loud and must not take the call down with it. Silence was the
+				// actual bug: an unchecked exception escaped this method, the caller
+				// caught only MsControlException, and the call carried on with no
+				// recording and no complaint.
+				try {
+					String configured = cfg.getRecordUri();
+					URI dest = configured.contains("{recording}")
+							? MediaCallflow.recordingUri(invite.getApplicationSession())
+							: URI.create(configured.replace("{id}", appId.replaceAll("[^A-Za-z0-9._-]", "_")));
+					anchor.recording = dest;
+					sipLogger.info(invite, "PlayerCallflow: recording to " + dest.getScheme() + ":...");
+					record(mg, dest, rec -> {
+						// recording continues until teardown flushes it
+					});
+				} catch (Exception e) {
+					sipLogger.severe(invite, "PlayerCallflow: recording could not be started: " + e);
+				}
 			}
 			playOnce(mg, invite);
 		} catch (MsControlException e) {

@@ -55,6 +55,11 @@ public class PlayerServlet extends AsyncSipServlet {
 		public volatile NetworkConnection nc;
 		public volatile String room;
 
+		/// The logical destination this call is recording to, so teardown can
+		/// release it. Null when the call is not being recorded, or is recording
+		/// to a plain file, which has nothing to release.
+		public volatile java.net.URI recording;
+
 		public Anchor(MediaSession ms) {
 			this.ms = ms;
 		}

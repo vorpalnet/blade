@@ -46,7 +46,8 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 		@JsonSubTypes.Type(value = OAuth2JwtBearerAuthentication.class, name = "oauth2-jwt-bearer"),
 		@JsonSubTypes.Type(value = OAuth2SamlBearerAuthentication.class, name = "oauth2-saml-bearer"),
 		@JsonSubTypes.Type(value = HmacAuthentication.class, name = "hmac"),
-		@JsonSubTypes.Type(value = AwsSigV4Authentication.class, name = "aws-sigv4")
+		@JsonSubTypes.Type(value = AwsSigV4Authentication.class, name = "aws-sigv4"),
+		@JsonSubTypes.Type(value = OciSignatureAuthentication.class, name = "oci-signature")
 })
 public abstract class Authentication implements Serializable {
 	private static final long serialVersionUID = 1L;

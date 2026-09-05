@@ -46,7 +46,7 @@ public class PlayerBye extends Callflow {
 			// Local node: the live media objects are in hand — release them directly.
 			try {
 				if (anchor.mg != null) {
-					anchor.mg.stop(); // stopAndWait the recorder → the file is finalized before release
+					anchor.mg.stop(); // stopAndWait the recorder -> the file is finalized before release
 				}
 			} catch (Exception ignore) {
 				// best effort
@@ -56,6 +56,19 @@ public class PlayerBye extends Callflow {
 			} catch (Exception ignore) {
 				// best effort
 			}
+			// Release the recording's destination LAST, after the media session is
+			// gone.
+			//
+			// Ordering, not tidiness. The recorder's final flush rides the
+			// pipeline teardown, so the last segment and the manifest are written
+			// during release() above. Revoking before that pulled the capability
+			// out from under the writer and every closing PUT came back 401 with
+			// the recording lost. Whatever the media server still has to say, it
+			// has to say before the credential goes away.
+			//
+			// Outside the try on purpose: a session that failed to release
+			// cleanly is exactly when the capability most needs revoking.
+			MediaCallflow.releaseRecording(anchor.recording);
 			// After a same-node refresh the live media is under a reattached session, not this one.
 			MediaCallflow.releaseReattached(appId);
 			return;

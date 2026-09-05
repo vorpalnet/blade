@@ -29,6 +29,9 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 
 import com.bea.wcp.sip.WlssAction;
+import org.vorpal.blade.framework.v2.analytics.Analytics;
+import org.vorpal.blade.framework.v3.events.AnalyticsEventMapper;
+
 import com.bea.wcp.sip.WlssSipApplicationSession;
 
 import org.vorpal.blade.framework.Callback;
@@ -247,11 +250,72 @@ public abstract class MediaCallflow extends Callflow {
 	}
 
 	/// Record the mix reaching `mediaGroup` to `destination`, then run `onComplete`.
+	///
+	/// A `rec:` destination is resolved through the deployment's
+	/// [RecordingDestinations] first, so an application names a recording and
+	/// never a path. Every other scheme is passed to the driver unchanged, so
+	/// `file:` still works and needs nothing installed.
 	protected void record(MediaGroup mediaGroup, URI destination, Callback<RecorderEvent> onComplete)
 			throws MsControlException {
 		Recorder recorder = mediaGroup.getRecorder();
 		arm(recorder, RECORD, onComplete);
-		recorder.record(destination, null, Parameters.NO_PARAMETER);
+		recorder.record(resolveDestination(destination), null, Parameters.NO_PARAMETER);
+	}
+
+	/// The logical name of the recording for this call: `rec:<vorpalId>.<startedAt>`.
+	///
+	/// The identifier is the pair the rest of BLADE already uses for a call, and
+	/// deliberately the same string as the CloudEvents subject and the analytics
+	/// correlator, so a recording, an event on the bus and a session row all name
+	/// the call identically and nothing has to be joined by guesswork later.
+	///
+	/// An application passes this to [#record] and never composes a path itself.
+	public static URI recordingUri(SipApplicationSession app) {
+		Long vorpalId = Analytics.getVorpalId(app);
+		if (vorpalId == null) {
+			throw new IllegalStateException("this call has no Vorpal-ID, so its recording cannot be named");
+		}
+		return URI.create(RecordingDestinations.SCHEME + ":"
+				+ AnalyticsEventMapper.subject(vorpalId, Analytics.getCallStartedAt(app)));
+	}
+
+	/// Release the destination for a recording that has stopped.
+	///
+	/// Best effort by design: it runs during teardown, where a destination that
+	/// outlives its recording is a small bounded problem and an exception is not.
+	public static void releaseRecording(URI destination) {
+		RecordingDestinations destinations = RecordingDestinations.installed();
+		if (destinations == null || destination == null
+				|| !RecordingDestinations.SCHEME.equals(destination.getScheme())) {
+			return;
+		}
+		try {
+			destinations.release(destination.getSchemeSpecificPart());
+		} catch (RuntimeException e) {
+			sipLogger.warning("could not release the recording destination for " + destination + ": " + e);
+		}
+	}
+
+	private static URI resolveDestination(URI destination) throws MsControlException {
+		if (destination == null || !RecordingDestinations.SCHEME.equals(destination.getScheme())) {
+			return destination;
+		}
+		RecordingDestinations destinations = RecordingDestinations.installed();
+		if (destinations == null) {
+			throw new MsControlException("a " + RecordingDestinations.SCHEME
+					+ ": destination needs a RecordingDestinations on the classpath");
+		}
+		try {
+			String resolved = destinations.resolve(destination.getSchemeSpecificPart());
+			if (resolved == null || resolved.isEmpty()) {
+				throw new MsControlException("no destination was produced for " + destination);
+			}
+			return URI.create(resolved);
+		} catch (MsControlException e) {
+			throw e;
+		} catch (Exception e) {
+			throw new MsControlException("could not resolve " + destination, e);
+		}
 	}
 
 	/// Feed the caller's SDP offer to `networkConnection` and run `onAnswer` when
