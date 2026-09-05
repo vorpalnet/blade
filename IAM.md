@@ -193,6 +193,107 @@ AdminServer to the engines by the machinery that already distributes
 configuration. There is no new editor, no new distribution path, and no policy
 language to learn.
 
+### How a recording comes to have a department
+
+A rule matches on the record, so something has to have written the record's
+attributes down. Four steps, three of which already existed:
+
+1. A `Selector` derives the value from the signaling and writes it to session
+   state. `TableSelector` is the one that maps a dialed number or a queue onto a
+   department, as configuration rather than code; `AttributeSelector` covers a
+   trunk that already sends the department in a header.
+2. `MediaCallflow.recordingAttributes(app, names)` copies the named session
+   attributes into a map. This step exists because session state dies with the
+   call and the access decision happens days later.
+3. `MediaCallflow.record(mediaGroup, uri, attributes, onComplete)` passes them to
+   `RecordingDestinations.describe`, which writes them down before the first byte
+   of audio.
+4. `RecordingArchive.attributes` reads them back at review time, and the rule
+   matches on what it returns.
+
+Three properties of step 3 are load-bearing.
+
+**Written at the start.** A recording classified when it finishes is
+unclassified while it runs, and stays unclassified forever if the node dies
+mid-call. That would leave content in the store that no rule can describe.
+
+**Written once.** The OCI implementation writes to a bucket carrying a retention
+rule, so a second write is refused. Verified against the live service: an attempt
+to reclassify a recording from `cardiology` to `billing` returns
+`403 RetentionRuleViolation` and the stored department does not change. Nobody
+can relabel a recording to widen who may hear it.
+
+**Not written by the media server.** The media server holds a capability scoped
+to the recording's prefix, so it could write this object too. The classification
+is what the policy matches on, so anything that can write it can grant itself
+access. The application writes it with its own credential instead, and the media
+plane never holds that power.
+
+A recording whose classification failed to write matches no rule that names an
+attribute. It fails closed, reachable only through a rule with an empty `match`,
+which is the compliance path and is meant to be.
+
+### One call, several conversations
+
+A transfer replaces the party on the far side, and the answer to "who may hear
+this" changes at that instant. So the recording changes with it: the application
+stops the current recording, releases its destination, and starts a new one named
+by `MediaCallflow.conversationUri`. Each conversation carries its own department.
+
+A billing reviewer is then granted the billing conversation and refused the
+support conversation that preceded it in the same call, with an audit record for
+each. That is minimum-necessary applied to a call rather than asserted about one.
+
+The conversations of a call are **not** related by their identifiers, which are
+flat and unique. They share a `call` attribute, stamped on every recording by
+`recordingAttributes`. Keeping the relationship in an attribute rather than in
+the object key means a rule can match on the call exactly as it matches on the
+department, the store needs no hierarchy, and nothing about the layout has to
+change to support a call that turns out to have three conversations instead of
+one.
+
+Two consequences worth stating.
+
+**Deciding where a conversation ends is the application's job.** The media server
+is told to stop writing here and start writing there. It has no notion of a
+conversation, a transfer, or a department, and needs none. The application is the
+only party that knows what the call means.
+
+**Hold is not a boundary.** A call on hold, and a PCI pause over a card number,
+both pause the recorder and resume into the same recording. The muted span never
+reaches the muxer, so it is not in the file to be found later. A boundary is a
+change of party; a pause is an absence of content.
+
+### Matching a caller against a record
+
+`${subject.<attribute>}` compares a record attribute against the *caller's* own,
+so one rule can cover every department:
+
+```yaml
+- name:   "Staff hear their own department's calls"
+  match:  { department: "${subject.department}" }
+  permit: [ phi:list, phi:play ]
+```
+
+**This works on the bearer-token path and not on the browser path.** A validated
+token carries claims, so `SubjectAttributes.of(JwtIdentity)` supplies them. A
+container-authenticated caller arrives as realm principals, and
+`RealmSubjectAttributes.attributes()` returns empty, because a realm subject
+carries group membership and not arbitrary attributes. A rule referencing a
+subject attribute the deployment does not supply matches nothing, so the rule
+above silently grants nothing to a browser user.
+
+For browser callers, key the rule on the group and name the department
+explicitly. It is more verbose and it is honest about what the container
+supplies:
+
+```yaml
+- name:   "Cardiology reviewers"
+  groups: [ acme-cardiology ]
+  match:  { department: cardiology }
+  permit: [ phi:list, phi:play ]
+```
+
 ### Why not WebLogic's own authorization provider
 
 WebLogic ships an XACML authorizer and role mapper, and they were the first thing
@@ -224,22 +325,44 @@ Four properties make it an audit trail rather than a log:
    event has nowhere to put content, and a test enforces that.
 3. **It is append-only, and not editable by its subjects.** The sink's database
    user gets `INSERT` and `SELECT` and nothing else. That is a grant, not code,
-   so it is cheap to implement and easy to show an auditor.
+   so it is cheap to implement and easy to show an auditor. *(Property of the
+   sink, which is not built. See the note below.)*
 4. **It outlives what it describes.** Access records are kept longer than the
    recordings they refer to. Confirm the retention obligation with your own
    counsel; §164.316(b)(2)(i) sets six years for required documentation, and
    whether your audit records fall under it is a question for a lawyer, not for
-   this document.
+   this document. *(Also the sink's property.)*
 
 Access records are deliberately **not** analytics events and do not ride the
 analytics subscription. Analytics records what a call did; this records what a
 person did. They answer to different readers, under different retention, with
 different integrity requirements.
 
-> **Deployment dependency.** The durable sink wants a datasource. The analytics
-> service uses `jdbc/BladeAnalytics`, which is not provisioned on every
-> environment yet. Until it is, access records are published to the bus and a
-> subscriber has to store them.
+> **The sink is not built. Read this before quoting §164.312(b) to anyone.**
+>
+> Every decision is evaluated, and every decision is published. Nothing
+> subscribes. The framework declares both access types with `persist=false`, which
+> keeps them out of the analytics database on purpose, and the audit sink that was
+> to own them instead does not exist yet. So today an access record reaches the
+> bus and is gone: there is nothing to query, and nothing an auditor can be shown.
+>
+> What that costs is the examining half of §164.312(b). The recording half is
+> real, and the decision it records is enforced. What is missing is durable
+> storage, and with it properties 3 and 4 above, which are properties of a sink
+> rather than of the record.
+>
+> Two decisions are open. The first is where the records land: the analytics
+> datasource `jdbc/BladeAnalytics` is not provisioned on every environment yet,
+> and object storage under a retention rule is the other candidate, since it makes
+> the append-only property a stored property of the bucket rather than a database
+> grant that a later administrator can widen. The second is whether the sink ships
+> open in BLADE or closed in the commercial layer, which the recording path
+> already answers for content by putting the interface in BLADE and the OCI
+> implementation behind it.
+>
+> The subscriber pattern to follow is `services/analytics`:
+> `SubscriptionRegistrar.start(...)` from a `@WebListener`, selecting the two
+> access types by name.
 
 ---
 
@@ -254,6 +377,7 @@ The framework supplies the decision, the vocabulary, and the record:
 | `AccessEvaluator` | The single decision point |
 | `AccessDecision` | The answer, with the rule or the reason |
 | `SubjectAttributes` | Who the caller is. `RealmSubjectAttributes` adapts a container subject; a validated bearer token adapts through `SubjectAttributes.of(JwtIdentity)` |
+| `ContainerSubject` | Finds the authenticated subject for the current thread |
 | `AccessEvent` | The audit record, and its CloudEvents envelope |
 
 An application that serves content calls the evaluator once per request, acts on
@@ -261,12 +385,51 @@ the answer, and publishes the event either way. Nothing else decides: an
 authorization rule enforced in four places is enforced in three, and the fourth
 is the one an auditor finds.
 
-One integration point is left to the deployment on purpose. Obtaining the
-authenticated subject for the current thread means the container's own security
-API, which is not on the framework's compile path, and putting it there would
-change what every consuming repository must install before it can build. So
-`RealmSubjectAttributes.of(subject, username)` takes the subject as an argument.
-The username is `HttpServletRequest.getUserPrincipal().getName()`.
+`RealmSubjectAttributes.of(subject, username)` takes the subject as an argument,
+so an application can build a caller from any source. To get the real one, ask
+`ContainerSubject.current()`. The username is
+`HttpServletRequest.getUserPrincipal().getName()`.
+
+```java
+SubjectAttributes caller = RealmSubjectAttributes.of(
+        ContainerSubject.current(),
+        request.getUserPrincipal().getName());
+```
+
+### The one trap worth knowing about
+
+Do not reach for `Subject.getSubject(AccessController.getContext())`. It is the
+call most examples show, and here it returns nothing.
+
+It reads identity from the JAAS access control context, which only
+`Subject.doAs` populates, and a servlet request is not dispatched inside one. On
+current Java it does worse than return null: that mechanism belongs to the
+Security Manager, the Security Manager is disallowed by default, and the call
+throws.
+
+The failure is silent and it looks like success. No subject means no groups, so
+every rule naming a group stops matching and the policy grants nothing to
+anybody. A policy that denies everyone looks like a strict policy, not a broken
+one. The symptom is an empty listing and a `403` for a caller you are certain
+should be allowed, including one holding every platform role.
+
+`ContainerSubject` exists to make that unavailable. It asks the container first,
+falls back to `Subject.current()`, and returns null rather than throwing, so a
+thread with no identity produces a clean deny and an audit record instead of a
+`500`. It reaches the container's security API reflectively, which keeps it off
+the framework's compile path and leaves what a consuming repository must install
+unchanged.
+
+To confirm which lookup answered on a live node, set the application's
+`loggingLevel` to `FINE` and look for the caller line:
+
+```
+blade-recordings recordings: caller RealmSubjectAttributes[weblogic groups=[Administrators]] via container
+```
+
+`via container` with the expected groups is the healthy state. `via none`, or a
+caller whose group set is empty when the directory says otherwise, means the
+identity is not reaching the application and no policy change will fix it.
 
 ---
 

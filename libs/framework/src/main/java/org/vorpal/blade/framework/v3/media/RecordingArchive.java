@@ -2,6 +2,7 @@ package org.vorpal.blade.framework.v3.media;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
@@ -80,6 +81,24 @@ public interface RecordingArchive {
 	/// every request, and only exporting hands over something that outlives the
 	/// decision.
 	void writeTo(String recordingId, OutputStream out) throws IOException;
+
+	/// The stored attributes of one recording, as written when it started.
+	///
+	/// What an access rule matches on for a single recording, so a decision about
+	/// playing or exporting rests on the same facts a decision about listing did.
+	/// Deriving them from the identifier instead would limit a policy to whatever
+	/// the id happens to encode, which is a call correlator and a timestamp and
+	/// nothing a compliance officer would recognise.
+	///
+	/// **An unknown recording returns empty, and empty denies.** Every rule that
+	/// names an attribute fails to match, so a recording the archive cannot
+	/// describe is refused rather than waved through, and a caller learns nothing
+	/// about whether it exists.
+	///
+	/// @return the attributes, never null
+	default Map<String, String> attributes(String recordingId) throws IOException {
+		return Collections.emptyMap();
+	}
 
 	/// The installed implementation, or null where nothing reads recordings back.
 	///

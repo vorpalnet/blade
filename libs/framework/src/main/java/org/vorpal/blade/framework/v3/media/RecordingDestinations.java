@@ -53,6 +53,40 @@ public interface RecordingDestinations {
 	///         reach its store has not recorded anything.
 	String resolve(String recordingId) throws Exception;
 
+	/// Record what this recording *is*, before any audio exists.
+	///
+	/// These are the attributes an access rule matches on: department, tenant,
+	/// queue, agent. [org.vorpal.blade.framework.v3.security.AccessRule] compares
+	/// them against the caller, so they are an access-control input rather than
+	/// decoration, and three properties follow from that.
+	///
+	/// **Written at the start, not the end.** A recording classified only when it
+	/// finishes is unclassified while it runs and stays unclassified forever if
+	/// the node dies mid-call. That leaves content in the store that no rule can
+	/// describe, which is the one outcome worth engineering against.
+	///
+	/// **Written once.** Where the store enforces retention the object cannot be
+	/// rewritten, which is the point: the classification a decision was made
+	/// against is the classification that was true when the call happened, and
+	/// nobody can revise it afterwards to widen who may listen.
+	///
+	/// **Not written by the media server.** Where the media server holds a
+	/// capability scoped to the recording's own prefix, an implementation should
+	/// write this with its own credential instead. Anything that can write the
+	/// classification can grant itself access, and that is not a power the media
+	/// plane needs.
+	///
+	/// Failure is not fatal to the recording, and deliberately fails closed: a
+	/// recording with no attributes matches no rule that names one, so it is
+	/// reachable only by a rule with an empty `match`, which is how a compliance
+	/// role still recovers it. The default does nothing, for implementations that
+	/// store no metadata.
+	///
+	/// @param recordingId the logical id, `rec:` already stripped
+	/// @param attributes  what the deployment knows about the call, never null
+	default void describe(String recordingId, java.util.Map<String, String> attributes) {
+	}
+
 	/// Release the destination for a recording that has stopped.
 	///
 	/// Where the destination was a capability, this is what makes its life equal

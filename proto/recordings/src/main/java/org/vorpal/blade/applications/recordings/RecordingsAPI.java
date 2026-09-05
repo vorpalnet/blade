@@ -5,6 +5,8 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.GET;
@@ -22,6 +24,7 @@ import org.vorpal.blade.framework.v3.events.EventBus;
 import org.vorpal.blade.framework.v3.media.RecordingArchive;
 import org.vorpal.blade.framework.v3.security.AccessDecision;
 import org.vorpal.blade.framework.v3.security.AccessEvaluator;
+import org.vorpal.blade.framework.v3.security.ContainerSubject;
 import org.vorpal.blade.framework.v3.security.DataPermission;
 import org.vorpal.blade.framework.v3.security.RealmSubjectAttributes;
 import org.vorpal.blade.framework.v3.security.SubjectAttributes;
@@ -135,16 +138,56 @@ public class RecordingsAPI {
 		return Response.ok(body).build();
 	}
 
+	/// Hand over a copy of one recording.
+	///
+	/// Byte-for-byte the same audio [#play] streams, behind a different
+	/// permission on purpose. Play is a listen inside this application, where the
+	/// next request is audited too. Export is the rung where the file leaves and
+	/// every control here stops applying to it, so a policy can grant the first
+	/// without granting the second, and most should.
+	@GET
+	@Path("{id}/export")
+	@Produces("audio/mp4")
+	public Response export(@PathParam("id") String id) {
+		SubjectAttributes caller = caller();
+		RecordingArchive archive = RecordingArchive.installed();
+		if (archive == null) {
+			return Response.status(Response.Status.SERVICE_UNAVAILABLE).build();
+		}
+
+		Map<String, String> attributes = attributesOf(archive, id);
+		AccessDecision decision = evaluator().evaluate(caller, DataPermission.EXPORT, attributes);
+		publish(caller, decision, "recording", id);
+
+		if (!decision.isAllowed()) {
+			return Response.status(Response.Status.FORBIDDEN).build();
+		}
+
+		StreamingOutput body = new StreamingOutput() {
+			@Override
+			public void write(OutputStream out) throws IOException {
+				archive.writeTo(id, out);
+			}
+		};
+		return Response.ok(body)
+				.header("Content-Disposition", "attachment; filename=\"" + id + ".m4a\"")
+				.build();
+	}
+
 	/// Who is asking, as the container knows them.
 	private SubjectAttributes caller() {
-		javax.security.auth.Subject subject = null;
-		try {
-			subject = javax.security.auth.Subject.getSubject(java.security.AccessController.getContext());
-		} catch (RuntimeException ignore) {
-			// No subject on this thread; the null caller below denies.
-		}
+		// ContainerSubject, not Subject.getSubject(AccessController.getContext()).
+		// The JAAS lookup returns null on a servlet thread, which reads as "no
+		// groups" and silently stops every group rule from matching. See that
+		// class for why.
+		javax.security.auth.Subject subject = ContainerSubject.current();
 		String name = (request.getUserPrincipal() == null) ? null : request.getUserPrincipal().getName();
-		return RealmSubjectAttributes.of(subject, name);
+		SubjectAttributes attributes = RealmSubjectAttributes.of(subject, name);
+		Logger logger = SettingsManager.getSipLogger();
+		if (logger != null && logger.isLoggable(Level.FINE)) {
+			logger.fine("recordings: caller " + attributes + " via " + ContainerSubject.source());
+		}
+		return attributes;
 	}
 
 	private AccessEvaluator evaluator() {
@@ -154,12 +197,31 @@ public class RecordingsAPI {
 
 	/// The record attributes a rule matches on. A recording the archive does not
 	/// know about yields none, so every rule with a `match` fails closed.
+	///
+	/// The archive is asked rather than the identifier parsed. A rule turns on
+	/// facts like `department` or `queue`, which are stored beside the recording
+	/// when it starts; the identifier carries a call correlator and a timestamp
+	/// and nothing a policy would name. Deriving attributes from the id was
+	/// exactly enough to make `${subject.name}` rules work and to make every rule
+	/// naming a business attribute silently match nothing.
 	private Map<String, String> attributesOf(RecordingArchive archive, String id) {
 		Map<String, String> attributes = new java.util.LinkedHashMap<>();
 		attributes.put("recordingId", id);
 		int dot = id.indexOf('.');
 		if (dot > 0) {
 			attributes.put("vorpalId", id.substring(0, dot));
+		}
+		try {
+			attributes.putAll(archive.attributes(id));
+		} catch (IOException unreadable) {
+			// Drop the id-derived attributes too, rather than decide on half the
+			// facts. Keeping them would let a rule match on a subset of the
+			// record, which is how a caller reaches a recording whose department
+			// they were never granted. What remains reachable is a rule naming no
+			// attribute at all, which is the compliance path and is meant to be.
+			SettingsManager.getSipLogger().warning("recordings: the attributes of " + id
+					+ " could not be read, so only a rule with an empty match can reach it: " + unreadable);
+			return java.util.Collections.emptyMap();
 		}
 		return attributes;
 	}

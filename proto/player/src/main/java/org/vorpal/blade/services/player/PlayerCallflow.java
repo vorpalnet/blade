@@ -156,7 +156,11 @@ public class PlayerCallflow extends MediaCallflow {
 							: URI.create(configured.replace("{id}", appId.replaceAll("[^A-Za-z0-9._-]", "_")));
 					anchor.recording = dest;
 					sipLogger.info(invite, "PlayerCallflow: recording to " + dest.getScheme() + ":...");
-					record(mg, dest, rec -> {
+					// What the recording IS, copied from session state before any audio.
+					// A Selector put these there during the call; the access decision
+					// happens days later, when the session is long gone.
+					record(mg, dest, MediaCallflow.recordingAttributes(
+							invite.getApplicationSession(), cfg.getRecordAttributes()), rec -> {
 						// recording continues until teardown flushes it
 					});
 				} catch (Exception e) {

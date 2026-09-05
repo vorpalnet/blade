@@ -2,6 +2,7 @@ package org.vorpal.blade.services.player;
 
 import java.io.Serializable;
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
@@ -30,6 +31,7 @@ public class PlayerSettings extends Configuration implements Serializable {
 	private boolean loop = false;
 	private boolean record = false;
 	private String recordUri;
+	private LinkedList<String> recordAttributes = new LinkedList<>();
 	private boolean conference = false;
 
 	@JsonPropertyDescription("JSR-309 driver name to obtain the media-server factory from "
@@ -93,6 +95,20 @@ public class PlayerSettings extends Configuration implements Serializable {
 
 	public void setRecordUri(String recordUri) {
 		this.recordUri = recordUri;
+	}
+
+	@JsonPropertyDescription("Session attribute names to carry onto the recording as the attributes an "
+			+ "access rule matches on, such as department or queue. A Selector writes the value into "
+			+ "session state during the call; this copies the named ones onto the recording before any "
+			+ "audio, because session state dies with the call and the access decision happens later. "
+			+ "Names absent from the session are left out. Empty means the recording carries no "
+			+ "attributes, so only a rule with an empty match will reach it.")
+	public LinkedList<String> getRecordAttributes() {
+		return recordAttributes;
+	}
+
+	public void setRecordAttributes(LinkedList<String> recordAttributes) {
+		this.recordAttributes = recordAttributes;
 	}
 
 	@JsonPropertyDescription("Conference mode: callers to the same dialed user (the To user part) share "

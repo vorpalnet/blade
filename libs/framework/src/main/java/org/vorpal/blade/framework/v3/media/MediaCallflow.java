@@ -3,6 +3,9 @@ package org.vorpal.blade.framework.v3.media;
 import java.io.IOException;
 import java.io.Serializable;
 import java.net.URI;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.nio.charset.StandardCharsets;
 
 import javax.media.mscontrol.MediaEvent;
@@ -257,9 +260,97 @@ public abstract class MediaCallflow extends Callflow {
 	/// `file:` still works and needs nothing installed.
 	protected void record(MediaGroup mediaGroup, URI destination, Callback<RecorderEvent> onComplete)
 			throws MsControlException {
+		record(mediaGroup, destination, java.util.Collections.<String, String>emptyMap(), onComplete);
+	}
+
+	/// Record, and say what the recording is.
+	///
+	/// `attributes` are what an access rule matches on: department, tenant,
+	/// queue, agent. They are written down before the first byte of audio, so a
+	/// recording is classified while it is still running and stays classified if
+	/// the node dies. See [RecordingDestinations#describe] for why that ordering
+	/// matters and why the media server is not the thing that writes them.
+	///
+	/// Describing is best effort and never fails the recording. It fails closed:
+	/// attributes that did not get written match no rule that names one, so the
+	/// recording is reachable only by a rule with an empty `match`. Refusing to
+	/// record at all would be worse, because the alternative to a poorly labelled
+	/// recording is usually no evidence.
+	protected void record(MediaGroup mediaGroup, URI destination, Map<String, String> attributes,
+			Callback<RecorderEvent> onComplete) throws MsControlException {
 		Recorder recorder = mediaGroup.getRecorder();
 		arm(recorder, RECORD, onComplete);
-		recorder.record(resolveDestination(destination), null, Parameters.NO_PARAMETER);
+		URI resolved = resolveDestination(destination);
+		describeRecording(destination, attributes);
+		recorder.record(resolved, null, Parameters.NO_PARAMETER);
+	}
+
+	/// Harvest the recording's attributes from session state.
+	///
+	/// This is the bridge between the two halves of classifying a call. A
+	/// [org.vorpal.blade.framework.v3.configuration.selectors.Selector] derives a
+	/// value from the signaling and writes it to session state, which is where a
+	/// `TableSelector` lands a department mapped from a dialed number or a queue.
+	/// Session state dies with the call, and the access decision happens days
+	/// later, so the value has to be copied onto the recording while the call is
+	/// still up. That copy is this method.
+	///
+	/// Names absent from the session are left out rather than stored empty. A
+	/// missing attribute and an attribute that is present but blank mean
+	/// different things to a rule: the first matches nothing, the second matches
+	/// a rule looking for blank.
+	///
+	/// @param app   the call's session, where selectors wrote
+	/// @param names the attribute names to carry onto the recording
+	/// @return the attributes that were present, never null
+	public static Map<String, String> recordingAttributes(SipApplicationSession app, Collection<String> names) {
+		Map<String, String> found = new LinkedHashMap<>();
+		if (app == null) {
+			return found;
+		}
+
+		// The call this recording belongs to, stamped on every recording rather
+		// than left to the identifier. A call with a transfer produces several
+		// recordings with unrelated ids, and this is what says they were one
+		// call. Putting the relationship in an attribute rather than in the
+		// object key means a rule can match on it like any other fact, and the
+		// store needs no hierarchy to express it.
+		Long vorpalId = Analytics.getVorpalId(app);
+		if (vorpalId != null) {
+			found.put("call", AnalyticsEventMapper.subject(vorpalId, Analytics.getCallStartedAt(app)));
+		}
+
+		if (names == null) {
+			return found;
+		}
+		for (String name : names) {
+			if (name == null) {
+				continue;
+			}
+			Object value = app.getAttribute(name);
+			if (value != null) {
+				found.put(name, String.valueOf(value));
+			}
+		}
+		return found;
+	}
+
+	/// Write the recording's attributes through the deployment's
+	/// [RecordingDestinations]. Never throws: see [#record].
+	private static void describeRecording(URI destination, Map<String, String> attributes) {
+		RecordingDestinations destinations = RecordingDestinations.installed();
+		if (destinations == null || destination == null || attributes == null || attributes.isEmpty()
+				|| !RecordingDestinations.SCHEME.equals(destination.getScheme())) {
+			return;
+		}
+		try {
+			destinations.describe(destination.getSchemeSpecificPart(), attributes);
+		} catch (Exception e) {
+			// Loud, because a recording nobody can find later is a quiet failure
+			// with a long delay before anyone notices.
+			sipLogger.severe("the recording " + destination + " could not be classified, so only a rule with an "
+					+ "empty match will reach it: " + e);
+		}
 	}
 
 	/// The logical name of the recording for this call: `rec:<vorpalId>.<startedAt>`.
@@ -277,6 +368,53 @@ public abstract class MediaCallflow extends Callflow {
 		}
 		return URI.create(RecordingDestinations.SCHEME + ":"
 				+ AnalyticsEventMapper.subject(vorpalId, Analytics.getCallStartedAt(app)));
+	}
+
+	/// The name of a **new conversation** within this call.
+	///
+	/// One call can hold several conversations. A transfer replaces the party on
+	/// the far side, and who may hear what changes at that instant, so the
+	/// recording changes with it: the application stops the current recording,
+	/// releases its destination, and starts a new one named by this.
+	///
+	/// ## Why a whole recording and not a marked span
+	///
+	/// A conversation boundary is the line at which the answer to "who may hear
+	/// this" changes. Making it a boundary between two recordings lets the
+	/// existing per-recording decision do all the work: a billing reviewer is
+	/// granted the billing conversation and refused the support one that preceded
+	/// it, with an audit record for each. Keeping one recording and marking spans
+	/// inside it would mean authorizing a time range and serving a clipped
+	/// stream, which is a second access-control mechanism to get right.
+	///
+	/// This is not the timed chunking that was removed. That split on a clock,
+	/// which served no listener and existed only to bound a credential's life.
+	/// This splits on the only boundary that means anything to a reviewer.
+	///
+	/// ## Nothing about this reaches the media server
+	///
+	/// The media server is told to stop writing here and start writing there. It
+	/// has no notion of a conversation, a transfer, or a department, and needs
+	/// none. Deciding where one conversation ends is the application's job,
+	/// because the application is the only party that knows what the call means.
+	///
+	/// ## How conversations of one call are found together
+	///
+	/// Not by the identifier, which is flat and unique per conversation, but by
+	/// the `call` attribute that [#recordingAttributes] stamps on every
+	/// recording. The relationship is data the policy can match on rather than a
+	/// shape in an object key, so a rule can name the call as readily as the
+	/// conversation, and the store needs no hierarchy to express it.
+	///
+	/// The application must release the previous destination at the boundary. A
+	/// capability outlives its recording otherwise, until its backstop expiry.
+	public static URI conversationUri(SipApplicationSession app) {
+		Long vorpalId = Analytics.getVorpalId(app);
+		if (vorpalId == null) {
+			throw new IllegalStateException("this call has no Vorpal-ID, so its conversation cannot be named");
+		}
+		return URI.create(RecordingDestinations.SCHEME + ":"
+				+ AnalyticsEventMapper.subject(vorpalId, new java.util.Date()));
 	}
 
 	/// Release the destination for a recording that has stopped.

@@ -20,6 +20,10 @@ public class PlayerSettingsSample extends PlayerSettings {
 		setLoop(false);
 		setRecord(false);
 		setRecordUri("file:///tmp/recordings/recording.webm");
+		// Named, not empty: the sample shows the shape a policy matches on. With no
+		// names the recording carries no attributes and only a rule with an empty
+		// match reaches it, which is safe and teaches nothing.
+		setRecordAttributes(new java.util.LinkedList<>(java.util.Arrays.asList("department", "queue", "agent")));
 		setConference(false);
 	}
 }
