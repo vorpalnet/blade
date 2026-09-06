@@ -9,6 +9,7 @@ import javax.media.mscontrol.MediaSession;
 import javax.media.mscontrol.MsControlException;
 import javax.media.mscontrol.join.Joinable;
 import javax.media.mscontrol.mediagroup.MediaGroup;
+import javax.media.mscontrol.mixer.MediaMixer;
 import javax.media.mscontrol.networkconnection.NetworkConnection;
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipApplicationSession;
@@ -37,7 +38,8 @@ import org.vorpal.blade.framework.v3.media.MediaCallflow;
 ///
 /// 1. Answer the caller from the media server, and hold that answer.
 /// 2. Ask the media server for an offer, and send it to the callee.
-/// 3. Apply the callee's answer, bridge the two legs, and start recording.
+/// 3. Apply the callee's answer and start recording; both legs were put on the
+///    mixer before any of this.
 ///
 /// Step 1 finishes before the outbound INVITE goes out, which is why
 /// [RecorderServlet] defers the send. The caller's answer is known early and
@@ -62,6 +64,10 @@ public class RecorderAnchor extends MediaCallflow {
 		public NetworkConnection caller;
 		public NetworkConnection callee;
 		public volatile MediaGroup mg;
+
+		/// The hub both legs meet through. See begin() for why they are not
+		/// connected to each other.
+		public MediaMixer mixer;
 
 		/// The media server's answer to the caller, produced before the callee
 		/// was even called and handed back when the callee answers.
@@ -95,23 +101,29 @@ public class RecorderAnchor extends MediaCallflow {
 		anchor.callee = ms.createNetworkConnection(NetworkConnection.BASIC);
 		LIVE.put(app.getId(), anchor);
 
-		// Bridge the two legs here, before either has negotiated and before a
-		// packet can arrive, rather than after the callee answers. Wiring the
-		// topology before media flows is the safer order on principle.
+		// The two legs meet through a mixer, not by being connected to each other.
 		//
-		// It is NOT a fix for the recording problem below, and it was measured:
-		// bridging late gave 1,747 bytes, bridging here gave 1,564, and not
-		// bridging at all gave 24,949 for the same twenty seconds of audio.
+		// Connecting them directly is the obvious way to build a two-party call
+		// and it cannot be recorded on this media server. The caller's endpoint
+		// would then feed two sinks, the far leg and the recorder, and the leg
+		// stops with `streaming stopped, reason not-linked` about 130ms later.
+		// Measured, same twenty seconds of audio: bridged directly 1,564 bytes,
+		// not bridged at all 24,949.
 		//
-		// KNOWN DEFECT, unresolved. Bridging the legs costs almost all of the
-		// recording. With the bridge the caller leg reports `streaming stopped,
-		// reason not-linked` about 130ms in and never recovers; without it the
-		// recording is whole. Ruled out by experiment: the moment the bridge is
-		// made, an RTP echo loop at the far end, and connecting one media type
-		// instead of all of them. What is left is that the caller endpoint is
-		// feeding two sinks at once, the callee and the recorder, which the media
-		// server appears not to sustain.
-		join(anchor.caller, Joinable.Direction.DUPLEX, anchor.callee);
+		// Through the mixer nothing feeds two sinks. Each leg has its own hub
+		// port, the recorder has a port of its own, and the hub does the fan-out.
+		// The recorder's port also receives the mix of both parties rather than
+		// one of them, so the recording is the conversation instead of one side
+		// of it.
+		//
+		// It is not free. A mixer costs roughly four times the CPU per participant
+		// against an anchored two-party call, and it destroys the speaker
+		// separation that scoring a call for synthetic speech depends on. Both are
+		// worth revisiting if the leg-to-leg path is ever fixed; neither is worth
+		// a recording that stops after half a second.
+		anchor.mixer = ms.createMediaMixer(MediaMixer.AUDIO);
+		join(anchor.caller, Joinable.Direction.DUPLEX, anchor.mixer);
+		join(anchor.callee, Joinable.Direction.DUPLEX, anchor.mixer);
 
 		if (callerOffer == null || callerOffer.length == 0) {
 			// Late media: the caller offered nothing, so the media server offers
@@ -126,7 +138,8 @@ public class RecorderAnchor extends MediaCallflow {
 		});
 	}
 
-	/// Apply the callee's answer, bridge the legs, and start recording.
+	/// Apply the callee's answer and start recording. The legs were put on the
+	/// mixer in begin().
 	public void connect(SipApplicationSession app, byte[] calleeAnswer, RecorderSettings cfg)
 			throws MsControlException {
 
@@ -141,25 +154,25 @@ public class RecorderAnchor extends MediaCallflow {
 
 	/// Begin a conversation's recording on an anchored call.
 	///
-	/// ## One media group taps one leg
+	/// ## The group taps the mix, not a leg
 	///
-	/// A JSR-309 `MediaGroup` looks like it can be joined to several things, and
-	/// the Gryphon driver's does not work that way: its `join` records *which*
-	/// leg the group serves, so joining it to a second leg silently replaces the
-	/// first rather than adding to it. Joining caller then callee therefore taps
-	/// the callee alone, and if the callee is quiet the recording is empty with
-	/// nothing in any log to say why. Measured: a call carrying 18 seconds of
-	/// G.711 from the caller produced a classified recording with zero segments.
+	/// The recorder is joined to the mixer both legs meet through, so it records
+	/// the conversation rather than one side of it, and no element ever feeds two
+	/// sinks. See [#begin] for why that matters: tapping a leg directly makes that
+	/// leg's endpoint serve both the far leg and the recorder, and it then stops
+	/// with `not-linked` about 130ms in.
 	///
-	/// So this taps the caller leg, and the callee's audio is **not** in this
-	/// recording. Capturing both sides needs a second group and recorder on the
-	/// other leg, which is the dual-channel work, and it is the right shape
-	/// anyway: a mixer costs roughly four times the CPU per participant and
-	/// destroys the speaker separation that scoring a call for synthetic speech
-	/// depends on.
+	/// Measured on the rig, the same twenty-second call: tapping a leg produced
+	/// 1,564 bytes across 2 segments; through the mixer, 333,180 bytes across 6,
+	/// reassembling to 20.01 seconds of audio.
 	///
-	/// DUPLEX rather than RECV because that is the direction `proto/player` uses
-	/// on the path that is known to produce audio.
+	/// A JSR-309 `MediaGroup` also cannot tap two things at once. The driver's
+	/// `join` records *which* source the group serves, so joining a second replaces
+	/// the first silently. That is another reason the mix is the right source: one
+	/// join, both parties.
+	///
+	/// The hub mixes at 48kHz stereo, so a recording is far larger than the 8kHz
+	/// mono the call actually carries. Worth revisiting for storage cost.
 	void startRecording(SipApplicationSession app, Anchor anchor, RecorderSettings cfg) {
 		if (cfg == null || !cfg.isRecord()) {
 			return;
@@ -167,7 +180,7 @@ public class RecorderAnchor extends MediaCallflow {
 		try {
 			if (anchor.mg == null) {
 				anchor.mg = anchor.ms.createMediaGroup(MediaGroup.PLAYER_RECORDER_SIGNALDETECTOR);
-				join(anchor.mg, Joinable.Direction.DUPLEX, anchor.caller);
+				join(anchor.mg, Joinable.Direction.DUPLEX, anchor.mixer);
 			}
 			URI destination = MediaCallflow.conversationUri(app);
 			anchor.recording = destination;
