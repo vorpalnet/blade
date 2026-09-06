@@ -45,6 +45,19 @@ SECRET="$(dirname "$0")/.nmsecret"          # one line:  NM_PASSWORD=...
 [ -z "${NM_PASSWORD:-}" ] && [ -f "$SECRET" ] && . "$SECRET"
 [ -z "${NM_PASSWORD:-}" ] && { read -rs -p "Node Manager password for ${NM_USER}: " NM_PASSWORD; echo; }
 
+# --- Pin the launch to a CONCRETE versioned home -----------------------------
+# config.xml's ServerStart carries paths through the 'current' symlink. Resolve
+# that link ONCE, here, and substitute the concrete versioned path into the
+# relayed ClassPath/Arguments — so a running JVM is pinned by path and a later
+# 'current' flip (update.sh) is inert to it, taking effect only at the next
+# start. BLADE_OCCAS_HOME overrides the resolution: update.sh's canary uses it
+# to start one server on a candidate home while 'current' still points at the
+# blessed one. Both the link path and today's resolved real path are rewritten,
+# because a hand-maintained ServerStart may carry either form.
+BLADE_LINK_REAL="$(readlink -f "$MW_HOME" 2>/dev/null || echo "$MW_HOME")"
+BLADE_PIN_HOME="${BLADE_OCCAS_HOME:-$BLADE_LINK_REAL}"
+[ -d "$BLADE_PIN_HOME/wlserver" ] || { echo "BLADE_OCCAS_HOME is not an Oracle home: $BLADE_PIN_HOME" >&2; exit 1; }
+
 WLST="$MW_HOME/oracle_common/common/bin/wlst.sh"
 [ -x "$WLST" ]        || { echo "wlst.sh not found/executable: $WLST" >&2; exit 1; }
 [ -d "$DOMAIN_HOME" ] || { echo "app domain home not found: $DOMAIN_HOME" >&2; exit 1; }
@@ -156,6 +169,14 @@ def _nmstart(sv, cp, args):
 try:
     (SRV_CP, SRV_ARGS) = _read_serverstart()
     print('ServerStart from config.xml: ClassPath ' + str(len(SRV_CP)) + ' chars, Arguments ' + str(len(SRV_ARGS)) + ' chars')
+    # De-symlink: pin this launch to one concrete versioned home (see the shell
+    # comment above). Trailing '/' keeps '/opt/oracle/occas/current2' style
+    # near-misses from matching.
+    for _from in ['${MW_HOME}', '${BLADE_LINK_REAL}']:
+        if _from != '' and _from != '${BLADE_PIN_HOME}':
+            SRV_CP = SRV_CP.replace(_from + '/', '${BLADE_PIN_HOME}' + '/')
+            SRV_ARGS = SRV_ARGS.replace(_from + '/', '${BLADE_PIN_HOME}' + '/')
+    print('Launch pinned to concrete home: ${BLADE_PIN_HOME}')
     nmConnect('${NM_USER}', '${NM_PASSWORD}', '${NM_HOST}', '${NM_PORT}',
               '${DOMAIN_NAME}', '${DOMAIN_HOME}', '${NM_TYPE}')
     print('Connected to Node Manager at ${NM_HOST}:${NM_PORT}; ${NM_ACTION} ${ADMIN_SERVER}...')

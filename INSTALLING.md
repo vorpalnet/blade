@@ -212,8 +212,19 @@ demo certificate on a live TLS port.
    AdminServer (via NM). **Do this** — boot services are part of the install, not
    an afterthought; without them nothing restarts after a reboot.
 
+   The AdminServer unit tracks the server's JVM and carries `Restart=always`:
+   however the AdminServer exits — a crash, or a stop issued from the Remote
+   Console or WLST — systemd starts it again within seconds. A deliberate stop
+   is `sudo systemctl stop weblogic` (the dashboard's "Stop the AdminServer" row
+   does this for you after its graceful shutdown). Engine units do not restart
+   on a console stop: a drained engine stays down until you start it.
+
    This step also grows/shrinks the cluster, re-provisions engine hosts, verifies
    the cluster, deploys the WebLogic Remote Console, and opens firewall ports.
+
+   Patching a **running cluster** is `update.sh`'s job, not the dashboard's Patch
+   row (which patches this box's home in place, servers down): build → canary →
+   flip → roll, with rollback a symlink move. See [UPDATING.md](UPDATING.md).
 
    On the front-door box it also owns the **edge nginx reverse proxy**. The
    **nginx** row sets the vhosts (admin → AdminServer, apps → engine0), the

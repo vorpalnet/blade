@@ -2,6 +2,11 @@ package org.vorpal.blade.services.recorder;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Properties;
+import java.util.ServiceLoader;
+
+import javax.media.mscontrol.MsControlFactory;
+import javax.media.mscontrol.spi.Driver;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipApplicationSession;
@@ -13,8 +18,10 @@ import javax.servlet.sip.annotation.SipListener;
 import javax.servlet.sip.annotation.SipServlet;
 
 import org.vorpal.blade.framework.v2.b2bua.B2buaListener;
+import org.vorpal.blade.framework.v2.b2bua.InitialInvite;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v3.B2buaServlet;
+import org.vorpal.blade.framework.v3.media.MediaCallflow;
 import org.vorpal.blade.framework.v3.media.MediaDirection;
 import org.vorpal.blade.framework.v3.media.SdpMedia;
 import org.vorpal.blade.framework.v2.sdp.Sdp;
@@ -45,15 +52,22 @@ import org.vorpal.blade.framework.v2.sdp.Sdp;
 /// the `call` attribute stamped on every recording, not through the identifiers,
 /// which are flat.
 ///
-/// ## Status
+/// ## Hold
 ///
-/// **The media path is not wired yet.** Recording requires the call's media to
-/// be anchored on the media server, and anchoring a call that passes through a
-/// B2BUA means answering the caller's offer from the media server and offering
-/// the media server toward the callee, on both legs. That SDP interception is
-/// the remaining work and it cannot be proven without a live call, so it is
-/// absent rather than written blind. What is complete and tested is the part
-/// that decides *when* to start, pause, resume and stop.
+/// A re-INVITE that puts the call on hold pauses the recorder rather than ending
+/// the recording, so the held passage never reaches the muxer and the
+/// conversation stays one recording with a gap in it. The same primitive serves
+/// a PCI pause. See [org.vorpal.blade.framework.v3.media.PausableRecorder], and
+/// note that a driver which cannot pause records the passage anyway, which this
+/// logs rather than hides.
+///
+/// ## Failing toward the call
+///
+/// Every failure here lets the call proceed. A media server that cannot be
+/// reached means the call is not recorded, not that the call is refused, because
+/// the alternative to an unrecorded call is a dropped one. That trade is
+/// deliberate and it is the opposite of the trade the *review* side makes, where
+/// an uncertain access decision refuses.
 @SipApplication(distributable = true)
 @SipServlet(loadOnStartup = 1)
 @SipListener
@@ -67,12 +81,23 @@ public class RecorderServlet extends B2buaServlet implements B2buaListener {
 	/// recording to, so a boundary and teardown can release it.
 	static final String RECORDING = "org.vorpal.blade.recorder.recording";
 
+	/// The content type of an SDP body.
+	static final String SDP = "application/sdp";
+
+	/// The halted callflow for each call in setup, so [#callAnswered] can lift the
+	/// halt. Node-local and short-lived: it exists only between the outbound
+	/// INVITE and the callee answering, and a callflow is not something to put on
+	/// a replicated session.
+	static final java.util.Map<String, InitialInvite> HALTED = new java.util.concurrent.ConcurrentHashMap<>();
+
 	public static SettingsManager<RecorderSettings> settings;
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
 		try {
 			settings = new SettingsManager<>(event, RecorderSettings.class, new RecorderSettingsSample());
+			MediaCallflow.setMsControlFactory(obtainFactory(settings.getCurrent()));
+			sipLogger.info("RecorderServlet: JSR-309 MsControlFactory installed");
 			sipLogger.fine("RecorderServlet.servletCreated");
 		} catch (Exception e) {
 			sipLogger.severe(e);
@@ -90,12 +115,108 @@ public class RecorderServlet extends B2buaServlet implements B2buaListener {
 		}
 	}
 
-	/// An initial INVITE: a conversation begins.
+	/// An initial INVITE: a conversation begins, and the media server goes into
+	/// the middle of it.
+	///
+	/// The outbound INVITE is held back, because its SDP has to be the media
+	/// server's offer rather than the caller's. `doNotProcess` stops the B2BUA
+	/// sending it, and `processContinue` sends it once the media server has
+	/// answered the caller and produced that offer. This is the deferral the
+	/// framework already provides for exactly this purpose.
 	@Override
 	public void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException {
-		RecordingAction action = ConversationBoundary.decide(true, directionsOf(outboundRequest),
-				isPaused(outboundRequest.getApplicationSession()));
-		apply(action, outboundRequest.getApplicationSession(), outboundRequest);
+		SipApplicationSession app = outboundRequest.getApplicationSession();
+		RecordingAction action = ConversationBoundary.decide(true, directionsOf(outboundRequest), isPaused(app));
+		apply(action, app, outboundRequest);
+
+		RecorderSettings cfg = (settings == null) ? null : settings.getCurrent();
+		if (cfg == null || !cfg.isRecord()) {
+			return;
+		}
+
+		final InitialInvite callflow = (InitialInvite) outboundRequest.getAttribute("callflow");
+		if (callflow == null) {
+			sipLogger.warning(outboundRequest, "RecorderServlet: no callflow to continue; passing the call through");
+			return;
+		}
+
+		try {
+			byte[] callerOffer = bodyOf(outboundRequest);
+			doNotProcess(outboundRequest);
+			HALTED.put(app.getId(), callflow);
+			new RecorderAnchor().begin(app, callerOffer, calleeOffer -> {
+				outboundRequest.setContent(calleeOffer, SDP);
+				resume(callflow);
+			});
+		} catch (Exception e) {
+			// The media server could not be reached. Let the call through
+			// unrecorded rather than failing it: the alternative to an unrecorded
+			// call is a dropped one, and that is worse for everybody.
+			sipLogger.severe(outboundRequest, "RecorderServlet: could not anchor, call proceeds unrecorded: " + e);
+			resume(callflow);
+		}
+	}
+
+	/// Send the outbound INVITE, and leave the halt in place.
+	///
+	/// **The halt is cleared later, in [#callAnswered], and the order is the
+	/// whole trick.** `doNotProcess` is read at two different moments for two
+	/// different purposes:
+	///
+	/// 1. Just after `callStarted` returns, to decide whether to send the
+	///    outbound INVITE.
+	/// 2. Inside the response handler, to decide whether to pass the callee's
+	///    answer back to the caller.
+	///
+	/// `processContinue` itself checks neither: it sends unconditionally, and the
+	/// second check happens after this application's [#callAnswered] has run. So
+	/// the flag stays set here, which stops the framework sending the INVITE a
+	/// second time when the media callback happens to complete on this thread,
+	/// and is cleared in `callAnswered`, in time for the answer to go back.
+	///
+	/// Both halves cost a live call to find. Clearing it here let the framework
+	/// send the INVITE again and the second send threw
+	/// `IllegalStateException: message is committed`. Leaving it set for the
+	/// whole call meant the callee answered and the caller never heard, so the
+	/// session hung until it timed out.
+	private static void resume(InitialInvite callflow) throws ServletException, IOException {
+		callflow.processContinue();
+	}
+
+	/// Resolve the 309 factory from the configured driver, or the sole registered
+	/// one. Discovery goes through ServiceLoader rather than
+	/// `javax.media.mscontrol.spi.DriverManager`, which finds drivers through a
+	/// mechanism Java 9 removed: touching it throws, and from a loadOnStartup
+	/// servlet that fails the whole deployment.
+	private static MsControlFactory obtainFactory(RecorderSettings cfg) throws ServletException {
+		Properties props = new Properties();
+		if (cfg != null && cfg.getDriverProperties() != null) {
+			props.putAll(cfg.getDriverProperties());
+		}
+		try {
+			String name = (cfg == null) ? null : cfg.getDriverName();
+			Driver fallback = null;
+			for (Driver driver : ServiceLoader.load(Driver.class, RecorderServlet.class.getClassLoader())) {
+				if (name != null && !name.isEmpty()) {
+					if (name.equals(driver.getName())) {
+						return driver.getFactory(props);
+					}
+				} else if (fallback == null) {
+					fallback = driver;
+				}
+			}
+			if (name != null && !name.isEmpty()) {
+				throw new ServletException("no JSR-309 driver named '" + name + "' is registered");
+			}
+			if (fallback == null) {
+				throw new ServletException("no JSR-309 driver is registered");
+			}
+			return fallback.getFactory(props);
+		} catch (ServletException e) {
+			throw e;
+		} catch (Exception e) {
+			throw new ServletException("getFactory failed", e);
+		}
 	}
 
 	/// A mid-dialog request. A re-INVITE carrying an offer is where hold appears;
@@ -110,8 +231,51 @@ public class RecorderServlet extends B2buaServlet implements B2buaListener {
 		apply(action, app, request);
 	}
 
+	/// The callee answered. Give the caller the media server's answer, not the
+	/// callee's, then bridge the legs and start recording.
+	///
+	/// The response to the caller is not held back. Its SDP was produced before
+	/// the callee was ever called, so it is ready now, and making the caller wait
+	/// on a second media round-trip would add setup delay for nothing. Applying
+	/// the callee's answer and joining happens a moment later, on the media
+	/// thread.
 	@Override
 	public void callAnswered(SipServletResponse outboundResponse) throws ServletException, IOException {
+		SipApplicationSession app = outboundResponse.getApplicationSession();
+
+		// Lift the halt, here and not earlier. This runs inside the callflow's
+		// response handler, immediately before it decides whether to pass the
+		// answer back to the caller, so clearing it now is what lets the caller
+		// hear the callee. See resume().
+		//
+		// The halt is on the OUTBOUND request, and it has to be cleared there.
+		// `outboundResponse` is a misleading name for what arrives here: it is
+		// the response being built toward the CALLER, so its getRequest() is the
+		// inbound INVITE, and clearing the attribute on that one changes nothing
+		// the callflow ever reads. Cost a live call to see: the flag looked
+		// cleared, and the caller still never heard the answer.
+		InitialInvite callflow = HALTED.remove(app.getId());
+		if (callflow != null) {
+			callflow.setDoNotProcess(false);
+			SipServletRequest outboundRequest = callflow.getOutboundRequest();
+			if (outboundRequest != null) {
+				outboundRequest.removeAttribute("doNotProcess");
+			}
+		}
+
+		RecorderAnchor.Anchor anchor = RecorderAnchor.LIVE.get(app.getId());
+		if (anchor == null) {
+			return;
+		}
+		try {
+			if (anchor.answerForCaller != null) {
+				outboundResponse.setContent(anchor.answerForCaller, SDP);
+			}
+			RecorderSettings cfg = (settings == null) ? null : settings.getCurrent();
+			new RecorderAnchor().connect(app, bodyOf(outboundResponse), cfg);
+		} catch (Exception e) {
+			sipLogger.severe(outboundResponse, "RecorderServlet: could not bridge the anchored call: " + e);
+		}
 	}
 
 	@Override
@@ -125,6 +289,7 @@ public class RecorderServlet extends B2buaServlet implements B2buaListener {
 
 	@Override
 	public void callDeclined(SipServletResponse outboundResponse) throws ServletException, IOException {
+		HALTED.remove(outboundResponse.getApplicationSession().getId());
 		finish(outboundResponse.getApplicationSession());
 	}
 
@@ -148,17 +313,17 @@ public class RecorderServlet extends B2buaServlet implements B2buaListener {
 			// A boundary always closes the previous conversation first. Its
 			// capability has to be released whether or not the next one starts,
 			// or it lives until its backstop expiry.
-			finish(app);
+			RecorderAnchor.stopRecording(app.getId());
 			app.setAttribute(PAUSED, Boolean.FALSE);
 			sipLogger.fine(request, "RecorderServlet: conversation begins");
 			break;
 		case PAUSE:
 			app.setAttribute(PAUSED, Boolean.TRUE);
-			sipLogger.fine(request, "RecorderServlet: on hold, recording paused");
+			pauseRecorder(app, true, request);
 			break;
 		case RESUME:
 			app.setAttribute(PAUSED, Boolean.FALSE);
-			sipLogger.fine(request, "RecorderServlet: off hold, recording resumed");
+			pauseRecorder(app, false, request);
 			break;
 		case NONE:
 		default:
@@ -166,13 +331,51 @@ public class RecorderServlet extends B2buaServlet implements B2buaListener {
 		}
 	}
 
-	/// Stop and release the conversation currently recording, if any.
-	private void finish(SipApplicationSession app) {
-		if (app == null || app.getAttribute(RECORDING) == null) {
+	/// Pause or resume the live recorder.
+	///
+	/// A paused span never reaches the muxer, so the held audio is not in the
+	/// file to be found later. Failing to pause is logged rather than thrown: the
+	/// call is not worth dropping over it, though it does mean hold music is in
+	/// the recording, which is why it is logged at warning.
+	private void pauseRecorder(SipApplicationSession app, boolean pause, SipServletRequest request) {
+		RecorderAnchor.Anchor anchor = RecorderAnchor.LIVE.get(app.getId());
+		if (anchor == null || anchor.mg == null || anchor.recording == null) {
 			return;
 		}
-		app.removeAttribute(RECORDING);
+		try {
+			boolean honoured = pause ? MediaCallflow.pauseRecording(anchor.mg)
+					: MediaCallflow.resumeRecording(anchor.mg);
+			sipLogger.fine(request, "RecorderServlet: " + (pause ? "on hold" : "off hold") + ", recording "
+					+ (honoured ? (pause ? "paused" : "resumed") : "UNCHANGED (driver cannot pause)"));
+		} catch (Exception e) {
+			sipLogger.warning(request,
+					"RecorderServlet: recorder would not " + (pause ? "pause" : "resume") + ": " + e);
+		}
+	}
+
+	/// End of call: stop the recorder, then release the anchor and the recording's
+	/// destination.
+	private void finish(SipApplicationSession app) {
+		if (app == null) {
+			return;
+		}
+		HALTED.remove(app.getId());
 		app.setAttribute(PAUSED, Boolean.FALSE);
+		RecorderAnchor.release(app.getId());
+	}
+
+	/// The message body as bytes, or null when it carries none.
+	static byte[] bodyOf(javax.servlet.sip.SipServletMessage message) {
+		try {
+			Object content = (message == null) ? null : message.getContent();
+			if (content == null) {
+				return null;
+			}
+			return (content instanceof byte[]) ? (byte[]) content
+					: String.valueOf(content).getBytes("UTF-8");
+		} catch (Exception e) {
+			return null;
+		}
 	}
 
 	private static boolean isPaused(SipApplicationSession app) {

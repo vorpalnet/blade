@@ -93,10 +93,23 @@ case "$ACTION" in
     *) die "Unknown action: ${ACTION} (distribute|switch|status)" ;;
 esac
 
-# --- Resolve conf: ~/.blade/<env>.conf (legacy build-profiles path is a fallback) ---
+# --- Resolve conf: the per-env profile dir (~/.blade/<env>/profile.conf) first,
+# then the legacy flat file, then the legacy build-profiles path. Uses the same
+# shared helper install.sh/deploy.sh use, so a migrated profile is found here too.
 BLADE_HOME="${BLADE_HOME:-$HOME/.blade}"
 if [ -f "$ENV_ARG" ]; then CONF_FILE="$ENV_ARG"; ENV_NAME="$(basename "${ENV_ARG%.conf}")"
-else ENV_NAME="$ENV_ARG"; CONF_FILE="${BLADE_HOME}/${ENV_NAME}.conf"; [ -f "$CONF_FILE" ] || CONF_FILE="${DEPLOY_DIR}/${ENV_NAME}.conf"; fi
+else
+    ENV_NAME="$ENV_ARG"
+    CONF_FILE=""
+    if [ -f "${SCRIPT_DIR}/misc/blade-paths.sh" ]; then
+        # shellcheck source=misc/blade-paths.sh
+        . "${SCRIPT_DIR}/misc/blade-paths.sh"
+        CONF_FILE="$(blade_profile_conf "$ENV_NAME" 2>/dev/null || true)"
+    fi
+    [ -n "$CONF_FILE" ] && [ -f "$CONF_FILE" ] || CONF_FILE="${BLADE_HOME}/${ENV_NAME}/profile.conf"
+    [ -f "$CONF_FILE" ] || CONF_FILE="${BLADE_HOME}/${ENV_NAME}.conf"
+    [ -f "$CONF_FILE" ] || CONF_FILE="${DEPLOY_DIR}/${ENV_NAME}.conf"
+fi
 [ -f "$CONF_FILE" ] || die "Conf not found: ${CONF_FILE}"
 
 read_prop() {

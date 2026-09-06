@@ -2226,12 +2226,25 @@ write_nm_envfile_remote() {
 }
 
 # Emit a server-via-Node-Manager unit to stdout — the AdminServer on the admin
-# box, or one engine on an engine box. Unlike the NM unit this is Type=oneshot +
-# RemainAfterExit: misc/start-admin-nm.sh does nmStart and exits, and the server
-# JVM is a child of Node Manager (not of this unit), so there's no foreground
-# process to babysit and no Restart=. ExecStop is an OS-level kill
-# (misc/stop-admin-os.sh) because pure-Java NM can't reliably nmKill.
-# NM_PASSWORD comes from a 0600 EnvironmentFile, never the unit text.
+# box, or one engine on an engine box. misc/start-admin-nm.sh does nmStart and
+# exits; the server JVM is a child of Node Manager, not of this unit.
+#
+# The two kinds of unit differ on purpose:
+#   AdminServer  Type=forking + PIDFile (the pid file Node Manager writes) +
+#                Restart=always. systemd tracks the real JVM, so ANY exit —
+#                a crash, but also a deliberate stop from the Remote Console
+#                or WLST — brings it back. NM's own AutoRestart only covers
+#                crashes; it respects a graceful shutdown, which on this box
+#                just meant an AdminServer that stayed down. A deliberate stop
+#                goes through systemctl (the 'x' row does), which systemd never
+#                auto-restarts.
+#   engines      Type=oneshot + RemainAfterExit, no Restart=. An engine stopped
+#                from the console is usually DRAINED for maintenance and must
+#                stay stopped; crash recovery is NM AutoRestart's job.
+# ExecStop is an OS-level kill (misc/stop-admin-os.sh) because pure-Java NM
+# can't reliably nmKill; it exits 0 when nothing is running, so stopping an
+# already-stopped service is clean. NM_PASSWORD comes from a 0600
+# EnvironmentFile, never the unit text.
 #
 # server   which server to start: AdminServer, or engine1/engine2/...
 # adminurl t3://<admin>:<port> — REQUIRED for a managed server (it has to be
@@ -2255,8 +2268,19 @@ render_admin_nm_unit() {
     printf 'Wants=nodemanager.service\n'
     printf 'Wants=network-online.target\n'
     printf '\n[Service]\n'
-    printf 'Type=oneshot\n'
-    printf 'RemainAfterExit=yes\n'
+    if [ "$server" = "AdminServer" ]; then
+        # Track the JVM via the pid file Node Manager writes at start, so the
+        # unit's state IS the server's state and Restart= has a process to watch.
+        # RestartSec gives stop_admin's release (systemctl stop after a graceful
+        # WLST shutdown) time to land before the resurrection would fire.
+        printf 'Type=forking\n'
+        printf 'PIDFile=%s/servers/%s/data/nodemanager/%s.pid\n' "$domhome" "$server" "$server"
+        printf 'Restart=always\n'
+        printf 'RestartSec=15\n'
+    else
+        printf 'Type=oneshot\n'
+        printf 'RemainAfterExit=yes\n'
+    fi
     [ -n "$jh" ] && printf 'Environment=JAVA_HOME=%s\n' "$jh"
     printf 'Environment=MW_HOME=%s\n' "$MWHOME"
     printf 'Environment=DOMAIN_NAME=%s\n' "$dom"
@@ -3074,7 +3098,13 @@ do_patch() {
     local real; real="$(readlink -f "$link" 2>/dev/null)"
     [ -n "$real" ] && [ -d "${real}/wlserver" ] || { warn "no Oracle home behind ${link} — install first."; return 1; }
 
-    patch_jdk
+    # PATCH_TARGET (set by update.sh) redirects the whole patch at another home —
+    # a clone bind-mounted at the inventory-registered path inside a private
+    # mount namespace, so opatch accepts it and the live tree is never touched.
+    # In that mode the JDK leg is skipped (update.sh owns the JDK lifecycle
+    # separately) and the idle-server refusal below does not apply: the clone is
+    # not the home any server runs from.
+    [ -n "${PATCH_TARGET:-}" ] || patch_jdk
     # Read java.home AFTER the JDK leg — migration may have just rewritten it.
     local jre; jre="$(read_prop "$OCCAS_CONF" java.home)"
 
@@ -3179,11 +3209,15 @@ do_patch() {
     fi
 
     # In-place: patch the LIVE, inventory-registered home. Out-of-place (cp -a a
-    # copy, opatch it, flip 'current') can't work — opatch rejects an unregistered
-    # copy with "RawInventory gets null OracleHomeInfo", and this OCCAS build ships
-    # no tool to register one (opatch attachHome / FMW pasteBinary absent). opatch's
-    # own `rollback -id` is the safety net the copy was trying to provide.
-    local target="$real"
+    # copy, opatch it, flip 'current') can't work directly — opatch rejects an
+    # unregistered copy with "RawInventory gets null OracleHomeInfo", and this
+    # OCCAS build ships no tool to register one (opatch attachHome / FMW
+    # pasteBinary absent). update.sh squares that circle by bind-mounting the
+    # copy AT the registered path in a private mount namespace and pointing
+    # PATCH_TARGET here; without update.sh, opatch's own `rollback -id` is the
+    # safety net the copy was trying to provide.
+    local target="${PATCH_TARGET:-$real}"
+    [ -d "${target}/wlserver" ] || { warn "PATCH_TARGET is not an Oracle home: ${target}"; rm -rf "$stage"; return 1; }
     local op="${target}/OPatch/opatch"
 
     info "Patch $(basename "$target") in place   ($(( ${#opdirs[@]} + ${#opjars[@]} )) OPatch update(s), ${#pnum[@]} patch(es), from ${pdir})"
@@ -3203,7 +3237,8 @@ do_patch() {
 
     # opatch rewrites files in the home — it MUST be idle, or running JVMs break and
     # the patch can corrupt. Refuse while any WebLogic server or Node Manager is up.
-    if pgrep -f 'weblogic.Server' >/dev/null 2>&1 || pgrep -f 'weblogic.NodeManager' >/dev/null 2>&1; then
+    # (Not in PATCH_TARGET mode: the clone is not the home any server runs from.)
+    if [ -z "${PATCH_TARGET:-}" ] && { pgrep -f 'weblogic.Server' >/dev/null 2>&1 || pgrep -f 'weblogic.NodeManager' >/dev/null 2>&1; }; then
         warn "WebLogic / Node Manager is running — an in-place patch needs the home idle."
         log  "  ${C_DIM}Stop it first: stop the AdminServer, then Node Manager, or: sudo systemctl stop weblogic nodemanager${C_RESET}"
         rm -rf "$stage"; return 1
@@ -3273,14 +3308,16 @@ do_patch() {
     as_install_user rm -rf "$stage"
 
     as_install_user sh -c "ORACLE_HOME='${target}' '${op}' lsinventory -oh '${target}' ${jre:+-jre '${jre}'} > '${target}/.blade-patch-manifest' 2>&1" || true
-    ok "Patched ${target} in place — ${applied} interim patch(es) applied."
+    ok "Patched ${target} — ${applied} interim patch(es) applied."
     grep -cE "^Patch  *[0-9]+" "${target}/.blade-patch-manifest" 2>/dev/null \
         | sed 's/^/  interim patches now present: /'
-    log "  ${C_DIM}The servers are down (patching needs them idle) — start them on the patched home: Node Manager, then the AdminServer.${C_RESET}"
-    log "  ${C_DIM}Roll a patch back:  ${op} rollback -id <patch-number> -oh ${target}${C_RESET}"
-    if [ "${#H_ROLE[@]}" -gt 0 ]; then
-        local _ne=0 _r; for _r in "${H_ROLE[@]}"; do [ "$_r" = engine ] && _ne=$((_ne + 1)); done
-        [ "$_ne" -gt 0 ] && log "  ${C_DIM}Push the patched home to the ${_ne} engine host(s):  ./sync-occas.sh ${NAME} distribute $(basename "$target")${C_RESET}"
+    if [ -z "${PATCH_TARGET:-}" ]; then
+        log "  ${C_DIM}The servers are down (patching needs them idle) — start them on the patched home: Node Manager, then the AdminServer.${C_RESET}"
+        log "  ${C_DIM}Roll a patch back:  ${op} rollback -id <patch-number> -oh ${target}${C_RESET}"
+        if [ "${#H_ROLE[@]}" -gt 0 ]; then
+            local _ne=0 _r; for _r in "${H_ROLE[@]}"; do [ "$_r" = engine ] && _ne=$((_ne + 1)); done
+            [ "$_ne" -gt 0 ] && log "  ${C_DIM}Push the patched home to the ${_ne} engine host(s):  ./sync-occas.sh ${NAME} distribute $(basename "$target")${C_RESET}"
+        fi
     fi
     return 0
 }
@@ -5596,7 +5633,27 @@ nm_admin() {
       cat "${SCRIPT_DIR}/misc/start-admin-nm.sh"
     } | as_install_user bash -s || warn "start-admin-nm returned an error"
 }
-start_admin() { nm_admin start "$@"; }
+# Start the AdminServer. Prefer systemd once weblogic.service exists for THIS
+# domain: the unit tracks the JVM (Restart=always), and a start outside it
+# leaves the unit inactive — a Remote Console stop would then stay down, which
+# is exactly what the unit exists to prevent. start-admin-nm.sh reports success
+# on an already-RUNNING server, so systemd can adopt a live JVM via the PIDFile.
+# Falls back to the direct NM path when the unit isn't installed yet.
+start_admin() {
+    local domhome="${DOMAINS_DIR}/$2"
+    if [ "$DRY" != "on" ] && command -v systemctl >/dev/null 2>&1 \
+        && grep -qsF "$domhome" /etc/systemd/system/weblogic.service; then
+        local sudo=""
+        [ "$(id -u)" != 0 ] && command -v sudo >/dev/null 2>&1 && sudo="sudo"
+        info "Starting AdminServer via systemd (weblogic.service, Restart=always)"
+        if $sudo systemctl start weblogic.service; then
+            ok "weblogic.service started."
+            return 0
+        fi
+        warn "systemctl start weblogic.service failed — falling back to a direct NM start ('journalctl -u weblogic' has the why)."
+    fi
+    nm_admin start "$@"
+}
 
 # Stop the AdminServer (+ any of the domain's servers). nmKill is unreliable with
 # pure-Java Node Manager (NativeVersionEnabled=false, required on aarch64) when a
@@ -5720,10 +5777,29 @@ do_verify() {
     return 0
 }
 
+# weblogic.service carries Restart=always (any AdminServer exit — console stop
+# included — is resurrected). A DELIBERATE stop must therefore go through
+# systemd: after the graceful shutdown below, tell systemd the stop is wanted.
+# ExecStop's OS-kill exits 0 on an already-stopped server, and 'systemctl stop'
+# on an inactive unit is a no-op, so this is safe whenever the unit exists and
+# points at THIS domain (same key the done-flag and teardown use). It also
+# catches the unit mid-'activating (auto-restart)', which is-active would miss.
+_systemd_release_admin() {
+    local domhome="$1"
+    command -v systemctl >/dev/null 2>&1 || return 0
+    grep -qsF "$domhome" /etc/systemd/system/weblogic.service || return 0
+    local sudo=""
+    [ "$(id -u)" != 0 ] && command -v sudo >/dev/null 2>&1 && sudo="sudo"
+    $sudo systemctl stop weblogic.service 2>/dev/null \
+        && log "  ${C_DIM}weblogic.service stopped — systemd will not auto-restart a deliberate stop.${C_RESET}" \
+        || true
+    return 0
+}
+
 stop_admin() {
     local oh="$1" dom="$2" auser="${3:-weblogic}"
     local domhome="${DOMAINS_DIR}/${dom}"
-    if [ "$DRY" = "on" ]; then log "${C_DIM}  [dry-run] graceful WLST shutdown of AdminServer (OS-signal only a hung remainder)${C_RESET}"; return 0; fi
+    if [ "$DRY" = "on" ]; then log "${C_DIM}  [dry-run] graceful WLST shutdown of AdminServer (OS-signal only a hung remainder); systemctl stop weblogic.service so Restart=always stands down${C_RESET}"; return 0; fi
     [ -d "$domhome" ] || { warn "app domain not found: ${domhome}."; return 1; }
     [ -n "$(_server_pids_for "$domhome")" ] || { ok "no running servers for '${dom}'."; return 0; }
     # A controlled shutdown, NOT a signal: connect to the AdminServer and shutdown()
@@ -5765,7 +5841,7 @@ PYEOF
         # Give the controlled shutdown time to finish before resorting to a signal.
         local i=0
         while [ "$i" -lt 40 ]; do
-            [ -z "$(_server_pids_for "$domhome")" ] && { ok "AdminServer stopped (graceful)."; return 0; }
+            [ -z "$(_server_pids_for "$domhome")" ] && { _systemd_release_admin "$domhome"; ok "AdminServer stopped (graceful)."; return 0; }
             sleep 1; i=$((i + 1))
         done
         warn "AdminServer still up ${i}s after graceful shutdown — OS-stopping the remainder."
@@ -5773,6 +5849,7 @@ PYEOF
         warn "no admin password (env / config) — can't do a graceful WLST shutdown; using a signal."
     fi
     kill_domain_procs "$domhome"
+    _systemd_release_admin "$domhome"
 }
 
 # Synchronously kill the JVMs belonging to a domain (matched by domain home in

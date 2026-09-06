@@ -370,6 +370,51 @@ public abstract class MediaCallflow extends Callflow {
 				+ AnalyticsEventMapper.subject(vorpalId, Analytics.getCallStartedAt(app)));
 	}
 
+	/// Stop writing to the recording on `mediaGroup`, keeping it open.
+	///
+	/// For hold and for a PCI pause. The paused span never reaches the muxer, so
+	/// it is not in the file to be found later.
+	///
+	/// @return true if the recorder paused. **False means the passage was
+	///         recorded**, because the installed driver's recorder cannot pause,
+	///         and a caller that asked for a pause on privacy grounds needs to
+	///         know it did not happen.
+	/// @see PausableRecorder
+	public static boolean pauseRecording(MediaGroup mediaGroup) {
+		return setPaused(mediaGroup, true);
+	}
+
+	/// Resume writing into the same recording. See [#pauseRecording].
+	public static boolean resumeRecording(MediaGroup mediaGroup) {
+		return setPaused(mediaGroup, false);
+	}
+
+	private static boolean setPaused(MediaGroup mediaGroup, boolean pause) {
+		if (mediaGroup == null) {
+			return false;
+		}
+		try {
+			Recorder recorder = mediaGroup.getRecorder();
+			if (!(recorder instanceof PausableRecorder)) {
+				// Loud, and not an exception. The call is not worth dropping, and
+				// the operator has to learn that a pause they configured is not
+				// being honoured by the driver they installed.
+				sipLogger.warning("this JSR-309 driver's recorder cannot pause, so the passage that was to be "
+						+ "left out has been recorded");
+				return false;
+			}
+			if (pause) {
+				((PausableRecorder) recorder).pauseRecording();
+			} else {
+				((PausableRecorder) recorder).resumeRecording();
+			}
+			return true;
+		} catch (Exception e) {
+			sipLogger.warning("the recorder would not " + (pause ? "pause" : "resume") + ": " + e);
+			return false;
+		}
+	}
+
 	/// The name of a **new conversation** within this call.
 	///
 	/// One call can hold several conversations. A transfer replaces the party on
