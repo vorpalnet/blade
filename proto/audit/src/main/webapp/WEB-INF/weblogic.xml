@@ -13,13 +13,8 @@
 		<wls:url-rewriting-enabled>false</wls:url-rewriting-enabled>
 	</wls:session-descriptor>
 
-	<!--
-	  No security-role-assignment, deliberately. This application serves nothing:
-	  it is a bus subscriber whose web.xml denies every URL. A role assignment here
-	  would reference a role the deployment descriptor never declares, and
-	  WebLogic refuses the deployment for exactly that:
-	    HTTP:101168 The security-role-assignment references an invalid security-role: Admin
-	  Reading the audit trail back is a separate, access-controlled surface behind
-	  phi:audit, and whatever serves it declares its own roles.
-	-->
+	<wls:security-role-assignment><wls:role-name>Admin</wls:role-name><wls:externally-defined/></wls:security-role-assignment>
+	<wls:security-role-assignment><wls:role-name>Operator</wls:role-name><wls:externally-defined/></wls:security-role-assignment>
+	<wls:security-role-assignment><wls:role-name>Deployer</wls:role-name><wls:externally-defined/></wls:security-role-assignment>
+	<wls:security-role-assignment><wls:role-name>Monitor</wls:role-name><wls:externally-defined/></wls:security-role-assignment>
 </wls:weblogic-web-app>

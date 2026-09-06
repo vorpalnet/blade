@@ -369,6 +369,13 @@ different integrity requirements.
 > `proto/audit` refuses to start with no `AuditSink` on the classpath. Consuming
 > access records and discarding them is worse than not running: it looks like
 > compliance and produces nothing.
+>
+> **Reading it back** is `GET /blade/audit/api/v1/audit/yyyy/MM/dd`, behind
+> `phi:audit`. Verified over HTTP: a caller holding all four platform roles and
+> no `phi:audit` gets `403`; granted the permission, the same caller reads the
+> day. Every read publishes its own access record, because a trail that logs
+> every access except accesses to itself has a hole in exactly the shape of
+> someone covering their tracks.
 
 ---
 

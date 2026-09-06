@@ -5,20 +5,49 @@
 	<display-name>blade-audit</display-name>
 
 	<!--
-	  No API and nothing served. This application is a bus subscriber: it starts a
-	  durable subscription from an annotated @WebListener and writes what arrives.
-	  Reading the audit trail back is a separate, access-controlled surface behind
-	  phi:audit, and it is not this.
+	  Two gates, and they are not redundant. The container gate below establishes
+	  who the caller is and refuses anyone outside the platform roles. The
+	  application then asks AccessEvaluator for phi:audit, which is the gate that
+	  actually decides: a platform role grants no access to content, and the
+	  access log is content.
 
-	  The deny-all guard exists because a WAR with no constraint serves whatever a
-	  future @Path class in it would expose. Adding an API here should be a
-	  deliberate act that also removes this.
+	  The pattern matches RestApplication's @ApplicationPath exactly, so the
+	  constraint provably covers the API. Naming a pattern that matches nothing
+	  is how an API ends up served with no authentication at all.
 	-->
 	<security-constraint>
 		<web-resource-collection>
-			<web-resource-name>Everything</web-resource-name>
-			<url-pattern>/*</url-pattern>
+			<web-resource-name>Audit API</web-resource-name>
+			<url-pattern>/api/v1/*</url-pattern>
 		</web-resource-collection>
-		<auth-constraint/>
+		<auth-constraint>
+			<role-name>Admin</role-name>
+			<role-name>Operator</role-name>
+			<role-name>Deployer</role-name>
+			<role-name>Monitor</role-name>
+		</auth-constraint>
 	</security-constraint>
+
+	<!--
+	  There is deliberately no catch-all deny constraint. One was tried, on the
+	  pattern "/", and the container applied it to `j_security_check` as well, so
+	  every login came back 403 and the API could never be reached. The API
+	  constraint above covers the only thing this WAR serves; anything added later
+	  must declare its own, and that is the safer place for the rule anyway,
+	  beside the thing it protects.
+	-->
+
+	<login-config>
+		<auth-method>CLIENT-CERT,FORM</auth-method>
+		<realm-name>default</realm-name>
+		<form-login-config>
+			<form-login-page>/login/login.jsp</form-login-page>
+			<form-error-page>/login/login.jsp</form-error-page>
+		</form-login-config>
+	</login-config>
+
+	<security-role><role-name>Admin</role-name></security-role>
+	<security-role><role-name>Operator</role-name></security-role>
+	<security-role><role-name>Deployer</role-name></security-role>
+	<security-role><role-name>Monitor</role-name></security-role>
 </web-app>

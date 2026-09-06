@@ -7,6 +7,7 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 
+import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v3.events.BladeEventTypes;
 import org.vorpal.blade.framework.v3.events.EventSubscriber;
 import org.vorpal.blade.framework.v3.events.SubscriptionRegistrar;
@@ -62,11 +63,26 @@ public class AuditSubscription implements ServletContextListener {
 		return Arrays.asList(BladeEventTypes.ACCESS_PERMITTED, BladeEventTypes.ACCESS_DENIED);
 	}
 
+	private static SettingsManager<AuditSettings> settings;
+
+	/// The loaded settings, for the read API. Null before the listener runs.
+	static AuditSettings settings() {
+		return (settings == null) ? null : settings.getCurrent();
+	}
+
 	private final AuditRecorder handler = new AuditRecorder();
 	private SubscriptionRegistrar registrar;
 
 	@Override
 	public void contextInitialized(ServletContextEvent event) {
+		try {
+			settings = new SettingsManager<>(event, AuditSettings.class, new AuditSettingsSample());
+		} catch (Exception e) {
+			// The read API refuses everything without a policy, which is the right
+			// failure. The subscription below still starts: losing the ability to
+			// READ the log is not a reason to stop WRITING it.
+			throw new IllegalStateException("blade-audit could not load its settings", e);
+		}
 		if (AuditSink.installed() == null) {
 			// Loud, and no subscription. See the class note.
 			throw new IllegalStateException("blade-audit will not start without an AuditSink on the classpath: "
