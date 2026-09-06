@@ -97,16 +97,31 @@ public class OriginateCallflow extends ClientCallflow {
 			sendRequest(response.createAck());
 
 			// Schedule auto-BYE after the call duration.
+			//
+			// The dialog is found from the timer's OWN application session rather
+			// than from the INVITE captured above. A timer callback is a
+			// continuation stored on a replicated session, and the framework's rule
+			// for those is that only serializable state goes in: live container
+			// objects are never stored, they are re-resolved when the continuation
+			// runs. Holding the request across the timer broke that rule.
+			//
+			// It is NOT the reason a run can hang, and that was measured rather
+			// than assumed. On a deployment whose SIP channel advertises a
+			// `public-address` the node cannot itself route to, EVERY in-dialog
+			// request fails, the ACK on the line above included, and the run sticks
+			// at one active call. Fixing this line did not change that, because the
+			// Contact is what is unreachable. See the tester's package notes.
 			if (byeAfterMs > 0) {
 				startTimer(appSession, byeAfterMs, false, (timer) -> {
-					SipSession session = invite.getSession();
-					if (session != null && session.isValid() && session.getState() != SipSession.State.TERMINATED) {
-						try {
-							sendRequest(session.createRequest(BYE));
-						} catch (Exception e) {
-							sipLogger.logStackTrace(e);
-							notifyFailed();
-						}
+					SipApplicationSession live = timer.getApplicationSession();
+					if (live == null || !live.isValid()) {
+						return;
+					}
+					try {
+						hangUpDialogs(live);
+					} catch (Exception e) {
+						sipLogger.logStackTrace(e);
+						notifyFailed();
 					}
 				});
 			}
@@ -124,6 +139,30 @@ public class OriginateCallflow extends ClientCallflow {
 			return scenario.getResponseScript().getExpectFinal();
 		}
 		return "2xx";
+	}
+
+	/// BYE every confirmed dialog on this call.
+	///
+	/// Resolved from the application session at the moment the timer fires, so it
+	/// is a live dialog rather than one remembered from twenty seconds ago. An
+	/// originated call has one dialog; the loop is there because a scenario that
+	/// grows a second one should not silently leave it up.
+	///
+	/// A session that is already gone is skipped rather than reported: the callee
+	/// hanging up first is a normal end to a call, not a failure of the run.
+	private void hangUpDialogs(SipApplicationSession app) throws ServletException, IOException {
+		int sent = 0;
+		java.util.Iterator<?> sessions = app.getSessions("SIP");
+		while (sessions.hasNext()) {
+			SipSession session = (SipSession) sessions.next();
+			if (session.isValid() && session.getState() == SipSession.State.CONFIRMED) {
+				sendRequest(session.createRequest(BYE));
+				sent++;
+			}
+		}
+		if (sent == 0) {
+			sipLogger.fine("OriginateCallflow: auto-BYE found no confirmed dialog; the call was already over");
+		}
 	}
 
 	/// The scenario's `autoByeAfter` wins over the engine-resolved duration
