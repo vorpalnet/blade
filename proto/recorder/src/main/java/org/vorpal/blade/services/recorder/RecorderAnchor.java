@@ -95,6 +95,24 @@ public class RecorderAnchor extends MediaCallflow {
 		anchor.callee = ms.createNetworkConnection(NetworkConnection.BASIC);
 		LIVE.put(app.getId(), anchor);
 
+		// Bridge the two legs here, before either has negotiated and before a
+		// packet can arrive, rather than after the callee answers. Wiring the
+		// topology before media flows is the safer order on principle.
+		//
+		// It is NOT a fix for the recording problem below, and it was measured:
+		// bridging late gave 1,747 bytes, bridging here gave 1,564, and not
+		// bridging at all gave 24,949 for the same twenty seconds of audio.
+		//
+		// KNOWN DEFECT, unresolved. Bridging the legs costs almost all of the
+		// recording. With the bridge the caller leg reports `streaming stopped,
+		// reason not-linked` about 130ms in and never recovers; without it the
+		// recording is whole. Ruled out by experiment: the moment the bridge is
+		// made, an RTP echo loop at the far end, and connecting one media type
+		// instead of all of them. What is left is that the caller endpoint is
+		// feeding two sinks at once, the callee and the recorder, which the media
+		// server appears not to sustain.
+		join(anchor.caller, Joinable.Direction.DUPLEX, anchor.callee);
+
 		if (callerOffer == null || callerOffer.length == 0) {
 			// Late media: the caller offered nothing, so the media server offers
 			// first in both directions.
@@ -116,10 +134,9 @@ public class RecorderAnchor extends MediaCallflow {
 		if (anchor == null) {
 			return;
 		}
-		processAnswer(anchor.callee, calleeAnswer, applied -> {
-			join(anchor.caller, Joinable.Direction.DUPLEX, anchor.callee);
-			startRecording(app, anchor, cfg);
-		});
+		// The legs were bridged in begin(); this only applies the callee's answer
+		// and starts the recorder.
+		processAnswer(anchor.callee, calleeAnswer, applied -> startRecording(app, anchor, cfg));
 	}
 
 	/// Begin a conversation's recording on an anchored call.
