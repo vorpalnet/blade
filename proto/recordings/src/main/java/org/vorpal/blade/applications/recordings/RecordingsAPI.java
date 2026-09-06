@@ -230,7 +230,18 @@ public class RecordingsAPI {
 		try {
 			AccessEvent event = new AccessEvent(caller, decision, kind, id)
 					.from(request == null ? null : request.getRemoteAddr());
-			EventBus.publish(event.toCloudEvent("/blade/recordings"));
+			org.vorpal.blade.framework.v3.events.CloudEvent envelope = event.toCloudEvent("/blade/recordings");
+
+			// Diagnostic, kept deliberately. An access record that is published
+			// into nothing is the failure this whole path exists to prevent, and
+			// it is invisible: EventBus.publish returns normally when no publisher
+			// is installed, so silence here looks exactly like success. This says
+			// which it was.
+			java.util.logging.Logger diag = java.util.logging.Logger.getLogger(RecordingsAPI.class.getName());
+			diag.info("recordings: publishing " + envelope.getType() + " ready=" + EventBus.isReady()
+					+ " destinations=" + EventBus.registeredDestinations());
+
+			EventBus.publish(envelope);
 		} catch (Exception e) {
 			// An audit record that cannot be published must be visible somewhere.
 			// Losing it silently is the one failure this whole path exists to
