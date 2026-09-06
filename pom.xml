@@ -901,6 +901,11 @@ fi
 			<modules><module>proto/recorder</module></modules>
 		</profile>
 		<profile>
+			<id>audit</id>
+			<activation><property><name>!skip.audit</name></property></activation>
+			<modules><module>proto/audit</module></modules>
+		</profile>
+		<profile>
 			<id>logs</id>
 			<activation><property><name>!skip.logs</name></property></activation>
 			<modules><module>admin/logs</module></modules>

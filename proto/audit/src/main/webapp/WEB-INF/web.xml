@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+	id="WebApp_Audit" version="4.0">
+	<display-name>blade-audit</display-name>
+
+	<!--
+	  No API and nothing served. This application is a bus subscriber: it starts a
+	  durable subscription from an annotated @WebListener and writes what arrives.
+	  Reading the audit trail back is a separate, access-controlled surface behind
+	  phi:audit, and it is not this.
+
+	  The deny-all guard exists because a WAR with no constraint serves whatever a
+	  future @Path class in it would expose. Adding an API here should be a
+	  deliberate act that also removes this.
+	-->
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>Everything</web-resource-name>
+			<url-pattern>/*</url-pattern>
+		</web-resource-collection>
+		<auth-constraint/>
+	</security-constraint>
+</web-app>

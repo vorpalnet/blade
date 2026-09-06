@@ -323,46 +323,52 @@ Four properties make it an audit trail rather than a log:
    quote it. An audit record that carried the transcript would disclose it to
    every reader of the audit log, including the people who were refused it. The
    event has nowhere to put content, and a test enforces that.
-3. **It is append-only, and not editable by its subjects.** The sink's database
-   user gets `INSERT` and `SELECT` and nothing else. That is a grant, not code,
-   so it is cheap to implement and easy to show an auditor. *(Property of the
-   sink, which is not built. See the note below.)*
+3. **It is append-only, and not editable by its subjects.** Records are held in a
+   bucket under a retention rule, so the property belongs to the store rather
+   than to this code or to an administrator's restraint. Attempting to rewrite a
+   stored record returns `403 RetentionRuleViolation`, and so does attempting to
+   delete it. That is a bucket setting, not code, so it is cheap to implement and
+   easy to show an auditor.
 4. **It outlives what it describes.** Access records are kept longer than the
    recordings they refer to. Confirm the retention obligation with your own
    counsel; §164.316(b)(2)(i) sets six years for required documentation, and
    whether your audit records fall under it is a question for a lawyer, not for
-   this document. *(Also the sink's property.)*
+   this document. *(Also the store's, and the retention rule is what sets it.)*
 
 Access records are deliberately **not** analytics events and do not ride the
 analytics subscription. Analytics records what a call did; this records what a
 person did. They answer to different readers, under different retention, with
 different integrity requirements.
 
-> **The sink is not built. Read this before quoting §164.312(b) to anyone.**
+> **Where the records land.** `AuditSink` is the interface, in the framework; the
+> subscriber is `proto/audit`, and it writes through whatever `AuditSink` the
+> deployment installs. Gryphon's `OciAuditSink` keeps them in OCI Object Storage,
+> one object per record, named `audit/yyyy/MM/dd/<millis>-<eventId>.json` so a
+> period reads as a prefix listing.
 >
-> Every decision is evaluated, and every decision is published. Nothing
-> subscribes. The framework declares both access types with `persist=false`, which
-> keeps them out of the analytics database on purpose, and the audit sink that was
-> to own them instead does not exist yet. So today an access record reaches the
-> bus and is gone: there is nothing to query, and nothing an auditor can be shown.
+> Object storage rather than the analytics datasource, and the reason is property
+> 3. In a bucket carrying a retention rule the append-only property belongs to the
+> store; with a database grant of `INSERT` and `SELECT` it belongs to whoever
+> administers the grant, and they can widen it from inside without leaving a trace
+> in the thing being widened.
 >
-> What that costs is the examining half of §164.312(b). The recording half is
-> real, and the decision it records is enforced. What is missing is durable
-> storage, and with it properties 3 and 4 above, which are properties of a sink
-> rather than of the record.
+> Verified against the live service, on a stored access record:
 >
-> Two decisions are open. The first is where the records land: the analytics
-> datasource `jdbc/BladeAnalytics` is not provisioned on every environment yet,
-> and object storage under a retention rule is the other candidate, since it makes
-> the append-only property a stored property of the bucket rather than a database
-> grant that a later administrator can widen. The second is whether the sink ships
-> open in BLADE or closed in the commercial layer, which the recording path
-> already answers for content by putting the interface in BLADE and the OCI
-> implementation behind it.
+> ```
+> rewrite a denial as a permit -> 403 RetentionRuleViolation
+> delete it                    -> 403 RetentionRuleViolation
+> read it back                 -> still "org.vorpal.blade.access.denied"
+> ```
 >
-> The subscriber pattern to follow is `services/analytics`:
-> `SubscriptionRegistrar.start(...)` from a `@WebListener`, selecting the two
-> access types by name.
+> The subscription is durable, so records queue while the application is down
+> rather than being dropped, and `AuditRecorder` rethrows anything the sink
+> refuses so an unstored batch is redelivered rather than acknowledged. A record
+> that arrives twice lands on the same object name, and the retention rule refuses
+> the second write, which is the correct outcome and is treated as success.
+>
+> `proto/audit` refuses to start with no `AuditSink` on the classpath. Consuming
+> access records and discarding them is worse than not running: it looks like
+> compliance and produces nothing.
 
 ---
 
