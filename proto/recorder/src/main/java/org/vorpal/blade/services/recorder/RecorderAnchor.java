@@ -3,6 +3,8 @@ package org.vorpal.blade.services.recorder;
 import java.io.IOException;
 import java.net.URI;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -22,6 +24,7 @@ import org.vorpal.blade.framework.Callback;
 import org.vorpal.blade.framework.v3.media.MediaCallflow;
 import org.vorpal.blade.framework.v3.media.RecordingArchive;
 import org.vorpal.blade.framework.v3.media.TranscriberEvent;
+import org.vorpal.blade.framework.v3.media.manifest.ContextBias;
 import org.vorpal.blade.framework.v3.media.manifest.ConversationManifest;
 import org.vorpal.blade.framework.v3.media.manifest.Conversations;
 import org.vorpal.blade.framework.v3.media.manifest.ManifestStore;
@@ -247,7 +250,7 @@ public class RecorderAnchor extends MediaCallflow {
 			});
 			openManifest(anchor, destination, attributes);
 			if (cfg.isTranscribe()) {
-				startTranscribing(anchor);
+				startTranscribing(anchor, expectedPhrases(app, cfg));
 			}
 			sipLogger.info("RecorderAnchor: recording " + destination.getScheme() + ":...");
 		} catch (Exception e) {
@@ -399,11 +402,31 @@ public class RecorderAnchor extends MediaCallflow {
 	/// warning. An utterance the media server's record pass shed under load
 	/// never arrives here at all, by design, and is a gap in the sequence rather
 	/// than a line of lesser text.
-	private void startTranscribing(Anchor anchor) {
+	/// What this call is likely to contain: the deployment's standing phrases
+	/// plus whatever the named session attributes hold for this call, such as
+	/// a caller's name a Selector looked up from the number.
+	static List<String> expectedPhrases(SipApplicationSession app, RecorderSettings cfg) {
+		List<String> phrases = new ArrayList<>();
+		if (cfg.getTranscribeHints() != null) {
+			phrases.addAll(cfg.getTranscribeHints());
+		}
+		if (cfg.getTranscribeHintAttributes() != null) {
+			for (String name : cfg.getTranscribeHintAttributes()) {
+				Object value = (name == null) ? null : app.getAttribute(name);
+				if (value != null && !String.valueOf(value).trim().isEmpty()) {
+					phrases.add(String.valueOf(value).trim());
+				}
+			}
+		}
+		return phrases;
+	}
+
+	private void startTranscribing(Anchor anchor, List<String> expected) {
 		ConversationManifest manifest = anchor.manifest;
 		if (manifest == null) {
 			return;
 		}
+		final ContextBias bias = ContextBias.of(expected);
 		TranscriptArchive archive = TranscriptArchive.installed();
 		if (archive == null) {
 			sipLogger.warning("RecorderAnchor: no TranscriptArchive is installed, so " + manifest.getConversation()
@@ -424,6 +447,9 @@ public class RecorderAnchor extends MediaCallflow {
 			Utterance utterance = event.getUtterance();
 			utterance.setParty(partyLabel(anchor, event.getParty()));
 			utterance.setSequence(anchor.utterances.incrementAndGet());
+			// The correction keeps what was heard on the utterance; the
+			// recognizer's own biasing, if the driver has any, already ran.
+			bias.apply(utterance);
 			TranscriptRef current = anchor.transcript;
 			if (current != null && current.getEngine() == null) {
 				current.setEngine(utterance.getEngine());
@@ -443,6 +469,9 @@ public class RecorderAnchor extends MediaCallflow {
 			return;
 		}
 		anchor.hearing = hearing;
+		if (!bias.isEmpty()) {
+			expectInTranscript(anchor.mg, expected);
+		}
 		manifest.addTranscript(ref);
 		try {
 			ManifestStore store = ManifestStore.installed();

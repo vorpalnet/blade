@@ -18,6 +18,8 @@ public class RecorderSettings extends Configuration implements Serializable {
 	private boolean record = true;
 	private boolean transcribe = true;
 	private LinkedList<String> recordAttributes = new LinkedList<>();
+	private LinkedList<String> transcribeHints = new LinkedList<>();
+	private LinkedList<String> transcribeHintAttributes = new LinkedList<>();
 
 	@JsonPropertyDescription("JSR-309 driver name to obtain the media-server factory from (the registered "
 			+ "Driver SPI). Leave blank to use the single registered driver.")
@@ -60,6 +62,29 @@ public class RecorderSettings extends Configuration implements Serializable {
 
 	public void setTranscribe(boolean transcribe) {
 		this.transcribe = transcribe;
+	}
+
+	@JsonPropertyDescription("Names and identifiers every call is likely to contain, such as the company's name or the "
+			+ "agents' names, in their natural casing. The transcriber leans its recognizer toward them and the "
+			+ "framework corrects a decode that sounds like one of them, keeping what was heard beside the "
+			+ "correction. Per-call phrases come from transcribeHintAttributes.")
+	public LinkedList<String> getTranscribeHints() {
+		return transcribeHints;
+	}
+
+	public void setTranscribeHints(LinkedList<String> transcribeHints) {
+		this.transcribeHints = transcribeHints;
+	}
+
+	@JsonPropertyDescription("Session attribute names whose values are phrases this particular call is likely to "
+			+ "contain: a caller's name or member ID that a Selector looked up from the signaling. Read when the "
+			+ "conversation starts and used the same way as transcribeHints.")
+	public LinkedList<String> getTranscribeHintAttributes() {
+		return transcribeHintAttributes;
+	}
+
+	public void setTranscribeHintAttributes(LinkedList<String> transcribeHintAttributes) {
+		this.transcribeHintAttributes = transcribeHintAttributes;
 	}
 
 	@JsonPropertyDescription("Session attribute names to carry onto each recording as the attributes an access "

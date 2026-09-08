@@ -468,6 +468,24 @@ public abstract class MediaCallflow extends Callflow {
 		}
 	}
 
+	/// Tell the transcriber on `mediaGroup` which names and identifiers this
+	/// call is likely to contain, so its recognizer can lean toward them. See
+	/// [Transcriber#expect]. Safe when nothing is transcribing; returns false
+	/// when the driver has no transcriber.
+	public static boolean expectInTranscript(MediaGroup mediaGroup, Collection<String> phrases) {
+		Transcriber transcriber = transcriberOf(mediaGroup);
+		if (transcriber == null) {
+			return false;
+		}
+		try {
+			transcriber.expect(phrases == null ? java.util.Collections.<String>emptyList() : phrases);
+			return true;
+		} catch (Exception e) {
+			sipLogger.warning("the transcriber would not take the expected phrases: " + e);
+			return false;
+		}
+	}
+
 	/// Stop transcribing on `mediaGroup`. Safe when nothing was transcribing.
 	public static void stopTranscribing(MediaGroup mediaGroup) {
 		Transcriber transcriber = transcriberOf(mediaGroup);

@@ -1,5 +1,10 @@
 package org.vorpal.blade.framework.v3.media.manifest;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -45,6 +50,8 @@ public class Utterance {
 	private String engine;
 	private String model;
 	private JsonNode words;
+	private String heard;
+	private List<Correction> corrections;
 
 	public Utterance() {
 	}
@@ -119,6 +126,61 @@ public class Utterance {
 		this.model = model;
 	}
 
+	/// What the recognizer wrote before any correction, present only when
+	/// [#getText] differs from it. The record keeps what was heard; the
+	/// correction is an interpretation of it against what the call was known
+	/// to involve, and a reviewer is entitled to both.
+	@JsonPropertyDescription("The recognizer's text before correction. Absent when nothing was corrected.")
+	public String getHeard() {
+		return heard;
+	}
+
+	public void setHeard(String heard) {
+		this.heard = heard;
+	}
+
+	@JsonPropertyDescription("Each span replaced in the text, from what was heard to the expected phrase.")
+	public List<Correction> getCorrections() {
+		return corrections;
+	}
+
+	public void setCorrections(List<Correction> corrections) {
+		this.corrections = corrections;
+	}
+
+	/// One span of text replaced by an expected phrase.
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public static final class Correction {
+		private String from;
+		private String to;
+
+		public Correction() {
+		}
+
+		public Correction(String from, String to) {
+			this.from = from;
+			this.to = to;
+		}
+
+		@JsonPropertyDescription("The words the recognizer wrote.")
+		public String getFrom() {
+			return from;
+		}
+
+		public void setFrom(String from) {
+			this.from = from;
+		}
+
+		@JsonPropertyDescription("The expected phrase they were replaced with.")
+		public String getTo() {
+			return to;
+		}
+
+		public void setTo(String to) {
+			this.to = to;
+		}
+	}
+
 	/// The recognizer's own structured result, when it produced one: tokens
 	/// and, where the model emits them, their offsets within the utterance.
 	/// Passed through rather than reshaped, because the shape is the engine's.
@@ -138,5 +200,52 @@ public class Utterance {
 	/// How long the speech lasted.
 	public long durationMillis() {
 		return Math.max(endMillis - startMillis, 0L);
+	}
+
+	/// The words of this utterance on the conversation clock, read out of
+	/// [#getWords]; empty when the engine gave no timing.
+	///
+	/// A word begins at a token carrying a leading space, or at the first
+	/// token, and takes every following token up to the next such one, so
+	/// punctuation stays with the word it follows. Its end is its last token's
+	/// start plus that token's duration when durations were given. This is
+	/// what lets a reviewer jump from a word to the audio behind it.
+	@JsonIgnore
+	public List<WordTime> wordTimes() {
+		if (words == null) {
+			return Collections.emptyList();
+		}
+		JsonNode tokens = words.path("tokens");
+		JsonNode stamps = words.path("timestamps");
+		JsonNode durations = words.path("durations");
+		if (!tokens.isArray() || !stamps.isArray() || tokens.size() == 0 || stamps.size() != tokens.size()) {
+			return Collections.emptyList();
+		}
+		List<WordTime> out = new ArrayList<>();
+		StringBuilder text = null;
+		long start = 0;
+		long end = 0;
+		for (int i = 0; i < tokens.size(); i++) {
+			String token = tokens.get(i).asText();
+			long at = startMillis + Math.round(stamps.get(i).asDouble() * 1000.0);
+			long duration = (durations.isArray() && durations.size() > i)
+					? Math.round(durations.get(i).asDouble() * 1000.0) : 0L;
+			boolean wordStart = token.startsWith(" ") || token.startsWith("\u2581");
+			if (wordStart && text != null && text.length() > 0) {
+				out.add(new WordTime(text.toString(), start, end));
+				text = null;
+			}
+			if (text == null) {
+				text = new StringBuilder();
+				start = at;
+				end = at;
+			}
+			text.append(token.startsWith("\u2581") ? token.substring(1).strip() : token.strip());
+			end = Math.max(end, at + duration);
+		}
+		if (text != null && text.length() > 0) {
+			out.add(new WordTime(text.toString(), start, end));
+		}
+		return out;
 	}
 }

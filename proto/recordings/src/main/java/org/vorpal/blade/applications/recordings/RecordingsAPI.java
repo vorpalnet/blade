@@ -22,6 +22,11 @@ import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v3.events.AccessEvent;
 import org.vorpal.blade.framework.v3.events.EventBus;
 import org.vorpal.blade.framework.v3.media.RecordingArchive;
+import org.vorpal.blade.framework.v3.media.manifest.ConversationManifest;
+import org.vorpal.blade.framework.v3.media.manifest.ManifestArchive;
+import org.vorpal.blade.framework.v3.media.manifest.TranscriptArchive;
+import org.vorpal.blade.framework.v3.media.manifest.TranscriptRef;
+import org.vorpal.blade.framework.v3.media.manifest.Utterance;
 import org.vorpal.blade.framework.v3.security.AccessDecision;
 import org.vorpal.blade.framework.v3.security.AccessEvaluator;
 import org.vorpal.blade.framework.v3.security.ContainerSubject;
@@ -136,6 +141,55 @@ public class RecordingsAPI {
 			}
 		};
 		return Response.ok(body).build();
+	}
+
+	/// Read what was said on one recording.
+	///
+	/// Behind `phi:transcript`, which is not `phi:play`: an analyst can be
+	/// given the words without the audio, and a policy that grants one says
+	/// nothing about the other. The body is [TranscriptView]: every line with
+	/// its bounds and its words on the conversation clock, the model that
+	/// produced it, and any correction toward an expected name beside what was
+	/// heard. Nothing is composed here; the record is handed over as stored.
+	@GET
+	@Path("{id}/transcript")
+	@Produces(MediaType.APPLICATION_JSON)
+	public Response transcript(@PathParam("id") String id) {
+		SubjectAttributes caller = caller();
+		RecordingArchive archive = RecordingArchive.installed();
+		ManifestArchive manifests = ManifestArchive.installed();
+		TranscriptArchive transcripts = TranscriptArchive.installed();
+		if (archive == null || manifests == null || transcripts == null) {
+			return Response.status(Response.Status.SERVICE_UNAVAILABLE)
+					.entity("{\"error\":\"no transcript archive is configured\"}").build();
+		}
+
+		Map<String, String> attributes = attributesOf(archive, id);
+		AccessDecision decision = evaluator().evaluate(caller, DataPermission.TRANSCRIPT, attributes);
+		publish(caller, decision, "transcript", id);
+
+		if (!decision.isAllowed()) {
+			return Response.status(Response.Status.FORBIDDEN).build();
+		}
+		try {
+			String conversation = TranscriptView.conversationOf(id);
+			ConversationManifest manifest = manifests.get(conversation);
+			if (manifest == null) {
+				// Recorded, perhaps, but not yet a record: the conversation is
+				// still in flight or was never described. Not found is the
+				// honest answer, and it discloses nothing the listing did not.
+				return Response.status(Response.Status.NOT_FOUND).build();
+			}
+			Map<String, List<Utterance>> utterances = new java.util.LinkedHashMap<>();
+			for (TranscriptRef ref : manifest.getTranscripts()) {
+				if (ref.getObject() != null && ref.getObject().endsWith("/")) {
+					utterances.put(ref.getId(), transcripts.read(conversation, ref.getId()));
+				}
+			}
+			return Response.ok(TranscriptView.of(manifest, utterances)).build();
+		} catch (IOException e) {
+			return Response.serverError().entity("{\"error\":\"the transcript could not be read\"}").build();
+		}
 	}
 
 	/// Hand over a copy of one recording.

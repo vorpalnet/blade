@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -83,5 +85,37 @@ public class UtteranceTest {
 		Utterance u = new Utterance("caller", 900L, 800L, "uh");
 		assertEquals(0L, u.durationMillis());
 		assertTrue(u.getStartMillis() > u.getEndMillis(), "the stored values are kept as given");
+	}
+
+	/// The tokens a transducer returned for "I need to rent a car." on the
+	/// rig, 2026-09-08: a word's first token carries a leading space, "rent"
+	/// arrives in two pieces, and the full stop attaches to "car".
+	@Test
+	public void wordTimesComeFromTheTokensOnTheConversationClock() throws Exception {
+		Utterance u = new Utterance("caller", 1622L, 3022L, "I need to rent a car.");
+		u.setWords(json.readTree("{\"tokens\":[\" I\",\" need\",\" to\",\" re\",\"nt\",\" a\",\" car\",\".\"],"
+				+ "\"timestamps\":[0.24,0.48,0.72,0.80,0.96,1.12,1.28,1.52],"
+				+ "\"durations\":[0.24,0.24,0.08,0.16,0.16,0.16,0.24,0.32]}"));
+
+		List<WordTime> words = u.wordTimes();
+
+		assertEquals(6, words.size());
+		assertEquals("I", words.get(0).text());
+		assertEquals(1622L + 240L, words.get(0).startMillis());
+		assertEquals(1622L + 480L, words.get(0).endMillis());
+		assertEquals("rent", words.get(3).text());
+		assertEquals(1622L + 800L, words.get(3).startMillis());
+		assertEquals(1622L + 1120L, words.get(3).endMillis(), "ends where its second piece ends");
+		assertEquals("car.", words.get(5).text());
+		assertEquals(1622L + 1280L, words.get(5).startMillis());
+		assertEquals(1622L + 1840L, words.get(5).endMillis(), "the full stop's duration counts");
+	}
+
+	@Test
+	public void noTimingMeansNoWords() throws Exception {
+		Utterance u = new Utterance("caller", 0L, 500L, "hello");
+		assertTrue(u.wordTimes().isEmpty());
+		u.setWords(json.readTree("{\"tokens\":[\" hello\"],\"timestamps\":[]}"));
+		assertTrue(u.wordTimes().isEmpty(), "whisper as exported: tokens without timestamps");
 	}
 }

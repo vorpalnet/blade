@@ -68,4 +68,12 @@ public interface Transcriber extends Resource<MediaGroup>, MediaEventNotifier<Tr
 
 	/// Stop for good and release what was listening. Safe to call more than once.
 	void stop();
+
+	/// Names and identifiers the parties are likely to say: the customer's
+	/// name, the agent's, a member or policy number. A driver that can bias
+	/// its recognizer toward them does; one that cannot keeps them and does
+	/// nothing. Text-level correction against the same phrases is the
+	/// framework's job, see [org.vorpal.blade.framework.v3.media.manifest.ContextBias],
+	/// and works whatever the driver did. Replaces any earlier set; empty clears.
+	void expect(java.util.Collection<String> phrases) throws MsControlException;
 }
