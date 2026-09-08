@@ -16,6 +16,7 @@ public class RecorderSettings extends Configuration implements Serializable {
 	private String driverName;
 	private Map<String, String> driverProperties = new LinkedHashMap<>();
 	private boolean record = true;
+	private boolean transcribe = true;
 	private LinkedList<String> recordAttributes = new LinkedList<>();
 
 	@JsonPropertyDescription("JSR-309 driver name to obtain the media-server factory from (the registered "
@@ -46,6 +47,19 @@ public class RecorderSettings extends Configuration implements Serializable {
 
 	public void setRecord(boolean record) {
 		this.record = record;
+	}
+
+	@JsonPropertyDescription("Transcribe each recorded conversation as it runs, one stored object per utterance "
+			+ "beside the recording, with each party heard separately so the speaker is known. Needs a driver "
+			+ "that can transcribe and a transcript archive on the classpath; with either missing the "
+			+ "conversation is recorded without a transcript and the log says so. The transcript pauses with "
+			+ "the recorder, so a passage kept out of the audio is not written down either.")
+	public boolean isTranscribe() {
+		return transcribe;
+	}
+
+	public void setTranscribe(boolean transcribe) {
+		this.transcribe = transcribe;
 	}
 
 	@JsonPropertyDescription("Session attribute names to carry onto each recording as the attributes an access "

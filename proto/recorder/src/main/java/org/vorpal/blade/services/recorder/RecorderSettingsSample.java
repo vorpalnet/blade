@@ -10,6 +10,7 @@ public class RecorderSettingsSample extends RecorderSettings {
 
 	public RecorderSettingsSample() {
 		setRecord(true);
+		setTranscribe(true);
 		// Named, not empty. A recording with no attributes matches no rule that
 		// names one, so it is reachable only through a rule with an empty match.
 		// That is safe, and it teaches nothing about what a policy turns on.

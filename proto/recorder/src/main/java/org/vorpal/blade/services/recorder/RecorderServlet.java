@@ -221,14 +221,41 @@ public class RecorderServlet extends B2buaServlet implements B2buaListener {
 
 	/// A mid-dialog request. A re-INVITE carrying an offer is where hold appears;
 	/// everything else here is none of this application's business.
+	///
+	/// ## The offer is replaced, not relayed
+	///
+	/// `request` is the INVITE about to go to the far party, and the framework
+	/// filled it with the near party's SDP. Sent like that, the far party would
+	/// learn the near party's address and the media would leave the media server
+	/// for the rest of the call, which is exactly what happened before this: a
+	/// held call was recorded as silence from the hold onward. So the body is
+	/// replaced with the media server's own SDP for the far leg, carrying the
+	/// near party's new direction, and the direction is kept so the answer can
+	/// carry its mirror in [#responseEvent]. See [AnchoredSdp].
 	@Override
 	public void requestEvent(SipServletRequest request) throws ServletException, IOException {
 		if (!"INVITE".equals(request.getMethod())) {
 			return;
 		}
 		SipApplicationSession app = request.getApplicationSession();
-		RecordingAction action = ConversationBoundary.decide(false, directionsOf(request), isPaused(app));
+		List<MediaDirection> offered = directionsOf(request);
+		RecordingAction action = ConversationBoundary.decide(false, offered, isPaused(app));
 		apply(action, app, request);
+
+		RecorderAnchor.Anchor anchor = RecorderAnchor.LIVE.get(app.getId());
+		if (anchor == null || offered == null || offered.isEmpty()) {
+			return; // no anchor to keep, or an offerless refresh that moves nothing
+		}
+		MediaDirection direction = offered.get(0);
+		anchor.reissued.incrementAndGet();
+		byte[] sdp = RecorderAnchor.anchoredSdp(anchor, anchor.callee, direction);
+		if (sdp == null) {
+			sipLogger.warning(request, "RecorderServlet: the callee leg has no media server SDP; "
+					+ "the re-INVITE is relayed as is and the media may leave the media server");
+			return;
+		}
+		request.setContent(sdp, SDP);
+		anchor.reinviteDirection = direction;
 	}
 
 	/// The callee answered. Give the caller the media server's answer, not the
@@ -268,11 +295,20 @@ public class RecorderServlet extends B2buaServlet implements B2buaListener {
 			return;
 		}
 		try {
+			// The callee's answer, read BEFORE the body is swapped for the media
+			// server's. Reading it afterwards fed the caller leg's own SDP to the
+			// callee leg, so the callee leg sent its RTP to the caller leg's port:
+			// the caller leg then saw two streams, its jitter buffer refused the
+			// second SSRC, and its receive chain died with not-linked within a
+			// second of the ACK. Every recording since had only the callee in it,
+			// and the mix hid that. Found by the transcriber, which hears each leg
+			// on its own and heard nothing from the caller.
+			byte[] calleeAnswer = bodyOf(outboundResponse);
 			if (anchor.answerForCaller != null) {
 				outboundResponse.setContent(anchor.answerForCaller, SDP);
 			}
 			RecorderSettings cfg = (settings == null) ? null : settings.getCurrent();
-			new RecorderAnchor().connect(app, bodyOf(outboundResponse), cfg);
+			new RecorderAnchor().connect(app, calleeAnswer, cfg);
 		} catch (Exception e) {
 			sipLogger.severe(outboundResponse, "RecorderServlet: could not bridge the anchored call: " + e);
 		}
@@ -298,8 +334,39 @@ public class RecorderServlet extends B2buaServlet implements B2buaListener {
 		finish(outboundRequest.getApplicationSession());
 	}
 
+	/// The far party answered a re-INVITE. `response` is the one about to go to
+	/// the near party, filled with the far party's SDP; it is replaced with the
+	/// media server's SDP for the near leg, in the direction that mirrors what
+	/// the near party offered, so the near party keeps sending to the media
+	/// server. A failure leaves the offer's direction pending for nothing, so it
+	/// is cleared either way.
 	@Override
 	public void responseEvent(SipServletResponse response) throws ServletException, IOException {
+		if (!"INVITE".equals(response.getMethod())) {
+			return;
+		}
+		RecorderAnchor.Anchor anchor = RecorderAnchor.LIVE.get(response.getApplicationSession().getId());
+		if (anchor == null) {
+			return;
+		}
+		MediaDirection offered = anchor.reinviteDirection;
+		if (offered == null) {
+			return;
+		}
+		if (response.getStatus() < 200) {
+			return; // provisional; the answer is still coming
+		}
+		anchor.reinviteDirection = null;
+		if (response.getStatus() >= 300) {
+			return;
+		}
+		byte[] sdp = RecorderAnchor.anchoredSdp(anchor, anchor.caller, offered.reverse());
+		if (sdp == null) {
+			sipLogger.warning(response, "RecorderServlet: the caller leg has no media server SDP; "
+					+ "the answer is relayed as is and the media may leave the media server");
+			return;
+		}
+		response.setContent(sdp, SDP);
 	}
 
 	/// Carry out what [ConversationBoundary] decided.

@@ -373,7 +373,9 @@ public abstract class MediaCallflow extends Callflow {
 	/// Stop writing to the recording on `mediaGroup`, keeping it open.
 	///
 	/// For hold and for a PCI pause. The paused span never reaches the muxer, so
-	/// it is not in the file to be found later.
+	/// it is not in the file to be found later. A [Transcriber] running on the
+	/// group pauses with it, for the same reason: a card number kept out of the
+	/// audio must not be written down as text.
 	///
 	/// @return true if the recorder paused. **False means the passage was
 	///         recorded**, because the installed driver's recorder cannot pause,
@@ -393,6 +395,7 @@ public abstract class MediaCallflow extends Callflow {
 		if (mediaGroup == null) {
 			return false;
 		}
+		boolean recorderPaused;
 		try {
 			Recorder recorder = mediaGroup.getRecorder();
 			if (!(recorder instanceof PausableRecorder)) {
@@ -401,17 +404,92 @@ public abstract class MediaCallflow extends Callflow {
 				// being honoured by the driver they installed.
 				sipLogger.warning("this JSR-309 driver's recorder cannot pause, so the passage that was to be "
 						+ "left out has been recorded");
-				return false;
-			}
-			if (pause) {
-				((PausableRecorder) recorder).pauseRecording();
+				recorderPaused = false;
 			} else {
-				((PausableRecorder) recorder).resumeRecording();
+				if (pause) {
+					((PausableRecorder) recorder).pauseRecording();
+				} else {
+					((PausableRecorder) recorder).resumeRecording();
+				}
+				recorderPaused = true;
 			}
-			return true;
 		} catch (Exception e) {
 			sipLogger.warning("the recorder would not " + (pause ? "pause" : "resume") + ": " + e);
+			recorderPaused = false;
+		}
+		// The transcriber follows, independently: a recorder that would not
+		// pause is no reason to keep writing the words down.
+		Transcriber transcriber = transcriberOf(mediaGroup);
+		if (transcriber != null) {
+			try {
+				if (pause) {
+					transcriber.pause();
+				} else {
+					transcriber.resume();
+				}
+			} catch (Exception e) {
+				sipLogger.warning("the transcriber would not " + (pause ? "pause" : "resume") + ": " + e);
+			}
+		}
+		return recorderPaused;
+	}
+
+	/// Transcribe every party on the source `mediaGroup` is joined to, delivering
+	/// each utterance to `listener` as it is heard.
+	///
+	/// Started beside [#record] so the utterances' offsets land on the
+	/// recording's own clock; see [Transcriber]. The listener is node-local and
+	/// runs on a driver thread. It is not a continuation and is not stored on the
+	/// application session: a transcript's durable state is what the listener
+	/// wrote to the [org.vorpal.blade.framework.v3.media.manifest.TranscriptArchive],
+	/// and after a failover the new node starts a transcriber of its own.
+	///
+	/// @return true if transcription started. **False means nothing is being
+	///         transcribed**, because the installed driver has no transcriber,
+	///         and it is logged at warning so an operator who configured
+	///         transcription learns the driver they installed cannot do it.
+	public static boolean transcribe(MediaGroup mediaGroup, MediaEventListener<TranscriberEvent> listener) {
+		if (mediaGroup == null || listener == null) {
 			return false;
+		}
+		Transcriber transcriber = transcriberOf(mediaGroup);
+		if (transcriber == null) {
+			sipLogger.warning("this JSR-309 driver cannot transcribe, so the conversation is recorded without a "
+					+ "transcript");
+			return false;
+		}
+		try {
+			transcriber.addListener(listener);
+			transcriber.start();
+			return true;
+		} catch (Exception e) {
+			sipLogger.warning("the transcriber would not start: " + e);
+			return false;
+		}
+	}
+
+	/// Stop transcribing on `mediaGroup`. Safe when nothing was transcribing.
+	public static void stopTranscribing(MediaGroup mediaGroup) {
+		Transcriber transcriber = transcriberOf(mediaGroup);
+		if (transcriber != null) {
+			try {
+				transcriber.stop();
+			} catch (Exception e) {
+				sipLogger.warning("the transcriber would not stop: " + e);
+			}
+		}
+	}
+
+	/// The group's transcriber, through the specification's door for a resource
+	/// it did not define, or null when the driver has none.
+	private static Transcriber transcriberOf(MediaGroup mediaGroup) {
+		if (mediaGroup == null) {
+			return null;
+		}
+		try {
+			return mediaGroup.getResource(Transcriber.class);
+		} catch (Exception e) {
+			return null;
 		}
 	}
 

@@ -96,6 +96,19 @@ public interface RecordingArchive {
 	/// about whether it exists.
 	///
 	/// @return the attributes, never null
+	/// What the store knows about one recording: how many bytes it holds and
+	/// whether it is whole.
+	///
+	/// The recorder writes this as it closes and it is the only party that knows.
+	/// A conversation manifest is assembled by the application, which cannot see
+	/// how many segments landed or whether any were dropped, so it has to ask.
+	///
+	/// Null when the recording is not there, which is different from a recording
+	/// that is there and empty.
+	default RecordingSummary summary(String recordingId) throws IOException {
+		return null;
+	}
+
 	default Map<String, String> attributes(String recordingId) throws IOException {
 		return Collections.emptyMap();
 	}
