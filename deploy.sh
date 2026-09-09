@@ -17,8 +17,8 @@
 #
 # <env>   ~/.blade/<env>.conf (or a path to a conf). Connection + secrets:
 #         wls.adminurl, wls.user, admin.password (ENC), optional wls.target.
-#         Also carries the app/EAR selection (build.apps, ear.<tier>) that build.sh
-#         wrote, so deploy lands exactly what was built.
+#         (Deploy shape — EAR vs loose WARs per tier — is read from the DIST
+#         itself: a tier's blade-<tier>.ear present in the build means EAR.)
 # <file>  the exact artifact to deploy: a path, or a bare filename found in the
 #         newest dist/<ver>/ tree (searched across lib/ admin/ services/ test/
 #         proto/ and the root). e.g. blade-admin.ear, gateway.war, blade-services.ear
@@ -516,14 +516,6 @@ do_all() {
     t_both="$(read_prop "$CONF_FILE" wls.targets.both)";       t_both="${t_both:-${t_admin},${t_cluster}}"
     t_test="$(read_prop "$CONF_FILE" wls.targets.test)";       t_test="${t_test:-$t_cluster}"
 
-    # Per-tier EAR flags — the SAME keys build.sh wrote from the shared profile, so
-    # we deploy exactly what was built: a tier's whole .ear when its flag is on,
-    # else its loose WARs. Defaults preserve the historical shape (admin/test as
-    # EARs, services loose for FSMAR flat-name routing).
-    local e_admin e_services e_test
-    e_admin="$(read_prop "$CONF_FILE" ear.admin)";       e_admin="${e_admin:-on}"
-    e_services="$(read_prop "$CONF_FILE" ear.services)"; e_services="${e_services:-off}"
-    e_test="$(read_prop "$CONF_FILE" ear.test)";         e_test="${e_test:-on}"
 
     _one() {  # <name> <file> <target> <islib> ; sets rc / returns 3 to abort
         local n="$1" f="$2" tg="$3" lib="$4" trc=0
@@ -534,9 +526,12 @@ do_all() {
         [ "$trc" -ne 0 ] && rc=1
         return 0
     }
-    _tier() {  # <tier-dir> <target> <earname> <earflag> ; EAR when on, else loose WARs
-        local tier="$1" tg="$2" earname="$3" flag="$4" war
-        if [ "$flag" = on ]; then
+    # Deploy shape comes from the DIST, not from config: a tier whose whole-tier
+    # .ear is IN this build deploys as that EAR; otherwise its loose WARs. The
+    # build output is self-describing, so config and artifacts cannot drift.
+    _tier() {  # <tier-dir> <target> <earname> ; EAR when present in dist, else loose WARs
+        local tier="$1" tg="$2" earname="$3" war
+        if [ -f "${DIST_DIR}/${earname}.ear" ]; then
             _one "$earname" "${DIST_DIR}/${earname}.ear" "$tg" false; return $?
         fi
         [ -d "${DIST_DIR}/${tier}" ] || return 0
@@ -549,19 +544,19 @@ do_all() {
     }
 
     if [ "$action" = undeploy ]; then
-        _tier test     "$t_test"    blade-test     "$e_test"     || return 1
-        _tier services "$t_cluster" blade-services "$e_services" || return 1
-        _tier admin    "$t_admin"   blade-admin    "$e_admin"    || return 1
+        _tier test     "$t_test"    blade-test     || return 1
+        _tier services "$t_cluster" blade-services || return 1
+        _tier admin    "$t_admin"   blade-admin    || return 1
         _one blade-shared "${DIST_DIR}/lib/blade-shared.war" "$t_both" true || return 1
     else
         _one blade-shared "${DIST_DIR}/lib/blade-shared.war" "$t_both" true || return 1
-        _tier admin    "$t_admin"   blade-admin    "$e_admin"    || return 1
-        _tier services "$t_cluster" blade-services "$e_services" || return 1
-        _tier test     "$t_test"    blade-test     "$e_test"     || return 1
+        _tier admin    "$t_admin"   blade-admin    || return 1
+        _tier services "$t_cluster" blade-services || return 1
+        _tier test     "$t_test"    blade-test     || return 1
     fi
     # A whole-profile run that touched NOTHING almost always means the dist tree is
     # wrong (empty, or pointed at the wrong build) — warn instead of a silent "done".
-    [ "$did" -eq 0 ] && warn "nothing to ${action}: no expected artifacts under ${DIST_DIR}. Did './build.sh ${ENV_NAME}' run into this dist?"
+    [ "$did" -eq 0 ] && warn "nothing to ${action}: no expected artifacts under ${DIST_DIR}. Did ./build.sh write this dist?"
     return "$rc"
 }
 
@@ -599,6 +594,31 @@ ART_BASE=$(basename "$ART")
 
 # Deployment name: filename without extension, unless overridden.
 APP_NAME="${NAME_OVERRIDE:-${ART_BASE%.*}}"
+
+# --- OpenID Connect client settings, per environment -----------------------
+# A web application's OpenID Connect client settings (issuer, client id, client
+# secret, redirect URL, scope) live beside the profile,
+# ~/.blade/<env>/oidc/<name>.properties, never in a WAR in the repository, and
+# are added to a scratch copy of the WAR here, at deploy time. A WAR without
+# one deploys as built and authenticates the way it always did.
+#
+# The file lands as WEB-INF/blade-oidc.properties, which the framework's
+# OidcLoginFilter reads. A file that says provider=container lands as
+# WEB-INF/oidcAuth.properties instead, for the container's own provider (see
+# misc/configure-oidc.py); the two never coexist in one WAR, since the
+# container's provider takes over any application carrying its file.
+OIDC_PROPS="${BLADE_HOME}/${ENV_NAME}/oidc/${APP_NAME}.properties"
+if [[ "$ART" == *.war ]] && [ -f "$OIDC_PROPS" ] && [ "$ACTION" = deploy ]; then
+    OIDC_TARGET=WEB-INF/blade-oidc.properties
+    grep -q '^provider=container' "$OIDC_PROPS" && OIDC_TARGET=WEB-INF/oidcAuth.properties
+    OIDC_WORK=$(mktemp -d "${TMPDIR:-/tmp}/blade-oidc.XXXXXX")
+    cp "$ART" "${OIDC_WORK}/${ART_BASE}"
+    mkdir -p "${OIDC_WORK}/WEB-INF"
+    cp "$OIDC_PROPS" "${OIDC_WORK}/${OIDC_TARGET}"
+    (cd "$OIDC_WORK" && zip -q "${ART_BASE}" "$OIDC_TARGET") || die "could not add ${OIDC_PROPS} to ${ART_BASE}"
+    ART="${OIDC_WORK}/${ART_BASE}"
+    log "  OpenID:       ${OIDC_PROPS} -> ${OIDC_TARGET}"
+fi
 
 # --- Resolve the target (WebLogic modes only) ---
 TARGET=""

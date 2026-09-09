@@ -12,9 +12,17 @@ stages — see [INSTALLING.md](INSTALLING.md) for standing up the server and
 
 One command builds everything shippable — the framework, the shared library, every
 admin/service/test/proto WAR, and the three whole-tier EARs — in one Maven reactor.
-There is no module to pick: to iterate on a single module, run Maven directly
-(`./mvnw -pl services/hold package`). What you *do* choose is the **mode**: a fast
-`dev` loop or a traceable `prod` release.
+A build is **product × platform × mode** and never reads an environment: one
+`--prod` release serves every environment you deploy it to, and `~/.blade`
+belongs to `install.sh`/`deploy.sh` alone.
+
+Narrowing what compiles is a per-invocation choice: `--libs` publishes just the
+libraries to `~/.m2` (the consumer-repo interface — optum/att-tao pin the blade
+submodule tag and run exactly this); `--apps=a,b` and `--no-ears` trim a dev
+loop; `--edit` opens a checkbox tree that writes `./build.conf` (gitignored,
+personal — picked up automatically by later builds; a team can check in a named
+file and pass `--conf=`). To iterate on a single module, run Maven directly
+(`./mvnw -pl services/hold package`).
 
 ---
 
@@ -64,19 +72,13 @@ always wins.
 
 ---
 
-## 4. Building for a named environment
+## 4. One build, every environment
 
-A deployment's profile carries its mode. `install.sh` and `deploy.sh` share one
-profile per environment, `~/.blade/<env>/profile.conf`; naming it on the build reads
-that environment's `build.mode`:
-
-```bash
-./build.sh ashburn        # builds in the mode ashburn's profile records
-./build.sh ashburn --prod # …unless you override it on the command line
-```
-
-So `build.sh`, `install.sh` and `deploy.sh` all speak of the same environment by
-name. (`build.sh` reads only the mode; it needs nothing else from the profile.)
+`build.sh` does not read environment profiles — deliberately. A release is built
+once (`./build.sh --prod` → `dist/<rev>-<build>/`) and `deploy.sh dev|stage|prod`
+all draw from it; the deploy shape (whole-tier EAR vs loose WARs) is read from
+the dist itself, so the artifacts are self-describing. `./build.sh <env>` from
+the old model is accepted and ignored with a note, so scripts don't break.
 
 ---
 

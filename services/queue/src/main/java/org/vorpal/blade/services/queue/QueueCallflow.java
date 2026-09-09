@@ -144,6 +144,12 @@ public class QueueCallflow extends Callflow {
 				}
 			}
 
+			// Now fully initialized: aliceRequest is set, the caller is ringing and
+			// the cancel expectation is armed. Only now is it safe for the drain
+			// timer (Queue.queueTask -> complete()) to pull this callflow.
+			// addFirst + pollLast = FIFO: newest at the head, drain from the tail.
+			QueueServlet.queues.get(queueId).callflows.addFirst(this);
+
 		} catch (Exception ex) {
 			sipLogger.severe(aliceRequest,
 					"QueueCallflow.process caught exception " + ex.getClass().getName() + " " + ex.getMessage());

@@ -39,7 +39,11 @@ public class MediaGap {
 		/// Media stopped arriving. A fault, not a control.
 		LOSS,
 		/// Suppressed by policy for a reason other than card entry.
-		POLICY
+		POLICY,
+		/// The party moved its media to a new address mid-call and its leg was
+		/// rebuilt on the media server: the gap is the rebuild, a few tens of
+		/// milliseconds, and the timeline on either side of it is intact.
+		MOVED
 	}
 
 	private Long startMillis;

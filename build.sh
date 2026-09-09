@@ -3,30 +3,36 @@
 # build.sh - Build wrapper for BLADE
 #
 # build.sh builds the shippable set — libs/admin/services/test/proto plus the
-# per-tier EARs — in one Maven reactor. By default it builds everything; a named
-# profile can narrow it. The profile is the SAME ~/.blade/<name>/profile.conf that
-# deploy.sh and install.sh use, so one selection drives build AND deploy:
-#   build.apps=*|<csv>   which apps to compile
-#   ear.<tier>=on|off    bundle a tier into blade-<tier>.ear, or ship loose WARs
-# Edit that selection with a checkbox tree:  ./build.sh --edit <name>  (or pick
-# "create" from the menu a bare `./build.sh` shows on a terminal). A profile
-# WITHOUT those keys — and `./build.sh default` from a superproject — builds the
-# full set, unchanged. To iterate on one module, run Maven directly, e.g.
-# ./mvnw -pl services/hold package.
+# per-tier EARs — in one Maven reactor. A build is product x platform x mode and
+# NEVER reads an environment: ~/.blade profiles belong to install/deploy, and one
+# build (especially a --prod release) serves every environment. Narrowing what
+# compiles is a per-invocation choice:
+#   --libs               publish the libraries only (parent POM + libs/* into
+#                        ~/.m2, no dist) — THE consumer-repo interface: optum/
+#                        att-tao pin the blade submodule tag and run this; they
+#                        never select blade modules
+#   --apps=<csv>         build only these apps (bare module names)
+#   --no-ears            ship every tier as loose WARs (skip the .ear assemblers)
+#   --conf=<file>        read build.apps= / ear.<tier>= from a selection conf; a
+#                        ./build.conf in the repo root (gitignored, personal) is
+#                        picked up automatically when present
+# Edit ./build.conf (or a --conf target) with a checkbox tree: ./build.sh --edit.
+# To iterate on one module, run Maven directly, e.g. ./mvnw -pl services/hold package.
 #
 # Two output modes:
 #   dev  (default)  flat dist/               + app version <revision>          (redeploys in place)
 #   prod (--prod)   dist/<revision>-<build>/ + app version <revision>-<build>  (traceable release)
 #
 # Usage:
-#   ./build.sh [profile|platform] [--edit] [--list] [--dev|--prod] [--no-dist] [--no-parallel] [maven-args...]
+#   ./build.sh [platform] [--dev|--prod] [--libs] [--apps=csv] [--no-ears]
+#              [--conf=file] [--edit] [--no-dist] [--no-parallel] [maven-args...]
 #
 # Examples:
-#   ./build.sh                              # on a terminal: pick a profile / create one / build all
-#   ./build.sh --list                       # list the ~/.blade profiles and exit
-#   ./build.sh --edit ashburn               # edit ashburn's profile (apps, EARs, dev/prod); enter builds, s saves & exits
-#   ./build.sh ashburn                      # build ashburn's selection
+#   ./build.sh                              # full shippable set, dev mode
 #   ./build.sh --prod                       # release build: full set → dist/<rev>-<build>/
+#   ./build.sh --libs                       # publish parent POM + libs/* to ~/.m2 (consumers)
+#   ./build.sh --apps=framework,crud --no-ears   # fast partial dev loop
+#   ./build.sh --edit                       # checkbox tree → ./build.conf; enter builds, s saves & exits
 #   ./build.sh occas-8.2                    # full set, OCCAS 8.2 platform
 #   ./build.sh clean package                # explicit Maven goals
 #   ./build.sh clean                        # clean-only (purges org.vorpal.blade from ~/.m2)
@@ -41,7 +47,7 @@
 # replaces the app on redeploy; prod appends the build number for traceable releases.
 #   ./build.sh -- -Pfoo                     # build with extra Maven flags
 #
-# Platform profiles: build-profiles/platforms/*.conf  (the only conf files left)
+# Platform confs: build-profiles/platforms/*.conf  (checked in — the OCCAS target)
 #
 # Default platform resolution (when none given on the command line):
 #   1. $MW_HOME env var → parse inventory/registry.xml for the active install
@@ -381,7 +387,7 @@ copy_all_to_dist() {
 
     echo "Copied ${copied} artifacts to ${DIST_REL}/"
     if [ $missing -gt 0 ]; then
-        echo "  (${missing} modules in ${PROFILE}.conf produced no artifact — first build, or build failure)"
+        echo "  (${missing} selected modules produced no artifact — first build, or build failure)"
     fi
 }
 
@@ -571,13 +577,19 @@ REMOVE_ALL_DIST=false
 #   prod (--prod)   WebLogic-Application-Version = <revision>-<build>  e.g. 3.0.4-7
 #                   distinct per build: traceable, side-by-side capable
 #
-# Override the default with BLADE_MODE=prod in the environment. A named
-# deployment profile (below) can also carry the mode via build.mode=; an explicit
-# --dev/--prod on the CLI always wins over the profile.
+# Override the default with BLADE_MODE=prod in the environment; an explicit
+# --dev/--prod on the CLI always wins. Mode is a per-invocation choice — no
+# config file carries it.
 BLADE_MODE="${BLADE_MODE:-dev}"
 MODE_EXPLICIT=false
-ENV_PROFILE=""
 BLADE_HOME="${BLADE_HOME:-$HOME/.blade}"
+# Selection state (see the header): flags win over --conf=, which wins over an
+# auto-picked ./build.conf. --libs overrides all selection.
+LIBS_ONLY=false
+NO_EARS=false
+APPS_CLI=""
+SEL_CONF_CLI=""
+IGNORED_ENV_ARG=""
 
 # Read a key=value from a conf file (ENC(...) secrets are unwrapped). Same shape
 # as the helper in install.sh / deploy.sh, so the three tools read one profile.
@@ -597,16 +609,16 @@ env_profile_conf() {
 }
 
 # ============================================================================
-# App / EAR selection — the shared profile carries build.apps + ear.<tier>
+# App / EAR selection — a selection CONF FILE carries build.apps + ear.<tier>
 # ============================================================================
 # build.apps=*        build every discovered app (default; auto-includes new apps)
 # build.apps=a,b,c    build only these (bare module names, globally unique)
 # ear.admin=on|off    on  → bundle the tier's selected WARs into blade-<tier>.ear
 #                     off → ship them as loose WARs (skip the .ear assembler)
 # Defaults preserve today's deploy shape: admin/test bundled, services loose.
-# proto has no EAR (loose only). These keys are written ONLY by the tree editor
-# below; a profile without them (a plain deploy profile) builds the full set, so
-# existing profiles and `./build.sh default` are unaffected.
+# proto has no EAR (loose only). The file is ./build.conf (gitignored, personal,
+# written by --edit) or any file named with --conf= (a team can check one in).
+# ~/.blade profiles are NOT read: builds are environment-free by design.
 EAR_TIERS="admin services test"
 EAR_SKIP=""   # tiers whose .ear is skipped this build (set by apply_profile_selection)
 
@@ -669,7 +681,6 @@ _bp_read_key() {
         ' ')            printf 'space' ;;
         ''|$'\n'|$'\r') printf 'enter' ;;
         a|A)            printf 'all' ;;
-        m|M)            printf 'mode' ;;
         s|S)            printf 'save' ;;
         j|J)            printf 'down' ;;
         k|K)            printf 'up' ;;
@@ -678,23 +689,9 @@ _bp_read_key() {
     esac
 }
 
-# Prompt for a new profile name over /dev/tty; echo it. Returns 1 on EOF.
-prompt_new_profile_name() {
-    local name=""
-    while [ -z "$name" ]; do
-        printf '  new profile name: ' > /dev/tty
-        IFS= read -r name < /dev/tty || return 1
-        case "$name" in
-            "") ;;
-            *[!A-Za-z0-9_-]*) echo "  letters, digits, - or _ only." > /dev/tty; name="" ;;
-            *) [ -f "${PLATFORMS_DIR}/${name}.conf" ] && { echo "  '${name}' is a platform name — pick another." > /dev/tty; name=""; } ;;
-        esac
-    done
-    printf '%s' "$name"
-}
-
 # Full-screen accordion: choose which apps compile, and which tiers bundle into an
-# EAR. Writes build.apps + ear.<tier> into <conf> ($2 = display name). Renders
+# EAR. Writes build.apps + ear.<tier> into <conf> ($2 = display name) — a SELECTION
+# conf (./build.conf or a --conf= target), never a ~/.blade profile. Renders
 # over /dev/tty. State is padded strings (bash 3.2 has no associative arrays).
 # Colour is never used — checkbox shape/position and the '›' cursor carry state.
 edit_profile_apps() {
@@ -717,9 +714,6 @@ edit_profile_apps() {
     local checked=" " m
     for m in "${mods[@]}"; do app_selected "$conf" "$m" && checked="${checked}${m} "; done
     _has() { case "$checked" in *" $1 "*) return 0 ;; esac; return 1; }
-
-    local mode; mode="$(read_prop "$conf" build.mode)"
-    case "$mode" in production|prod) mode=prod ;; *) mode=dev ;; esac
 
     local ear_admin ear_services ear_test
     ear_admin=$(ear_flag "$conf" admin); ear_services=$(ear_flag "$conf" services); ear_test=$(ear_flag "$conf" test)
@@ -746,7 +740,7 @@ edit_profile_apps() {
         printf '\e[H\e[J' > /dev/tty
         {
             echo ""
-            echo "  BLADE — choose apps to build   (profile: ${pname} · mode: $(echo "$mode" | tr a-z A-Z))"
+            echo "  BLADE — choose apps to build   (selection: ${pname})"
             echo ""
             expanded="${pos_cat[$cursor]}"
             for p in $(seq 0 $((npos - 1))); do
@@ -769,7 +763,7 @@ edit_profile_apps() {
                 else printf ' %s %s\n' "$pre" "$label"; fi
             done
             echo ""
-            echo "  ↑/↓ move · space toggle (app, or a tier's EAR) · a all-in-tier · m dev/prod"
+            echo "  ↑/↓ move · space toggle (app, or a tier's EAR) · a all-in-tier"
             echo "  enter save & build · s save & exit · q quit without saving"
         } > /dev/tty
         key=$(_bp_read_key)
@@ -793,7 +787,6 @@ edit_profile_apps() {
                     if [ "$all" = 1 ]; then checked="${checked/ $mm / }"
                     elif ! _has "$mm"; then checked="${checked}${mm} "; fi
                 done ;;
-            mode) [ "$mode" = prod ] && mode=dev || mode=prod ;;
             enter) ending=build; break ;;
             save)  ending=save;  break ;;
             quit)  printf '\e[?25h' > /dev/tty; trap - INT; echo "  (cancelled — profile unchanged)" > /dev/tty; return 1 ;;
@@ -807,56 +800,14 @@ edit_profile_apps() {
     elif [ "${#picked[@]}" -eq 0 ];             then apps_val=""
     else apps_val="$(IFS=,; echo "${picked[*]}")"; fi
 
-    blade_set_prop "$conf" build.mode "$mode"
     blade_set_prop "$conf" build.apps "$apps_val"
     blade_set_prop "$conf" ear.admin "$ear_admin"
     blade_set_prop "$conf" ear.services "$ear_services"
     blade_set_prop "$conf" ear.test "$ear_test"
     echo "  saved ${conf}" > /dev/tty
-    echo "  mode=${mode} · ${#picked[@]}/${#mods[@]} apps · EAR admin=${ear_admin} services=${ear_services} test=${ear_test}" > /dev/tty
+    echo "  ${#picked[@]}/${#mods[@]} apps · EAR admin=${ear_admin} services=${ear_services} test=${ear_test}" > /dev/tty
     # 0 = saved, go build (enter); 10 = saved, exit (s). Quit (q) returned 1 above.
     [ "$ending" = build ] && return 0 || return 10
-}
-
-# Interactive: pick / create / edit a profile for this build. Sets ENV_PROFILE
-# (global; may stay empty for a full-set build) and returns 0 to build it. When the
-# app/EAR editor opens (--edit, or "create" from the picker), the key that closes it
-# decides: enter → save & build (returns 0), s → save & EXIT, q → cancel & EXIT.
-# Returns 1 if the picker itself was cancelled (nothing to build).
-resolve_build_profile() {
-    local pick c ec
-    # Run the editor on <conf>; act on how the user left it: enter (0) → build,
-    # s (10) → save & exit, q (1) → cancel & exit.
-    _edit_then() {   # <conf>
-        ec=0; edit_profile_apps "$1" "$ENV_PROFILE" || ec=$?
-        case "$ec" in
-            0)  return 0 ;;                                                                    # enter → build
-            10) echo "Saved '${ENV_PROFILE}'. Build it with:  ./build.sh ${ENV_PROFILE}"; exit 0 ;;  # s → exit
-            *)  exit 0 ;;                                                                      # q → cancelled
-        esac
-    }
-    if [ "$EDIT_REQUESTED" = true ]; then
-        if [ -z "$ENV_PROFILE" ]; then
-            pick="$(blade_pick_profile)" || return 1
-            case "$pick" in
-                __create__) ENV_PROFILE="$(prompt_new_profile_name)" || return 1 ;;
-                *)          ENV_PROFILE="$pick" ;;
-            esac
-        fi
-        c="$(blade_profile_conf_path "$ENV_PROFILE")"; [ -n "$c" ] || c="${BLADE_HOME}/${ENV_PROFILE}/profile.conf"
-        _edit_then "$c"; return 0
-    fi
-    # Bare build, no profile named → list/create (skip for a legacy default arg).
-    if [ -z "$ENV_PROFILE" ] && [ -z "$IGNORED_PROFILE_ARG" ]; then
-        pick="$(blade_pick_profile 'A|build the full shippable set (no profile)')" || return 1
-        case "$pick" in
-            __A__)      ENV_PROFILE="" ;;
-            __create__) ENV_PROFILE="$(prompt_new_profile_name)" || return 1
-                        _edit_then "${BLADE_HOME}/${ENV_PROFILE}/profile.conf" ;;
-            *)          ENV_PROFILE="$pick" ;;
-        esac
-    fi
-    return 0
 }
 
 for arg in "$@"; do
@@ -876,20 +827,25 @@ for arg in "$@"; do
         INIT_REQUESTED=true
     elif [ "$arg" = "--edit" ]; then
         EDIT_REQUESTED=true
+    elif [ "$arg" = "--libs" ]; then
+        LIBS_ONLY=true
+    elif [ "$arg" = "--no-ears" ]; then
+        NO_EARS=true
+    elif [[ "$arg" == --apps=* ]]; then
+        APPS_CLI="${arg#--apps=}"
+    elif [[ "$arg" == --conf=* ]]; then
+        SEL_CONF_CLI="${arg#--conf=}"
     elif [ "$arg" = "cleanAll" ]; then
         REMOVE_ALL_DIST=true
         MAVEN_ARGS+=("clean")
     elif [[ "$arg" == -* ]]; then
         MAVEN_ARGS+=("$arg")
     elif [ -n "$(env_profile_conf "$arg")" ]; then
-        # A named deployment profile (~/.blade/<name>[/profile].conf) — the same
-        # profile install.sh/deploy.sh use. Take its build.mode unless the CLI
-        # named one explicitly. build.sh needs nothing else from it.
-        ENV_PROFILE="$arg"
-        case "$(read_prop "$(env_profile_conf "$arg")" build.mode)" in
-            production|prod) [ "$MODE_EXPLICIT" = true ] || BLADE_MODE=prod ;;
-            development|dev) [ "$MODE_EXPLICIT" = true ] || BLADE_MODE=dev ;;
-        esac
+        # An environment name (~/.blade/<name>). Environments no longer configure
+        # builds — a build is product x platform x mode; an environment is where
+        # artifacts DEPLOY (install.sh/deploy.sh territory). Accepted and ignored
+        # so `./build.sh ashburn` muscle memory doesn't break; noted below.
+        IGNORED_ENV_ARG="$arg"
     elif [ "$arg" = "default" ] || [ "$arg" = "full" ] || [ "$arg" = "minimal" ]; then
         # A retired module-profile name. optum/att-tao invoke `./build.sh default`;
         # accept and ignore it so those builds keep working (noted before the build).
@@ -905,7 +861,7 @@ done
 # (create/refine a profile's app+EAR selection); the editor runs from the
 # interactive-resolution block once the build goal is known.
 if [ "$LIST_ONLY" = true ]; then
-    echo "BLADE profiles (~/.blade):"
+    echo "Environment profiles (~/.blade) — deploy targets; builds do not read them:"
     _pl="$(blade_list_profiles)"
     [ -n "$_pl" ] && printf '%s\n' "$_pl" | sed 's/^/  /' || echo "  (none yet)"
     exit 0
@@ -1102,28 +1058,22 @@ elif [ "$HAS_INSTALL" = false ] && [ "$HAS_BUILD_GOAL" = true ]; then
     MAVEN_GOALS+=("install")
 fi
 
-# --- Interactive profile resolution (TTY + build goal only) ---
-# --edit opens the app/EAR tree editor; a bare build with no profile lists the
-# pool or offers to create one (Jeff: "if a profile isn't provided, list or
-# create"). Guarded on a real terminal, so a non-interactive `./build.sh` in CI
-# and superproject calls like `./build.sh default` fall straight through to the
-# full set and never block.
-# [ -t 3 ] is the interactivity test: fd 3 is the pre-tee original stdout (see the
-# `exec 3>&1` up top). It is the ONLY reliable terminal check here — [ -t 1 ] is
-# always false (stdout is tee'd to the build log) and [ -e /dev/tty ] is true even
-# in CI (the device node exists but can't be opened), which would wrongly divert a
-# non-interactive build into the picker and abort it.
-if [ "$HAS_BUILD_GOAL" = true ] && [ -t 3 ] \
-   && { [ "$EDIT_REQUESTED" = true ] || [ -z "$ENV_PROFILE" ]; }; then
-    resolve_build_profile || { echo "Nothing to build."; exit 0; }
-    # A profile chosen/created just now may carry build.mode; honour it unless the
-    # CLI already named --dev/--prod.
-    if [ -n "$ENV_PROFILE" ] && [ "$MODE_EXPLICIT" != true ]; then
-        case "$(read_prop "$(env_profile_conf "$ENV_PROFILE")" build.mode)" in
-            production|prod) BLADE_MODE=prod ;;
-            development|dev) BLADE_MODE=dev ;;
-        esac
-    fi
+# --- --edit: the app/EAR tree editor on a SELECTION conf file ---
+# Default target is ./build.conf — gitignored personal scratch, picked up
+# automatically by later bare builds; --conf=FILE edits a named file a team can
+# check in. Environments are not involved. [ -t 3 ] is the interactivity test:
+# fd 3 is the pre-tee original stdout (see the `exec 3>&1` up top) — [ -t 1 ] is
+# always false (stdout is tee'd to the build log) and [ -e /dev/tty ] is true
+# even in CI (the node exists but can't be opened).
+if [ "$EDIT_REQUESTED" = true ]; then
+    [ -t 3 ] || { echo "No terminal — --edit needs one."; exit 1; }
+    _editconf="${SEL_CONF_CLI:-${SCRIPT_DIR}/build.conf}"
+    _ec=0; edit_profile_apps "$_editconf" "${_editconf##*/}" || _ec=$?
+    case "$_ec" in
+        0)  SEL_CONF_CLI="$_editconf" ;;   # enter → build with it now
+        10) echo "Saved ${_editconf}. A bare ./build.sh picks it up automatically."; exit 0 ;;
+        *)  echo "Nothing to build."; exit 0 ;;
+    esac
 fi
 
 # --- Purge installed BLADE artifacts on clean ---
@@ -1197,18 +1147,60 @@ else
     if [ -n "$IGNORED_PROFILE_ARG" ]; then
         echo "Note: the module-set names (default/full/minimal) are retired — building the full set (ignoring '${IGNORED_PROFILE_ARG}')."
     fi
+    if [ -n "$IGNORED_ENV_ARG" ]; then
+        echo "Note: environment names no longer configure builds (ignoring '${IGNORED_ENV_ARG}')."
+        echo "      A build serves every environment; use --dev/--prod for the mode and"
+        echo "      --apps=/--no-ears/--conf= (or ./build.conf via --edit) for selection."
+    fi
     INCLUDED_MODULES="$ALL_MODULES"
-    # A profile that carries an app/EAR selection (written by the tree editor)
-    # narrows the build: deselected apps get -Dskip.<app>; a tier with its EAR off
-    # gets -Dskip.<tier> (its WARs still build loose). A plain deploy profile with
-    # no selection keys builds the full set, unchanged.
-    if [ -n "$ENV_PROFILE" ]; then
-        _selconf="$(env_profile_conf "$ENV_PROFILE")"
+    if [ "$LIBS_ONLY" = true ]; then
+        # --libs: publish the libraries — parent POM + every libs/* module into
+        # ~/.m2 — and nothing else: no apps, no EARs, no dist. This is the whole
+        # consumer-repo interface (optum/att-tao Step 0): a consumer pins the
+        # blade submodule tag and asks for the libraries its version range
+        # resolves; it never selects blade modules.
+        PROFILE="libraries only (--libs)"
+        _kept=""
+        while IFS= read -r _m; do
+            [ -z "$_m" ] && continue
+            if [ -f "${SCRIPT_DIR}/libs/${_m}/pom.xml" ]; then _kept="${_kept}${_m}"$'\n'
+            else SKIP_FLAGS+=("-Dskip.${_m}"); fi
+        done <<< "$ALL_MODULES"
+        INCLUDED_MODULES="${_kept%$'\n'}"
+        for _t in $EAR_TIERS; do SKIP_FLAGS+=("-Dskip.${_t}"); EAR_SKIP="${EAR_SKIP} ${_t}"; done
+        SKIP_DIST=true
+    else
+        # A selection conf narrows the build: deselected apps get -Dskip.<app>; a
+        # tier with its EAR off gets -Dskip.<tier> (its WARs still build loose).
+        # Precedence: --apps=/--no-ears (a synthesized one-shot selection) beat
+        # --conf=FILE, which beats an auto-picked ./build.conf. No file, no flags
+        # ⇒ the full set.
+        _selconf=""
+        _seltmp=""
+        if [ -n "$APPS_CLI" ] || [ "$NO_EARS" = true ]; then
+            _seltmp="$(mktemp /tmp/blade-selection.XXXXXX)"
+            {
+                [ -n "$APPS_CLI" ] && echo "build.apps=${APPS_CLI}"
+                if [ "$NO_EARS" = true ]; then
+                    echo "ear.admin=off"; echo "ear.services=off"; echo "ear.test=off"
+                fi
+            } > "$_seltmp"
+            _selconf="$_seltmp"
+            PROFILE="selection: ${APPS_CLI:-all apps}${NO_EARS:+ · no EARs}"
+        elif [ -n "$SEL_CONF_CLI" ]; then
+            [ -f "$SEL_CONF_CLI" ] || { echo "Error: selection conf not found: ${SEL_CONF_CLI}"; exit 1; }
+            _selconf="$SEL_CONF_CLI"
+            PROFILE="selection: ${SEL_CONF_CLI}"
+        elif [ -f "${SCRIPT_DIR}/build.conf" ]; then
+            _selconf="${SCRIPT_DIR}/build.conf"
+            PROFILE="selection: build.conf"
+        fi
         if [ -n "$_selconf" ] && profile_has_selection "$_selconf"; then
-            CONF_FILE="$_selconf"
-            PROFILE="profile: ${ENV_PROFILE}"
+            # The one-shot temp conf never lands in dist; a real file does (traceability).
+            [ -z "$_seltmp" ] && CONF_FILE="$_selconf"
             apply_profile_selection "$_selconf"
         fi
+        [ -n "$_seltmp" ] && rm -f "$_seltmp"
     fi
 fi
 

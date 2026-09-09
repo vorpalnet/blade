@@ -8,29 +8,28 @@
 	<!--
 	  Two layers, and they answer different questions.
 
-	  The container answers "may this person into the admin tier at all", in the
-	  four platform roles, the same as every other admin app. The application
-	  then answers "may this person hear THIS recording", which no url-pattern
-	  can express, through AccessEvaluator. A platform role grants no access to
-	  content: an Admin who is not named by a rule gets a 403 from the app.
+	  OidcLoginFilter answers "who is this person": a browser is signed in with
+	  the deployment's OpenID Connect provider when WEB-INF/blade-oidc.properties
+	  is present (deploy.sh adds it), an API client presents a bearer token, and
+	  a WAR deployed without the file falls back to the container's login named
+	  below. The application then answers "may this person hear THIS recording",
+	  which no url-pattern can express, through AccessEvaluator. Being signed in
+	  grants no access to content: a caller not named by a rule gets a 403.
 
-	  The pattern matches RecordingsApplication's @ApplicationPath. Naming a
-	  pattern nothing is served on is how services/context ended up serving its
-	  whole API unauthenticated.
+	  There is deliberately no auth-constraint on the API. The container checks
+	  one before any filter runs, so a constraint here would demand the
+	  container's own login of every browser and the OpenID sign-in could never
+	  start. The filter is mapped to everything this WAR serves; anything added
+	  later is behind it too.
 	-->
-	<security-constraint>
-		<web-resource-collection>
-			<web-resource-name>Recordings review</web-resource-name>
-			<url-pattern>/api/*</url-pattern>
-			<url-pattern>/</url-pattern>
-		</web-resource-collection>
-		<auth-constraint>
-			<role-name>Admin</role-name>
-			<role-name>Operator</role-name>
-			<role-name>Deployer</role-name>
-			<role-name>Monitor</role-name>
-		</auth-constraint>
-	</security-constraint>
+	<filter>
+		<filter-name>OidcLoginFilter</filter-name>
+		<filter-class>org.vorpal.blade.framework.v3.security.OidcLoginFilter</filter-class>
+	</filter>
+	<filter-mapping>
+		<filter-name>OidcLoginFilter</filter-name>
+		<url-pattern>/*</url-pattern>
+	</filter-mapping>
 
 	<!-- The container's default JAX-RS base, denied to everyone. An empty
 	     auth-constraint grants no role, so a resource that ever loses its
@@ -55,4 +54,5 @@
 	<security-role><role-name>Operator</role-name></security-role>
 	<security-role><role-name>Deployer</role-name></security-role>
 	<security-role><role-name>Monitor</role-name></security-role>
+	<security-role><role-name>Reviewer</role-name></security-role>
 </web-app>

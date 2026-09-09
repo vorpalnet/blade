@@ -20,6 +20,8 @@ public class RecorderSettings extends Configuration implements Serializable {
 	private LinkedList<String> recordAttributes = new LinkedList<>();
 	private LinkedList<String> transcribeHints = new LinkedList<>();
 	private LinkedList<String> transcribeHintAttributes = new LinkedList<>();
+	private boolean redact = true;
+	private Map<String, String> redactPatterns = new LinkedHashMap<>();
 
 	@JsonPropertyDescription("JSR-309 driver name to obtain the media-server factory from (the registered "
 			+ "Driver SPI). Leave blank to use the single registered driver.")
@@ -85,6 +87,32 @@ public class RecorderSettings extends Configuration implements Serializable {
 
 	public void setTranscribeHintAttributes(LinkedList<String> transcribeHintAttributes) {
 		this.transcribeHintAttributes = transcribeHintAttributes;
+	}
+
+	@JsonPropertyDescription("Find protected values in each utterance as it is transcribed and store a redacted "
+			+ "rendition beside the verbatim text: card numbers, social security numbers, phone numbers, "
+			+ "account and member identifiers, numeric dates. The verbatim text is still stored; which of "
+			+ "the two a reviewer sees is decided when they read it, by the phi:unredact permission. False "
+			+ "stores verbatim text only and marks the transcript VERBATIM.")
+	public boolean isRedact() {
+		return redact;
+	}
+
+	public void setRedact(boolean redact) {
+		this.redact = redact;
+	}
+
+	@JsonPropertyDescription("What to redact, as kind -> regular expression, for example memberId -> "
+			+ "[A-Z]{2}\\d{6}. Empty means the built-in set (card with a checksum test, ssn, phone, number, "
+			+ "date). A kind named like a built-in one replaces it; a kind mapped to an empty expression "
+			+ "removes it. Matched against the text the recognizer produced, so a value spoken as digits "
+			+ "is matched as digits.")
+	public Map<String, String> getRedactPatterns() {
+		return redactPatterns;
+	}
+
+	public void setRedactPatterns(Map<String, String> redactPatterns) {
+		this.redactPatterns = (redactPatterns == null) ? new LinkedHashMap<>() : redactPatterns;
 	}
 
 	@JsonPropertyDescription("Session attribute names to carry onto each recording as the attributes an access "

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+	id="WebApp_Catalog" version="4.0">
+	<display-name>blade-catalog</display-name>
+
+	<!-- No API and no page. This application only listens: a durable
+	     subscription to the conversation-closed event, and rows written into
+	     the analytics database for the review application to search. What it
+	     serves is nothing, and the constraint below says so to the container. -->
+	<listener>
+		<listener-class>org.vorpal.blade.applications.catalog.CatalogSubscription</listener-class>
+	</listener>
+
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>Nothing is served</web-resource-name>
+			<url-pattern>/*</url-pattern>
+		</web-resource-collection>
+		<auth-constraint/>
+	</security-constraint>
+</web-app>

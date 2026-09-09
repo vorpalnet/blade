@@ -52,6 +52,8 @@ public class Utterance {
 	private JsonNode words;
 	private String heard;
 	private List<Correction> corrections;
+	private String redacted;
+	private List<Redaction> redactions;
 
 	public Utterance() {
 	}
@@ -146,6 +148,95 @@ public class Utterance {
 
 	public void setCorrections(List<Correction> corrections) {
 		this.corrections = corrections;
+	}
+
+	/// The text with every protected span replaced by its kind in brackets,
+	/// present only when a redactor ran. Stored beside the verbatim text rather
+	/// than instead of it: the record keeps what was said, and which of the two
+	/// a reader is shown is the review API's decision, made against
+	/// `phi:unredact` at the moment of reading. A copy that had been redacted
+	/// in storage could never be un-redacted for the one reader entitled to it.
+	@JsonPropertyDescription("The text with protected spans withheld, each shown as its kind in brackets. Absent when no redactor ran.")
+	public String getRedacted() {
+		return redacted;
+	}
+
+	public void setRedacted(String redacted) {
+		this.redacted = redacted;
+	}
+
+	@JsonPropertyDescription("Each protected span found in the text: its kind, its character bounds in the verbatim text, and its moment on the conversation clock when the words were timed.")
+	public List<Redaction> getRedactions() {
+		return redactions;
+	}
+
+	public void setRedactions(List<Redaction> redactions) {
+		this.redactions = redactions;
+	}
+
+	/// One protected span. The character bounds address the verbatim text;
+	/// the time bounds, when present, address the audio, which is what a
+	/// player needs to mute the same span.
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public static final class Redaction {
+		private String kind;
+		private int from;
+		private int to;
+		private Long startMillis;
+		private Long endMillis;
+
+		public Redaction() {
+		}
+
+		public Redaction(String kind, int from, int to) {
+			this.kind = kind;
+			this.from = from;
+			this.to = to;
+		}
+
+		@JsonPropertyDescription("What kind of protected value was found, for example card or ssn.")
+		public String getKind() {
+			return kind;
+		}
+
+		public void setKind(String kind) {
+			this.kind = kind;
+		}
+
+		@JsonPropertyDescription("Start of the span in the verbatim text, a character offset.")
+		public int getFrom() {
+			return from;
+		}
+
+		public void setFrom(int from) {
+			this.from = from;
+		}
+
+		@JsonPropertyDescription("End of the span in the verbatim text, exclusive.")
+		public int getTo() {
+			return to;
+		}
+
+		public void setTo(int to) {
+			this.to = to;
+		}
+
+		@JsonPropertyDescription("When the span was spoken, on the conversation clock. Absent when the words were not timed.")
+		public Long getStartMillis() {
+			return startMillis;
+		}
+
+		public void setStartMillis(Long startMillis) {
+			this.startMillis = startMillis;
+		}
+
+		public Long getEndMillis() {
+			return endMillis;
+		}
+
+		public void setEndMillis(Long endMillis) {
+			this.endMillis = endMillis;
+		}
 	}
 
 	/// One span of text replaced by an expected phrase.

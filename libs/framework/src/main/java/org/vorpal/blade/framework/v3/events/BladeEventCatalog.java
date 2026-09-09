@@ -55,6 +55,9 @@ public final class BladeEventCatalog {
 		for (EventType declaration : accessTypes()) {
 			versions.put(declaration.getType(), declaration.getVersion());
 		}
+		for (EventType declaration : conversationTypes()) {
+			versions.put(declaration.getType(), declaration.getVersion());
+		}
 		return versions;
 	}
 
@@ -461,5 +464,25 @@ public final class BladeEventCatalog {
 
 		return new ArrayList<>(Arrays.asList(actor, action, resourceKind, resourceId, decision, rule, reason,
 				sourceAddress));
+	}
+
+	/// The conversation lifecycle, one type so far. Not an analytics type: the
+	/// catalog application subscribes by selector and builds the searchable
+	/// index from the archive it points at.
+	public static List<EventType> conversationTypes() {
+		EventType closed = base(BladeEventTypes.CONVERSATION_CLOSED, "Conversation Closed",
+				"A recorded conversation was committed to the archive and can be indexed. Names the conversation and the call; carries no content, so an index is rebuilt from the archive, never from these events.",
+				"ConversationClosed");
+		closed.setPersist(false);
+		EventField conversation = new EventField("conversation", EventFieldType.STRING, true);
+		conversation.setDescription("The conversation's identifier, which names its prefix in the archive.");
+		EventField call = new EventField("call", EventFieldType.STRING, false);
+		call.setDescription("The call the conversation belongs to; a transferred call has several conversations under one call.");
+		EventField node = new EventField("node", EventFieldType.STRING, false);
+		node.setDescription("Which node committed it.");
+		EventField reason = new EventField("reason", EventFieldType.STRING, true);
+		reason.setDescription("closed for an orderly end, swept for a conversation finalised after its node was lost.");
+		closed.setFields(new ArrayList<>(Arrays.asList(conversation, call, node, reason)));
+		return new ArrayList<>(Arrays.asList(closed));
 	}
 }

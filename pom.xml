@@ -906,6 +906,11 @@ fi
 			<modules><module>proto/audit</module></modules>
 		</profile>
 		<profile>
+			<id>catalog</id>
+			<activation><property><name>!skip.catalog</name></property></activation>
+			<modules><module>proto/catalog</module></modules>
+		</profile>
+		<profile>
 			<id>logs</id>
 			<activation><property><name>!skip.logs</name></property></activation>
 			<modules><module>admin/logs</module></modules>

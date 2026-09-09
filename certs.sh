@@ -305,6 +305,17 @@ do_import() {
     if [ -n "$chain" ]; then
         trust_pw="$(get_secret tls.trust.passphrase "Trust keystore passphrase for ${ENV_NAME}")"
         rm -f "${CERTS_DIR}/blade-trust.p12"
+        # The servers validate every outbound TLS peer against this store, not
+        # only the ones presenting the imported chain: an OpenID provider, an
+        # object-storage endpoint, a partner API. Seed it with the JDK's public
+        # roots first, or each of those fails with "PKIX path building failed".
+        local cacerts; cacerts="$(dirname "$(dirname "$(readlink -f "$KEYTOOL")")")/lib/security/cacerts"
+        if [ -f "$cacerts" ] && "$KEYTOOL" -importkeystore -noprompt -srckeystore "$cacerts" -srcstorepass changeit \
+                -destkeystore "${CERTS_DIR}/blade-trust.p12" -deststoretype PKCS12 -deststorepass "$trust_pw" >/dev/null 2>&1; then
+            ok "seeded blade-trust.p12 with the JDK's public roots"
+        else
+            warn "could not seed blade-trust.p12 with the JDK's public roots (${cacerts}); outbound TLS to public services will fail."
+        fi
         # Split the chain into individual certs; import each under ca-N.
         awk -v dir="$CERTS_DIR" 'BEGIN{n=0} /BEGIN CERT/{n++} n{print > (dir "/.chain-" n ".pem")}' "$chainr"
         local f i=0

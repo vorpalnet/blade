@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recordings</title>
+<!--
+  The review page: search the call catalog, read a transcript, hear a call.
+  Hand-rolled and served from this WAR, with nothing fetched from outside it:
+  a reviewer's browser must not be sent to a third party to render a PHI page.
+  Everything it shows comes from this application's own API, which decides
+  per record what this reviewer may see, so the page carries no policy of its
+  own and no state beyond the current search.
+
+  Colour never carries meaning here. A protected span is bracketed text; a
+  muted recording says so in words; an incomplete record says so in words.
+-->
+<style>
+  :root { --ink: #1f1f1f; --muted: #5a5a5a; --line: #d8d8d8; --panel: #f6f6f6; --brand: #602671; }
+  body { margin: 0; font: 14px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--ink); background: #fff; }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 16px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  header .who { color: var(--muted); font-size: 13px; margin-left: auto; }
+  header a { color: var(--brand); }
+  main { display: grid; grid-template-columns: minmax(360px, 1fr) minmax(420px, 1.4fr); gap: 0; min-height: calc(100vh - 50px); }
+  .search { padding: 16px 20px; border-right: 1px solid var(--line); }
+  form.filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin-bottom: 12px; }
+  form.filters label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); }
+  form.filters input, form.filters select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; }
+  form.filters .wide { grid-column: 1 / -1; }
+  form.filters button { grid-column: 1 / -1; justify-self: start; font: inherit; padding: 7px 14px; border: 1px solid var(--brand); background: var(--brand); color: #fff; border-radius: 4px; cursor: pointer; }
+  .status { color: var(--muted); font-size: 13px; margin: 6px 0 10px; min-height: 1.4em; }
+  table.hits { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.hits th { text-align: left; font-weight: 600; border-bottom: 1px solid var(--line); padding: 6px 6px; color: var(--muted); }
+  table.hits td { border-bottom: 1px solid var(--line); padding: 6px 6px; vertical-align: top; }
+  table.hits tr.hit { cursor: pointer; }
+  table.hits tr.hit:hover td, table.hits tr.selected td { background: var(--panel); }
+  table.hits tr.selected td:first-child { box-shadow: inset 3px 0 0 var(--brand); }
+  .snippet { color: var(--muted); font-style: italic; }
+  .record { padding: 16px 20px; }
+  .record h2 { font-size: 16px; margin: 0 0 4px; font-weight: 600; }
+  .facts { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+  .facts span + span::before { content: " · "; }
+  .player { margin: 8px 0 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .player audio { width: 100%; max-width: 520px; }
+  .player .note { color: var(--muted); font-size: 12px; }
+  .transcript { border: 1px solid var(--line); border-radius: 4px; padding: 6px 0; max-height: 60vh; overflow: auto; }
+  .line { display: grid; grid-template-columns: 64px 70px 1fr; gap: 10px; padding: 5px 12px; }
+  .line:hover { background: var(--panel); }
+  .line .t { color: var(--muted); font-variant-numeric: tabular-nums; cursor: pointer; }
+  .line .p { font-weight: 600; }
+  .line .p.callee { font-weight: 400; color: var(--muted); }
+  .line .p::after { content: ""; }
+  .line .x .k { border: 1px solid var(--ink); border-radius: 3px; padding: 0 4px; font-size: 12px; }
+  .empty { color: var(--muted); padding: 24px 0; }
+  .toggle { font-size: 12px; color: var(--muted); }
+  .toggle input { vertical-align: middle; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Recordings</h1>
+  <span class="who" id="who"></span>
+  <a href="oidc/logout" id="logout" hidden>Sign out</a>
+</header>
+<main>
+  <section class="search">
+    <form class="filters" id="filters" autocomplete="off">
+      <label>From day <input type="date" name="from"></label>
+      <label>To day <input type="date" name="to"></label>
+      <label class="wide">Number, calling or called (prefix) <input name="number" placeholder="816555"></label>
+      <label>Attribute <input name="attrName" placeholder="department"></label>
+      <label>equals <input name="attrValue" placeholder="cardiology"></label>
+      <label>Found in the call
+        <select name="kind">
+          <option value="">anything</option>
+          <option value="card">a card number</option>
+          <option value="ssn">a social security number</option>
+          <option value="phone">a phone number</option>
+          <option value="number">an account or member id</option>
+          <option value="date">a date</option>
+          <option value="address">an address</option>
+        </select>
+      </label>
+      <label>Call id <input name="call" placeholder="0C360643.1a08…"></label>
+      <label class="wide">Words said <input name="q" placeholder="cancel my appointment"></label>
+      <label class="wide">Protected value spoken (needs unredact) <input name="value" placeholder="member id, card…"></label>
+      <button type="submit">Search</button>
+    </form>
+    <div class="status" id="status"></div>
+    <table class="hits" id="hits" hidden>
+      <thead><tr><th>When (UTC)</th><th>From</th><th>To</th><th>Length</th><th>Found</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="empty" id="empty" hidden>Nothing you may see matches.</div>
+  </section>
+  <section class="record" id="record">
+    <div class="empty">Search, then pick a call.</div>
+  </section>
+</main>
+<script>
+(function () {
+  var api = 'api/v1/recordings';
+  var statusEl = document.getElementById('status');
+  var table = document.getElementById('hits');
+  var tbody = table.querySelector('tbody');
+  var empty = document.getElementById('empty');
+  var record = document.getElementById('record');
+  var selected = null;
+
+  function fmtWhen(iso) { return iso ? iso.replace('T', ' ').replace(/\.\d+Z$/, 'Z').replace('Z', '') : ''; }
+  function fmtLen(ms) { var s = Math.round((ms || 0) / 1000); return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); }
+  function fmtKinds(k) { if (!k) return ''; return k.split(',').map(function (x) { return x.split('=')[0]; }).join(', '); }
+  function text(el, s) { el.textContent = s == null ? '' : String(s); return el; }
+  function el(tag, cls) { var e = document.createElement(tag); if (cls) e.className = cls; return e; }
+
+  function queryString(form) {
+    var d = new FormData(form), p = new URLSearchParams();
+    ['from', 'to', 'number', 'call', 'q', 'value', 'kind'].forEach(function (k) { var v = d.get(k); if (v) p.set(k, v); });
+    if (d.get('attrName') && d.get('attrValue')) p.set('attr.' + d.get('attrName'), d.get('attrValue'));
+    return p.toString();
+  }
+
+  document.getElementById('filters').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    text(statusEl, 'Searching…');
+    fetch(api + '/search?' + queryString(ev.target), { headers: { 'Accept': 'application/json' } })
+      .then(function (r) {
+        if (r.status === 403) throw new Error('You may not run that search.');
+        if (r.status === 409) return r.json().then(function (b) { throw new Error(b.error); });
+        if (!r.ok) throw new Error('The search failed (' + r.status + ').');
+        return r.json();
+      })
+      .then(function (body) {
+        tbody.innerHTML = '';
+        var hits = body.hits || [];
+        text(statusEl, hits.length + ' of ' + body.candidates + ' matching call' + (body.candidates === 1 ? '' : 's') + ' you may see');
+        table.hidden = hits.length === 0; empty.hidden = hits.length !== 0;
+        hits.forEach(function (h) {
+          var tr = el('tr', 'hit');
+          tr.appendChild(text(el('td'), fmtWhen(h.epochUtc)));
+          tr.appendChild(text(el('td'), h.from || ''));
+          tr.appendChild(text(el('td'), h.to || ''));
+          tr.appendChild(text(el('td'), fmtLen(h.durationMillis) + (h.complete ? '' : ' (incomplete)')));
+          tr.appendChild(text(el('td'), fmtKinds(h.kinds)));
+          tr.addEventListener('click', function () { select(tr, h); });
+          tbody.appendChild(tr);
+          if (h.snippet) {
+            var sr = el('tr'); var td = el('td', 'snippet'); td.colSpan = 5; text(td, '“' + h.snippet + '”'); sr.appendChild(td); tbody.appendChild(sr);
+          }
+        });
+      })
+      .catch(function (e) { text(statusEl, e.message); table.hidden = true; empty.hidden = true; });
+  });
+
+  function feed(audio, url, note) {
+    var mime = 'audio/mp4; codecs="mp4a.40.2"';
+    if (!window.MediaSource || !MediaSource.isTypeSupported(mime)) {
+      audio.src = url; // the browser's own loader, the best that is left
+      return;
+    }
+    var ms = new MediaSource();
+    audio.src = URL.createObjectURL(ms);
+    audio.addEventListener('error', function () {
+      text(note, 'the recording could not be played' + (audio.error ? ' (code ' + audio.error.code + ')' : ''));
+    });
+    ms.addEventListener('sourceopen', function () {
+      var sb = ms.addSourceBuffer(mime);
+      var queue = [], done = false, busy = false;
+      function pump() {
+        if (busy || sb.updating) return;
+        if (queue.length) { busy = true; sb.appendBuffer(queue.shift()); }
+        else if (done && ms.readyState === 'open') { try { ms.endOfStream(); } catch (e) {} }
+      }
+      sb.addEventListener('updateend', function () { busy = false; pump(); });
+      sb.addEventListener('error', function () { text(note, 'the recording could not be decoded'); });
+      fetch(url, { credentials: 'same-origin' }).then(function (r) {
+        if (r.status === 403) throw new Error('you may not hear this recording' + (url.indexOf('verbatim') > 0 ? ' verbatim' : ''));
+        if (r.status === 409) return r.json().then(function (b) { throw new Error(b.error); });
+        if (!r.ok) throw new Error('the recording could not be fetched (' + r.status + ')');
+        var reader = r.body.getReader();
+        function next() {
+          reader.read().then(function (step) {
+            if (step.done) { done = true; pump(); return; }
+            queue.push(step.value.buffer.slice(step.value.byteOffset, step.value.byteOffset + step.value.byteLength));
+            pump(); next();
+          });
+        }
+        next();
+      }).catch(function (e) { text(note, e.message); try { ms.endOfStream('network'); } catch (x) {} });
+    });
+  }
+
+  function select(tr, hit) {
+    if (selected) selected.classList.remove('selected');
+    selected = tr; tr.classList.add('selected');
+    show(hit, false);
+  }
+
+  function show(hit, verbatim) {
+    record.innerHTML = '';
+    var h2 = text(el('h2'), (hit.from || '?') + ' → ' + (hit.to || '?'));
+    record.appendChild(h2);
+    var facts = el('div', 'facts');
+    facts.appendChild(text(el('span'), fmtWhen(hit.epochUtc) + ' UTC'));
+    facts.appendChild(text(el('span'), fmtLen(hit.durationMillis)));
+    if (hit.holds) facts.appendChild(text(el('span'), hit.holds + ' hold' + (hit.holds === 1 ? '' : 's')));
+    if (hit.moves) facts.appendChild(text(el('span'), 'media moved'));
+    Object.keys(hit.attributes || {}).forEach(function (k) { if (k !== 'call' && k !== 'from' && k !== 'to') facts.appendChild(text(el('span'), k + ' ' + hit.attributes[k])); });
+    facts.appendChild(text(el('span'), 'call ' + hit.call));
+    record.appendChild(facts);
+
+    var player = el('div', 'player');
+    var audio = el('audio'); audio.controls = true;
+    player.appendChild(audio);
+    var note = el('span', 'note');
+    text(note, verbatim ? 'as stored' : 'protected spans are silenced');
+    player.appendChild(note);
+    // The recording is fragmented MP4 streamed without a length, which is
+    // the one shape a plain <audio src> handles worst and Media Source
+    // Extensions handles natively: fragments are appended as they arrive,
+    // the duration is known once the last one lands, and seeking works.
+    feed(audio, api + '/' + encodeURIComponent(hit.id) + '/media' + (verbatim ? '?verbatim=true' : ''), note);
+    var tog = el('label', 'toggle'); var cb = el('input'); cb.type = 'checkbox'; cb.checked = verbatim;
+    tog.appendChild(cb); tog.appendChild(document.createTextNode(' verbatim (needs unredact)'));
+    cb.addEventListener('change', function () { show(hit, cb.checked); });
+    player.appendChild(tog);
+    record.appendChild(player);
+
+    var box = el('div', 'transcript');
+    text(box, 'Loading transcript…');
+    record.appendChild(box);
+    fetch(api + '/' + encodeURIComponent(hit.id) + '/transcript' + (verbatim ? '?verbatim=true' : ''), { headers: { 'Accept': 'application/json' } })
+      .then(function (r) {
+        if (r.status === 403) throw new Error(verbatim ? 'You may not see the verbatim transcript.' : 'You may not read this transcript.');
+        if (r.status === 404) throw new Error('No transcript for this call.');
+        if (!r.ok) throw new Error('The transcript could not be read (' + r.status + ').');
+        return r.json();
+      })
+      .then(function (t) {
+        box.innerHTML = '';
+        var lines = [];
+        (t.transcripts || []).forEach(function (tr) { (tr.utterances || []).forEach(function (u) { lines.push(u); }); });
+        lines.sort(function (a, b) { return a.startMillis - b.startMillis; });
+        if (!lines.length) { text(box, 'The transcript is empty.'); return; }
+        lines.forEach(function (u) {
+          var row = el('div', 'line');
+          var tm = text(el('span', 't'), fmtLen(u.startMillis));
+          tm.title = 'play from here';
+          tm.addEventListener('click', function () { audio.currentTime = u.startMillis / 1000; audio.play(); });
+          row.appendChild(tm);
+          row.appendChild(text(el('span', 'p ' + (u.party === 'callee' ? 'callee' : '')), u.party));
+          var x = el('span', 'x');
+          // A protected span arrives as [kind]; render it as a tag, not as colour.
+          String(u.text || '').split(/(\[[a-zA-Z]+\])/).forEach(function (part) {
+            if (/^\[[a-zA-Z]+\]$/.test(part)) { x.appendChild(text(el('span', 'k'), part.slice(1, -1))); }
+            else { x.appendChild(document.createTextNode(part)); }
+          });
+          row.appendChild(x);
+          box.appendChild(row);
+        });
+      })
+      .catch(function (e) { text(box, e.message); });
+  }
+
+  // Who is signed in, if the API says. A plain probe of today's listing tells us the session is alive.
+  var today = new Date().toISOString().slice(0, 10).replace(/-/g, '/');
+  fetch(api + '/' + today, { headers: { 'Accept': 'application/json' } }).then(function (r) {
+    if (r.ok) { document.getElementById('logout').hidden = false; }
+  });
+})();
+</script>
+</body>
+</html>

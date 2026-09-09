@@ -95,4 +95,17 @@ class RecordingsPolicyTest {
 		assertFalse(decision.isAllowed());
 		assertEquals(DataPermission.EXPORT, decision.getPermission());
 	}
+
+	@Test
+	@DisplayName("a reviewer reads every transcript and hears none of them")
+	void reviewersReadWordsNotAudio() {
+		AccessEvaluator policy = sample();
+		SubjectAttributes rita = caller("rita", "Reviewer");
+		assertTrue(policy.evaluate(rita, DataPermission.LIST, recording()).isAllowed());
+		assertTrue(policy.evaluate(rita, DataPermission.TRANSCRIPT, recording("department", "cardiology")).isAllowed());
+		assertFalse(policy.evaluate(rita, DataPermission.PLAY, recording()).isAllowed());
+		assertFalse(policy.evaluate(rita, DataPermission.EXPORT, recording()).isAllowed());
+		assertFalse(policy.evaluate(caller("sam", "EXAMPLE-SUPERVISORS"), DataPermission.TRANSCRIPT,
+				recording()).isAllowed(), "a group the rule does not name gets nothing from it");
+	}
 }

@@ -347,7 +347,7 @@ arguments follow. Naming an environment reads its mode from the shared profile
 ./build.sh                              # dev build, platform from $MW_HOME
 ./build.sh --prod                       # release build (versioned dist + app version)
 ./build.sh occas-8.2                    # target OCCAS 8.2 (overrides $MW_HOME)
-./build.sh ashburn                      # build in ashburn's recorded mode
+./build.sh --libs                       # publish just the libraries to ~/.m2 (consumers)
 ./build.sh occas-8.1 clean package      # REQUIRED shape when switching platforms
 ./build.sh -- -Dfoo=bar                 # extra Maven flags
 ```

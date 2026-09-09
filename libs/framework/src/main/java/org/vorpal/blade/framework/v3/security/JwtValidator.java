@@ -161,7 +161,14 @@ public final class JwtValidator {
 	private List<String> extractRoleValues(JWTClaimsSet claims) {
 		String claimName = (config.getRolesClaim() == null || config.getRolesClaim().isEmpty())
 				? "groups" : config.getRolesClaim();
-		Object raw = claims.getClaim(claimName);
+		return groupValues(claims.getClaim(claimName));
+	}
+
+	/// The group names in a claim value, whatever shape the provider gave it:
+	/// one delimited string, an array of strings, or an array of objects that
+	/// name the group under `name`, `display` or `value` (an OCI identity
+	/// domain's userinfo answers with objects). Never null.
+	public static List<String> groupValues(Object raw) {
 		List<String> values = new ArrayList<>();
 		if (raw == null) {
 			return values;
@@ -174,11 +181,36 @@ public final class JwtValidator {
 			}
 		} else if (raw instanceof Collection) {
 			for (Object item : (Collection<?>) raw) {
-				if (item != null) {
+				if (item instanceof Map) {
+					Map<?, ?> m = (Map<?, ?>) item;
+					Object name = (m.get("name") != null) ? m.get("name")
+							: (m.get("display") != null) ? m.get("display") : m.get("value");
+					if (name != null) {
+						values.add(name.toString());
+					}
+				} else if (item != null) {
 					values.add(item.toString());
 				}
 			}
 		}
 		return values;
+	}
+
+	/// The same identity with more groups, from wherever the provider put the
+	/// ones its ID token left out. Roles are mapped from the added groups the
+	/// way they are from the claim, so a mapping works whichever way the groups
+	/// arrived.
+	public JwtIdentity withGroups(JwtIdentity identity, Collection<String> more) {
+		Set<String> groups = new LinkedHashSet<>(identity.groups());
+		Set<String> roles = new LinkedHashSet<>(identity.roles());
+		Map<String, String> mappings = config.getRoleMappings();
+		for (String raw : more) {
+			groups.add(raw);
+			String mapped = (mappings != null && mappings.containsKey(raw)) ? mappings.get(raw) : raw;
+			if (AdminRole.isAdminRole(mapped)) {
+				roles.add(mapped);
+			}
+		}
+		return new JwtIdentity(identity.getName(), roles, identity.claims(), groups);
 	}
 }

@@ -11,13 +11,20 @@ import org.vorpal.blade.framework.v3.media.MediaDirection;
 /// A call is one conversation until the party on the far side changes, and that
 /// is an event this application already sees: the App Router routes **initial**
 /// requests through the chain, so a call that moves to a new party arrives here
-/// as a new initial INVITE. A re-INVITE is by definition the same dialog with
-/// the same parties, so it can never be a new conversation.
+/// as a new initial INVITE when the recorder sits downstream of the application
+/// that transferred it.
 ///
-/// So `isInitial` is the boundary test. This application needs to know nothing
-/// about how a transfer was performed, which SIP method carried it, or which
-/// application performed it. Transfer is somebody else's app; routing is the App
-/// Router's job; this one watches what passes through.
+/// With the recorder upstream, nearer the trunk, a transfer completed by the
+/// application behind it arrives as a re-INVITE on the far leg carrying the
+/// target's SDP. The same dialog, a different party. [AnchoredSdp#newParty]
+/// tells that apart from a party moving its own media by the offer's origin
+/// line: RFC 3264 keeps a party's `o=` username and session id constant and
+/// moves only the version, so a changed origin identity is a changed party.
+/// `RecorderServlet.requestEvent` closes the conversation and opens the next
+/// on a fresh leg when it sees one. Either way this application needs to know
+/// nothing about how a transfer was performed, which SIP method carried it, or
+/// which application performed it. Transfer is somebody else's app; routing is
+/// the App Router's job; this one watches what passes through.
 ///
 /// ## Why it is a class and not four lines in the servlet
 ///

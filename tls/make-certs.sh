@@ -234,9 +234,23 @@ keytool -importcert -noprompt -alias "$CA_ALIAS" -file "$CA_PEM" \
 keytool -importcert -noprompt -alias "$ID_ALIAS" -file "$SIGNED" \
     -keystore "$ID_P12" -storepass "$KS_PASS" >/dev/null
 
-# --- 5. Trust store: our CA, plus the SBC CA when mTLS is on -----------------
+# --- 5. Trust store: public roots, our CA, plus the SBC CA when mTLS is on ----
+# The servers use this store for every outbound TLS connection they make, not
+# only for the peers that present BLADE certificates: an OpenID provider such
+# as an OCI identity domain, an object-storage endpoint, a partner API. A store
+# holding only our CA makes each of those fail with "PKIX path building
+# failed", so the JDK's own public roots go in first.
 echo "==> Building trust store"
 rm -f "$TRUST_P12"
+CACERTS="$(dirname "$(dirname "$(readlink -f "$(command -v keytool)")")")/lib/security/cacerts"
+if [ -f "$CACERTS" ]; then
+    keytool -importkeystore -noprompt -srckeystore "$CACERTS" -srcstorepass changeit \
+        -destkeystore "$TRUST_P12" -deststoretype PKCS12 -deststorepass "$TRUST_PASS" >/dev/null 2>&1 \
+        && echo "    + public roots imported from ${CACERTS}" \
+        || echo "    ! could not import the JDK's public roots from ${CACERTS}; outbound TLS to public services will fail"
+else
+    echo "    ! no JDK cacerts beside keytool; outbound TLS to public services will fail"
+fi
 keytool -importcert -noprompt -alias "$CA_ALIAS" -file "$CA_PEM" \
     -keystore "$TRUST_P12" -storetype PKCS12 -storepass "$TRUST_PASS" >/dev/null
 if [ "$SIP_TWOWAY" = "true" ]; then

@@ -113,8 +113,8 @@ public class QueueServlet extends B2buaServlet {
 					if (queue != null) {
 						QueueAttributes queueAttributes = queue.attributes;
 						QueueCallflow queueCallflow = new QueueCallflow(queueName, queueAttributes);
-						// addFirst + pollLast = FIFO: newest at the head, drain from the tail
-						queue.callflows.addFirst(queueCallflow);
+						// Do NOT enqueue here: the callflow is not yet drainable. process()
+						// enqueues it once aliceRequest is set and the caller is ringing.
 						queue.statistics.intervalTask();
 						callflow = queueCallflow;
 					} else {

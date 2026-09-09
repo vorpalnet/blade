@@ -18,4 +18,9 @@
 	<wls:security-role-assignment><wls:role-name>Operator</wls:role-name><wls:externally-defined/></wls:security-role-assignment>
 	<wls:security-role-assignment><wls:role-name>Deployer</wls:role-name><wls:externally-defined/></wls:security-role-assignment>
 	<wls:security-role-assignment><wls:role-name>Monitor</wls:role-name><wls:externally-defined/></wls:security-role-assignment>
+	<!-- A reviewer is not an administrator. Externally defined: the realm
+	     decides which group is a reviewer, and with the OpenID Connect
+	     provider that is a group the identity provider emits, named Reviewer
+	     or mapped to this role in the realm. -->
+	<wls:security-role-assignment><wls:role-name>Reviewer</wls:role-name><wls:externally-defined/></wls:security-role-assignment>
 </wls:weblogic-web-app>

@@ -8,6 +8,7 @@ import java.util.ServiceLoader;
 import javax.media.mscontrol.MsControlFactory;
 import javax.media.mscontrol.spi.Driver;
 
+import javax.media.mscontrol.networkconnection.NetworkConnection;
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletContextEvent;
@@ -128,6 +129,10 @@ public class RecorderServlet extends B2buaServlet implements B2buaListener {
 		SipApplicationSession app = outboundRequest.getApplicationSession();
 		RecordingAction action = ConversationBoundary.decide(true, directionsOf(outboundRequest), isPaused(app));
 		apply(action, app, outboundRequest);
+		// Who called whom, for every recording of this call: the first thing a
+		// supervisor searches by. The user parts only; a URI's host is routing.
+		stamp(app, "recorder.from", outboundRequest.getFrom());
+		stamp(app, "recorder.to", outboundRequest.getTo());
 
 		RecorderSettings cfg = (settings == null) ? null : settings.getCurrent();
 		if (cfg == null || !cfg.isRecord()) {
@@ -247,15 +252,52 @@ public class RecorderServlet extends B2buaServlet implements B2buaListener {
 			return; // no anchor to keep, or an offerless refresh that moves nothing
 		}
 		MediaDirection direction = offered.get(0);
+		// Which party sent this: the request is about to go to the far party,
+		// so a request bound for the caller's session came from the callee.
+		boolean fromCaller = anchor.callerSessionId == null
+				|| !anchor.callerSessionId.equals(request.getSession().getId());
+		NetworkConnection near = fromCaller ? anchor.caller : anchor.callee;
+		NetworkConnection far = fromCaller ? anchor.callee : anchor.caller;
+
+		// A party that moved its media gets a fresh leg; see RecorderAnchor.moveLeg.
+		byte[] nearOffer = bodyOf(request);
+		byte[] lastRemote = null;
+		try {
+			lastRemote = (near == null) ? null : near.getSdpPortManager().getUserAgentSessionDescription();
+		} catch (Exception e) {
+			sipLogger.fine(request, "RecorderServlet: the near leg's last SDP is unavailable: " + e);
+		}
+		if (near != null && AnchoredSdp.moved(lastRemote, nearOffer)) {
+			java.util.concurrent.CompletableFuture<byte[]> answer = new java.util.concurrent.CompletableFuture<>();
+			anchor.moveAnswer = answer;
+			if (AnchoredSdp.newParty(lastRemote, nearOffer)) {
+				// A different party on this leg: a transfer completed by
+				// re-INVITE. That is a conversation boundary, the same one a new
+				// initial INVITE marks, on a fresh leg. The conversation so far
+				// closes now, before the swap, so its record holds only the party
+				// it was with; the next begins once the new party is on the mix.
+				sipLogger.info(request, "RecorderServlet: a new party on the " + (fromCaller ? "caller" : "callee")
+						+ " leg (" + AnchoredSdp.origin(nearOffer) + "); conversation boundary");
+				RecorderAnchor.stopRecording(app.getId());
+				app.setAttribute(PAUSED, Boolean.FALSE);
+				final RecorderSettings cfg = (settings == null) ? null : settings.getCurrent();
+				new RecorderAnchor().moveLeg(anchor, fromCaller, nearOffer, answer,
+						() -> new RecorderAnchor().startRecording(app, anchor, cfg));
+			} else {
+				new RecorderAnchor().moveLeg(anchor, fromCaller, nearOffer, answer);
+			}
+		}
+
 		anchor.reissued.incrementAndGet();
-		byte[] sdp = RecorderAnchor.anchoredSdp(anchor, anchor.callee, direction);
+		byte[] sdp = RecorderAnchor.anchoredSdp(anchor, far, direction);
 		if (sdp == null) {
-			sipLogger.warning(request, "RecorderServlet: the callee leg has no media server SDP; "
+			sipLogger.warning(request, "RecorderServlet: the far leg has no media server SDP; "
 					+ "the re-INVITE is relayed as is and the media may leave the media server");
 			return;
 		}
 		request.setContent(sdp, SDP);
 		anchor.reinviteDirection = direction;
+		anchor.reinviteFromCaller = fromCaller;
 	}
 
 	/// The callee answered. Give the caller the media server's answer, not the
@@ -294,6 +336,9 @@ public class RecorderServlet extends B2buaServlet implements B2buaListener {
 		if (anchor == null) {
 			return;
 		}
+		// This response is the one toward the caller, so its session is the
+		// caller's; a later mid-dialog request bound for it came from the callee.
+		anchor.callerSessionId = outboundResponse.getSession().getId();
 		try {
 			// The callee's answer, read BEFORE the body is swapped for the media
 			// server's. Reading it afterwards fed the caller leg's own SDP to the
@@ -357,12 +402,31 @@ public class RecorderServlet extends B2buaServlet implements B2buaListener {
 			return; // provisional; the answer is still coming
 		}
 		anchor.reinviteDirection = null;
+		java.util.concurrent.CompletableFuture<byte[]> move = anchor.moveAnswer;
+		anchor.moveAnswer = null;
 		if (response.getStatus() >= 300) {
 			return;
 		}
-		byte[] sdp = RecorderAnchor.anchoredSdp(anchor, anchor.caller, offered.reverse());
+		NetworkConnection near = anchor.reinviteFromCaller ? anchor.caller : anchor.callee;
+		byte[] sdp = null;
+		if (move != null) {
+			// The fresh leg's own SDP, in the mirrored direction. The media
+			// server answers in milliseconds; the wait is bounded so a media
+			// server that does not answer costs the party its move, not the
+			// call.
+			try {
+				sdp = AnchoredSdp.rewrite(move.get(2000, java.util.concurrent.TimeUnit.MILLISECONDS), offered.reverse(),
+						anchor.reissued.get());
+			} catch (Exception e) {
+				sipLogger.warning(response, "RecorderServlet: the moved party's fresh leg did not negotiate in time ("
+						+ e + "); answering with the old leg, which the party may no longer reach");
+			}
+		}
 		if (sdp == null) {
-			sipLogger.warning(response, "RecorderServlet: the caller leg has no media server SDP; "
+			sdp = RecorderAnchor.anchoredSdp(anchor, near, offered.reverse());
+		}
+		if (sdp == null) {
+			sipLogger.warning(response, "RecorderServlet: the near leg has no media server SDP; "
 					+ "the answer is relayed as is and the media may leave the media server");
 			return;
 		}
@@ -432,6 +496,22 @@ public class RecorderServlet extends B2buaServlet implements B2buaListener {
 	}
 
 	/// The message body as bytes, or null when it carries none.
+	private static void stamp(SipApplicationSession app, String name, javax.servlet.sip.Address address) {
+		if (address == null || address.getURI() == null) {
+			return;
+		}
+		javax.servlet.sip.URI uri = address.getURI();
+		String user = null;
+		if (uri instanceof javax.servlet.sip.SipURI) {
+			user = ((javax.servlet.sip.SipURI) uri).getUser();
+		} else if (uri instanceof javax.servlet.sip.TelURL) {
+			user = ((javax.servlet.sip.TelURL) uri).getPhoneNumber();
+		}
+		if (user != null && !user.isEmpty()) {
+			app.setAttribute(name, user);
+		}
+	}
+
 	static byte[] bodyOf(javax.servlet.sip.SipServletMessage message) {
 		try {
 			Object content = (message == null) ? null : message.getContent();

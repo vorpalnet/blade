@@ -5,37 +5,28 @@
 	<display-name>blade-audit</display-name>
 
 	<!--
-	  Two gates, and they are not redundant. The container gate below establishes
-	  who the caller is and refuses anyone outside the platform roles. The
-	  application then asks AccessEvaluator for phi:audit, which is the gate that
-	  actually decides: a platform role grants no access to content, and the
-	  access log is content.
+	  Two gates, and they are not redundant. OidcLoginFilter establishes who the
+	  caller is: a browser signed in with the deployment's OpenID Connect
+	  provider when WEB-INF/blade-oidc.properties is present (deploy.sh adds it),
+	  an API client with a bearer token, or, in a WAR deployed without the file,
+	  the container's login named below. The application then asks
+	  AccessEvaluator for phi:audit, which is the gate that actually decides:
+	  being signed in grants no access to content, and the access log is content.
 
-	  The pattern matches RestApplication's @ApplicationPath exactly, so the
-	  constraint provably covers the API. Naming a pattern that matches nothing
-	  is how an API ends up served with no authentication at all.
+	  There is deliberately no auth-constraint. The container checks one before
+	  any filter runs, so a constraint would demand its own login of every
+	  browser and the OpenID sign-in could never start. (The earlier catch-all
+	  deny on "/" also caught j_security_check and turned every login into a
+	  403.) The filter is mapped to everything this WAR serves.
 	-->
-	<security-constraint>
-		<web-resource-collection>
-			<web-resource-name>Audit API</web-resource-name>
-			<url-pattern>/api/v1/*</url-pattern>
-		</web-resource-collection>
-		<auth-constraint>
-			<role-name>Admin</role-name>
-			<role-name>Operator</role-name>
-			<role-name>Deployer</role-name>
-			<role-name>Monitor</role-name>
-		</auth-constraint>
-	</security-constraint>
-
-	<!--
-	  There is deliberately no catch-all deny constraint. One was tried, on the
-	  pattern "/", and the container applied it to `j_security_check` as well, so
-	  every login came back 403 and the API could never be reached. The API
-	  constraint above covers the only thing this WAR serves; anything added later
-	  must declare its own, and that is the safer place for the rule anyway,
-	  beside the thing it protects.
-	-->
+	<filter>
+		<filter-name>OidcLoginFilter</filter-name>
+		<filter-class>org.vorpal.blade.framework.v3.security.OidcLoginFilter</filter-class>
+	</filter>
+	<filter-mapping>
+		<filter-name>OidcLoginFilter</filter-name>
+		<url-pattern>/*</url-pattern>
+	</filter-mapping>
 
 	<login-config>
 		<auth-method>CLIENT-CERT,FORM</auth-method>
@@ -50,4 +41,5 @@
 	<security-role><role-name>Operator</role-name></security-role>
 	<security-role><role-name>Deployer</role-name></security-role>
 	<security-role><role-name>Monitor</role-name></security-role>
+	<security-role><role-name>Reviewer</role-name></security-role>
 </web-app>

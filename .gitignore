@@ -69,3 +69,6 @@ build-profiles/deploy/*.secret
 # (The systemd boot service uses <domain>/.blade-nm.env, which lives outside the
 # repo under MW_HOME; this covers the in-repo .nmsecret convenience file.)
 misc/.nmsecret
+
+# personal build selection (written by ./build.sh --edit); teams share via --conf=
+/build.conf

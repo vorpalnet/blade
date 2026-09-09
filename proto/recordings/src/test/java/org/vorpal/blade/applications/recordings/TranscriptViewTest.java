@@ -72,4 +72,48 @@ class TranscriptViewTest {
 		assertEquals("need", words.get(1).get("text"));
 		assertEquals(1622L + 480L, words.get(1).get("startMillis"));
 	}
+
+	@Test
+	@DisplayName("a redacted transcript withholds the spans, the words behind them and what was heard, until verbatim is asked for")
+	@SuppressWarnings("unchecked")
+	void theRedactedRendition() throws Exception {
+		ConversationManifest manifest = new ConversationManifest("1F17594D.1a07e772b4e", "1F17594D.1a07e772aff",
+				Instant.parse("2026-09-08T00:42:14Z"));
+		TranscriptRef live = new TranscriptRef("live", "en-US", TranscriptRef.Attribution.PER_TRACK);
+		live.setRedaction(TranscriptRef.Redaction.REDACTED);
+		live.setObject("transcript/live/");
+		manifest.addTranscript(live);
+
+		Utterance u = new Utterance("caller", 10_000L, 14_000L, "Card 4111 1111 1111 1111 please.");
+		u.setSequence(1);
+		u.setHeard("Card 4111 1111 1111 1111 pleas.");
+		u.setCorrections(List.of(new Utterance.Correction("pleas.", "please")));
+		u.setWords(new ObjectMapper().readTree("{\"tokens\":[\" Card\",\" 4111\",\" 1111\",\" 1111\",\" 1111\",\" please\",\".\"],"
+				+ "\"timestamps\":[0.0,0.5,1.0,1.5,2.0,2.6,2.9],\"durations\":[0.4,0.4,0.4,0.4,0.4,0.3,0.1]}"));
+		org.vorpal.blade.framework.v3.media.manifest.Redactor.defaults().apply(u);
+
+		Map<String, Object> redacted = TranscriptView.of(manifest, Map.of("live", List.of(u)));
+		Map<String, Object> t = ((List<Map<String, Object>>) redacted.get("transcripts")).get(0);
+		assertEquals("REDACTED", t.get("redaction"));
+		Map<String, Object> line = ((List<Map<String, Object>>) t.get("utterances")).get(0);
+		assertEquals("Card [card] please.", line.get("text"));
+		assertFalse(line.containsKey("heard"), "what was heard carries the same digits");
+		List<Map<String, Object>> words = (List<Map<String, Object>>) line.get("words");
+		assertEquals("Card", words.get(0).get("text"));
+		assertEquals("[card]", words.get(1).get("text"));
+		assertEquals("[card]", words.get(4).get("text"));
+		assertEquals("please.", words.get(5).get("text"), "punctuation stays with its word");
+		assertEquals(10_500L, words.get(1).get("startMillis"), "timing survives, so a player can mute the span");
+		List<Map<String, Object>> spans = (List<Map<String, Object>>) line.get("redactions");
+		assertEquals("card", spans.get(0).get("kind"));
+		assertFalse(spans.get(0).containsKey("from"), "offsets address the verbatim text and are not shown");
+
+		Map<String, Object> verbatim = TranscriptView.of(manifest, Map.of("live", List.of(u)), true);
+		Map<String, Object> vt = ((List<Map<String, Object>>) verbatim.get("transcripts")).get(0);
+		assertEquals("VERBATIM", vt.get("redaction"));
+		Map<String, Object> vline = ((List<Map<String, Object>>) vt.get("utterances")).get(0);
+		assertEquals("Card 4111 1111 1111 1111 please.", vline.get("text"));
+		assertEquals("Card 4111 1111 1111 1111 pleas.", vline.get("heard"));
+		assertEquals(5, ((List<Map<String, Object>>) vline.get("redactions")).get(0).get("from"));
+	}
 }

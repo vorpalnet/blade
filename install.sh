@@ -487,7 +487,6 @@ load_profile() {
     # DYNAMIC range therefore starts at 1 — engine1 on machine1, engine2 on
     # machine2 — with no off-by-one and no second engine on the admin box.
     SRV_START_INDEX="$(d server.name.starting.index 1)"
-    BUILD_MODE="$(d build.mode dev)"
     # The LOGIN user, not the install user: cloud images only plant the ssh key
     # for their login account (opc, ec2-user). Privilege on the far side comes
     # from that user's sudo, applied per command — never from oracle-owned keys.
@@ -541,7 +540,7 @@ load_profile() {
     NGX_APPS_SN="$(d nginx.server_name.apps "")"
     NGX_BACKEND="$(d nginx.backend.addr "")"
     NGX_ADMIN_PORT="$(d nginx.admin.port "$SSL_PORT")"
-    NGX_APPS_PORT="$(d nginx.apps.port 8001)"
+    NGX_APPS_PORT="$(d nginx.apps.port 8002)"
     NGX_FULLCHAIN="$(d nginx.tls.fullchain "")"
     NGX_PRIVKEY="$(d nginx.tls.privkey "")"
     NGX_MAXBODY="$(d nginx.client.max.body.size 500m)"
@@ -837,7 +836,6 @@ EOF
 # ----- phase 6: runtime / deploy ---------------------------------------------
 phase_runtime() {
     log ""; log "${C_BOLD}Runtime / deploy settings${C_RESET}"
-    ask BUILD_MODE "Build mode (dev|prod)" "$BUILD_MODE"
     ask SSH_USER      "SSH user for reaching engine nodes (reboot/provision)" "$SSH_USER"
     ask ADMINURL      "WebLogic admin URL (deploy runs ON the AdminServer)" "$ADMINURL"
     return 0
@@ -860,7 +858,7 @@ EOF
     local defbe; defbe="${NGX_BACKEND:-$(hostname -I 2>/dev/null | awk '{print $1}')}"
     ask NGX_BACKEND    "  Backend address (this box's WebLogic listen addr)" "$defbe"
     ask NGX_ADMIN_PORT "  AdminServer SSL port" "${NGX_ADMIN_PORT:-$SSL_PORT}"
-    ask NGX_APPS_PORT  "  engine0 HTTP port"    "${NGX_APPS_PORT:-8001}"
+    ask NGX_APPS_PORT  "  engine0 SSL port"     "${NGX_APPS_PORT:-8002}"
     # Suggest the Let's Encrypt path for the cert's base domain (admin vhost minus
     # its first label), but any PEM pair is fine.
     local certbase="${NGX_ADMIN_SN#*.}"
@@ -1179,16 +1177,10 @@ save_profile() {
         echo ""
         echo "# --- Build selection (shared with build.sh + deploy.sh) ---"
         echo "# Edit it all with:  ./build.sh --edit ${NAME}"
-        echo "#   build.mode=dev    version <rev>, flat dist/ (fast loop);"
-        echo "#             prod    version <rev>-<build>, dist/<rev>-<build>/ (traceable)"
-        echo "#   build.apps=*      build every app ('*'), or a CSV of app names"
-        echo "#   ear.<tier>=on     bundle the tier into blade-<tier>.ear; off = loose WARs"
-        echo "# Defaults match the deploy shape: admin/test bundled, services loose."
-        echo "build.mode=${BUILD_MODE}"
-        echo "build.apps=*"
-        echo "ear.admin=on"
-        echo "ear.services=off"
-        echo "ear.test=on"
+        echo "# Build selection no longer lives here — a build is environment-free"
+        echo "# (one --prod dist serves every environment). Mode is a build.sh flag"
+        echo "# (--dev/--prod); app/EAR selection is ./build.sh --edit -> build.conf"
+        echo "# in the repo, or --apps=/--conf=. See BUILDING.md."
         echo ""
         echo "# --- OCCAS binaries (sync-occas.sh) ---"
         echo "occas.base.dir=${OCCAS_BASE}"
@@ -1209,8 +1201,6 @@ save_profile() {
         echo "approuter.dir=${APPROUTER_DIR}"
         echo "engine.nodes=${ENGINE_NODES}"
         echo ""
-        echo "# --- Which service WARs to deploy ---"
-        echo "deploy.services=*"
         echo ""
         echo "# --- TLS / certificates (tls/make-certs.sh + tls/install-ssl.sh) ---"
         echo "tls.san=${SAN}"
@@ -1339,7 +1329,7 @@ build_menu_rows() {
     local p_ident=0; [ -n "$DOMAIN" ] && p_ident=1
     local p_hosts=0; [ "$nhosts" -ge 1 ] && p_hosts=1
     local p_tls=0;   [ -n "$SSL_PORT" ] && p_tls=1
-    local p_run=0;   { [ -n "$BUILD_MODE" ] && [ -n "$ADMINURL" ]; } && p_run=1
+    local p_run=0;   [ -n "$ADMINURL" ] && p_run=1
     local a_i=0; [ -d "${MWHOME}/wlserver" ] && a_i=1
     local a_n=0; [ -d "${DOMAINS_DIR}/${NM_DOMAIN}" ] && a_n=1
     local a_c=0; [ -d "${DOMAINS_DIR}/${DOMAIN}" ] && a_c=1
@@ -1409,7 +1399,7 @@ build_menu_rows() {
     _row phase  nginx "nginx reverse proxy (edge TLS + WebSocket)" "$ngxsum" "$p_nginx"
     _row action ngx   "Install/refresh nginx config (validate + reload)" "$([ -f /etc/nginx/nginx.conf ] && echo /etc/nginx/nginx.conf)" "-"
     _row head ""      "STEP 6 · Deploy settings (build profile, SSH, admin URL)" "" "-"
-    _row phase runtime "Build mode, SSH user, admin URL" "${BUILD_MODE} · ${ADMINURL}" "$p_run"
+    _row phase runtime "SSH user, admin URL" "${ADMINURL}" "$p_run"
     # App deployment lives in deploy.sh (it reads THIS profile). install.sh stands
     # up the server; it no longer deploys apps.
     _row head ""      "STEP 7 · Deploy apps → run:  ./deploy.sh ${NAME:-<env>} --all" "" "-"
@@ -4431,6 +4421,25 @@ ensure_nm_cert() {
     local trpw="${BLADE_TRUST_PASSWORD:-}"
     [ -z "$trpw" ] && [ -f "$WLS_SECRET" ] && trpw="$(read_prop "$WLS_SECRET" tls.trust.passphrase)"
     if [ -f "${outdir}/blade-trust.p12" ] && [ -n "$trpw" ]; then
+        # Existing installs built before the trust store carried the JDK's
+        # public roots: add them now, once. The servers validate every outbound
+        # TLS peer against this store (an OpenID provider, object storage, a
+        # partner API), and a store holding only our CA fails each of those
+        # with "PKIX path building failed". make-certs.sh / certs.sh seed new
+        # stores the same way; the marker alias is one the JDK always ships.
+        if ! "$kt" -list -alias 'digicertglobalrootg2 [jdk]' -keystore "${outdir}/blade-trust.p12" \
+                -storepass "$trpw" >/dev/null 2>&1; then
+            local cacerts="${jh:+${jh}/lib/security/cacerts}"
+            [ -f "$cacerts" ] || cacerts="$(dirname "$(dirname "$(readlink -f "$(command -v "$kt")")")")/lib/security/cacerts"
+            if [ -f "$cacerts" ] && "$kt" -importkeystore -noprompt -srckeystore "$cacerts" -srcstorepass changeit \
+                    -destkeystore "${outdir}/blade-trust.p12" -deststoretype PKCS12 -deststorepass "$trpw" >/dev/null 2>&1; then
+                ok "added the JDK's public roots to blade-trust.p12 (outbound TLS to public services)"
+                _nm_regen=1   # the placed copy in the domain is stale too; refresh it below
+                "$kt" -delete -alias blade-nm -keystore "${outdir}/blade-trust.p12" -storepass "$trpw" >/dev/null 2>&1 || true
+            else
+                warn "could not add the JDK's public roots to blade-trust.p12 (${cacerts}); outbound TLS to public services will fail."
+            fi
+        fi
         # If the NM cert was regenerated, the blade-nm already in blade-trust.p12
         # (e.g. carried over by the cert import) is now stale — evict it so the new
         # cert is re-imported below instead of being skipped as "already present".
@@ -6266,6 +6275,12 @@ do_backup() {
 #     handshake. The map + the two proxy_set_header lines fix it.
 #   * Backend is the box's ROUTABLE address, never 127.0.0.1: the AdminServer
 #     SSL listener binds its ListenAddress, and localhost never reaches it.
+#   * Both vhosts proxy to the servers' SSL listeners, never the plain HTTP
+#     port. The container rebuilds every request URL from the scheme of the
+#     connection it received, not from X-Forwarded-Proto. Over plain HTTP the
+#     OpenID Connect provider sees its callback arrive as http://... , finds it
+#     unequal to the https://... redirect URL it registered, and starts the
+#     login over: five laps, then the identity provider gives up.
 # naxsi is optional (on|off|auto): the includes appear only when the compiled
 # module's rule files are present, so this also renders on a vanilla nginx.
 # ============================================================================
@@ -6369,7 +6384,7 @@ EOF
         server_name ${apps_sn};
         location / {
 EOF
-        _emit_location http "$apps_port" "$block_inc"
+        _emit_location https "$apps_port" "$block_inc"
         cat <<'EOF'
         }
         location /RequestDenied { internal; return 403; }
@@ -6391,7 +6406,13 @@ do_install_nginx() {
     backend="$(read_prop "$DEPLOY_CONF" nginx.backend.addr)"
     [ -n "$backend" ] || backend="$(hostname -I 2>/dev/null | awk '{print $1}')"
     admin_port="$(read_prop "$DEPLOY_CONF" nginx.admin.port)"; admin_port="${admin_port:-${SSL_PORT:-7002}}"
-    apps_port="$(read_prop "$DEPLOY_CONF" nginx.apps.port)"; apps_port="${apps_port:-8001}"
+    apps_port="$(read_prop "$DEPLOY_CONF" nginx.apps.port)"; apps_port="${apps_port:-8002}"
+    # Profiles written before the apps vhost went to the SSL listener carry the
+    # engine's plain-HTTP port here; the vhost now speaks TLS to the backend.
+    if [ "$apps_port" = "${ENGINE_HTTP_PORT:-8001}" ]; then
+        warn "nginx.apps.port=${apps_port} is the engine's plain-HTTP port; the apps vhost proxies to the SSL listener now — using 8002 (set nginx.apps.port to keep it)."
+        apps_port=8002
+    fi
     fullchain="$(read_prop "$DEPLOY_CONF" nginx.tls.fullchain)"
     privkey="$(read_prop "$DEPLOY_CONF" nginx.tls.privkey)"
     maxbody="$(read_prop "$DEPLOY_CONF" nginx.client.max.body.size)"; maxbody="${maxbody:-500m}"

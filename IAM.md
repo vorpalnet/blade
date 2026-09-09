@@ -11,9 +11,11 @@ engineer who has to explain it to them. Read `SECURITY.md` for how a caller
 authenticates. Read this for what they are allowed to do afterwards.
 
 > Status: the access-control layer described in §3 and §4 ships in the framework
-> jar and is unit-tested. The identity provider integration in §2 is deployment
-> configuration with one item still to confirm against Oracle's documentation,
-> marked below. §6 is design, not code.
+> jar and is unit-tested. The identity provider integration in §2 ships in the
+> framework jar too and was proven end to end against an OCI IAM identity domain
+> on 2026-09-08: a reviewer with no account on the platform signed in through the
+> domain and was shown every recording the reviewer rule grants. §6 is design,
+> not code.
 
 ---
 
@@ -52,59 +54,144 @@ BLADE stores no users and no passwords. It never has. Identity lives in the
 corporate directory or identity provider, and BLADE reads what that system
 asserts.
 
-### On OCCAS 8.3, single sign-on is domain configuration
+### Single sign-on is the framework's own OpenID Connect login
+
+`OidcLoginFilter`, in the framework jar, signs a browser in with any OpenID
+Connect provider and accepts bearer tokens from API clients. An application
+names it in `web.xml`, mapped to everything it serves, and declares no
+`auth-constraint` of its own: the container checks a constraint before any
+filter runs, so a constraint would demand the container's own login of every
+browser and the OpenID sign-in could never start. The recordings and audit
+applications are wired this way.
+
+Which door a request comes through, in order:
+
+1. `Authorization: Bearer <token>`: verified against the provider's keys and
+   the configured issuer, no session. The API client's path.
+2. A request the container already authenticated, by form, certificate or
+   basic login, passes untouched.
+3. With no client settings in the WAR the filter asks the container to
+   authenticate the request, which is the login the descriptor's
+   `login-config` names. An unconfigured deployment keeps the login it had.
+4. A session holding a signed-in identity proceeds as that identity.
+5. Anything else starts a login: authorization code with PKCE, a state and a
+   nonce in the session, the browser to the provider. A request that does not
+   accept HTML gets `401` with a JSON body, since a script's request cannot
+   usefully follow a redirect to a login page.
+
+The callback checks the state, trades the code for the ID token with the
+client secret and the PKCE verifier, verifies the token with `JwtValidator`
+(signature against the provider's JWKS, issuer, this client as audience,
+expiry), checks the nonce, and stores the identity in a fresh session.
+`/oidc/logout` under the context root drops the session and visits the
+provider's end-session endpoint when it publishes one. Every sign-in is one
+INFO line in the server log, with the groups as the token carried them.
+
+**What the application sees.** The request is wrapped: `getUserPrincipal()`
+is the `JwtIdentity`, and `isUserInRole(r)` is true for any value the token's
+group claim carried, verbatim or through a `role.<group>=<Role>` mapping in
+the settings. A `web.xml` role named `Reviewer` is therefore held by anyone in
+a provider group called `Reviewer`, the same reading of "externally defined"
+the container gives a realm group. Resource code resolves the caller with
+`SubjectAttributes.of(JwtIdentity)`, which carries the token's groups and
+string claims, so an access rule may name the customer's own group names and
+match on `${subject.<claim>}`.
+
+**Where the client settings live.** `WEB-INF/blade-oidc.properties`: `issuer`,
+`clientId`, `clientSecret`, `redirectUrl`, and optionally `scope` (default
+`openid`), `discoveryUrl` (when the discovery document is not at
+`<issuer>/.well-known/openid-configuration`), `usernameClaim` (default `sub`),
+`groupsClaim` (default `groups`), `audience` (for bearer tokens issued to
+another audience) and `role.<group>` mappings. A secret has no place in a WAR
+in the repository, so `deploy.sh` adds the file from
+`~/.blade/<env>/oidc/<deployment-name>.properties` at deploy time; a WAR with
+no such file deploys as built. The redirect URL's path is what identifies the
+callback, so the scheme, host and port a proxy presents to the browser do not
+have to be what the server sees.
+
+### The container's own provider, and why it is not the default
 
 OCCAS 8.3 (WebLogic Server 14.1.2) ships an OpenID Connect identity assertion
-provider, `oidc-identity-asserter.jar` in the WebLogic `mbeantypes` directory.
-It is a full relying party, not just a token validator: it runs the
-authorization-code flow with PKCE, discovers the provider's endpoints from the
-issuer URL, caches the signing keys, and handles sign-out. It also accepts a
-bearer token presented directly on the `Authorization` header, so the same
-provider serves browsers and API clients.
+provider, `oidc-identity-asserter.jar` under `mbeantypes`. It is a full relying
+party: authorization code with PKCE, discovery from the issuer, cached keys,
+a `groups` claim turned into realm principals, and a bearer token accepted on
+the `Authorization` header. `misc/configure-oidc.py` adds it to the realm, and
+a settings file that says `provider=container` lands in the WAR as its
+`WEB-INF/oidcAuth.properties`. The vendor lists Keycloak and Azure as the
+providers it tested against.
 
-Three of its behaviors decide how a deployment is configured:
+It was taken to the last step against an OCI identity domain on 2026-09-08,
+and two things stopped it that have no setting on either side:
 
-| Behavior | What it means for you |
-|---|---|
-| It reads a `groups` claim from the ID token and turns each value into a WebLogic principal | Your identity provider must emit group membership in a claim named `groups`. The name is a constant in the provider, not a setting. |
-| `VirtualUserAllowed` defaults to true | Federated users need no account in WebLogic's embedded directory. Nobody provisions users twice. |
-| `UserNameTokenClaim` defaults to `upn`, `UserIDTokenClaim` to `sub` | Both are settable on the provider if your tokens name the user elsewhere. `ClockSkew` and the key-cache lifetime are settable too. |
+- Its key matcher accepts only a key marked `use: sig`. An identity domain
+  publishes its signing key without a `use` field, so every ID token is
+  rejected as unsigned ("no key found" in the debug log, "Invalid
+  OpenIDConnect token signature" in the browser). The JWKS URL comes from
+  discovery and cannot be overridden.
+- It requests the `openid` scope only, and reads groups from a claim named
+  `groups` only. An identity domain emits its `groups` claim for the `groups`
+  scope and refuses a custom claim by that name, so even a verified token
+  would carry no roles.
 
-Once groups arrive as principals, the mapping onto BLADE's four roles is the
-`weblogic.xml` machinery that is already in every admin WAR. One detail is easy
-to get wrong: `<externally-defined/>` means "match a realm group with the same
-name," so it works only if the group in your identity provider is literally
-called `Admin`. For a real corporate group name, name it instead:
+Four more things it needed were found on the way and are worth knowing for any
+provider. Its redirect URL must carry the port, `https://host:443/...`,
+because the container writes the port into every request URL it rebuilds and
+the provider compares the callback character for character. The proxy in
+front must speak TLS to the server's SSL listener, because the container takes
+the scheme from its own connection, not from `X-Forwarded-Proto`; `install.sh`
+renders nginx that way now. The domain trust store must hold the public roots
+(below). And `misc/configure-oidc.py` takes a server name as its last argument
+to turn on that server's authentication debug, the only place the provider
+says what it did with a token.
 
-```xml
-<wls:security-role-assignment>
-    <wls:role-name>Admin</wls:role-name>
-    <wls:principal-name>ACME-BLADE-Administrators</wls:principal-name>
-</wls:security-role-assignment>
-```
+### With an OCI IAM identity domain
 
-> **To confirm before you build the recipe.** Where the per-application OpenID
-> Connect client configuration is authored, meaning issuer, client id, client
-> secret and redirect URL, is not documented here. The values are held per web application
-> at runtime, but they appear in no descriptor schema, no domain configuration
-> schema, and no management bean in the installed product. Check Oracle's
-> *Administering Security for Oracle WebLogic Server* 14.1.2 before relying on
-> this section. This document would rather say it does not know than guess.
+An identity domain is an ordinary OpenID provider with four particulars, each
+met by `misc/oci-identity-domain.sh`, which registers an application, writes the
+settings file above, and creates the groups and a test user:
 
-### The bearer-token path, and where it is still the answer
+- Its tokens carry the login id in `sub` and its groups in a `groups` claim
+  that is emitted only when the `groups` scope is requested. The script writes
+  `scope=openid groups`.
+- Its discovery document is served under the domain's own URL while naming the
+  global `https://identity.oraclecloud.com/` as issuer. The framework's login
+  takes the two apart (`discoveryUrl` beside `issuer`) and enforces the issuer
+  on the token's `iss` claim, where it matters. The script also sets the
+  domain's own issuer attribute to the domain URL, which the container's
+  provider needs and which harms nothing else; the domain keeps the previous
+  issuer beside it so tokens issued before the change still verify.
+- Its signing keys are private by default: the discovery document's `jwks_uri`
+  answers 401 to an anonymous fetch. The script turns on the domain's public
+  access to its signing certificate. The keys are public material; the switch
+  only says so.
+- The servers reach it over public TLS. Every OCCAS server validates outbound
+  connections against the domain trust store (`blade-trust.p12`), which held
+  only BLADE's own CA, so the first fetch of the discovery document failed with
+  "PKIX path building failed". `certs.sh`, `make-certs.sh` and `install.sh`
+  now seed that store with the JDK's public roots; an existing environment gets
+  them on its next `install.sh` pass, and the servers pick the store up on
+  restart.
 
-`JwtAuthFilter` in the framework validates an `Authorization: Bearer` token
-against a configured issuer and JWKS, independently of the container. It remains
-the door for API clients on a deployment that has not enabled the container
-provider, and `SECURITY.md` §2a's first-party token path is unaffected and still
-required: a browser cannot attach an `Authorization` header to a WebSocket
-handshake, and no amount of OpenID Connect changes that.
+Single sign-on means exactly that. A browser that already holds a session in
+the identity domain, such as an administrator signed in to the OCI console in
+the same browser, is signed in to BLADE as that person without a prompt. To
+try a test user, use a private window.
 
-**One planned piece of work is no longer needed.** `SECURITY.md` open item 3 was
-to distribute one JWT configuration to every admin WAR, because `JwtAuthFilter`
-only activates where a configuration supplier is published and so guarded only
-the `security` app. On 8.3 the whole admin tier is guarded by one realm-level
-provider, and there is nothing to distribute.
+The applications declare a fifth role, `Reviewer`, beside the four platform roles,
+externally defined like them, so a group called `Reviewer` in the identity domain
+is the reviewer role with no mapping to maintain, and a policy rule naming
+`Reviewer` grants the transcript to sixty thousand agents' supervisors without one
+of them being given an account here. A directory that must keep its own group
+names maps them with `role.<group>=Reviewer` in the settings file.
+
+### The first-party token path is unchanged
+
+`JwtAuthFilter` and `SECURITY.md` §2a's first-party tokens are unaffected and
+still required: a browser cannot attach an `Authorization` header to a
+WebSocket handshake, and no amount of OpenID Connect changes that.
+`SECURITY.md` open item 3, distributing one JWT configuration to every admin
+WAR, is answered differently now: an application that wants the corporate
+identity provider names `OidcLoginFilter` and gets its settings at deploy time.
 
 ---
 
@@ -264,6 +351,20 @@ both pause the recorder and resume into the same recording. The muted span never
 reaches the muxer, so it is not in the file to be found later. A boundary is a
 change of party; a pause is an absence of content.
 
+**How the recorder knows the party changed.** Two ways, for the two places a
+recorder can sit. Downstream of the transferring application, the transfer's
+INVITE to the target routes through the recorder as a new initial request, and
+that is the boundary. Upstream, nearer the trunk, the transfer arrives as a
+re-INVITE on the far leg carrying the target's SDP, and the recorder reads the
+offer's origin line: a party moving its own media keeps its `o=` username and
+session id and moves only the version, so a changed origin identity is a
+changed party. Then the conversation closes, the party gets a fresh leg on the
+media server, and the next conversation opens on it. A change of address with
+the same origin is followed as a move inside one conversation, with a gap in
+the manifest saying so. Proven on 2026-09-09 with a caller that re-INVITEd
+under a new origin: one call, two complete conversations, the second starting
+under a second later, both under the same `call` attribute.
+
 ### Matching a caller against a record
 
 `${subject.<attribute>}` compares a record attribute against the *caller's* own,
@@ -408,6 +509,82 @@ SubjectAttributes caller = RealmSubjectAttributes.of(
         ContainerSubject.current(),
         request.getUserPrincipal().getName());
 ```
+
+### Redaction: found at capture, decided at read
+
+The recorder finds protected values in each utterance as it is transcribed and
+stores a redacted rendition beside the verbatim text. Two sources. Shapes: card
+numbers by their check digit, social security numbers, phone numbers, account
+and member identifiers, numeric and spoken dates, street addresses, each a
+named kind with a regular expression the deployment can extend or replace
+(`redactPatterns` in the recorder's settings, `redact` to turn it off). And the
+values the call is known to involve: whatever the session attributes named in
+`transcribeHintAttributes` hold, the caller's name a Selector looked up, the
+member identifier the routing carried, each redacted under its own attribute
+name, `[callerName]`, `[memberId]`. A name has no shape a pattern finds, and it
+needs none when the recorder knows it before the first word.
+
+The verbatim text is stored too. Redacting in storage would leave the one
+reader entitled to the value unable to get it, and the audio carries it anyway.
+
+Which rendition a reader gets is decided when they read. A transcript the
+recorder marked `REDACTED` is served with each protected span as its kind in
+brackets, the timed words behind it masked the same way, and the recognizer's
+uncorrected text withheld. The audio is served muted: each span carries the
+moment it was spoken, from the recognizer's word timing, and the frames inside
+it, padded by 200 ms each side, are replaced by silent frames as the file
+streams, so `phi:play` and `phi:export` hand over the call without the
+numbers, in the eyes and in the ears. Asking for the stored text or the stored
+audio (`?verbatim=true` on the transcript, media or export resource) is a
+second permission, `phi:unredact`, evaluated and audited as its own decision.
+A span the recognizer could not time cannot be muted, and the audio is then
+refused rather than played with the value audible.
+
+Measured on the rig on 2026-09-08 against a call that read out a member id, a
+card and a phone number: the three spans decode as digital silence and the
+speech around them is unchanged to the decibel.
+
+What is not there: a name the call did not already know. A caller who says a
+third party's name, or their own when nothing looked it up, is redacted only if
+the name happens to match a shape, and a name has none. That needs an entity
+model on the transcript, the same class of work as the biasing. And a long
+digit string is only as good as the recognizer's digit runs: a card read out
+in four groups came back as thirteen digits, which failed the check digit and
+was redacted as a number rather than a card. Redacted either way.
+
+### Searching: the catalog is a cache of the archive
+
+`blade-catalog` holds a durable subscription to the conversation-closed event
+the framework publishes when a manifest is committed, by the recording node
+or by the sweep that finalises what a dead node left. The event names the
+conversation and nothing else; the catalog reads the manifest and the stored
+utterances back from the archive and writes rows into the analytics
+database: who called whom, when, how long, every attribute the recording
+carried, the holds and the media moves, the redaction kinds found, and the
+redacted rendition of every utterance under a full-text index. The verbatim
+text is never in the database. The protected values found are stored as keyed
+hashes of their normalised form under a key the deployment mints, so an exact
+match on a member id can be asked for and a copy of the catalog gives up
+nothing. Rows replace rows, so a redelivered event, a re-run and a rebuild
+from the archive are one operation, and a schema change is a rebuild rather
+than a migration.
+
+The review API's search combines a day range, a calling or called number by
+prefix, attributes by value, a call id, redaction kinds, and words, and
+returns candidates in recency order with the first matching utterance as a
+snippet. Every candidate is evaluated for `phi:list` against the attributes
+the catalog holds for it, the same evaluation the day listing makes, and only
+the permitted ones come back. The search is audited once, as a listing, with
+the query passed through the redactor first: a search for a phone number is
+content, and the audit log carries none. A search by protected value is a
+`phi:unredact` question, evaluated and audited as its own decision. The page
+at the application's root is the reviewer's front door: search, the transcript
+with protected spans as tags, the recording muted or verbatim by the same
+permission.
+
+Index rows must expire with the recordings they describe; the reaper keyed on
+the bucket's retention rule is not built yet. Neither is the label layer,
+`BLADE_LABEL`, which the schema carries for the classifier that will fill it.
 
 ### The one trap worth knowing about
 

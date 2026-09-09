@@ -147,6 +147,14 @@ public final class BladeEventTypes {
 	/// of what an access review is looking for.
 	public static final String ACCESS_DENIED = "org.vorpal.blade.access.denied";
 
+	/// A recorded conversation became a record: its manifest was committed to
+	/// the archive, by the node that recorded it or by the sweep that finalises
+	/// what a dead node left behind. The payload names the conversation and
+	/// nothing else about it; whoever needs the content reads the archive, so
+	/// an index built from these events is a cache of the archive and can be
+	/// rebuilt from it.
+	public static final String CONVERSATION_CLOSED = "org.vorpal.blade.conversation.closed";
+
 	/// The CloudEvents type for an analytics event name — one of the eleven when
 	/// the framework defines the name, [#CALL_EVENT] otherwise.
 	///

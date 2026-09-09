@@ -46,8 +46,19 @@ final class TranscriptView {
 	}
 
 	/// The response body: the manifest's transcript entries, each with its
-	/// utterances in time order.
+	/// utterances in time order, redacted where the record says so.
 	static Map<String, Object> of(ConversationManifest manifest, Map<String, List<Utterance>> utterancesByTranscript) {
+		return of(manifest, utterancesByTranscript, false);
+	}
+
+	/// The response body. With `verbatim` false, a transcript the manifest
+	/// marks REDACTED is rendered from each utterance's redacted rendition:
+	/// protected spans appear as their kind in brackets, the timed words inside
+	/// them are masked the same way, and the recognizer's uncorrected text is
+	/// withheld, since it holds the same digits. A transcript marked VERBATIM
+	/// has nothing to withhold and is rendered as stored either way.
+	static Map<String, Object> of(ConversationManifest manifest, Map<String, List<Utterance>> utterancesByTranscript,
+			boolean verbatim) {
 		Map<String, Object> body = new LinkedHashMap<>();
 		body.put("conversation", manifest.getConversation());
 		body.put("call", manifest.getCall());
@@ -61,7 +72,9 @@ final class TranscriptView {
 			t.put("id", ref.getId());
 			t.put("language", ref.getLanguage());
 			t.put("attribution", ref.getAttribution() == null ? null : ref.getAttribution().name());
-			t.put("redaction", ref.getRedaction() == null ? null : ref.getRedaction().name());
+			boolean withhold = !verbatim && ref.getRedaction() == TranscriptRef.Redaction.REDACTED;
+			t.put("redaction", withhold ? TranscriptRef.Redaction.REDACTED.name()
+					: (ref.getRedaction() == null ? null : TranscriptRef.Redaction.VERBATIM.name()));
 			t.put("engine", ref.getEngine());
 			t.put("model", ref.getModel());
 			t.put("complete", ref.isComplete());
@@ -73,7 +86,7 @@ final class TranscriptView {
 				List<Utterance> ordered = new ArrayList<>(utterances);
 				ordered.sort((a, b) -> Long.compare(a.getStartMillis(), b.getStartMillis()));
 				for (Utterance u : ordered) {
-					lines.add(line(u));
+					lines.add(withhold ? redactedLine(u) : line(u));
 				}
 			}
 			t.put("utterances", lines);
@@ -81,6 +94,54 @@ final class TranscriptView {
 		}
 		body.put("transcripts", transcripts);
 		return body;
+	}
+
+	/// The line a reader without `phi:unredact` sees.
+	private static Map<String, Object> redactedLine(Utterance u) {
+		Map<String, Object> line = new LinkedHashMap<>();
+		line.put("sequence", u.getSequence());
+		line.put("party", u.getParty());
+		line.put("startMillis", u.getStartMillis());
+		line.put("endMillis", u.getEndMillis());
+		List<Utterance.Redaction> spans = (u.getRedactions() == null) ? List.of() : u.getRedactions();
+		line.put("text", u.getRedacted() != null ? u.getRedacted() : u.getText());
+		line.put("engine", u.getEngine());
+		line.put("model", u.getModel());
+		List<Map<String, Object>> words = new ArrayList<>();
+		for (WordTime w : u.wordTimes()) {
+			Map<String, Object> m = new LinkedHashMap<>();
+			String kind = kindAt(spans, w);
+			m.put("text", kind == null ? w.text() : "[" + kind + "]");
+			m.put("startMillis", w.startMillis());
+			m.put("endMillis", w.endMillis());
+			words.add(m);
+		}
+		line.put("words", words);
+		List<Map<String, Object>> redactions = new ArrayList<>();
+		for (Utterance.Redaction r : spans) {
+			Map<String, Object> m = new LinkedHashMap<>();
+			m.put("kind", r.getKind());
+			if (r.getStartMillis() != null) {
+				m.put("startMillis", r.getStartMillis());
+				m.put("endMillis", r.getEndMillis());
+			}
+			redactions.add(m);
+		}
+		line.put("redactions", redactions);
+		return line;
+	}
+
+	/// The kind of the protected span a timed word falls in, or null. A span
+	/// carries the time of the words it covered, so a word is inside it when
+	/// their times overlap.
+	private static String kindAt(List<Utterance.Redaction> spans, WordTime w) {
+		for (Utterance.Redaction r : spans) {
+			if (r.getStartMillis() != null && r.getEndMillis() != null
+					&& w.startMillis() < r.getEndMillis() && w.endMillis() > r.getStartMillis()) {
+				return r.getKind();
+			}
+		}
+		return null;
 	}
 
 	private static Map<String, Object> line(Utterance u) {
@@ -102,6 +163,21 @@ final class TranscriptView {
 				}
 			}
 			line.put("corrections", corrections);
+		}
+		if (u.getRedactions() != null && !u.getRedactions().isEmpty()) {
+			List<Map<String, Object>> redactions = new ArrayList<>();
+			for (Utterance.Redaction r : u.getRedactions()) {
+				Map<String, Object> m = new LinkedHashMap<>();
+				m.put("kind", r.getKind());
+				m.put("from", r.getFrom());
+				m.put("to", r.getTo());
+				if (r.getStartMillis() != null) {
+					m.put("startMillis", r.getStartMillis());
+					m.put("endMillis", r.getEndMillis());
+				}
+				redactions.add(m);
+			}
+			line.put("redactions", redactions);
 		}
 		line.put("engine", u.getEngine());
 		line.put("model", u.getModel());

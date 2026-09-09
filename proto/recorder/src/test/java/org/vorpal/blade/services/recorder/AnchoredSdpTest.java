@@ -62,4 +62,36 @@ public class AnchoredSdpTest {
 	public void aMissingDirectionMeansSendrecv() {
 		assertTrue(SdpMedia.captureDirections(rewritten(null, 1)).contains(MediaDirection.SENDRECV));
 	}
+
+	@Test
+	void seesAMoveAndNotARefresh() {
+		byte[] first = ("v=0\r\no=u 1 1 IN IP4 10.1.1.211\r\ns=-\r\nc=IN IP4 10.1.1.211\r\nt=0 0\r\n"
+				+ "m=audio 6000 RTP/AVP 0\r\na=rtpmap:0 PCMU/8000\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+		byte[] held = ("v=0\r\no=u 1 2 IN IP4 10.1.1.211\r\ns=-\r\nc=IN IP4 10.1.1.211\r\nt=0 0\r\n"
+				+ "m=audio 6000 RTP/AVP 0\r\na=sendonly\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+		byte[] movedPort = ("v=0\r\no=u 1 3 IN IP4 10.1.1.211\r\ns=-\r\nc=IN IP4 10.1.1.211\r\nt=0 0\r\n"
+				+ "m=audio 6100 RTP/AVP 0\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+		byte[] movedHost = ("v=0\r\no=u 1 4 IN IP4 10.1.1.211\r\ns=-\r\nc=IN IP4 10.1.1.9\r\nt=0 0\r\n"
+				+ "m=audio 6000 RTP/AVP 0\r\nc=IN IP4 10.1.1.77\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+		org.junit.jupiter.api.Assertions.assertEquals("10.1.1.211:6000", AnchoredSdp.mediaAddress(first));
+		org.junit.jupiter.api.Assertions.assertEquals("10.1.1.77:6000", AnchoredSdp.mediaAddress(movedHost), "a media-level c= wins");
+		org.junit.jupiter.api.Assertions.assertFalse(AnchoredSdp.moved(first, held), "a hold changes direction, not address");
+		org.junit.jupiter.api.Assertions.assertTrue(AnchoredSdp.moved(first, movedPort));
+		org.junit.jupiter.api.Assertions.assertTrue(AnchoredSdp.moved(first, movedHost));
+		org.junit.jupiter.api.Assertions.assertFalse(AnchoredSdp.moved(null, movedPort), "nothing to compare against is not a move");
+	}
+
+	@Test
+	void tellsANewPartyFromAMove() {
+		byte[] first = ("v=0\r\no=alice 1234 1 IN IP4 10.1.1.211\r\ns=-\r\nc=IN IP4 10.1.1.211\r\nt=0 0\r\n"
+				+ "m=audio 6000 RTP/AVP 0\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+		byte[] moved = ("v=0\r\no=alice 1234 2 IN IP4 10.1.1.211\r\ns=-\r\nc=IN IP4 10.1.1.211\r\nt=0 0\r\n"
+				+ "m=audio 6100 RTP/AVP 0\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+		byte[] other = ("v=0\r\no=bob 9876 1 IN IP4 10.1.1.212\r\ns=-\r\nc=IN IP4 10.1.1.212\r\nt=0 0\r\n"
+				+ "m=audio 6000 RTP/AVP 0\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+		org.junit.jupiter.api.Assertions.assertEquals("alice 1234", AnchoredSdp.origin(first));
+		org.junit.jupiter.api.Assertions.assertFalse(AnchoredSdp.newParty(first, moved), "same origin, new version: a move");
+		org.junit.jupiter.api.Assertions.assertTrue(AnchoredSdp.newParty(first, other), "another origin: another party");
+		org.junit.jupiter.api.Assertions.assertTrue(AnchoredSdp.moved(first, other), "and it is also somewhere else");
+	}
 }

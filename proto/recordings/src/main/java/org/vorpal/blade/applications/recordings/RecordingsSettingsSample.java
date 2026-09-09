@@ -33,6 +33,14 @@ public class RecordingsSettingsSample extends RecordingsSettings {
 				new LinkedList<>(Arrays.asList("EXAMPLE-SUPERVISORS")), ownQueue,
 				Arrays.asList("phi:list", "phi:transcript", "phi:play")));
 
+		// A reviewer reads the words of every call and hears none of them. The
+		// group is the identity provider's: with the container's OpenID Connect
+		// provider, a federated user in a group called Reviewer arrives holding
+		// it, and nobody is given an account here to make that so.
+		rules.add(new AccessRule("reviewers read every transcript",
+				new LinkedList<>(Arrays.asList("Reviewer")), null,
+				Arrays.asList("phi:list", "phi:transcript")));
+
 		// Compliance sees everything and may take a copy. Export is its own rung
 		// because that is the point where content stops being auditable.
 		rules.add(new AccessRule("compliance may export",

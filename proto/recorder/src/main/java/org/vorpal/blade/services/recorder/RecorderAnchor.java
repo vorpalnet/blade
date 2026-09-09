@@ -25,6 +25,8 @@ import org.vorpal.blade.framework.v3.media.MediaCallflow;
 import org.vorpal.blade.framework.v3.media.RecordingArchive;
 import org.vorpal.blade.framework.v3.media.TranscriberEvent;
 import org.vorpal.blade.framework.v3.media.manifest.ContextBias;
+import org.vorpal.blade.framework.v3.media.manifest.MediaGap;
+import org.vorpal.blade.framework.v3.media.manifest.Redactor;
 import org.vorpal.blade.framework.v3.media.manifest.ConversationManifest;
 import org.vorpal.blade.framework.v3.media.manifest.Conversations;
 import org.vorpal.blade.framework.v3.media.manifest.ManifestStore;
@@ -122,6 +124,102 @@ public class RecorderAnchor extends MediaCallflow {
 
 		/// How many times each leg's SDP has been re-issued, for the version.
 		public final AtomicInteger reissued = new AtomicInteger();
+
+		/// The caller's SIP session, so a mid-dialog request can be told apart
+		/// by which party sent it: a request about to go to this session came
+		/// from the callee.
+		public volatile String callerSessionId;
+
+		/// Whether the re-INVITE being answered came from the caller.
+		public volatile boolean reinviteFromCaller = true;
+
+		/// The media server's answer for a leg being rebuilt because its party
+		/// moved, completed when the fresh endpoint has negotiated. Null when no
+		/// move is in progress.
+		public volatile java.util.concurrent.CompletableFuture<byte[]> moveAnswer;
+	}
+
+	/// Follow a party that moved its media: build it a fresh leg on the media
+	/// server, negotiate its new offer there, put the leg on the mix in the
+	/// old one's place, and release the old one.
+	///
+	/// The media server does not renegotiate an endpoint, which is why a
+	/// re-INVITE is normally answered with the leg's existing SDP. When the
+	/// offer moves the party's address that answer would leave the media
+	/// server sending to a dead address and the party hearing nothing. A fresh
+	/// endpoint costs one negotiation and a new hub port; the far party sees
+	/// nothing, the recorder keeps recording the mix, and the transcriber
+	/// follows the mix's membership on its own. The swap is written into the
+	/// manifest as a gap on the track, [MediaGap.Reason#MOVED], bounded by the
+	/// offer's arrival and the fresh leg's answer.
+	///
+	/// `answer` completes with the media server's SDP for the fresh leg, which
+	/// [RecorderServlet#responseEvent] sends to the party in place of the old
+	/// one; the party then sends to the new endpoint.
+	void moveLeg(Anchor anchor, boolean callerMoved, byte[] newOffer,
+			java.util.concurrent.CompletableFuture<byte[]> answer) {
+		moveLeg(anchor, callerMoved, newOffer, answer, null);
+	}
+
+	/// As [#moveLeg(Anchor, boolean, byte[], CompletableFuture)], then run
+	/// `afterSwap` once the fresh leg is on the mix and the old one is gone.
+	/// A new party's conversation starts there: the recorder and transcriber
+	/// have to see the mix with the new leg in it, not the old.
+	void moveLeg(Anchor anchor, boolean callerMoved, byte[] newOffer,
+			java.util.concurrent.CompletableFuture<byte[]> answer, Runnable afterSwap) {
+		final long movedAtMillis = conversationMillis(anchor);
+		try {
+			final NetworkConnection fresh = anchor.ms.createNetworkConnection(NetworkConnection.BASIC);
+			final NetworkConnection old = callerMoved ? anchor.caller : anchor.callee;
+			join(fresh, Joinable.Direction.DUPLEX, anchor.mixer);
+			offer(fresh, newOffer, negotiated -> {
+				if (callerMoved) {
+					anchor.caller = fresh;
+				} else {
+					anchor.callee = fresh;
+				}
+				try {
+					anchor.mixer.unjoin(old);
+				} catch (Exception e) {
+					sipLogger.warning("RecorderAnchor: the moved party's old leg could not leave the mix: " + e);
+				}
+				try {
+					old.release();
+				} catch (Exception e) {
+					sipLogger.warning("RecorderAnchor: the moved party's old leg could not be released: " + e);
+				}
+				noteMove(anchor, callerMoved ? "caller" : "callee", movedAtMillis, conversationMillis(anchor),
+						AnchoredSdp.mediaAddress(newOffer));
+				if (afterSwap != null) {
+					try {
+						afterSwap.run();
+					} catch (RuntimeException e) {
+						sipLogger.severe("RecorderAnchor: after the leg swap: " + e);
+					}
+				}
+				answer.complete(negotiated.getMediaServerSdp());
+			});
+		} catch (Exception e) {
+			answer.completeExceptionally(e);
+		}
+	}
+
+	/// Milliseconds since this conversation's recording started, or 0 before
+	/// it has.
+	private static long conversationMillis(Anchor anchor) {
+		return (anchor.startedAtMillis <= 0) ? 0L : Math.max(0L, System.currentTimeMillis() - anchor.startedAtMillis);
+	}
+
+	private static void noteMove(Anchor anchor, String party, long fromMillis, long toMillis, String address) {
+		ConversationManifest manifest = anchor.manifest;
+		if (manifest == null || manifest.getTracks().isEmpty()) {
+			return;
+		}
+		MediaGap gap = new MediaGap(fromMillis, Math.max(fromMillis, toMillis), MediaGap.Reason.MOVED);
+		gap.setDetail(party + " moved its media to " + address + "; leg rebuilt");
+		manifest.getTracks().get(0).addGap(gap);
+		sipLogger.info("RecorderAnchor: " + party + " of " + manifest.getConversation() + " moved its media to "
+				+ address + "; leg rebuilt in " + (toMillis - fromMillis) + " ms");
 	}
 
 	/// The media server's SDP for `leg`, re-issued with `direction`, or null
@@ -245,12 +343,19 @@ public class RecorderAnchor extends MediaCallflow {
 			URI destination = MediaCallflow.conversationUri(app);
 			anchor.recording = destination;
 			Map<String, String> attributes = MediaCallflow.recordingAttributes(app, cfg.getRecordAttributes());
+			for (String party : new String[] { "from", "to" }) {
+				Object number = app.getAttribute("recorder." + party);
+				if (number != null) {
+					attributes.putIfAbsent(party, String.valueOf(number));
+				}
+			}
 			record(anchor.mg, destination, attributes, done -> {
 				// The recording runs until a boundary or teardown stops it.
 			});
 			openManifest(anchor, destination, attributes);
 			if (cfg.isTranscribe()) {
-				startTranscribing(anchor, expectedPhrases(app, cfg));
+				startTranscribing(anchor, expectedPhrases(app, cfg),
+						cfg.isRedact() ? Redactor.of(cfg.getRedactPatterns()).withPhrases(protectedPhrases(app, cfg)) : Redactor.none());
 			}
 			sipLogger.info("RecorderAnchor: recording " + destination.getScheme() + ":...");
 		} catch (Exception e) {
@@ -421,7 +526,26 @@ public class RecorderAnchor extends MediaCallflow {
 		return phrases;
 	}
 
-	private void startTranscribing(Anchor anchor, List<String> expected) {
+	/// What this call is known to involve that must not reach a reader without
+	/// `phi:unredact`: the per-call phrases, under the attribute names they
+	/// came from. A caller's name from `callerName` is redacted as
+	/// `[callerName]`, a member identifier from `memberId` as `[memberId]`. The
+	/// standing phrases, the company's and the agents' names, are not: they are
+	/// the deployment's own, not the caller's.
+	static Map<String, String> protectedPhrases(SipApplicationSession app, RecorderSettings cfg) {
+		Map<String, String> phrases = new java.util.LinkedHashMap<>();
+		if (cfg.getTranscribeHintAttributes() != null) {
+			for (String name : cfg.getTranscribeHintAttributes()) {
+				Object value = (name == null) ? null : app.getAttribute(name);
+				if (value != null && !String.valueOf(value).trim().isEmpty()) {
+					phrases.put(name, String.valueOf(value).trim());
+				}
+			}
+		}
+		return phrases;
+	}
+
+	private void startTranscribing(Anchor anchor, List<String> expected, Redactor redactor) {
 		ConversationManifest manifest = anchor.manifest;
 		if (manifest == null) {
 			return;
@@ -436,7 +560,9 @@ public class RecorderAnchor extends MediaCallflow {
 		final String conversation = manifest.getConversation();
 		TranscriptRef ref = new TranscriptRef(LIVE_TRANSCRIPT, "en-US", TranscriptRef.Attribution.PER_TRACK);
 		ref.getSource().add("mix");
-		ref.setRedaction(TranscriptRef.Redaction.VERBATIM);
+		// REDACTED says a reader is shown the redacted rendition unless they
+		// hold phi:unredact; the verbatim text is stored either way.
+		ref.setRedaction(redactor.isEmpty() ? TranscriptRef.Redaction.VERBATIM : TranscriptRef.Redaction.REDACTED);
 		ref.setObject("transcript/" + LIVE_TRANSCRIPT + "/");
 		ref.setCreatedUtc(Instant.now().toString());
 		ref.setComplete(false);
@@ -450,6 +576,10 @@ public class RecorderAnchor extends MediaCallflow {
 			// The correction keeps what was heard on the utterance; the
 			// recognizer's own biasing, if the driver has any, already ran.
 			bias.apply(utterance);
+			// After the correction, so a member id the bias restored is found
+			// as one and a protected span never survives in the text a
+			// reviewer without phi:unredact is shown.
+			redactor.apply(utterance);
 			TranscriptRef current = anchor.transcript;
 			if (current != null && current.getEngine() == null) {
 				current.setEngine(utterance.getEngine());
