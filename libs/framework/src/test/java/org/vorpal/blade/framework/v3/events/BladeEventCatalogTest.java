@@ -43,19 +43,26 @@ class BladeEventCatalogTest {
 		}
 	}
 
-	/// Every type the catalog declares, from both of its lists.
+	/// Every type the catalog declares, from all three of its lists.
 	///
-	/// The catalog has two on purpose: [BladeEventCatalog#analyticsTypes] is what
-	/// the analytics database is built from, and [BladeEventCatalog#accessTypes]
-	/// is the access-audit pair, which must stay off that subscription because it
-	/// answers to a different reader under a different retention. The drift guard
-	/// below is about *declaration*, not about routing, so it looks at both.
+	/// The catalog keeps separate lists on purpose: [BladeEventCatalog#analyticsTypes]
+	/// is what the analytics database is built from; [BladeEventCatalog#accessTypes]
+	/// is the access-audit pair, off that subscription because it answers to a
+	/// different reader under a different retention; and
+	/// [BladeEventCatalog#conversationTypes] is the conversation lifecycle, whose
+	/// consumer indexes the archive by selector. The drift guard below is about
+	/// *declaration*, not about routing, so it looks at every list — a list added
+	/// to the catalog without a loop here re-creates the exact failure this fixes
+	/// (CONVERSATION_CLOSED was declared, but in a list this helper didn't read).
 	private static Set<String> declaredTypes() {
 		Set<String> declared = new HashSet<>();
 		for (EventType type : BladeEventCatalog.analyticsTypes()) {
 			declared.add(type.getType());
 		}
 		for (EventType type : BladeEventCatalog.accessTypes()) {
+			declared.add(type.getType());
+		}
+		for (EventType type : BladeEventCatalog.conversationTypes()) {
 			declared.add(type.getType());
 		}
 		return declared;
@@ -91,7 +98,9 @@ class BladeEventCatalogTest {
 
 		assertEquals(constants, declared.size(),
 				"BladeEventCatalog declares a type that BladeEventTypes does not name");
-		assertEquals(19, constants, "a type was added or removed without updating the taxonomy");
+		// 20 = application start/stop, session start/stop/key, the eleven call and
+		// transfer types + CALL_EVENT, the access pair, and CONVERSATION_CLOSED.
+		assertEquals(20, constants, "a type was added or removed without updating the taxonomy");
 	}
 
 	/// Every framework event name resolves to a type the catalog declares.
