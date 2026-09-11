@@ -1,7 +1,10 @@
 package org.vorpal.blade.framework.v3.configuration.expressions;
 
 import java.io.Serializable;
+import java.util.logging.Level;
 
+import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v3.configuration.Context;
 
 /// A compiled boolean expression evaluated against a [Context].
@@ -118,6 +121,13 @@ public class Expression implements Serializable {
 		public boolean eval(Context ctx) {
 			return toBool(value);
 		}
+
+		/// Renders the literal the way it was written, so a FINEST condition
+		/// trace reads like the config: a string in quotes, everything else bare.
+		@Override
+		public String toString() {
+			return (value instanceof String) ? "'" + value + "'" : String.valueOf(value);
+		}
 	}
 
 	private static final class Variable implements Node {
@@ -145,6 +155,13 @@ public class Expression implements Serializable {
 		@Override
 		public boolean eval(Context ctx) {
 			return toBool(value(ctx));
+		}
+
+		/// Renders as it was written, `${name}`, so a FINEST trace names the
+		/// variable a reader can go find in the config.
+		@Override
+		public String toString() {
+			return "${" + name + "}";
 		}
 	}
 
@@ -180,7 +197,14 @@ public class Expression implements Serializable {
 		public boolean eval(Context ctx) {
 			Object l = left.value(ctx);
 			Object r = right.value(ctx);
+			boolean result = compute(l, r);
+			explain(l, result);
+			return result;
+		}
 
+		/// The comparison itself, unchanged. Split out from [#eval] so [#explain]
+		/// can trace the decision on the exact values it was made from.
+		private boolean compute(Object l, Object r) {
 			// String operators: no numeric coercion.
 			if ("matches".equals(op) || "contains".equals(op)) {
 				String ls = (l == null) ? "" : l.toString();
@@ -261,6 +285,30 @@ public class Expression implements Serializable {
 				case ">=": return c >= 0;
 				default:   throw new IllegalStateException("unknown op: " + op);
 			}
+		}
+
+		/// Says, at FINEST, why this comparison came out the way it did: the
+		/// condition as written, the value the left side actually resolved to,
+		/// and the result. The point is the case that fooled everyone here — a
+		/// condition that reads right but quietly evaluates false. The two ways
+		/// that happens are called out by name:
+		///
+		/// - the variable is UNSET (no selector stored it), so it reads as the
+		///   empty string and can never match — the silent-drop this exists for;
+		/// - the variable resolved to a value that simply is not what the
+		///   operator wanted (e.g. `${To.user}` is `+14153760002`, but the
+		///   pattern `14153760002` demands a full-string match and the `+` is a
+		///   carrier's E.164 prefix that a request-URI user usually lacks).
+		///
+		/// Costs nothing until someone raises the level to FINEST. Never throws:
+		/// a diagnostic must not break the routing decision it is reporting on.
+		private void explain(Object l, boolean result) {
+			Logger log = SettingsManager.getSipLogger();
+			if (log == null || !log.isLoggable(Level.FINEST)) return;
+			String why = (l == null)
+					? left + " is UNSET (no selector stored it), so it reads as empty \"\""
+					: left + " resolved to \"" + l + "\"";
+			log.finest("when " + left + " " + op + " " + right + "  ->  " + result + "   (" + why + ")");
 		}
 	}
 

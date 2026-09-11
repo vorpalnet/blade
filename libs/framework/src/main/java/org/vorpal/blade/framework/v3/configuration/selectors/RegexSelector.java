@@ -91,7 +91,23 @@ public class RegexSelector extends Selector implements Serializable {
 		}
 
 		Matcher m = compiledPattern.matcher(raw);
-		if (!m.matches()) return;
+		if (!m.matches()) {
+			// A miss stores nothing, so ${id.group} stays unset and reads as the
+			// empty string in a `when` — a mis-written pattern then looks exactly
+			// like a rule that correctly did not fire. Leave a trace for whoever
+			// turns the level up, showing the exact source the pattern was run
+			// against. (A full-string match is unforgiving of a stray character:
+			// a carrier's To user is E.164 with a leading '+', which the same
+			// pattern on a request-URI user, usually without the '+', would miss.)
+			Logger sipLogger = SettingsManager.getSipLogger();
+			if (sipLogger != null && sipLogger.isLoggable(Level.FINEST)) {
+				sipLogger.finest(ctx != null ? ctx.getRequest() : null,
+						"selector '" + id + "': pattern <" + pattern + "> did not match "
+								+ attribute + " = <" + raw + ">, so nothing was stored and ${"
+								+ id + ".*} stays unset");
+			}
+			return;
+		}
 
 		// Harvest every group the match produced — numbered AND named.
 		Map<String, String> groups = extractGroups(m);
