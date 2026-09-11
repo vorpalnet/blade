@@ -829,25 +829,73 @@ public abstract class AsyncSipServlet extends SipServlet
 		}
 	}
 
-	/// Last-chance keep-alive probe when a SipApplicationSession expires.
-	///
-	/// Instead of letting the container drop the session outright, re-INVITE both
-	/// call dialogs and keep the session alive only if both endpoints answer — a
-	/// call an external element is still holding up (BLADE keep-alive off) is
-	/// saved; a dead one still expires. See
-	/// [KeepAlive#probeAndConfirm][org.vorpal.blade.framework.v2.keepalive.KeepAlive#probeAndConfirm].
-	///
-	/// The probe re-INVITE responses arrive after this method returns, so the
-	/// session is first extended by a short grace window (the container clamps it
-	/// up to its floor, ~3 minutes) to survive the round-trip; the probe then
-	/// extends to the full interval on success, or reaps on failure.
-	///
-	/// A concrete servlet that overrides this must call `super.sessionExpired`, or
-	/// the probe will not run for its app. Registration still requires the class
-	/// to be annotated `@SipListener`.
+	/// Container callback when a SipApplicationSession expires. Final: it runs the
+	/// framework's last-chance keep-alive probe (which cannot be suppressed), then
+	/// delegates to the overridable [#onSessionExpired] hook. Applications override
+	/// the hook, never this method.
 	@Override
-	public void sessionExpired(SipApplicationSessionEvent event) {
-		SipApplicationSession appSession = (event != null) ? event.getApplicationSession() : null;
+	public final void sessionExpired(SipApplicationSessionEvent event) {
+		onSessionExpired(event);
+		runExpirationProbe((event != null) ? event.getApplicationSession() : null);
+	}
+
+	@Override
+	public final void sessionCreated(SipApplicationSessionEvent event) {
+		onSessionCreated(event);
+	}
+
+	@Override
+	public final void sessionDestroyed(SipApplicationSessionEvent event) {
+		onSessionDestroyed(event);
+	}
+
+	@Override
+	public final void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
+		onSessionReadyToInvalidate(event);
+	}
+
+	/// Overridable hook, invoked when a SipApplicationSession expires, before the
+	/// framework's keep-alive probe runs. Default no-op; override for app-specific
+	/// expiry handling. (The session is still valid here; the probe may extend or
+	/// tear it down after.)
+	///
+	/// @param event the expiration event
+	protected void onSessionExpired(SipApplicationSessionEvent event) {
+		// no-op
+	}
+
+	/// Overridable hook, invoked when a SipApplicationSession is created. Default no-op.
+	///
+	/// @param event the creation event
+	protected void onSessionCreated(SipApplicationSessionEvent event) {
+		// no-op
+	}
+
+	/// Overridable hook, invoked when a SipApplicationSession is destroyed. Default no-op.
+	///
+	/// @param event the destruction event
+	protected void onSessionDestroyed(SipApplicationSessionEvent event) {
+		// no-op
+	}
+
+	/// Overridable hook, invoked when a SipApplicationSession is ready to invalidate.
+	/// Default no-op.
+	///
+	/// @param event the ready-to-invalidate event
+	protected void onSessionReadyToInvalidate(SipApplicationSessionEvent event) {
+		// no-op
+	}
+
+	/// Last-chance keep-alive probe when a SipApplicationSession expires: re-INVITE
+	/// both call dialogs and keep the session alive only if both endpoints answer.
+	/// A call an external element is still holding up (BLADE keep-alive off) is
+	/// saved; a dead one still expires. The probe re-INVITE responses arrive after
+	/// this returns, so the session is first extended by a short grace window (the
+	/// container clamps it up to its floor, ~3 minutes) to survive the round-trip;
+	/// the probe then restores the lifetime BLADE applied at setup on success, or
+	/// reaps on failure. See
+	/// [KeepAlive#probeAndConfirm][org.vorpal.blade.framework.v2.keepalive.KeepAlive#probeAndConfirm].
+	private void runExpirationProbe(SipApplicationSession appSession) {
 		if (appSession == null || !appSession.isValid()) {
 			return;
 		}
@@ -881,7 +929,7 @@ public abstract class AsyncSipServlet extends SipServlet
 				// Ceiling reached: stop probing so a responsive-but-dead endpoint
 				// cannot pin a session open forever. Tear down and let it expire.
 				if (sipLogger.isLoggable(Level.FINE)) {
-					sipLogger.fine(appSession, "AsyncSipServlet.sessionExpired - max session age (" + maxMinutes
+					sipLogger.fine(appSession, "AsyncSipServlet.runExpirationProbe - max session age (" + maxMinutes
 							+ "m) reached; letting session expire");
 				}
 				new KeepAliveExpiry().handle(first);
@@ -910,21 +958,6 @@ public abstract class AsyncSipServlet extends SipServlet
 			}
 		}
 		return null;
-	}
-
-	@Override
-	public void sessionCreated(SipApplicationSessionEvent event) {
-		// no-op
-	}
-
-	@Override
-	public void sessionDestroyed(SipApplicationSessionEvent event) {
-		// no-op
-	}
-
-	@Override
-	public void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
-		// no-op
 	}
 
 	/// FINER diagnostics for every inbound request: request, session and

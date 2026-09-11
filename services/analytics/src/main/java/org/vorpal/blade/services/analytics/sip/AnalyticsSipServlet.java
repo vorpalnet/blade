@@ -105,22 +105,22 @@ public class AnalyticsSipServlet extends B2buaServlet implements B2buaListener, 
 	}
 
 	@Override
-	public void sessionCreated(SipApplicationSessionEvent event) {
+	protected void onSessionCreated(SipApplicationSessionEvent event) {
 		sipLogger.info(event.getApplicationSession(), "AnalyticsSipServlet.sessionCreated");
 	}
 
 	@Override
-	public void sessionDestroyed(SipApplicationSessionEvent event) {
+	protected void onSessionDestroyed(SipApplicationSessionEvent event) {
 		sipLogger.info(event.getApplicationSession(), "AnalyticsSipServlet.sessionDestroyed");
 	}
 
 	@Override
-	public void sessionExpired(SipApplicationSessionEvent event) {
+	protected void onSessionExpired(SipApplicationSessionEvent event) {
 		sipLogger.info(event.getApplicationSession(), "AnalyticsSipServlet.sessionExpired");
 	}
 
 	@Override
-	public void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
+	protected void onSessionReadyToInvalidate(SipApplicationSessionEvent event) {
 		sipLogger.info(event.getApplicationSession(), "AnalyticsSipServlet.sessionReadyToInvalidate");
 	}
 

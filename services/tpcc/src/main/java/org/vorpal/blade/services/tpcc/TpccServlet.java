@@ -85,7 +85,7 @@ public class TpccServlet extends B2buaServlet //
 	}
 
 	@Override
-	public void sessionCreated(SipApplicationSessionEvent event) {
+	protected void onSessionCreated(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.INFO)) {
 			SipApplicationSession appSession = event.getApplicationSession();
 			sipLogger.info(appSession, "appSession created...");
@@ -93,7 +93,7 @@ public class TpccServlet extends B2buaServlet //
 	}
 
 	@Override
-	public void sessionDestroyed(SipApplicationSessionEvent event) {
+	protected void onSessionDestroyed(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.INFO)) {
 			SipApplicationSession appSession = event.getApplicationSession();
 			sipLogger.info(appSession, "appSession destroyed...");
@@ -101,7 +101,7 @@ public class TpccServlet extends B2buaServlet //
 	}
 
 	@Override
-	public void sessionExpired(SipApplicationSessionEvent event) {
+	protected void onSessionExpired(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.INFO)) {
 			SipApplicationSession appSession = event.getApplicationSession();
 			sipLogger.info(appSession, "appSession sessionExpired...");
@@ -109,7 +109,7 @@ public class TpccServlet extends B2buaServlet //
 	}
 
 	@Override
-	public void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
+	protected void onSessionReadyToInvalidate(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.INFO)) {
 			SipApplicationSession appSession = event.getApplicationSession();
 			sipLogger.info(appSession, "appSession sessionReadyToInvalidate...");
