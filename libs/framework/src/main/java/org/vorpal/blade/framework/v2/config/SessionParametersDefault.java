@@ -3,7 +3,8 @@ package org.vorpal.blade.framework.v2.config;
 import java.io.Serializable;
 import java.util.LinkedList;
 
-/// Default session parameters: 60-minute expiration and **no session selectors**.
+/// Default session parameters: 60-minute expiration, **no session selectors**,
+/// the last-chance expiration probe on, and a 12-hour probe ceiling.
 ///
 /// Session selectors are strictly opt-in. Each selector value becomes an OCCAS
 /// index key, and on OCCAS 8.3 every index key is a single shared Coherence
@@ -22,6 +23,8 @@ public class SessionParametersDefault extends SessionParameters implements Seria
 	public SessionParametersDefault() {
 		this.expiration = 60; // 1 hour
 		this.keepAlive = null; // deprecated
+		this.expirationProbe = Boolean.TRUE; // last-chance probe on appSession expiry
+		this.maxSessionMinutes = 720; // 12h ceiling: never pin a session forever
 		this.sessionSelectors = new LinkedList<>();
 	}
 

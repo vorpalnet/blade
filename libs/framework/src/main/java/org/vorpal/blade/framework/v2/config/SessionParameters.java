@@ -18,6 +18,10 @@ public class SessionParameters implements Serializable {
 
 	public KeepAliveParameters keepAlive = null;
 
+	public Boolean expirationProbe = null;
+
+	public Integer maxSessionMinutes = null;
+
 	public List<AttributeSelector> sessionSelectors = null;
 
 	protected boolean passthru = false;
@@ -63,6 +67,31 @@ public class SessionParameters implements Serializable {
 
 	public SessionParameters setKeepAlive(KeepAliveParameters keepAlive) {
 		this.keepAlive = keepAlive;
+		return this;
+	}
+
+	@JsonPropertyDescription("Last-chance keep-alive probe when the Application Session expires: "
+			+ "re-INVITE both dialogs and keep the session alive only if both endpoints answer. A call an "
+			+ "external element is still holding up survives a bookkeeping timeout; a dead call still expires. "
+			+ "Default true.")
+	public Boolean getExpirationProbe() {
+		return expirationProbe;
+	}
+
+	public SessionParameters setExpirationProbe(Boolean expirationProbe) {
+		this.expirationProbe = expirationProbe;
+		return this;
+	}
+
+	@JsonPropertyDescription("Hard ceiling in minutes on total session age for the expiration probe: past "
+			+ "this age the probe stops and the session is allowed to expire, so a responsive-but-dead endpoint "
+			+ "cannot pin a session open forever. Default 720 (12 hours).")
+	public Integer getMaxSessionMinutes() {
+		return maxSessionMinutes;
+	}
+
+	public SessionParameters setMaxSessionMinutes(Integer maxSessionMinutes) {
+		this.maxSessionMinutes = maxSessionMinutes;
 		return this;
 	}
 

@@ -241,7 +241,7 @@
 ///   "session": {
 ///     "expiration": 60,
 ///     "keepAlive": {
-///       "style": "UPDATE",
+///       "style": "REINVITE",
 ///       "sessionExpires": 1800,
 ///       "minSE": 90
 ///     },

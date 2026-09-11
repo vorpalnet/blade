@@ -331,16 +331,10 @@ public class TransferServlet extends B2buaServlet
 	@Override
 	public void sessionExpired(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
-
-//			String id = null;
-//			if (event.getApplicationSession() != null) {
-//				id = event.getApplicationSession().getId();
-//			}
-//
-//			SipApplicationSession appSession = event.getApplicationSession();
-//			sipLogger.finer(appSession, "TransferServlet.sessionExpired - appSessionId=" + id);
 			sipLogger.finer(Color.RED_BOLD_BRIGHT("TransferServlet.sessionExpired"));
 		}
+		// Run the framework's last-chance keep-alive probe.
+		super.sessionExpired(event);
 	}
 
 	@Override

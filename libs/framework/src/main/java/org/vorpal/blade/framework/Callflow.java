@@ -121,12 +121,29 @@ public abstract class Callflow implements Serializable {
 	private static final String VORPAL_SESSION = "VORPAL_SESSION";
 	private static final String VORPAL_DIALOG = "VORPAL_DIALOG";
 
-	/// SipSession attribute (Boolean): whether this session's endpoint has
-	/// advertised UPDATE in an Allow header. Maintained passively by
-	/// AsyncSipServlet as messages arrive; read by the keep-alive refresh to
-	/// choose between UPDATE and re-INVITE style. Absent = unknown, which the
-	/// keep-alive treats as unsupported.
-	public static final String ALLOW_UPDATE = "ALLOW_UPDATE";
+	/// SipApplicationSession attribute: the expiration (minutes) BLADE last applied
+	/// in [#extendSessionExpiration], i.e. the highest-wins result of config, an
+	/// upstream `se`, a `Session-Expires` header, and the time already remaining
+	/// (which captures a developer's own higher `setExpires` made at or before
+	/// setup). The expiration probe restores THIS on a confirmed refresh rather
+	/// than the config default, so it never lowers an intentionally longer
+	/// lifetime. The JSR-359 API exposes only the absolute due time
+	/// (`getExpirationTime`), never the delta, and by the time `sessionExpired`
+	/// fires the session has already expired — so the applied value cannot be read
+	/// back and must be cached here when set. A developer `setExpires` made
+	/// mid-call, after setup and bypassing BLADE, is not seen and cannot be cached.
+	static final String VORPAL_APPSESSION_EXPIRES = "VORPAL_APPSESSION_EXPIRES";
+
+	/// SipSession attribute: the SDP body (application/sdp) this session's
+	/// endpoint most recently advertised as its own media. Cached passively by
+	/// AsyncSipServlet as messages arrive (see AsyncSipServlet#captureRemoteSdp).
+	/// The keep-alive refresh re-offers a leg's *peer* copy of this so it can
+	/// refresh each dialog on its own transaction, with no live round-trip to the
+	/// peer (see org.vorpal.blade.framework.v2.keepalive.KeepAlive).
+	public static final String LAST_SDP = "LAST_SDP";
+
+	/// The SDP content type, `application/sdp`.
+	public static final String APPLICATION_SDP = "application/sdp";
 
 	public static final String DIALOG_PARAM = "dialog";
 	/// Parameterable key on X-Vorpal-ID carrying the transport-level
@@ -146,6 +163,18 @@ public abstract class Callflow implements Serializable {
 	/// millisecond.
 	public static final String TIMESTAMP_PARAM = "ts";
 	private static final String VORPAL_TIMESTAMP = "VORPAL_TIMESTAMP";
+
+	/// Parameterable key on X-Vorpal-ID carrying this app's SipApplicationSession
+	/// expiration, in minutes, so a chain of B2BUAs staggers its expiry timers.
+	/// Each hop adopts the upstream value plus one (see [#adoptStaggeredExpiration])
+	/// and re-stamps its own, so the originating app's timer fires first and owns
+	/// the keep-alive; the rest fire strictly later. Kept on X-Vorpal-ID (a private
+	/// header) so non-BLADE elements never interpret it, unlike `Session-Expires`.
+	public static final String SE_PARAM = "se";
+	/// SipApplicationSession attribute holding this app's staggered expiration
+	/// (minutes) adopted from an upstream X-Vorpal-ID `se`, or unset when this app
+	/// originates the chain and uses its configured expiration.
+	private static final String VORPAL_SESSION_EXPIRES = "VORPAL_SESSION_EXPIRES";
 
 	protected static final String SIP_ADDRESS_ATTR = "sipAddress";
 	protected static final String IS_PROXY_ATTR = "isProxy";
@@ -623,6 +652,17 @@ public abstract class Callflow implements Serializable {
 						if (ts != null && !ts.isEmpty()) {
 							appSession.setAttribute(VORPAL_TIMESTAMP, ts);
 						}
+						// Adopt an upstream app's expiration plus one minute, so this
+						// hop's timer fires strictly after the app that stamped it.
+						// The originating app carries no `se` and uses its own config.
+						String se = xVorpalId.getParameter(SE_PARAM);
+						if (se != null && !se.isEmpty()) {
+							try {
+								appSession.setAttribute(VORPAL_SESSION_EXPIRES, Integer.parseInt(se.trim()) + 1);
+							} catch (NumberFormatException nfe) {
+								// malformed upstream value: fall back to this app's own config
+							}
+						}
 					}
 				} catch (Exception ex) {
 					sipLogger.warning(request, "Callflow.getVorpalSessionId - Unable to parse header '" + X_VORPAL_ID
@@ -811,6 +851,19 @@ public abstract class Callflow implements Serializable {
 			if (timestamp != null && !timestamp.isEmpty()) {
 				xVorpalId.setParameter(TIMESTAMP_PARAM, timestamp);
 			}
+
+			// Stamp this app's expiration (minutes) so a downstream B2BUA staggers
+			// one minute later. An adopted value (VORPAL_SESSION_EXPIRES) is already
+			// upstream+1; the originator advertises its configured expiration.
+			Integer myExpires = (Integer) appSession.getAttribute(VORPAL_SESSION_EXPIRES);
+			if (myExpires == null) {
+				SessionParameters params = getSessionParameters();
+				myExpires = (params != null) ? params.getExpiration() : null;
+			}
+			if (myExpires != null) {
+				xVorpalId.setParameter(SE_PARAM, Integer.toString(myExpires));
+			}
+
 			message.setParameterableHeader(X_VORPAL_ID, xVorpalId);
 		}
 	}
@@ -956,6 +1009,14 @@ public abstract class Callflow implements Serializable {
 				expiresInMinutes = Math.max(expiresInMinutes, params.getExpiration());
 			}
 
+			// Staggered chain expiration adopted from an upstream X-Vorpal-ID `se`
+			// (upstream value + 1). Highest wins, so with uniform config across the
+			// chain each downstream hop lands one minute later than the one before.
+			Integer staggered = (Integer) appSession.getAttribute(VORPAL_SESSION_EXPIRES);
+			if (staggered != null) {
+				expiresInMinutes = Math.max(expiresInMinutes, staggered);
+			}
+
 			// Check Session-Expires header (value is in seconds)
 			Parameterable sessionExpires = request.getParameterableHeader(SESSION_EXPIRES);
 			if (sessionExpires == null) {
@@ -967,6 +1028,10 @@ public abstract class Callflow implements Serializable {
 			}
 
 			appSession.setExpires(expiresInMinutes);
+			// Remember what we applied so the expiration probe can restore this
+			// exact lifetime on a confirmed refresh, instead of lowering it to the
+			// config default (see Callflow.VORPAL_APPSESSION_EXPIRES).
+			appSession.setAttribute(VORPAL_APPSESSION_EXPIRES, expiresInMinutes);
 
 			if (sipLogger.isLoggable(Level.FINER)) {
 				sipLogger.finer(request,
@@ -1009,10 +1074,10 @@ public abstract class Callflow implements Serializable {
 		if (sessionExpires == null) {
 			sessionExpires = (Parameterable) appSession.getAttribute(SESSION_EXPIRES);
 			if (sessionExpires != null) {
-				request.addHeader(SESSION_EXPIRES, sessionExpires.toString());
+				request.setHeader(SESSION_EXPIRES, sessionExpires.toString());
 				String minSE = (String) appSession.getAttribute(MIN_SE);
 				if (minSE != null) {
-					request.addHeader(MIN_SE, minSE);
+					request.setHeader(MIN_SE, minSE);
 				}
 			}
 		}
@@ -1020,27 +1085,33 @@ public abstract class Callflow implements Serializable {
 		int sessionExpiresInSeconds = (kap.getSessionExpires() != null) ? kap.getSessionExpires() : 1800; // 30 min
 		int minSEinSeconds = (kap.getMinSE() != null) ? kap.getMinSE() : 900; // 15 minutes
 
-		String refresher = null;
-		boolean uas = false;
-		if (sessionExpires != null) {
-			refresher = sessionExpires.getParameter("refresher");
-			if (refresher != null) {
-				uas = refresher.equals("uas");
-			}
-			// important, so no other app operates on it.
-			sessionExpires.setParameter("refresher", "uac");
-		}
+		// Only one application in a chain of B2BUAs drives the refresh. An upstream
+		// app claims it by stamping refresher=uac on the propagated Session-Expires;
+		// a downstream app that sees that claim stands down. A header carrying no
+		// refresher param is UNCLAIMED — this app should claim it, not stand down —
+		// so only refresher=uac suppresses arming here.
+		String refresher = (sessionExpires != null) ? sessionExpires.getParameter("refresher") : null;
+		boolean alreadyClaimedUpstream = "uac".equals(refresher);
 
-		if (sessionExpires == null || uas == true) {
+		if (!alreadyClaimedUpstream) {
 
-			if (uas == true) {
+			if (sessionExpires != null) {
+				// Honor the interval already negotiated on the header rather than
+				// overriding it with the config default.
 				sessionExpiresInSeconds = Integer.parseInt(sessionExpires.getValue());
 				String strMinSE = request.getHeader(MIN_SE);
 				if (strMinSE != null) {
 					minSEinSeconds = Integer.parseInt(strMinSE);
 				} else {
-					minSEinSeconds = sessionExpiresInSeconds / 2;
+					minSEinSeconds = Math.max(sessionExpiresInSeconds / 2, 90); // RFC 4028 Min-SE floor
 				}
+
+				// Claim the refresh for this app and propagate the claim downstream,
+				// so no other app in the chain also refreshes. setHeader writes the
+				// stamped value back onto the outgoing request (the addHeader path
+				// used to stamp a copy the wire never saw).
+				sessionExpires.setParameter("refresher", "uac");
+				request.setHeader(SESSION_EXPIRES, sessionExpires.toString());
 			}
 
 			request.getSessionKeepAlivePreference().setEnabled(true);

@@ -21,6 +21,8 @@ import javax.servlet.sip.Parameterable;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.ServletTimer;
 import javax.servlet.sip.SipApplicationSession;
+import javax.servlet.sip.SipApplicationSessionEvent;
+import javax.servlet.sip.SipApplicationSessionListener;
 import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipServlet;
 import javax.servlet.sip.SipServletContextEvent;
@@ -55,8 +57,9 @@ import org.vorpal.blade.framework.v2.config.AttributeSelector;
 import org.vorpal.blade.framework.v2.config.AttributeSelector.DialogType;
 import org.vorpal.blade.framework.v2.config.AttributesKey;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
-import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.keepalive.KeepAlive;
+import org.vorpal.blade.framework.v2.keepalive.KeepAliveExpiry;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v2.logging.Logger.Direction;
@@ -95,7 +98,7 @@ import org.vorpal.blade.framework.v2.logging.Logger.Direction;
 /// 
 /// @author Jeff McDonald
 public abstract class AsyncSipServlet extends SipServlet
-		implements SipServletListener, ServletContextListener, TimerListener {
+		implements SipServletListener, ServletContextListener, TimerListener, SipApplicationSessionListener {
 
 	private static final long serialVersionUID = 1L;
 
@@ -649,8 +652,8 @@ public abstract class AsyncSipServlet extends SipServlet
 			String method = request.getMethod();
 			SipSession linkedSession = Callflow.getLinkedSession(request.getSession());
 
-			// passively track endpoint UPDATE support for the keep-alive style
-			captureAllowHeader(request, sipSession);
+			// passively cache the endpoint's advertised SDP for the keep-alive refresh
+			captureRemoteSdp(request, sipSession);
 
 			// get the Vorpal ID first thing (skip short-lived, fire-and-forget methods)
 			if (request.isInitial()) {
@@ -794,28 +797,134 @@ public abstract class AsyncSipServlet extends SipServlet
 
 	}
 
-	/// Passively track whether the endpoint behind this session supports the
-	/// UPDATE method, for the keep-alive refresh style decision (see
+	/// Passively cache the SDP an endpoint most recently advertised as its own
+	/// media, for the keep-alive refresh (see
 	/// [org.vorpal.blade.framework.v2.keepalive.KeepAlive]). If the message
-	/// carries an Allow header, record TRUE/FALSE in the session's
-	/// `Callflow.ALLOW_UPDATE` attribute; if there is no Allow header, leave
-	/// the attribute untouched — unknown stays unknown, and a previous
-	/// definitive answer is not erased.
-	protected static void captureAllowHeader(SipServletMessage message, SipSession sipSession) {
+	/// carries an application/sdp body, record it in the session's
+	/// `Callflow.LAST_SDP` attribute; a message with no SDP leaves any previously
+	/// cached value in place. The keep-alive re-offers a leg's *peer* copy of
+	/// this so it can refresh each dialog on its own transaction, with no live
+	/// round-trip to the peer.
+	protected static void captureRemoteSdp(SipServletMessage message, SipSession sipSession) {
 		if (sipSession == null || !sipSession.isValid()) {
 			return;
 		}
 
-		Boolean allowsUpdate = KeepAlive.allowsUpdate(message.getHeaderList("Allow"));
-		if (allowsUpdate != null) {
-			try {
-				sipSession.setAttribute(Callflow.ALLOW_UPDATE, allowsUpdate);
-			} catch (IllegalStateException e) {
-				// isValid() can flip during the BYE/2xx cleanup window (same race
-				// documented in Callflow.getVorpalDialogId) — a missed capture on
-				// a dying session doesn't matter.
+		String contentType = message.getContentType();
+		if (contentType == null || !contentType.equalsIgnoreCase(Callflow.APPLICATION_SDP)) {
+			return;
+		}
+
+		try {
+			Object sdp = message.getContent();
+			if (sdp != null) {
+				sipSession.setAttribute(Callflow.LAST_SDP, sdp);
+			}
+		} catch (IOException e) {
+			// couldn't read the body; leave any previously cached value in place
+		} catch (IllegalStateException e) {
+			// isValid() can flip during the BYE/2xx cleanup window (same race
+			// documented in Callflow.getVorpalDialogId) — a missed capture on
+			// a dying session doesn't matter.
+		}
+	}
+
+	/// Last-chance keep-alive probe when a SipApplicationSession expires.
+	///
+	/// Instead of letting the container drop the session outright, re-INVITE both
+	/// call dialogs and keep the session alive only if both endpoints answer — a
+	/// call an external element is still holding up (BLADE keep-alive off) is
+	/// saved; a dead one still expires. See
+	/// [KeepAlive#probeAndConfirm][org.vorpal.blade.framework.v2.keepalive.KeepAlive#probeAndConfirm].
+	///
+	/// The probe re-INVITE responses arrive after this method returns, so the
+	/// session is first extended by a short grace window (the container clamps it
+	/// up to its floor, ~3 minutes) to survive the round-trip; the probe then
+	/// extends to the full interval on success, or reaps on failure.
+	///
+	/// A concrete servlet that overrides this must call `super.sessionExpired`, or
+	/// the probe will not run for its app. Registration still requires the class
+	/// to be annotated `@SipListener`.
+	@Override
+	public void sessionExpired(SipApplicationSessionEvent event) {
+		SipApplicationSession appSession = (event != null) ? event.getApplicationSession() : null;
+		if (appSession == null || !appSession.isValid()) {
+			return;
+		}
+
+		try {
+			SessionParameters params = Callflow.getSessionParameters();
+
+			// Default on: only an explicit false disables the probe.
+			boolean probeEnabled = (params == null) || !Boolean.FALSE.equals(params.getExpirationProbe());
+			if (!probeEnabled) {
+				return; // let the container invalidate
+			}
+
+			SipSession first = firstLinkedDialog(appSession);
+			if (first == null) {
+				return; // not a live two-party call; let it expire normally
+			}
+
+			// Restore the lifetime BLADE actually applied at setup (which already
+			// honors a developer's higher setExpires and the configured default),
+			// never a blind config value that could lower an intentional 900.
+			Integer appliedExpires = (Integer) appSession.getAttribute(Callflow.VORPAL_APPSESSION_EXPIRES);
+			int fullMinutes = (appliedExpires != null) ? appliedExpires
+					: (params != null && params.getExpiration() != null) ? params.getExpiration() : 60;
+			int maxMinutes = (params != null && params.getMaxSessionMinutes() != null)
+					? params.getMaxSessionMinutes()
+					: 720;
+
+			long ageMinutes = (System.currentTimeMillis() - appSession.getCreationTime()) / 60000;
+			if (ageMinutes >= maxMinutes) {
+				// Ceiling reached: stop probing so a responsive-but-dead endpoint
+				// cannot pin a session open forever. Tear down and let it expire.
+				if (sipLogger.isLoggable(Level.FINE)) {
+					sipLogger.fine(appSession, "AsyncSipServlet.sessionExpired - max session age (" + maxMinutes
+							+ "m) reached; letting session expire");
+				}
+				new KeepAliveExpiry().handle(first);
+				return;
+			}
+
+			// Extend by a grace window so the session survives the probe
+			// round-trip; setExpires(1) is clamped up to the container floor.
+			appSession.setExpires(1);
+			new KeepAlive().probeAndConfirm(first, fullMinutes);
+
+		} catch (Exception ex) {
+			sipLogger.logStackTrace(appSession, ex);
+		}
+	}
+
+	/// The first valid SIP dialog in this appSession that is half of a linked
+	/// (B2BUA) call, or null when the session holds no such two-party call.
+	private static SipSession firstLinkedDialog(SipApplicationSession appSession) {
+		@SuppressWarnings("unchecked")
+		Iterator<SipSession> itr = (Iterator<SipSession>) appSession.getSessions("SIP");
+		while (itr.hasNext()) {
+			SipSession session = itr.next();
+			if (session != null && session.isValid() && Callflow.getLinkedSession(session) != null) {
+				return session;
 			}
 		}
+		return null;
+	}
+
+	@Override
+	public void sessionCreated(SipApplicationSessionEvent event) {
+		// no-op
+	}
+
+	@Override
+	public void sessionDestroyed(SipApplicationSessionEvent event) {
+		// no-op
+	}
+
+	@Override
+	public void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
+		// no-op
 	}
 
 	/// FINER diagnostics for every inbound request: request, session and
@@ -1089,8 +1198,8 @@ public abstract class AsyncSipServlet extends SipServlet
 			String method = response.getMethod();
 			SipSession linkedSession = Callflow.getLinkedSession(response.getSession());
 
-			// passively track endpoint UPDATE support for the keep-alive style
-			captureAllowHeader(response, sipSession);
+			// passively cache the endpoint's advertised SDP for the keep-alive refresh
+			captureRemoteSdp(response, sipSession);
 
 			logResponseDiagnostics(response, isProxy, sipSession, linkedSession);
 

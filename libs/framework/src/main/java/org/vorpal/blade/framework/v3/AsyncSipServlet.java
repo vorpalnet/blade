@@ -57,8 +57,8 @@ public abstract class AsyncSipServlet extends org.vorpal.blade.framework.AsyncSi
 			SipSession linkedSession = org.vorpal.blade.framework.Callflow
 					.getLinkedSession(request.getSession());
 
-			// passively track endpoint UPDATE support for the keep-alive style
-			captureAllowHeader(request, sipSession);
+			// passively cache the endpoint's advertised SDP for the keep-alive refresh
+			captureRemoteSdp(request, sipSession);
 
 			// get the Vorpal ID first thing (skip short-lived, fire-and-forget methods)
 			if (request.isInitial()) {
@@ -224,8 +224,8 @@ public abstract class AsyncSipServlet extends org.vorpal.blade.framework.AsyncSi
 			SipSession linkedSession = org.vorpal.blade.framework.Callflow
 					.getLinkedSession(response.getSession());
 
-			// passively track endpoint UPDATE support for the keep-alive style
-			captureAllowHeader(response, sipSession);
+			// passively cache the endpoint's advertised SDP for the keep-alive refresh
+			captureRemoteSdp(response, sipSession);
 
 			logResponseDiagnostics(response, isProxy, sipSession, linkedSession);
 

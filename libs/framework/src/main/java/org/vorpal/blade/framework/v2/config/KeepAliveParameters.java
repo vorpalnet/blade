@@ -11,7 +11,7 @@ public class KeepAliveParameters implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	public enum KeepAlive {
-		DISABLED, UPDATE, REINVITE
+		DISABLED, REINVITE
 	};
 
 	protected KeepAlive style = null;
@@ -20,7 +20,7 @@ public class KeepAliveParameters implements Serializable {
 
 	protected Integer minSE = null;
 
-	@JsonPropertyDescription("Sets keep alive style: DISABLED, UPDATE, REINVITE. UPDATE is used only when both endpoints have advertised 'Allow: UPDATE'; otherwise each refresh falls back to re-INVITE.")
+	@JsonPropertyDescription("Sets keep alive style: DISABLED or REINVITE. REINVITE refreshes each dialog with a re-INVITE re-offering its already-negotiated media.")
 	public KeepAlive getStyle() {
 		return style;
 	}
