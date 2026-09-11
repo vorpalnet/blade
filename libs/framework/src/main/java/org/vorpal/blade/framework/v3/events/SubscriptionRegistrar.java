@@ -217,8 +217,18 @@ public final class SubscriptionRegistrar {
 			boolean rebuilt = EventBus.reconcileSubscriber(subscriptionName, EventBus.CONNECTION_FACTORY_JNDI,
 					EventBus.TOPIC_JNDI, selector, durable.getAsBoolean(), handler, batchSize, batchMillis);
 
+			EventSubscriber live = EventBus.subscriberFor(subscriptionName);
+
+			// Every tick, re-attach any distributed-topic member that is available
+			// but not being consumed. A member's attach can lose the one-active-
+			// consumer race to a peer, and without this the survivor would never
+			// take the partition over when that peer leaves — the failure that
+			// left a single-node cluster silently not indexing.
+			if (live != null) {
+				live.retryUnattached();
+			}
+
 			if (rebuilt || announce) {
-				EventSubscriber live = EventBus.subscriberFor(subscriptionName);
 				info("events: '" + subscriptionName + "' subscribed to " + EventBus.TOPIC_JNDI + ", "
 						+ (selector == null
 								? "taking every event and filtering in code (" + wanted.size()

@@ -115,6 +115,9 @@ public class EventSubscriber {
 	/// The key the single non-distributed consumer is held under.
 	private static final String SOLE = "";
 
+	private static final java.util.logging.Logger LOG =
+			java.util.logging.Logger.getLogger(EventSubscriber.class.getName());
+
 	private final String connectionFactoryJndi;
 	private final String destinationJndi;
 	private final String subscriptionName;
@@ -125,6 +128,12 @@ public class EventSubscriber {
 	private final Handler handler;
 
 	private final ConcurrentMap<String, Member> members = new ConcurrentHashMap<>();
+
+	/// Every member the container has reported available, whether or not a
+	/// consumer is currently attached to it. [#members] is the subset that is
+	/// actually consuming; a member here but not there is one whose attach
+	/// failed and must be retried. See [#retryUnattached].
+	private final ConcurrentMap<String, Destination> available = new ConcurrentHashMap<>();
 	private ConnectionFactory factory;
 	private Object membership;
 	private volatile boolean closed;
@@ -272,8 +281,21 @@ public class EventSubscriber {
 	/// Start consuming one member. Failure is contained to that member: the
 	/// others keep running and this one is retried when the container next
 	/// reports it available.
+	/// The container reported a member available. Remember it and attach a
+	/// consumer. A failed attach is kept in [#available] for [#retryUnattached],
+	/// not dropped — see [#attach].
 	private void addMember(String memberName, Destination member) {
+		available.put(memberName, member);
+		attach(memberName);
+	}
+
+	/// Attach a consumer to one available member, unless one already is.
+	private void attach(String memberName) {
 		if (closed || members.containsKey(memberName)) {
+			return;
+		}
+		Destination member = available.get(memberName);
+		if (member == null) {
 			return;
 		}
 		try {
@@ -284,10 +306,34 @@ public class EventSubscriber {
 			members.put(memberName, open(memberName, member, subscriptionName + "@" + memberName));
 		} catch (Exception e) {
 			members.remove(memberName);
+			// Not a permanent failure. A durable subscription permits one active
+			// consumer, so this attach loses to a peer that already holds the
+			// member's client id — or to a peer that has crashed but whose lease
+			// the broker has not released yet. The member stays in `available`;
+			// the watchdog calls retryUnattached() and the lone survivor takes
+			// over its own partition once the id frees. Swallowing this without a
+			// retry is what left a single-node cluster silently not consuming.
+			LOG.log(java.util.logging.Level.FINE,
+					"could not attach a consumer for member " + memberName + " (will retry): " + e);
+		}
+	}
+
+	/// Re-attempt every member that is available but not consuming. Called on
+	/// the subscription watchdog's tick, this is what lets a single surviving
+	/// node take over a partition whose active consumer left with a peer.
+	public void retryUnattached() {
+		if (closed) {
+			return;
+		}
+		for (String memberName : available.keySet()) {
+			if (!members.containsKey(memberName)) {
+				attach(memberName);
+			}
 		}
 	}
 
 	private void removeMember(String memberName) {
+		available.remove(memberName);
 		Member member = members.remove(memberName);
 		if (member != null) {
 			member.close();
