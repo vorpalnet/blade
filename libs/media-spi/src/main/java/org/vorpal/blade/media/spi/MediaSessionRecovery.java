@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.v3.media;
+package org.vorpal.blade.media.spi;
 
 import javax.media.mscontrol.MediaSession;
 import javax.media.mscontrol.MsControlException;
@@ -18,13 +18,19 @@ import javax.servlet.sip.SipApplicationSession;
 /// still-running media (media-server coordinates, element ids) into that replicated SAS, keyed by the
 /// [MediaSession] URI, and rebuilds live objects from it on the surviving node.
 ///
-/// The app never sees this — it speaks only `javax.media.mscontrol.*`; [MediaCallflow#reattach] drives
-/// it. Drivers that do not implement it simply get no failover recovery (today's behavior): the
-/// continuations still ride the replicated SAS, but the live media objects are not rebuilt.
+/// The app never sees this — it speaks only `javax.media.mscontrol.*`; the framework's
+/// `MediaCallflow.reattach` drives it. Drivers that do not implement it simply get no failover
+/// recovery (today's behavior): the continuations still ride the replicated SAS, but the live media
+/// objects are not rebuilt.
+///
+/// This interface lives in the media SPI jar (on the classloader that loads the driver), not in the
+/// framework jar bundled per WAR, so there is exactly one `MediaSessionRecovery` Class whether the
+/// driver is bundled in the app's WAR or deployed apart from it. That is what lets the framework's
+/// `factory instanceof MediaSessionRecovery` hold across the two tiers.
 public interface MediaSessionRecovery {
 
 	/// Persist the recovery state of `live` into `app` (the replicated SAS), keyed by the session's
-	/// URI. Must be **idempotent and cheap** — [MediaCallflow] calls it as media-server coordinates
+	/// URI. Must be **idempotent and cheap** — the framework calls it as media-server coordinates
 	/// become available (each verb, and again right after the SDP anchor), so a later call simply
 	/// refreshes an earlier one.
 	void captureInto(SipApplicationSession app, MediaSession live);

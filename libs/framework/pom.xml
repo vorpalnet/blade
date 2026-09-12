@@ -16,6 +16,16 @@
 	<name>BLADE Framework Library</name>
 
 	<dependencies>
+		<!-- The shared media contract (MediaConfigs, MediaSessionRecovery, DtmfSink,
+		     SelectiveForwarder). Compile scope so it flows transitively to any module
+		     that depends on the framework; at runtime it is NOT bundled in WEB-INF/lib
+		     (the parent pom's WAR packagingExcludes strips every jar but the framework
+		     jar) but resolved from the domain lib/ extension classpath, the one place a
+		     separately deployed JSR-309 driver can also see it. See libs/media-spi. -->
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-media-spi</artifactId>
+		</dependency>
 		<!-- 3rd-party deps at compile scope so they flow transitively to
 		     any module that depends on the framework. At runtime these
 		     come from the shared library WAR; the parent pom's WAR plugin

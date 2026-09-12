@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.v3.media;
+package org.vorpal.blade.media.spi;
 
 import javax.media.mscontrol.Configuration;
 import javax.media.mscontrol.networkconnection.NetworkConnection;
@@ -11,9 +11,14 @@ import javax.media.mscontrol.networkconnection.NetworkConnection;
 /// spec rather than a workaround. Dialogic reached the same conclusion from the other direction and
 /// exposed WebRTC through a vendor method on its own `NetworkConnection`.
 ///
-/// Declaring these in the framework rather than in a driver keeps applications vendor-neutral: an
-/// app asks for a [#WEBRTC] dialog, and whichever driver is installed either honours it or throws
-/// `MsControlException`. Nothing in the public tree names a media server.
+/// Declaring these in the shared media SPI rather than in a driver keeps applications
+/// vendor-neutral: an app asks for a [#WEBRTC] dialog, and whichever driver is installed either
+/// honours it or throws `MsControlException`. Nothing in the public tree names a media server.
+///
+/// This enum lives in the media SPI jar (on the classloader that loads the driver), not in the
+/// framework jar bundled per WAR, so there is exactly one `MediaConfigs` Class whether the driver
+/// is bundled in the app's WAR or deployed apart from it. That is what lets a driver compare
+/// `config == MediaConfigs.WEBRTC` by identity instead of by name.
 public enum MediaConfigs implements Configuration<NetworkConnection> {
 
 	/// A dialog whose far end is a browser: the media server must terminate ICE and DTLS-SRTP on it.

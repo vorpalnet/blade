@@ -15,7 +15,7 @@ import javax.servlet.sip.SipSession;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.vorpal.blade.framework.v3.events.CloudEvent;
-import org.vorpal.blade.framework.v3.media.MediaConfigs;
+import org.vorpal.blade.media.spi.MediaConfigs;
 
 /// A browser calls out — and *every* browser call goes out this way, including one whose far end is
 /// another browser. Signaling always rides SIP: the INVITE goes through the App Router, past the

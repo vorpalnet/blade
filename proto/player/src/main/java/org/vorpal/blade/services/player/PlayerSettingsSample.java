@@ -15,7 +15,7 @@ public class PlayerSettingsSample extends PlayerSettings {
 		this.session = new SessionParametersDefault();
 
 		setDriverName("");
-		getDriverProperties().put("media.server.url", "ws://localhost:8888/");
+		getDriverProperties().put("kurento.ws.url", "ws://localhost:8888/");
 		setMediaUri("http://media.example.com/greeting.wav");
 		setLoop(false);
 		setRecord(false);

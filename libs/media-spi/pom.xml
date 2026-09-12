@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.vorpal.blade</groupId>
+		<artifactId>vorpal-blade</artifactId>
+		<version>${revision}</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>vorpal-blade-media-spi</artifactId>
+	<packaging>jar</packaging>
+	<name>BLADE Media SPI</name>
+	<description>
+		The stable contract shared by the BLADE framework, its media applications, and a
+		JSR-309 media driver: the extra JSR-309 Configurations (MediaConfigs), the
+		failover-recovery and out-of-band-DTMF hooks a driver factory implements
+		(MediaSessionRecovery, DtmfSink), and the SFU forwarding capability
+		(SelectiveForwarder). Every type here depends only on javax.media.mscontrol.* and
+		javax.servlet.sip.*, so a driver compiles and loads against this jar alone with no
+		framework linkage.
+
+		This jar is deployed on the classloader that loads the driver (the domain lib/
+		extension classpath, or the OCCAS native 309-loader path), NOT bundled in each WAR:
+		the parent POM's WAR packagingExcludes strips it from WEB-INF/lib, so a WAR resolves
+		these types from that shared parent. One Class per type across both tiers is what
+		makes the framework's `factory instanceof MediaSessionRecovery` and the
+		`config == MediaConfigs.WEBRTC` check hold when the driver is deployed apart from the
+		app. See gryphon/gryphon-jsr309.
+	</description>
+
+	<!-- No dependencies beyond the platform APIs the parent POM provides at `provided`
+	     scope (sipservlet-api, mscontrol). Keeping this jar contract-only is the point. -->
+
+	<build>
+		<finalName>blade-media-spi</finalName>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-install-plugin</artifactId>
+				<configuration>
+					<skip>false</skip>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>

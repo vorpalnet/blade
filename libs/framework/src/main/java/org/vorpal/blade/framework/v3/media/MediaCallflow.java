@@ -39,6 +39,8 @@ import com.bea.wcp.sip.WlssSipApplicationSession;
 
 import org.vorpal.blade.framework.Callback;
 import org.vorpal.blade.framework.v3.Callflow;
+import org.vorpal.blade.media.spi.DtmfSink;
+import org.vorpal.blade.media.spi.MediaSessionRecovery;
 
 /// A [Callflow] with **JSR-309 media-server verbs written in the lambda-continuation
 /// style of [Callflow#sendRequest]** — so a media conversation reads top-to-bottom
