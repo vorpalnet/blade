@@ -1474,10 +1474,13 @@ public abstract class Callflow implements Serializable {
 					stampVorpalIdHeaders(response, appSession, sipSession);
 				}
 
-				// Glare handling
+				// Glare handling. After we (UAS) answer 2xx, the dialog is confirmed only once the
+				// ACK arrives, so hold in QUEUE, not PROTECT: an in-dialog request that races in
+				// ahead of the ACK is parked rather than 491'd, and the inbound ACK (doRequest)
+				// flips the session to ALLOW and drains it. A non-2xx final ends the transaction
+				// outright (the container ACKs it), so glare clears.
 				if (status != 491) {
 					if (successful(response)) {
-						// jwm - unnecessary
 						setGlareState(sipSession, GlareState.QUEUE);
 					} else if (failure(response)) {
 						setGlareState(sipSession, GlareState.ALLOW);

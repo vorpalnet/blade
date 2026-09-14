@@ -190,13 +190,12 @@ public abstract class AsyncSipServlet extends org.vorpal.blade.framework.AsyncSi
 				Callflow.traceEvent(Direction.SEND, request, null, "proxy", "send", null);
 			}
 
-			// Anything in the Queue? Use recursion
-			if (!glareQueue.isEmpty()) {
-				SipServletRequest glareRequest = glareQueue.removeFirst();
-				sipSession.setAttribute(GLARE_QUEUE, glareQueue);
-				sipLogger.warning(glareRequest, "AsyncSipServlet.doRequest - processing request in glare queue");
-				doRequest(glareRequest);
-			}
+			// Replay a request parked during glare — but only now that the dialog is clear
+			// (ALLOW). Replaying while still PROTECT, as this used to unconditionally, just
+			// re-glares the parked request straight into a 491. drainGlareQueue replays one and
+			// recurses, so a parked INVITE that flips the dialog back to PROTECT stops the drain,
+			// and its own completion resumes it: parked requests replay one transaction at a time.
+			drainGlareQueue(sipSession);
 
 		} catch (Exception ex6) { // this should never happen, but if it does...
 			if (sipLogger != null) {
@@ -208,6 +207,34 @@ public abstract class AsyncSipServlet extends org.vorpal.blade.framework.AsyncSi
 			}
 		}
 
+	}
+
+	/// Replay the oldest request parked by glare, but only while the dialog is clear (ALLOW).
+	///
+	/// Called at every point the glare state returns to ALLOW: the tail of [#doRequest] (after an
+	/// inbound ACK/BYE/CANCEL or an answered in-dialog request) and after a final response clears
+	/// glare in [#doResponse]. It removes one request and re-enters [#doRequest]; an INVITE flips the
+	/// dialog back to PROTECT, ending the drain until that transaction finishes and clears glare
+	/// again, so parked requests replay FIFO, one transaction at a time, never into a PROTECT dialog
+	/// (which would 491 them). (Mirror of the base AsyncSipServlet's fix; kept in sync until the
+	/// duplicated doRequest/doResponse are hoisted.)
+	@SuppressWarnings("unchecked")
+	private void drainGlareQueue(SipSession sipSession) throws ServletException, IOException {
+		if (sipSession == null || !sipSession.isValid()) {
+			return;
+		}
+		if (Callflow.getGlareState(sipSession) != GlareState.ALLOW) {
+			return;
+		}
+		LinkedList<SipServletRequest> glareQueue = (LinkedList<SipServletRequest>) sipSession
+				.getAttribute(GLARE_QUEUE);
+		if (glareQueue == null || glareQueue.isEmpty()) {
+			return;
+		}
+		SipServletRequest glareRequest = glareQueue.removeFirst();
+		sipSession.setAttribute(GLARE_QUEUE, glareQueue);
+		sipLogger.warning(glareRequest, "AsyncSipServlet.drainGlareQueue - replaying request parked during glare");
+		doRequest(glareRequest);
 	}
 
 	/// Copied from v2 AsyncSipServlet.doResponse (AsyncSipServlet.java:861–1003)
@@ -229,19 +256,18 @@ public abstract class AsyncSipServlet extends org.vorpal.blade.framework.AsyncSi
 
 			logResponseDiagnostics(response, isProxy, sipSession, linkedSession);
 
-			// For GLARE
-			if (method.equals(Callflow.INVITE)) {
-				// Release glare on any non-2xx final (3xx redirect or 4xx+ failure).
-				// 2xx is intentionally excluded — the ACK arriving in doRequest releases
-				// glare in that branch. The container auto-ACKs 3xx/4xx/5xx/6xx so the
-				// request branch never sees one for those.
-				if (Callflow.redirection(response) || Callflow.failure(response)) {
-					Callflow.setGlareState(sipSession, GlareState.ALLOW);
-				}
-			} else {
-				if (false == Callflow.provisional(response)) {
-					Callflow.setGlareState(sipSession, GlareState.ALLOW);
-				}
+			// For GLARE: a received final response ends the transaction we opened as the UAC,
+			// so the dialog is clear again — for a 2xx INVITE too. Do NOT special-case 2xx out
+			// of this. The earlier code did, on the theory that "the ACK arriving in doRequest
+			// releases glare" — but that only holds on the UAS side, where the ACK is inbound.
+			// A UAC's ACK is outbound, and clears glare only if it happens to go through
+			// sendRequest; a raw createAck().send() would leave the dialog stuck in PROTECT and
+			// 491 every later re-INVITE. Releasing on the final response here makes the release
+			// independent of how the ACK is sent. A provisional (1xx) leaves the transaction
+			// open, so glare protection stays until the final arrives.
+			if (false == Callflow.provisional(response)) {
+				Callflow.setGlareState(sipSession, GlareState.ALLOW);
+				drainGlareQueue(sipSession);
 			}
 
 			// Check for the possibility that an INVITE response comes back *after* the call
