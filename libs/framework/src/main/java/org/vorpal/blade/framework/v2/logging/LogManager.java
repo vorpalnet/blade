@@ -55,7 +55,7 @@ public class LogManager implements ServletContextListener {
 	private static final String DEFAULT_LOGGER_NAME = "BLADE";
 	private static final String PATH_SEPARATOR = "/";
 
-	private static String basename;
+	private String basename;
 
 	@Override
 	public final void contextInitialized(ServletContextEvent sce) {
@@ -66,7 +66,14 @@ public class LogManager implements ServletContextListener {
 
 	@Override
 	public final void contextDestroyed(ServletContextEvent sce) {
-		closeLogger(basename);
+		// Derive from the event first; fall back to the name captured at init.
+		// Closing the handler here is what deletes the .lck and frees the
+		// java.util.logging lock number, so the next deployment reuses
+		// <app>.0.log instead of rotating to <app>.0.log.1, .2, ...
+		String name = (sce != null && sce.getServletContext() != null)
+				? SettingsManager.deriveName(sce.getServletContext())
+				: basename;
+		closeLogger(name);
 	}
 
 	private static final ConcurrentHashMap<String, Logger> logMap = new ConcurrentHashMap<>();

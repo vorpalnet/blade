@@ -4,6 +4,17 @@
               xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee
                                   http://xmlns.jcp.org/xml/ns/javaee/web-fragment_4_0.xsd"
               version="4.0">
+    <!-- Declared here, not left to @WebListener scanning: in a SIP WAR the
+         container was not registering the annotated LogManager, so its
+         contextDestroyed never ran and the per-app FileHandler was never
+         closed. That leaks the java.util.logging lock across redeploys, so a
+         fresh deployment cannot reclaim <app>.0.log and rotates to
+         <app>.0.log.1, .2, ... (the "two loggers running" duplicate-log
+         symptom). Listed first so it initializes first and is therefore
+         destroyed last, after the servlet's stop event is written. -->
+    <listener>
+        <listener-class>org.vorpal.blade.framework.v2.logging.LogManager</listener-class>
+    </listener>
     <listener>
         <listener-class>org.vorpal.blade.framework.v2.logging.LogReaderRegistrar</listener-class>
     </listener>
