@@ -15,7 +15,7 @@ import javax.servlet.sip.SipSession;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.vorpal.blade.framework.v3.events.CloudEvent;
-import org.vorpal.blade.media.spi.MediaConfigs;
+import org.vorpal.blade.framework.v3.media.MediaConfigs;
 
 /// A browser calls out — and *every* browser call goes out this way, including one whose far end is
 /// another browser. Signaling always rides SIP: the INVITE goes through the App Router, past the
@@ -92,6 +92,13 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 		String callId = app.getId();
 		app.setAttribute(BrowserSignals.BROWSER_AOR, aor);
 
+		// Assert the caller's identity to the far end (RFC 3325). The From URI is the JWT-authenticated
+		// address, so the network is vouching for it; the display name is what the browser supplied.
+		// A conference app reads this to label a participant's tile without trusting a client-set From.
+		// Strip CR/LF and quotes from the name: it is client-supplied and rides a header, so it must not
+		// be able to inject a second header line.
+		assertIdentity(invite, aor, SignalProtocol.field(offerEvent, "displayName"));
+
 		MediaMode mode = WebrtcServlet.mediaMode()
 				.resolve(BrowserRegistry.isLocal(targetAor(target, aor)), getMsControlFactory() != null);
 
@@ -125,6 +132,16 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 		});
 
 		return callId;
+	}
+
+	/// Set `P-Asserted-Identity` on the outbound INVITE: the authenticated `aor` as the SIP URI, with
+	/// the browser-supplied display name when there is one. The name is sanitized (CR, LF and quotes
+	/// removed) because it is client input carried in a header. `P-Asserted-Identity` is not a system
+	/// header, so it is set directly on the request.
+	private static void assertIdentity(SipServletRequest invite, String aor, String displayName) {
+		String uri = "<sip:" + aor + ">";
+		String name = (displayName == null) ? "" : displayName.replaceAll("[\\r\\n\"]", "").trim();
+		invite.setHeader("P-Asserted-Identity", name.isEmpty() ? uri : "\"" + name + "\" " + uri);
 	}
 
 	// ---- pass-through -------------------------------------------------------------------------

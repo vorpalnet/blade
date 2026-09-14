@@ -23,9 +23,13 @@ import javax.media.mscontrol.mediagroup.Recorder;
 import javax.media.mscontrol.mediagroup.RecorderEvent;
 import javax.media.mscontrol.mediagroup.signals.SignalDetector;
 import javax.media.mscontrol.mediagroup.signals.SignalDetectorEvent;
+import javax.media.mscontrol.mediagroup.signals.SpeechRecognitionEvent;
 import javax.media.mscontrol.networkconnection.NetworkConnection;
 import javax.media.mscontrol.networkconnection.SdpPortManager;
 import javax.media.mscontrol.networkconnection.SdpPortManagerEvent;
+import javax.media.mscontrol.resource.AllocationEvent;
+import javax.media.mscontrol.resource.AllocationEventListener;
+import javax.media.mscontrol.resource.AllocationEventNotifier;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
@@ -39,8 +43,7 @@ import com.bea.wcp.sip.WlssSipApplicationSession;
 
 import org.vorpal.blade.framework.Callback;
 import org.vorpal.blade.framework.v3.Callflow;
-import org.vorpal.blade.media.spi.DtmfSink;
-import org.vorpal.blade.media.spi.MediaSessionRecovery;
+import org.vorpal.blade.framework.v3.media.manifest.Utterance;
 
 /// A [Callflow] with **JSR-309 media-server verbs written in the lambda-continuation
 /// style of [Callflow#sendRequest]** — so a media conversation reads top-to-bottom
@@ -112,7 +115,16 @@ import org.vorpal.blade.media.spi.MediaSessionRecovery;
 /// events under the lock; this defensive `doAction` makes the API correct for
 /// arbitrary drivers too. **Failover re-attach** is [#reattach]: the continuations
 /// survive in the replicated SAS, and the driver rebuilds the live media session from
-/// its own recovery record through [MediaSessionRecovery].
+/// the recovery record it publishes ([#RECOVERY_ATTRIBUTE]).
+///
+/// ## Nothing but JSR-309 crosses to the driver
+///
+/// A driver may be deployed apart from the application, in the domain `lib/`, where it
+/// shares no classes with BLADE. So everything this class needs from a driver travels
+/// through standard `javax.media.mscontrol` calls and string names: the owning session
+/// as a [MediaSession] attribute, failover through [MsControlFactory#getMediaObject],
+/// media-server loss as an [AllocationEvent], a recorder pause as [Recorder#PAUSE].
+/// Never a BLADE type a driver would have to implement.
 public abstract class MediaCallflow extends Callflow {
 	private static final long serialVersionUID = 1L;
 
@@ -121,23 +133,19 @@ public abstract class MediaCallflow extends Callflow {
 	/// session from any media event.
 	public static final String SIP_APP_SESSION_ID = "org.vorpal.blade.v3.media.sasId";
 
-	/// [MediaSession] attribute (String): the name of the application (the deployment /
-	/// context-root name) that owns the session. Stamped by [#bindMediaSession] from
-	/// [#setApplicationName]; a driver copies it onto the media server's objects so a party that
-	/// finds them later — the media server itself, when a control socket dies — knows which
-	/// application to call back ([MediaRefresh]).
+	/// [MediaSession] attribute (String): the name of the application that owns the session, as
+	/// [SipApplicationSession#getApplicationName] reports it. Stamped by [#bindMediaSession]; a
+	/// driver copies it onto the media server's objects so a party that finds them later, the
+	/// media server itself when a control socket dies, knows which application to call back
+	/// ([MediaRefresh]).
 	public static final String SIP_APP_NAME = "org.vorpal.blade.v3.media.app";
 
-	/// The owning application's name, set once at servlet init (the base servlet does it).
-	private static volatile String applicationName;
-
-	public static void setApplicationName(String name) {
-		applicationName = name;
-	}
-
-	public static String getApplicationName() {
-		return applicationName;
-	}
+	/// [MediaSession] attribute (String) a driver that supports failover recovery publishes: a URI
+	/// that [MsControlFactory#getMediaObject] turns back into this live session on another node.
+	/// What the URI holds is the driver's business. BLADE copies it onto the replicated
+	/// [SipApplicationSession] whenever media coordinates may have changed, and hands it back in
+	/// [#reattach]. A driver that publishes nothing gets no recovery, and [#reattach] returns null.
+	public static final String RECOVERY_ATTRIBUTE = "org.vorpal.blade.v3.media.recovery";
 
 	/// [MediaObject] parameter (String value): the id of the [SipApplicationSession] that owns one
 	/// resource container — a [NetworkConnection] or [MediaGroup] — when several calls share a
@@ -159,6 +167,15 @@ public abstract class MediaCallflow extends Callflow {
 	/// this app session. Full key is `MEDIA_MS_ + <mediaSessionUri>`; [#reattach] scans these to find
 	/// the call's media session(s) on the node that takes over after failover.
 	private static final String MEDIA_MS_ = "org.vorpal.blade.v3.media.ms.";
+
+	/// Prefix for the [SipApplicationSession] copy of a driver's recovery record. Full key is
+	/// `MEDIA_REC_ + <mediaSessionUri>`; see [#RECOVERY_ATTRIBUTE].
+	private static final String MEDIA_REC_ = "org.vorpal.blade.v3.media.rec.";
+
+	/// Suffixes on a collect's continuation key: how many digits the [#prompt] wants, and the
+	/// out-of-band digits heard so far. See [#deliverDtmf].
+	private static final String DIGITS_WANTED = ".wanted";
+	private static final String DIGITS_HEARD = ".heard";
 
 	// Verb tags — disambiguate concurrent pending operations on one MediaSession.
 	private static final String PLAY = "PLAY";
@@ -205,6 +222,7 @@ public abstract class MediaCallflow extends Callflow {
 	/// media session on the node that takes over after failover.
 	protected static void bindMediaSession(MediaSession ms, SipApplicationSession app) {
 		ms.setAttribute(SIP_APP_SESSION_ID, app.getId());
+		String applicationName = app.getApplicationName();
 		if (applicationName != null) {
 			ms.setAttribute(SIP_APP_NAME, applicationName);
 		}
@@ -243,14 +261,18 @@ public abstract class MediaCallflow extends Callflow {
 	/// Collect up to `numDigits` DTMF signals on `mediaGroup`, then run `onDigits`.
 	/// The collected digits are on the event: [SignalDetectorEvent#getSignalString].
 	///
-	/// The digits may reach the detector from the media plane (RFC 4733 / in-band tones the driver
-	/// decodes) or from the signaling plane — a SIP INFO `application/dtmf-relay` body the app routes in
-	/// via [#deliverDtmf] / [#deliverInfoDtmf]. Either source completes the same continuation; the app
-	/// writes one `prompt` regardless of how the caller's phone carries DTMF.
+	/// The digits may reach the detector from the media plane (RFC 4733 or in-band tones the driver
+	/// decodes), or arrive in the signaling plane as a SIP INFO `application/dtmf-relay` body the app
+	/// routes in through [#deliverDtmf] / [#deliverInfoDtmf]. Either source completes the same
+	/// continuation, so the app writes one `prompt` however the caller's phone carries DTMF.
 	protected void prompt(MediaGroup mediaGroup, int numDigits, Callback<SignalDetectorEvent> onDigits)
 			throws MsControlException {
 		SignalDetector detector = mediaGroup.getSignalDetector();
-		arm(detector, COLLECT, onDigits);
+		Armed armed = arm(detector, COLLECT, onDigits);
+		// INFO digits never reach the media server, so they are counted here, beside the
+		// continuation they complete. Replicated with it, a half-entered PIN survives a failover.
+		armed.app.setAttribute(armed.key + DIGITS_WANTED, numDigits);
+		armed.app.removeAttribute(armed.key + DIGITS_HEARD);
 		detector.receiveSignals(numDigits, null, null, Parameters.NO_PARAMETER);
 	}
 
@@ -375,15 +397,19 @@ public abstract class MediaCallflow extends Callflow {
 	/// Stop writing to the recording on `mediaGroup`, keeping it open.
 	///
 	/// For hold and for a PCI pause. The paused span never reaches the muxer, so
-	/// it is not in the file to be found later. A [Transcriber] running on the
-	/// group pauses with it, for the same reason: a card number kept out of the
-	/// audio must not be written down as text.
+	/// it is not in the file to be found later. A transcription running on the
+	/// group ([#transcribe]) pauses with it, for the same reason: a card number
+	/// kept out of the audio must not be written down as text.
 	///
-	/// @return true if the recorder paused. **False means the passage was
-	///         recorded**, because the installed driver's recorder cannot pause,
-	///         and a caller that asked for a pause on privacy grounds needs to
-	///         know it did not happen.
-	/// @see PausableRecorder
+	/// The pause is JSR-309's own [Recorder#PAUSE] action, and it counts only when the
+	/// recorder confirms it with [RecorderEvent#PAUSED] before the action returns. A
+	/// driver that ignores the action, or confirms later, is reported as not having
+	/// paused. That errs toward telling the operator, which is the safe side for a pause
+	/// taken on privacy grounds.
+	///
+	/// @return true if the recorder confirmed the pause. **False means the passage
+	///         was recorded**, and a caller that asked for a pause on privacy grounds
+	///         needs to know it did not happen.
 	public static boolean pauseRecording(MediaGroup mediaGroup) {
 		return setPaused(mediaGroup, true);
 	}
@@ -400,115 +426,253 @@ public abstract class MediaCallflow extends Callflow {
 		boolean recorderPaused;
 		try {
 			Recorder recorder = mediaGroup.getRecorder();
-			if (!(recorder instanceof PausableRecorder)) {
+			Confirmation confirmed = new Confirmation(pause ? RecorderEvent.PAUSED : RecorderEvent.RESUMED);
+			recorder.addListener(confirmed);
+			try {
+				mediaGroup.triggerAction(pause ? Recorder.PAUSE : Recorder.RESUME);
+			} finally {
+				recorder.removeListener(confirmed);
+			}
+			recorderPaused = confirmed.seen;
+			if (!recorderPaused) {
 				// Loud, and not an exception. The call is not worth dropping, and
 				// the operator has to learn that a pause they configured is not
 				// being honoured by the driver they installed.
-				sipLogger.warning("this JSR-309 driver's recorder cannot pause, so the passage that was to be "
-						+ "left out has been recorded");
-				recorderPaused = false;
-			} else {
-				if (pause) {
-					((PausableRecorder) recorder).pauseRecording();
-				} else {
-					((PausableRecorder) recorder).resumeRecording();
-				}
-				recorderPaused = true;
+				sipLogger.warning(pause
+						? "this JSR-309 driver's recorder did not confirm the pause, so the passage that was to be "
+								+ "left out has been recorded"
+						: "this JSR-309 driver's recorder did not confirm resuming, so what follows may be missing "
+								+ "from the recording");
 			}
 		} catch (Exception e) {
 			sipLogger.warning("the recorder would not " + (pause ? "pause" : "resume") + ": " + e);
 			recorderPaused = false;
 		}
-		// The transcriber follows, independently: a recorder that would not
+		// The transcription follows, independently: a recorder that would not
 		// pause is no reason to keep writing the words down.
-		Transcriber transcriber = transcriberOf(mediaGroup);
-		if (transcriber != null) {
+		Transcription transcription = TRANSCRIPTIONS.get(mediaGroup.getURI().toString());
+		if (transcription != null) {
 			try {
-				if (pause) {
-					transcriber.pause();
-				} else {
-					transcriber.resume();
-				}
+				transcription.setPaused(pause);
 			} catch (Exception e) {
-				sipLogger.warning("the transcriber would not " + (pause ? "pause" : "resume") + ": " + e);
+				sipLogger.warning("the transcription would not " + (pause ? "pause" : "resume") + ": " + e);
 			}
 		}
 		return recorderPaused;
 	}
 
-	/// Transcribe every party on the source `mediaGroup` is joined to, delivering
-	/// each utterance to `listener` as it is heard.
+	/// The pattern that arms a [SignalDetector] to transcribe rather than collect DTMF.
 	///
-	/// Started beside [#record] so the utterances' offsets land on the
-	/// recording's own clock; see [Transcriber]. The listener is node-local and
-	/// runs on a driver thread. It is not a continuation and is not stored on the
-	/// application session: a transcript's durable state is what the listener
-	/// wrote to the [org.vorpal.blade.framework.v3.media.manifest.TranscriptArchive],
-	/// and after a failover the new node starts a transcriber of its own.
+	/// JSR-309 carries speech recognition on the detector: a `receiveSignals` whose pattern names a
+	/// grammar, answered with [SpeechRecognitionEvent]s. BLADE uses that door for transcription, so a
+	/// driver needs nothing but the standard interfaces:
 	///
-	/// @return true if transcription started. **False means nothing is being
-	///         transcribed**, because the installed driver has no transcriber,
-	///         and it is logged at warning so an operator who configured
+	/// - [#transcribe] arms the detector with this value as `SignalDetector.PATTERN[0]`, a signal
+	///   count of -1 (no end), and [SignalDetectorEvent#SIGNAL_DETECTED] enabled.
+	/// - The phrases from [#expectInTranscript], one per line, ride as `PATTERN[1]`. They arrive on
+	///   every arming, and a driver that can bias its recognizer toward them does.
+	/// - Each utterance comes back as a `SIGNAL_DETECTED` [SpeechRecognitionEvent] whose
+	///   [SpeechRecognitionEvent#getUserInput] is the utterance as JSON, in the shape of [Utterance],
+	///   with `party` naming by URI the leg whose audio it was.
+	/// - A pause is [SignalDetector#STOP], and a resume is the same arming again; the driver keeps
+	///   the transcription's clock across it. The end is [SignalDetector#CANCEL].
+	///
+	/// A driver that cannot transcribe refuses the pattern, and [#transcribe] returns false.
+	public static final String TRANSCRIPTION_PATTERN = "builtin:transcription";
+
+	/// Transcribe every party on the source `mediaGroup` is joined to, delivering each utterance to
+	/// `listener` as it is heard.
+	///
+	/// Each party is heard separately, so every utterance arrives knowing whose it was, even when the
+	/// recording is one mixed track. Utterance bounds are offsets from the moment this was called, so a
+	/// transcription started beside [#record] puts its words on the recording's own clock.
+	/// [#pauseRecording] pauses the transcription too: what is said during a pause is never heard, and
+	/// the clock keeps running, so offsets after the pause stay true.
+	///
+	/// The listener is node-local and runs on a driver thread. It is not a continuation and is not
+	/// stored on the application session: a transcript's durable state is what the listener wrote to
+	/// the [org.vorpal.blade.framework.v3.media.manifest.TranscriptArchive], and after a failover the
+	/// new node starts a transcription of its own. The group's detector is busy while a transcription
+	/// runs on it, so collect DTMF on another group. The wire contract is [#TRANSCRIPTION_PATTERN].
+	///
+	/// @return true if transcription started. **False means nothing is being transcribed**, because
+	///         the installed driver refused, and it is logged at warning so an operator who configured
 	///         transcription learns the driver they installed cannot do it.
 	public static boolean transcribe(MediaGroup mediaGroup, MediaEventListener<TranscriberEvent> listener) {
 		if (mediaGroup == null || listener == null) {
 			return false;
 		}
-		Transcriber transcriber = transcriberOf(mediaGroup);
-		if (transcriber == null) {
-			sipLogger.warning("this JSR-309 driver cannot transcribe, so the conversation is recorded without a "
-					+ "transcript");
-			return false;
-		}
+		stopTranscribing(mediaGroup);
+		String key = mediaGroup.getURI().toString();
+		Transcription transcription = null;
 		try {
-			transcriber.addListener(listener);
-			transcriber.start();
+			transcription = new Transcription(mediaGroup, listener);
+			transcription.detector.addListener(transcription);
+			TRANSCRIPTIONS.put(key, transcription);
+			transcription.arm();
 			return true;
 		} catch (Exception e) {
-			sipLogger.warning("the transcriber would not start: " + e);
+			if (transcription != null) {
+				TRANSCRIPTIONS.remove(key, transcription);
+				transcription.detector.removeListener(transcription);
+			}
+			sipLogger.warning("this JSR-309 driver would not transcribe, so the conversation is recorded without a "
+					+ "transcript: " + e);
 			return false;
 		}
 	}
 
-	/// Tell the transcriber on `mediaGroup` which names and identifiers this
-	/// call is likely to contain, so its recognizer can lean toward them. See
-	/// [Transcriber#expect]. Safe when nothing is transcribing; returns false
-	/// when the driver has no transcriber.
+	/// Tell the transcription on `mediaGroup` which names and identifiers this call is likely to
+	/// contain, so the recognizer can lean toward them. Replaces any earlier set; empty clears.
+	/// Text-level correction against the same phrases is the framework's job, see
+	/// [org.vorpal.blade.framework.v3.media.manifest.ContextBias], and works whatever the driver did.
+	/// Returns false when nothing is transcribing on the group.
 	public static boolean expectInTranscript(MediaGroup mediaGroup, Collection<String> phrases) {
-		Transcriber transcriber = transcriberOf(mediaGroup);
-		if (transcriber == null) {
+		Transcription transcription = (mediaGroup == null) ? null
+				: TRANSCRIPTIONS.get(mediaGroup.getURI().toString());
+		if (transcription == null) {
 			return false;
 		}
 		try {
-			transcriber.expect(phrases == null ? java.util.Collections.<String>emptyList() : phrases);
+			transcription.expect(phrases);
 			return true;
 		} catch (Exception e) {
-			sipLogger.warning("the transcriber would not take the expected phrases: " + e);
+			sipLogger.warning("the transcription would not take the expected phrases: " + e);
 			return false;
 		}
 	}
 
-	/// Stop transcribing on `mediaGroup`. Safe when nothing was transcribing.
+	/// Stop transcribing on `mediaGroup` and take the listener off. Safe when nothing was transcribing.
 	public static void stopTranscribing(MediaGroup mediaGroup) {
-		Transcriber transcriber = transcriberOf(mediaGroup);
-		if (transcriber != null) {
-			try {
-				transcriber.stop();
-			} catch (Exception e) {
-				sipLogger.warning("the transcriber would not stop: " + e);
+		Transcription transcription = (mediaGroup == null) ? null
+				: TRANSCRIPTIONS.remove(mediaGroup.getURI().toString());
+		if (transcription == null) {
+			return;
+		}
+		transcription.detector.removeListener(transcription);
+		try {
+			mediaGroup.triggerAction(SignalDetector.CANCEL);
+		} catch (Exception e) {
+			sipLogger.warning("the transcription would not stop: " + e);
+		}
+	}
+
+	/// Transcriptions running on this node, by media group URI. Node-local, like the listeners they
+	/// carry; an entry leaves when the application stops transcribing.
+	private static final java.util.concurrent.ConcurrentHashMap<String, Transcription> TRANSCRIPTIONS =
+			new java.util.concurrent.ConcurrentHashMap<>();
+
+	/// One transcription: a group's detector armed with [#TRANSCRIPTION_PATTERN], and the listener that
+	/// turns each [SpeechRecognitionEvent] into the application's [TranscriberEvent].
+	private static final class Transcription implements MediaEventListener<SignalDetectorEvent> {
+		private static final com.fasterxml.jackson.databind.ObjectMapper JSON =
+				new com.fasterxml.jackson.databind.ObjectMapper().configure(
+						com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+		final MediaGroup group;
+		final SignalDetector detector;
+		private final MediaEventListener<TranscriberEvent> listener;
+		private volatile java.util.List<String> phrases = java.util.Collections.emptyList();
+		private volatile boolean paused;
+
+		Transcription(MediaGroup group, MediaEventListener<TranscriberEvent> listener) throws MsControlException {
+			this.group = group;
+			this.detector = group.getSignalDetector();
+			this.listener = listener;
+		}
+
+		void arm() throws MsControlException {
+			Parameters p = group.createParameters();
+			p.put(SignalDetector.PATTERN[0], TRANSCRIPTION_PATTERN);
+			if (!phrases.isEmpty()) {
+				p.put(SignalDetector.PATTERN[1], String.join("\n", phrases));
+			}
+			p.put(SignalDetector.ENABLED_EVENTS,
+					new javax.media.mscontrol.EventType[] { SignalDetectorEvent.SIGNAL_DETECTED });
+			detector.receiveSignals(-1, new javax.media.mscontrol.Parameter[] { SignalDetector.PATTERN[0] }, null, p);
+		}
+
+		void expect(Collection<String> expected) throws MsControlException {
+			java.util.List<String> next = new java.util.ArrayList<>();
+			if (expected != null) {
+				for (String phrase : expected) {
+					if (phrase != null && !phrase.trim().isEmpty()) {
+						next.add(phrase.trim());
+					}
+				}
+			}
+			phrases = next;
+			if (!paused) {
+				arm();
 			}
 		}
+
+		void setPaused(boolean pause) throws MsControlException {
+			if (pause == paused) {
+				return;
+			}
+			paused = pause;
+			if (pause) {
+				group.triggerAction(SignalDetector.STOP);
+			} else {
+				arm();
+			}
+		}
+
+		@Override
+		public void onEvent(SignalDetectorEvent event) {
+			if (!(event instanceof SpeechRecognitionEvent)
+					|| !SignalDetectorEvent.SIGNAL_DETECTED.equals(event.getEventType())) {
+				return;
+			}
+			Utterance utterance;
+			try {
+				utterance = JSON.readValue(((SpeechRecognitionEvent) event).getUserInput(), Utterance.class);
+			} catch (Exception e) {
+				sipLogger.warning("an utterance from the JSR-309 driver could not be read and was dropped: " + e);
+				return;
+			}
+			listener.onEvent(new Heard(event.getSource(), utterance));
+		}
 	}
 
-	/// The group's transcriber, through the specification's door for a resource
-	/// it did not define, or null when the driver has none.
-	private static Transcriber transcriberOf(MediaGroup mediaGroup) {
-		if (mediaGroup == null) {
-			return null;
+	/// An utterance as the application's listener receives it.
+	private static final class Heard implements TranscriberEvent {
+		private final SignalDetector source;
+		private final Utterance utterance;
+
+		Heard(SignalDetector source, Utterance utterance) {
+			this.source = source;
+			this.utterance = utterance;
 		}
-		try {
-			return mediaGroup.getResource(Transcriber.class);
-		} catch (Exception e) {
+
+		@Override
+		public Utterance getUtterance() {
+			return utterance;
+		}
+
+		@Override
+		public SignalDetector getSource() {
+			return source;
+		}
+
+		@Override
+		public javax.media.mscontrol.EventType getEventType() {
+			return TranscriberEvent.Type.UTTERANCE;
+		}
+
+		@Override
+		public boolean isSuccessful() {
+			return true;
+		}
+
+		@Override
+		public javax.media.mscontrol.MediaErr getError() {
+			return MediaEvent.NO_ERROR;
+		}
+
+		@Override
+		public String getErrorText() {
 			return null;
 		}
 	}
@@ -740,18 +904,126 @@ public abstract class MediaCallflow extends Callflow {
 	// =========================================================== out-of-band DTMF
 
 	/// Deliver out-of-band DTMF (digits that arrived in the signaling plane, typically a SIP INFO) to
-	/// `app`'s armed [SignalDetector], completing a pending [#prompt]. Vendor-neutral: it resolves the
-	/// call's media session and hands the digits to the driver's [DtmfSink]. Returns true if a detector
-	/// was collecting and consumed them; false (no-op) if the driver has no `DtmfSink`, the app has no
-	/// bound media session, or nothing is collecting. `digits` is the raw DTMF string, e.g. `"5"` or
-	/// `"1234"`.
+	/// `app`'s pending [#prompt].
+	///
+	/// The digits never reach the media server, so BLADE completes the collect itself and no driver is
+	/// involved. They are counted against the prompt's digit count; a `#` ends the collect early and is
+	/// not part of the result. When the collect completes, its continuation runs with the digits on
+	/// [SignalDetectorEvent#getSignalString], exactly as if the detector had heard them.
+	///
+	/// Returns true if a prompt was collecting and took the digits, false if none was. `digits` is the
+	/// raw DTMF string, e.g. `"5"` or `"1234"`. Call it holding `app`'s lock, as a SIP callflow does.
 	public static boolean deliverDtmf(SipApplicationSession app, String digits) {
-		MsControlFactory factory = msControlFactory;
-		if (app == null || digits == null || digits.isEmpty() || !(factory instanceof DtmfSink)) {
+		if (app == null || digits == null || digits.isEmpty()) {
 			return false;
 		}
-		String msUri = findBoundMediaSessionUri(app);
-		return msUri != null && ((DtmfSink) factory).deliverDtmf(msUri, digits);
+		String key = pendingCollect(app);
+		if (key == null) {
+			return false;
+		}
+		Object wanted = app.getAttribute(key + DIGITS_WANTED);
+		int target = (wanted instanceof Integer) ? (Integer) wanted : 0;
+		Object heard = app.getAttribute(key + DIGITS_HEARD);
+		StringBuilder collected = new StringBuilder(heard == null ? "" : heard.toString());
+		for (int i = 0; i < digits.length(); i++) {
+			char c = digits.charAt(i);
+			if (c == '#') {
+				completeCollect(app, key, collected.toString());
+				return true;
+			}
+			collected.append(c);
+			if (target > 0 && collected.length() >= target) {
+				completeCollect(app, key, collected.toString());
+				return true;
+			}
+		}
+		app.setAttribute(key + DIGITS_HEARD, collected.toString());
+		return true;
+	}
+
+	/// The continuation key of the collect `app` is waiting on, or null when none is.
+	private static String pendingCollect(SipApplicationSession app) {
+		String suffix = ":" + COLLECT;
+		java.util.Iterator<String> names = app.getAttributeNames();
+		while (names.hasNext()) {
+			String name = names.next();
+			if (name.startsWith(MEDIA_CB_) && name.endsWith(suffix)) {
+				return name;
+			}
+		}
+		return null;
+	}
+
+	/// Run a collect's continuation with `digits`, and clear what it was counting.
+	private static void completeCollect(SipApplicationSession app, String key, String digits) {
+		@SuppressWarnings("unchecked")
+		Callback<SignalDetectorEvent> callback = (Callback<SignalDetectorEvent>) app.getAttribute(key);
+		app.removeAttribute(key);
+		app.removeAttribute(key + DIGITS_WANTED);
+		app.removeAttribute(key + DIGITS_HEARD);
+		if (callback != null) {
+			callback.accept(new CollectedDigits(digits));
+		}
+	}
+
+	/// The completion BLADE hands a collect that out-of-band digits finished. It has no source: the
+	/// detector is a live object on whichever node armed it, and the digits came from SIP.
+	private static final class CollectedDigits implements SignalDetectorEvent {
+		private final String digits;
+
+		CollectedDigits(String digits) {
+			this.digits = digits;
+		}
+
+		@Override
+		public String getSignalString() {
+			return digits;
+		}
+
+		@Override
+		public javax.media.mscontrol.Value[] getSignalBuffer() {
+			return new javax.media.mscontrol.Value[0];
+		}
+
+		@Override
+		public int getPatternIndex() {
+			return -1;
+		}
+
+		@Override
+		public javax.media.mscontrol.Qualifier getQualifier() {
+			return SignalDetectorEvent.NUM_SIGNALS_DETECTED;
+		}
+
+		@Override
+		public javax.media.mscontrol.resource.Trigger getRTCTrigger() {
+			return null;
+		}
+
+		@Override
+		public SignalDetector getSource() {
+			return null;
+		}
+
+		@Override
+		public javax.media.mscontrol.EventType getEventType() {
+			return SignalDetectorEvent.RECEIVE_SIGNALS_COMPLETED;
+		}
+
+		@Override
+		public boolean isSuccessful() {
+			return true;
+		}
+
+		@Override
+		public javax.media.mscontrol.MediaErr getError() {
+			return MediaEvent.NO_ERROR;
+		}
+
+		@Override
+		public String getErrorText() {
+			return null;
+		}
 	}
 
 	/// Extract the DTMF from a SIP INFO request and [#deliverDtmf] it to the call's SignalDetector. A
@@ -865,7 +1137,7 @@ public abstract class MediaCallflow extends Callflow {
 	/// and attach the framework dispatcher. Stores the callback on the replicated
 	/// [SipApplicationSession] (so it survives failover) keyed by MediaSession URI +
 	/// verb. Requires the MediaSession to have been bound ([#bindMediaSession]).
-	private <E extends MediaEvent<?>> void arm(MediaEventNotifier<E> notifier, String verb, Callback<E> callback)
+	private <E extends MediaEvent<?>> Armed arm(MediaEventNotifier<E> notifier, String verb, Callback<E> callback)
 			throws MsControlException {
 		MediaSession ms = notifier.getMediaSession();
 		// The continuation is keyed by, and the app resolved from, the resource's container when the
@@ -887,8 +1159,45 @@ public abstract class MediaCallflow extends Callflow {
 		}
 		app.setAttribute(cbKey(keyUri, verb), callback);
 		notifier.addListener(new MediaDispatcher<E>(appId, keyUri, verb));
+		// Hear media-server loss on every container a verb touches. The listener is equal per media
+		// session, so a driver that keeps listeners as a set holds one per container and reports a
+		// loss once per session.
+		if (container instanceof AllocationEventNotifier) {
+			String owner = (String) ms.getAttribute(SIP_APP_SESSION_ID);
+			((AllocationEventNotifier) container)
+					.addListener(new MediaLossListener(owner != null ? owner : appId, ms.getURI().toString()));
+		}
 		// Keep the failover recovery record current with whatever media coordinates now exist.
 		captureRecovery(app, ms);
+		return new Armed(app, cbKey(keyUri, verb));
+	}
+
+	/// Where [#arm] stored a continuation: the app session and the attribute key.
+	private static final class Armed {
+		final SipApplicationSession app;
+		final String key;
+
+		Armed(SipApplicationSession app, String key) {
+			this.app = app;
+			this.key = key;
+		}
+	}
+
+	/// Sees whether a resource reported `expected` while an action ran. See [#pauseRecording].
+	private static final class Confirmation implements MediaEventListener<RecorderEvent> {
+		private final javax.media.mscontrol.EventType expected;
+		volatile boolean seen;
+
+		Confirmation(javax.media.mscontrol.EventType expected) {
+			this.expected = expected;
+		}
+
+		@Override
+		public void onEvent(RecorderEvent event) {
+			if (event != null && expected.equals(event.getEventType())) {
+				seen = true;
+			}
+		}
 	}
 
 	/// The resource container ([NetworkConnection] / [MediaGroup]) a notifier belongs to, or null
@@ -917,12 +1226,15 @@ public abstract class MediaCallflow extends Callflow {
 		return appId == null ? null : getSipUtil().getApplicationSessionById(appId);
 	}
 
-	/// If the installed factory supports failover recovery ([MediaSessionRecovery]), let it persist
-	/// `ms`'s current recovery state into the replicated `app`. No-op for factories that don't.
+	/// Copy the recovery record the driver publishes on `ms` ([#RECOVERY_ATTRIBUTE]) onto the replicated
+	/// `app`, so a node that takes over can [#reattach]. No-op when the driver publishes none.
 	private static void captureRecovery(SipApplicationSession app, MediaSession ms) {
-		MsControlFactory factory = msControlFactory;
-		if (app != null && factory instanceof MediaSessionRecovery) {
-			((MediaSessionRecovery) factory).captureInto(app, ms);
+		if (app == null || ms == null) {
+			return;
+		}
+		Object record = ms.getAttribute(RECOVERY_ATTRIBUTE);
+		if (record != null) {
+			app.setAttribute(MEDIA_REC_ + ms.getURI(), record.toString());
 		}
 	}
 
@@ -935,10 +1247,11 @@ public abstract class MediaCallflow extends Callflow {
 	/// e.g. so a teardown can [MediaSession#release] the still-running media instead of leaking it.
 	///
 	/// The app speaks only 309, so it calls this (typically from its BYE/failover path) without any
-	/// knowledge of the underlying media server; the driver ([MediaSessionRecovery]) does the reclaim.
+	/// knowledge of the underlying media server. The driver does the reclaim, from the record it
+	/// published ([#RECOVERY_ATTRIBUTE]), through the standard [MsControlFactory#getMediaObject].
 	public static MediaSession reattach(SipApplicationSession app) throws MsControlException {
 		MsControlFactory factory = msControlFactory;
-		if (app == null || !(factory instanceof MediaSessionRecovery)) {
+		if (app == null || factory == null) {
 			return null;
 		}
 		MediaSession cached = LIVE.get(app.getId());
@@ -949,11 +1262,22 @@ public abstract class MediaCallflow extends Callflow {
 		if (msUri == null) {
 			return null;
 		}
-		MediaSession ms = ((MediaSessionRecovery) factory).rebuild(app, msUri);
-		if (ms != null) {
-			bindMediaSession(ms, app); // re-stamp the binding on the rebuilt (fresh) live object
-			LIVE.put(app.getId(), ms);
+		Object record = app.getAttribute(MEDIA_REC_ + msUri);
+		if (record == null) {
+			return null; // the driver published nothing to recover from
 		}
+		javax.media.mscontrol.MediaObject found;
+		try {
+			found = factory.getMediaObject(URI.create(record.toString()));
+		} catch (IllegalArgumentException e) {
+			throw new MsControlException("the recovery record for " + msUri + " is not a URI", e);
+		}
+		if (!(found instanceof MediaSession)) {
+			return null;
+		}
+		MediaSession ms = (MediaSession) found;
+		bindMediaSession(ms, app); // re-stamp the binding on the rebuilt (fresh) live object
+		LIVE.put(app.getId(), ms);
 		return ms;
 	}
 
@@ -1020,11 +1344,50 @@ public abstract class MediaCallflow extends Callflow {
 		mediaLostListener = listener;
 	}
 
-	/// Driver entry point: report a lost media session to the application, if it registered.
-	public static void mediaSessionLost(String appId, String msUri) {
+	/// Report a lost media session to the application, if it registered.
+	private static void mediaSessionLost(String appId, String msUri) {
 		MediaLostListener listener = mediaLostListener;
 		if (listener != null && appId != null) {
 			listener.mediaSessionLost(appId, msUri);
+		}
+	}
+
+	/// Turns JSR-309's [AllocationEvent#IRRECOVERABLE_FAILURE] on a media session's containers into a
+	/// [MediaLostListener] call. [#arm] puts one on every container a verb touches, and they compare
+	/// equal per owner and media session, so a driver that keeps its listeners as a set reports a loss
+	/// once per session. A driver that reports it once per container repeats it; the application's
+	/// listener already has to tolerate a second report, because a loss can reach it from more than
+	/// one leg.
+	static final class MediaLossListener implements AllocationEventListener, Serializable {
+		private static final long serialVersionUID = 1L;
+
+		private final String appId;
+		private final String msUri;
+
+		MediaLossListener(String appId, String msUri) {
+			this.appId = appId;
+			this.msUri = msUri;
+		}
+
+		@Override
+		public void onEvent(AllocationEvent event) {
+			if (event != null && AllocationEvent.IRRECOVERABLE_FAILURE.equals(event.getEventType())) {
+				mediaSessionLost(appId, msUri);
+			}
+		}
+
+		@Override
+		public boolean equals(Object other) {
+			if (!(other instanceof MediaLossListener)) {
+				return false;
+			}
+			MediaLossListener that = (MediaLossListener) other;
+			return java.util.Objects.equals(appId, that.appId) && java.util.Objects.equals(msUri, that.msUri);
+		}
+
+		@Override
+		public int hashCode() {
+			return java.util.Objects.hash(appId, msUri);
 		}
 	}
 
@@ -1068,6 +1431,9 @@ public abstract class MediaCallflow extends Callflow {
 
 		@Override
 		public void onEvent(final E event) {
+			if (isProgress(event)) {
+				return; // a report on the way to finishing, not the completion the continuation waits for
+			}
 			final SipApplicationSession app = getSipUtil().getApplicationSessionById(appId);
 			if (app == null) {
 				return; // call is gone; nothing to continue
@@ -1083,6 +1449,8 @@ public abstract class MediaCallflow extends Callflow {
 						Callback<E> callback = (Callback<E>) app.getAttribute(key);
 						if (callback != null) {
 							app.removeAttribute(key); // one-shot, like a response callback
+							app.removeAttribute(key + DIGITS_WANTED);
+							app.removeAttribute(key + DIGITS_HEARD);
 							callback.accept(event);   // Callback.accept wraps checked exceptions
 						}
 						return null;
@@ -1097,5 +1465,15 @@ public abstract class MediaCallflow extends Callflow {
 
 	private static String cbKey(String mediaSessionUri, String verb) {
 		return MEDIA_CB_ + mediaSessionUri + ":" + verb;
+	}
+
+	/// Whether `event` is a report a resource makes on the way to finishing: a recorder that started,
+	/// paused or resumed, a detector that heard one signal. A continuation waits for the completion,
+	/// so these pass it by. Without this a pause would run a recording's continuation, and one
+	/// transcribed utterance would complete a pending DTMF collect.
+	static boolean isProgress(MediaEvent<?> event) {
+		javax.media.mscontrol.EventType type = (event == null) ? null : event.getEventType();
+		return RecorderEvent.STARTED.equals(type) || RecorderEvent.PAUSED.equals(type)
+				|| RecorderEvent.RESUMED.equals(type) || SignalDetectorEvent.SIGNAL_DETECTED.equals(type);
 	}
 }

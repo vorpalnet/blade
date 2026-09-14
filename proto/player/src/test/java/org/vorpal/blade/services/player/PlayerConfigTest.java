@@ -22,7 +22,7 @@ public class PlayerConfigTest {
 	public void sampleNamesADriverAndMedia() {
 		PlayerSettings s = new PlayerSettingsSample();
 		assertEquals("the sole registered driver", "", s.getDriverName());
-		assertEquals("ws://localhost:8888/", s.getDriverProperties().get("media.server.url"));
+		assertEquals("ws://localhost:8888/", s.getDriverProperties().get("kurento.ws.url"));
 		assertNotNull("sample plays something", s.getMediaUri());
 		assertFalse(s.isLoop());
 		assertFalse(s.isRecord());

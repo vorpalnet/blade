@@ -58,9 +58,9 @@ import org.vorpal.blade.framework.v2.sdp.Sdp;
 /// A re-INVITE that puts the call on hold pauses the recorder rather than ending
 /// the recording, so the held passage never reaches the muxer and the
 /// conversation stays one recording with a gap in it. The same primitive serves
-/// a PCI pause. See [org.vorpal.blade.framework.v3.media.PausableRecorder], and
-/// note that a driver which cannot pause records the passage anyway, which this
-/// logs rather than hides.
+/// a PCI pause. See [MediaCallflow#pauseRecording], and note that a driver which
+/// does not confirm the pause records the passage anyway, which this logs rather
+/// than hides.
 ///
 /// ## Failing toward the call
 ///

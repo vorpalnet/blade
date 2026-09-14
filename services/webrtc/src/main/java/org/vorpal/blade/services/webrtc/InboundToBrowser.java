@@ -14,7 +14,7 @@ import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v3.events.CloudEvent;
 import org.vorpal.blade.framework.v3.media.MediaCallflow;
-import org.vorpal.blade.media.spi.MediaConfigs;
+import org.vorpal.blade.framework.v3.media.MediaConfigs;
 
 /// A call arrives from the SIP network for a browser.
 ///

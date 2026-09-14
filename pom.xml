@@ -105,11 +105,6 @@
 			<!-- Internal modules -->
 			<dependency>
 				<groupId>org.vorpal.blade</groupId>
-				<artifactId>vorpal-blade-media-spi</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>org.vorpal.blade</groupId>
 				<artifactId>vorpal-blade-library-framework</artifactId>
 				<version>${project.version}</version>
 			</dependency>
@@ -703,11 +698,6 @@ fi
 		     Note: most service/admin/test modules depend on `framework` and
 		     `shared` at compile time. If you skip them here, they must already
 		     be installed in your local Maven repo from a prior build. -->
-		<profile>
-			<id>media-spi</id>
-			<activation><property><name>!skip.media-spi</name></property></activation>
-			<modules><module>libs/media-spi</module></modules>
-		</profile>
 		<profile>
 			<id>framework</id>
 			<activation><property><name>!skip.framework</name></property></activation>

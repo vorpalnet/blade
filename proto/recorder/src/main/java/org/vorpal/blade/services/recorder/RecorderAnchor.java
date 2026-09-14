@@ -113,10 +113,6 @@ public class RecorderAnchor extends MediaCallflow {
 		/// stable whatever order the writes complete in.
 		public final AtomicInteger utterances = new AtomicInteger();
 
-		/// The listener on the driver's transcriber, kept so a boundary can take
-		/// it off again. Left in place it would hear the next conversation too.
-		public volatile MediaEventListener<TranscriberEvent> hearing;
-
 		/// The direction the caller asked for in a re-INVITE still being
 		/// answered, so the response can carry its mirror. Null between
 		/// re-INVITEs.
@@ -571,7 +567,7 @@ public class RecorderAnchor extends MediaCallflow {
 
 		MediaEventListener<TranscriberEvent> hearing = event -> {
 			Utterance utterance = event.getUtterance();
-			utterance.setParty(partyLabel(anchor, event.getParty()));
+			utterance.setParty(partyLabel(anchor, utterance.getParty()));
 			utterance.setSequence(anchor.utterances.incrementAndGet());
 			// The correction keeps what was heard on the utterance; the
 			// recognizer's own biasing, if the driver has any, already ran.
@@ -598,7 +594,6 @@ public class RecorderAnchor extends MediaCallflow {
 			anchor.transcript = null;
 			return;
 		}
-		anchor.hearing = hearing;
 		if (!bias.isEmpty()) {
 			expectInTranscript(anchor.mg, expected);
 		}
@@ -615,42 +610,35 @@ public class RecorderAnchor extends MediaCallflow {
 	}
 
 	/// Which party a leg is, from the anchor's own point of view. The driver
-	/// names a leg by its connection; this application knows which connection
-	/// it offered to whom.
-	private static String partyLabel(Anchor anchor, Joinable party) {
-		if (party == anchor.caller) {
+	/// names a leg by its connection's URI; this application knows which
+	/// connection it offered to whom.
+	private static String partyLabel(Anchor anchor, String party) {
+		if (isLeg(anchor.caller, party)) {
 			return "caller";
 		}
-		if (party == anchor.callee) {
+		if (isLeg(anchor.callee, party)) {
 			return "callee";
 		}
-		if (party instanceof javax.media.mscontrol.MediaObject
-				&& ((javax.media.mscontrol.MediaObject) party).getURI() != null) {
-			return ((javax.media.mscontrol.MediaObject) party).getURI().toString();
-		}
-		return "unknown";
+		return (party != null) ? party : "unknown";
 	}
 
-	/// Take the listener off and stop the driver's transcriber, before the group
-	/// is stopped. The utterance count is folded into the manifest when it
-	/// closes, not here.
+	private static boolean isLeg(Object leg, String party) {
+		return party != null && leg instanceof javax.media.mscontrol.MediaObject
+				&& ((javax.media.mscontrol.MediaObject) leg).getURI() != null
+				&& party.equals(((javax.media.mscontrol.MediaObject) leg).getURI().toString());
+	}
+
+	/// Stop the transcription and take its listener off, before the group is
+	/// stopped. Left running it would hear the next conversation too. The
+	/// utterance count is folded into the manifest when it closes, not here.
 	private static void stopTranscribing(Anchor anchor) {
-		MediaEventListener<TranscriberEvent> hearing = anchor.hearing;
-		anchor.hearing = null;
 		if (anchor.mg == null) {
 			return;
 		}
 		try {
-			if (hearing != null) {
-				org.vorpal.blade.framework.v3.media.Transcriber transcriber = anchor.mg
-						.getResource(org.vorpal.blade.framework.v3.media.Transcriber.class);
-				if (transcriber != null) {
-					transcriber.removeListener(hearing);
-				}
-			}
 			MediaCallflow.stopTranscribing(anchor.mg);
 		} catch (Exception e) {
-			sipLogger.warning("RecorderAnchor: the transcriber would not stop: " + e);
+			sipLogger.warning("RecorderAnchor: the transcription would not stop: " + e);
 		}
 	}
 
