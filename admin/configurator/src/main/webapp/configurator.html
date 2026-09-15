@@ -24,7 +24,7 @@
         }
     </script>
 </head>
-<body class="vorpal-glass">
+<body class="vorpal-glass autopublish-on">
 
     <header class="vorpal-topbar">
         <a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
@@ -89,6 +89,7 @@
             <div class="form-toolbar">
                 <button type="button" class="btn btn-primary" onclick="saveData()">Save</button>
                 <button type="button" class="btn btn-secondary" onclick="loadConfig()">Load</button>
+                <button type="button" class="btn btn-secondary" onclick="loadSample()">Load Sample</button>
                 <button type="button" class="btn btn-publish" onclick="publishConfig()">Publish</button>
                 <button type="button" id="btn-ai" class="btn btn-secondary" style="display:none"
                         title="Describe the configuration in plain language; Claude drafts it for review"
@@ -102,7 +103,6 @@
                     <button type="button" class="btn btn-secondary toolbar-menu-trigger">File <span class="toolbar-chev">▾</span></button>
                     <div class="toolbar-menu-items" role="menu">
                         <button type="button" onclick="showTemplateLibrary()">New from Template…</button>
-                        <button type="button" onclick="loadSample()">Load Sample</button>
                         <hr>
                         <button type="button" onclick="importConfig()">Import…</button>
                         <button type="button" onclick="exportConfig()">Export</button>
@@ -139,9 +139,9 @@
                 <!-- Auto-publish toggle. Global Configurator behavior, not tied to the
                      currently-loaded app, so it sits apart at the right of the toolbar.
                      State is shown by thumb position AND the on/off text label. -->
-                <label class="autopublish-switch" title="ON: files saved here are published to live services automatically (the old watcher behavior). OFF: click Publish to apply changes.">
+                <label class="autopublish-switch" title="ON: saved files go live automatically and the Publish button is hidden. OFF: saves wait for Publish.">
                     <span class="autopublish-caption">Auto-publish</span>
-                    <input type="checkbox" id="autopublish-toggle" onchange="setAutoPublish(this.checked)">
+                    <input type="checkbox" id="autopublish-toggle" checked onchange="setAutoPublish(this.checked)">
                     <span class="autopublish-track"><span class="autopublish-thumb"></span></span>
                     <span id="autopublish-state" class="autopublish-state">on</span>
                 </label>
@@ -157,7 +157,7 @@
                     <ol class="welcome-steps">
                         <li><strong>Target</strong> — the scope to edit: Domain, Cluster, or Server.</li>
                         <li><strong>Schema</strong> — which BLADE application's settings to open.</li>
-                        <li><strong>Edit, Save, Publish</strong> — published changes go live to running services immediately.</li>
+                        <li><strong>Edit, Save</strong>: with Auto-publish on, a save goes live to running services immediately. With it off, click Publish.</li>
                     </ol>
                     <p class="welcome-links">New here? See the <a href="docs/overview.html">Overview</a> or the <a href="docs/index.html">Documentation</a>.</p>
                 </div>

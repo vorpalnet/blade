@@ -3621,9 +3621,9 @@ function publishConfig() {
 
 // --- Auto-publish toggle ---------------------------------------------------
 // Global Configurator behavior: when ON, *.json files saved under
-// ./config/custom/vorpal/ are republished to live services automatically
-// (the same behavior the standalone watcher WAR provides). Writing the flag triggers
-// a server-side reload that starts/stops the watcher thread immediately.
+// ./config/custom/vorpal/ are republished to live services automatically, so the
+// Publish buttons are hidden (body.autopublish-on). Writing the flag triggers a
+// server-side reload that starts/stops the watcher thread immediately.
 
 function setAutoPublish(enabled) {
     sendWebSocketMessage('set_autopublish', { enabled: enabled });
@@ -3636,6 +3636,8 @@ function updateAutoPublishToggle(enabled) {
     const stateLabel = document.getElementById('autopublish-state');
     if (toggle) toggle.checked = enabled;
     if (stateLabel) stateLabel.textContent = enabled ? 'on' : 'off';
+    document.body.classList.toggle('autopublish-on', enabled);
+    if (enabled) clearUnpublished(); // the watcher owns publishing now
 }
 
 function resetForm() {

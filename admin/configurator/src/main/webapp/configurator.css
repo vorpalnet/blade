@@ -1477,6 +1477,11 @@ button.btn {
     background: var(--btn-publish-hover);
 }
 
+/* Auto-publish ON: saves go live on their own, so there is nothing to Publish. */
+body.autopublish-on .btn-publish {
+    display: none;
+}
+
 /* Auto-publish toggle — a sliding on/off switch. Pushed to the right of the
    toolbar (margin-left:auto) because it controls a global Configurator
    behavior, not the currently-loaded app. State is carried by thumb position

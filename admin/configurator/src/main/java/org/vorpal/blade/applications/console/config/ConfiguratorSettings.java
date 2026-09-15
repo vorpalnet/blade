@@ -9,15 +9,18 @@ import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
 
 /// Settings for the Configurator admin app.
 ///
-/// `autoPublish` controls the file-system watcher behavior the standalone
-/// `watcher` WAR also provides: when `true`, on-disk edits to
-/// `./config/custom/vorpal/*.json` are auto-published to live services
-/// via JMX. When `false`, operators must explicitly Save + Publish
-/// through the UI.
+/// `autoPublish` controls the file-system watcher: when `true` (the default),
+/// on-disk edits to `./config/custom/vorpal/*.json` are auto-published to live
+/// services via JMX and the UI hides its Publish button. When `false`,
+/// operators must explicitly Save + Publish through the UI.
 ///
-/// The flag is live — [ConfiguratorSettingsManager] starts and stops the
+/// The flag is live. [ConfiguratorSettingsManager] starts and stops the
 /// watcher thread from its `initialize()` hook on every reload, so the
 /// Auto-publish toggle in the UI takes effect immediately, no redeploy.
+///
+/// The field initializer is `true`, not just the sample's value, because a
+/// `blade-configurator.json` that omits the key deserializes through the
+/// no-arg constructor.
 @SchemaAbout(
 		name = "Configurator",
 		tagline = "Schema-Driven Configuration Editor",
@@ -25,10 +28,10 @@ import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
 public class ConfiguratorSettings extends Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
 
-	protected boolean autoPublish;
+	protected boolean autoPublish = true;
 	protected AiSettings ai = new AiSettings();
 
-	@JsonPropertyDescription("When true, on-disk *.json edits under ./config/custom/vorpal/ are auto-published to live services via JMX (the same behavior the standalone watcher WAR provides). When false, only explicit Save + Publish through the UI applies changes. Takes effect immediately when toggled.")
+	@JsonPropertyDescription("When true (the default), on-disk *.json edits under ./config/custom/vorpal/ are auto-published to live services via JMX, and the Publish button is hidden. When false, only explicit Save + Publish through the UI applies changes. Takes effect immediately when toggled.")
 	public boolean isAutoPublish() {
 		return autoPublish;
 	}

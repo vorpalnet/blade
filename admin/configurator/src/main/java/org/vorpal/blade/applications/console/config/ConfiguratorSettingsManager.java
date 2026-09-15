@@ -1,5 +1,7 @@
 package org.vorpal.blade.applications.console.config;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.logging.Level;
@@ -14,8 +16,7 @@ import org.vorpal.blade.framework.v2.config.SettingsManager;
 /// [ConfigurationMonitor] lifecycle.
 ///
 /// The monitor watches `./config/custom/vorpal/*.json` and republishes
-/// on-disk edits to live services via JMX — the same behavior the standalone
-/// `watcher` WAR provides.
+/// on-disk edits to live services via JMX.
 ///
 /// The framework calls [#initialize] on every config reload (see
 /// [SettingsManager#initialize] and `Settings#reload`), including the
@@ -35,11 +36,32 @@ public class ConfiguratorSettingsManager extends SettingsManager<ConfiguratorSet
 
 	public ConfiguratorSettingsManager(ServletContextEvent event) throws Exception {
 		super(event, ConfiguratorSettings.class, new ConfiguratorSettingsSample());
+		seedDomainConfig();
+	}
+
+	/// Copies `_samples/blade-configurator.json.SAMPLE` to
+	/// `blade-configurator.json` when the domain file is missing, so the UI's
+	/// settings have a file to save into. Runs after `super()` because the
+	/// framework writes the sample during construction; on a first deploy it
+	/// does not exist before then. No reload follows: with no domain file the
+	/// running config already is the sample.
+	private void seedDomainConfig() {
+		Path config = getDomainPath().resolve(getServletContextName() + ".json");
+		Path sample = getSamplePath().resolve(getServletContextName() + ".json.SAMPLE");
+		if (Files.exists(config) || !Files.exists(sample)) {
+			return;
+		}
+		try {
+			Files.copy(sample, config);
+			logger.info("configurator created " + config.toAbsolutePath() + " from " + sample.getFileName());
+		} catch (IOException e) {
+			logger.log(Level.WARNING, "configurator could not copy " + sample + " to " + config, e);
+		}
 	}
 
 	/// Framework hook, invoked on every `reload()`. Brings the monitor thread
 	/// in line with the current `autoPublish` flag. A null config means
-	/// auto-publish stays off — same as the shipped default.
+	/// auto-publish stays off.
 	@Override
 	public synchronized void initialize(ConfiguratorSettings config) throws ServletParseException {
 		boolean autoPublish = (config != null) && config.isAutoPublish();

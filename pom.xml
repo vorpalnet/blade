@@ -574,9 +574,12 @@
 					</execution>
 				</executions>
 			</plugin>
-			<!-- Install the parent POM and framework JAR to .m2; skip all others.
-		     The parent POM must be installed because the framework JAR references it,
-		     and downstream modules (fsmar, shared) need to resolve it. -->
+			<!-- BLADE installs the framework JAR to ~/.m2 and nothing else. WebLogic
+			     deploys WARs, EARs and the FSMAR jar from dist/ and never reads a Maven
+			     repository, so no module may turn install back on. A build that layers
+			     onto a BLADE WAR reads it from this build's target/ or dist/. The parent
+			     POM installs beside the framework only because the framework's POM
+			     inherits from it. .githooks/pre-commit refuses a module that opts in. -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-install-plugin</artifactId>

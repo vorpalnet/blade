@@ -7,7 +7,7 @@
 # NEVER reads an environment: ~/.blade profiles belong to install/deploy, and one
 # build (especially a --prod release) serves every environment. Narrowing what
 # compiles is a per-invocation choice:
-#   --libs               publish the libraries only (parent POM + libs/* into
+#   --libs               publish the framework only (parent POM + framework JAR into
 #                        ~/.m2, no dist) — THE consumer-repo interface: optum/
 #                        att-tao pin the blade submodule tag and run this; they
 #                        never select blade modules
@@ -30,7 +30,7 @@
 # Examples:
 #   ./build.sh                              # full shippable set, dev mode
 #   ./build.sh --prod                       # release build: full set → dist/<rev>-<build>/
-#   ./build.sh --libs                       # publish parent POM + libs/* to ~/.m2 (consumers)
+#   ./build.sh --libs                       # publish parent POM + framework JAR to ~/.m2 (consumers)
 #   ./build.sh --apps=framework,crud --no-ears   # fast partial dev loop
 #   ./build.sh --edit                       # checkbox tree → ./build.conf; enter builds, s saves & exits
 #   ./build.sh occas-8.2                    # full set, OCCAS 8.2 platform
@@ -1154,11 +1154,12 @@ else
     fi
     INCLUDED_MODULES="$ALL_MODULES"
     if [ "$LIBS_ONLY" = true ]; then
-        # --libs: publish the libraries — parent POM + every libs/* module into
-        # ~/.m2 — and nothing else: no apps, no EARs, no dist. This is the whole
-        # consumer-repo interface (optum/att-tao Step 0): a consumer pins the
-        # blade submodule tag and asks for the libraries its version range
-        # resolves; it never selects blade modules.
+        # --libs: build every libs/* module; only the parent POM + framework JAR
+        # install into ~/.m2 (the parent pom skips install; framework opts back
+        # in). No apps, no EARs, no dist. This is the whole consumer-repo
+        # interface (optum/att-tao Step 0): a consumer pins the blade submodule
+        # tag and asks for the framework its version range resolves; it never
+        # selects blade modules.
         PROFILE="libraries only (--libs)"
         _kept=""
         while IFS= read -r _m; do

@@ -436,8 +436,9 @@ public class FileManagerServlet extends HttpServlet {
 	}
 
 	/// Persist the auto-publish flag and republish so it takes effect live.
-	/// Writes only `autoPublish` to the domain `blade-configurator.json` (the
-	/// rest of the config comes from the shipped sample via merge), then reloads
+	/// Sets `autoPublish` in the domain `blade-configurator.json`, keeping its
+	/// other keys (ConfiguratorSettingsManager seeds the file from the sample
+	/// at startup; if it is gone, a file holding only this key is written), then reloads
 	/// the Configurator's MBean — which fires ConfiguratorSettingsManager's
 	/// initialize() hook and starts or stops the watcher thread.
 	private void setAutoPublish(boolean enabled) throws Exception {

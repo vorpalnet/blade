@@ -32,6 +32,27 @@ DECOMPILE='[Dd]ecompil'
 # maintainer the explanation they need.
 ALLOW='libs/framework/src/main/java/org/vorpal/blade/framework/v3/configuration/routing/LooseRoutingFilter\.java|libs/framework/src/main/java/org/vorpal/blade/framework/v3/configuration/routing/LooseRoutingHelper\.java|\.githooks/pre-commit'
 
+# --- ~/.m2 carries the framework JAR and nothing else. WebLogic deploys from dist/
+# --- and never reads a Maven repository; the parent pom skips install, and only
+# --- the framework (plus the root pom it inherits from) may turn it back on.
+INSTALL_ALLOW='pom\.xml|libs/framework/pom\.xml'
+if [ "${1:-}" = "--all" ]; then
+    poms=$(git ls-files '*pom.xml')
+else
+    poms=$(git diff --cached --name-only --diff-filter=ACM -- '*pom.xml')
+fi
+for f in $poms; do
+    [ -f "$f" ] || continue
+    echo "$f" | grep -qE "^($INSTALL_ALLOW)$" && continue
+    if grep -A4 'maven-install-plugin' "$f" | grep -q '<skip>false</skip>' \
+            || grep -q '<blade\.skip\.install>false' "$f"; then
+        printf '\n  Commit refused: %s installs to ~/.m2.\n\n' "$f"
+        printf '  Only the framework JAR belongs there. WebLogic cannot deploy from a Maven\n'
+        printf '  repository; a build that needs a BLADE WAR reads it from target/ or dist/.\n\n'
+        exit 1
+    fi
+done
+
 if [ "${1:-}" = "--all" ]; then
     files=$(git ls-files '*.java' '*.md' '*.txt')
 else
