@@ -82,11 +82,11 @@ public class GatewayConfigTest {
 	@Test
 	public void trunkRequestUriIsBuiltForTheCarrier() {
 		VirtualGateway vg = new VirtualGateway();
-		vg.setRegistrarDomain("us-east-nj.sip.flowroute.com");
+		vg.setRegistrarDomain("sip.carrier.example.com");
 		vg.setTransport("tcp");
-		assertEquals("sip:18165551234@us-east-nj.sip.flowroute.com;transport=tcp",
+		assertEquals("sip:18165551234@sip.carrier.example.com;transport=tcp",
 				vg.trunkRequestUri("18165551234"));
-		assertEquals("sip:us-east-nj.sip.flowroute.com;transport=tcp", vg.trunkRequestUri(null));
+		assertEquals("sip:sip.carrier.example.com;transport=tcp", vg.trunkRequestUri(null));
 	}
 
 	@Test
@@ -107,8 +107,8 @@ public class GatewayConfigTest {
 		// Set is the multi-homed case: it round-trips.
 		VirtualGateway vg = new VirtualGateway();
 		vg.setName("t");
-		vg.setOutboundInterface("admin.ashburn.vorpal.net");
+		vg.setOutboundInterface("admin.example.com");
 		VirtualGateway back = M.readValue(M.writeValueAsString(vg), VirtualGateway.class);
-		assertEquals("admin.ashburn.vorpal.net", back.getOutboundInterface());
+		assertEquals("admin.example.com", back.getOutboundInterface());
 	}
 }

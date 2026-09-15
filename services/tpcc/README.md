@@ -31,8 +31,8 @@ resumes when the SIP transaction completes.
 | `DELETE dialog/{sessionId}/{dialogId}` | BYE a dialog |
 
 `sessionId` is the SIP application-session key (minted by `POST session`); `dialogId` is
-one dialog's Vorpal dialog id. Roadmap noted in the source: per-dialog hold/mute (the framework
-callflows exist), and a one-shot `POST /call {from, to}`.
+one dialog's Vorpal dialog id. The API has no per-dialog hold or mute operation and no
+one-shot call endpoint: create a session and both dialogs, then connect them.
 
 **Deployment note:** as shipped, the API's `web.xml` carries no auth-constraint — unlike
 the other service-tier APIs (context, events), which use BASIC auth. Put authentication

@@ -1,8 +1,8 @@
 # Installing OCCAS
 
-**Use `./install.sh`.** This directory no longer drives the install — it survives only for
-legacy env conf files. Profiles live in `.conf/<name>/` (gitignored) and are created and
-edited by the installer itself.
+**Use `./install.sh`.** This directory no longer drives the install; it survives only for
+legacy env conf files. Each profile lives at `~/.blade/<name>/profile.conf`, with its
+keystores in `~/.blade/<name>/certs/`, and the installer creates and edits it.
 
 ```
 ./install.sh                    pick or create a profile, then the dashboard
@@ -46,9 +46,9 @@ onto the patched copy's stale snapshot and lose every config change since it was
 
 ## Patching
 
-Oracle's eDelivery media ships buggy; the fixes come from My Oracle Support. Download the
-zips in a browser into `patch.dir` (default `~/occas-patches`) and list the patch IDs, in
-the order they must be applied, in `.conf/<name>/patches.list`.
+OCCAS patches come from My Oracle Support. Download the zips in a browser into `patch.dir`
+(a profile key, default `~/occas-patches`). The patch step finds every patch there and
+applies them lowest patch number first.
 
 The patch step copies the home that `current` resolves to, patches the **copy**, and stops.
 Nothing is switched, so a failed patch costs nothing and the running install is untouched.

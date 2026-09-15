@@ -15,10 +15,10 @@ import org.junit.jupiter.api.Test;
 /// is the server's entire startup contract — `setDomainEnv.sh` never runs. The previous behaviour
 /// overwrote it verbatim with the profile, which dropped `-Dwls.home` (server will not boot) and
 /// `-Dwlss.callstate.manager.classname` (SIP call-state replication silently off). These assertions
-/// use the real ashburn baseline and the real "Ashburn Engines" profile.
+/// use a real cluster baseline and a real engine profile.
 public class JvmSettingsMergeTest {
 
-	/// The live ashburn ServerStart.Arguments, verbatim.
+	/// A live cluster ServerStart.Arguments, verbatim.
 	private static final String BASELINE = "-Xms256m -Xmx512m -da "
 			+ "-javaagent:/opt/oracle/occas/8.3/wlserver/server/lib/debugpatch-agent.jar "
 			+ "-Dwls.home=/opt/oracle/occas/8.3/wlserver/server "
@@ -28,7 +28,7 @@ public class JvmSettingsMergeTest {
 			+ "-Dweblogic.security.SSL.minimumProtocolVersion=TLSv1.2 "
 			+ "-Dweblogic.servlet.ClasspathServlet.disableSecureMode=false";
 
-	/// The "Ashburn Engines" profile, verbatim.
+	/// An engine-tier profile, verbatim.
 	private static final String PROFILE = "-Xms4g -Xmx4g -XX:+UseZGC -XX:+ZGenerational "
 			+ "-XX:+AlwaysPreTouch -XX:+UseStringDeduplication -XX:+ExplicitGCInvokesConcurrent "
 			+ "-Djava.security.egd=file:/dev/./urandom -Dwlss.maddr.enable=true "

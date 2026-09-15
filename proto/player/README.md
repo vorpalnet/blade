@@ -13,9 +13,8 @@ It has **no idea what media server is behind it**. At startup it asks the JSR-30
 registered one) and installs its factory on `MediaCallflow`. Nothing here is tied to any particular
 media server — that lives entirely behind the driver.
 
-In the Vorpal deployment the driver is a **JSR-309 media controller driver**, deployed
-alongside as a runtime artifact. The app has **zero compile dependency on the driver** —
-swap the driver, swap the media server.
+Deploy any JSR-309 driver alongside it; see the driver's documentation. The app has
+**zero compile dependency on the driver**, so swapping the driver swaps the media server.
 
 ## The callflow
 
@@ -69,8 +68,7 @@ node is routing, not this app.
 ## Status
 
 - **Built:** config model, the `offer → join → play/record` callflow, DTMF over INFO, conference
-  mode, BYE teardown, vendor-neutral SPI bootstrap. `PlayerConfigTest` **2/2**; skinny WAR
-  (`player.war`, framework jar + the driver jars).
+  mode, BYE teardown, vendor-neutral SPI bootstrap. Skinny WAR (`player.war`).
 - **Deploy-time (OCCAS + a JSR-309 media controller):** the media path itself — SDP anchor, playback,
   recording, the mix — needs a live media server and is verified there.
 
@@ -80,5 +78,5 @@ node is routing, not this app.
 ./mvnw -pl proto/player -o test       # config unit tests (framework 3.0.4 installed)
 ./mvnw -pl proto/player -o package    # skinny WAR: target/player.war
 ```
-Registered via the `!skip.player` profile (root pom → `proto/player`); a proto app, so excluded from
-the everyday `default`/`production` builds until promoted.
+Registered via the `!skip.player` profile (root pom → `proto/player`). `build.sh` builds it with
+everything else and ships it loose in `dist/proto/`; as a `proto/` app it is never bundled in an EAR.

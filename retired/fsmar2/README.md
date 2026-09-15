@@ -4,13 +4,13 @@
 
 **This module is retired.** It lives under `retired/` and is **excluded from the standard
 build** (no Maven profile references it; `build.sh` only discovers modules under
-`libs/`, `admin/`, `services/`, `test/`). It is kept for reference and for the rare case
-of rebuilding the legacy router by hand (`./mvnw -f retired/fsmar/pom.xml package`).
+`libs/`, `admin/`, `services/`, `test/`, `proto/`). It is kept for reference and for the rare case
+of rebuilding the legacy router by hand (`./mvnw -f retired/fsmar2/pom.xml package`).
 
-The current FSMAR is `libs/fsmar/` (`vorpal-blade-library-fsmar.jar`) — formerly "FSMAR 3".
-It shares no code with this module. New work goes there; this will eventually be removed.
+The current FSMAR is `libs/fsmar/` (`blade-fsmar.jar`) — formerly "FSMAR 3".
+It shares no code with this module. New work goes there.
 
-When it was current, FSMAR 2 produced `vorpal-blade-library-fsmar.jar` and read
+Built by hand, FSMAR 2 produces `vorpal-blade-library-fsmar2.jar` and reads
 `config/custom/vorpal/fsmar2.json`. Its config model now lives in the framework at
 `org.vorpal.blade.framework.v2.fsmar`.
 
@@ -30,9 +30,9 @@ Key features include:
 
 #How does it work?
 
-FSMAR is not a WebLogic deployment — it's a fat JAR that lives in the OCCAS domain's `approuter/` directory and is activated via the OCCAS admin console. See the **FSMAR install walkthrough** in [DEPLOYMENT.md](../../DEPLOYMENT.md#fsmar-install-walkthrough) for the full procedure.
+FSMAR is not a WebLogic deployment — it's a fat JAR that lives in the OCCAS domain's `approuter/` directory and is activated via the OCCAS admin console. See the **FSMAR install walkthrough** in [DEPLOYING.md](../../DEPLOYING.md#fsmar-install-walkthrough) for the full procedure.
 
-For automated installs, use `./deploy.sh <env> fsmar` from the repository root, which copies `fsmar.jar` to the configured `approuter.dir` (locally or over SSH).
+To install a hand-built jar, run `./deploy.sh <env> retired/fsmar2/target/vorpal-blade-library-fsmar2.jar --approuter` from the repository root. It copies the jar into the profile's `approuter.dir` on the host where you run it.
 
 On first startup, FSMAR writes a sample config into the OCCAS `_samples` directory alongside samples from every other BLADE app. Copy it into place, rename, and edit — the JSON syntax is documented in the tutorial below.
 
@@ -80,19 +80,19 @@ Condider the following SIP packet:
 INVITE sip:bob@vorpal.org SIP/2.0
 Content-Type: application/sdp
 To: "Bob" <sip:bob@vorpal.org>;loc=wonderland
-Via: SIP/2.0/TCP 192.168.1.206:5060;wlsscid=1a25;branch=z9b;wlsssid=12dnl1j
+Via: SIP/2.0/TCP 192.0.2.10:5060;branch=z9hG4bK-example
 Min-SE: 90
 Allow: INFO, CANCEL, ACK, BYE, UPDATE
 Allow: PRACK, INVITE
-Call-ID: wlss-19b2247c-c038baf4182b6d4aaa762b897434deb7@192.168.1.206
+Call-ID: a84b4c76e66710@192.0.2.10
 From: "Alice" <sip:alice@vorpal.org>loc=wonderland;tag=f234ee12
 Max-Forwards: 70
-Contact: <sip:buyer@192.168.1.206:5060;transport=tcp;wlsscid=1a25;ob;sipappsessionid=6ccj>
+Contact: <sip:alice@192.0.2.10:5060;transport=tcp>
 X-Version-Number: 2.1.3
 Session-Expires: 3600;refresher=uac
 CSeq: 1 INVITE
 Content-Length: 4060
-Route: <sip:192.168.1.202:5060;lr;transport=tcp>
+Route: <sip:192.0.2.20:5060;lr;transport=tcp>
 Supported: 100rel, timer
 
 ...

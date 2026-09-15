@@ -393,13 +393,13 @@ public final class PreviewEngineSmokeTest {
 	/// `example-create` rule set. The engine must not throw and must
 	/// produce a JSON-serialisable PreviewResult.
 	private static void testPreviewRealSiprecInvite() throws Exception {
-		String wire = "INVITE sip:10.73.217.237:5060 SIP/2.0\r\n"
-				+ "Via: SIP/2.0/TCP 10.23.90.71:5060;branch=z9hG4bKgifh0s30bgs7grndfk30\r\n"
-				+ "From: sip:acmeSrc@10.23.90.71;tag=6ee628a7a2b7d79b7d93a863608005dd\r\n"
-				+ "To: <sip:10.73.217.237:5060;transport=tcp>\r\n"
-				+ "Call-ID: ef6aaf063cd6dce6837da8d85584e236070@10.73.217.237\r\n"
+		String wire = "INVITE sip:192.0.2.10:5060 SIP/2.0\r\n"
+				+ "Via: SIP/2.0/TCP 192.0.2.71:5060;branch=z9hG4bKgifh0s30bgs7grndfk30\r\n"
+				+ "From: sip:acmeSrc@192.0.2.71;tag=6ee628a7a2b7d79b7d93a863608005dd\r\n"
+				+ "To: <sip:192.0.2.10:5060;transport=tcp>\r\n"
+				+ "Call-ID: ef6aaf063cd6dce6837da8d85584e236070@192.0.2.10\r\n"
 				+ "CSeq: 58931781 INVITE\r\n"
-				+ "Contact: <sip:acmeSrc@10.23.90.71:5060;transport=tcp>;+sip.src\r\n"
+				+ "Contact: <sip:acmeSrc@192.0.2.71:5060;transport=tcp>;+sip.src\r\n"
 				+ "Max-Forwards: 70\r\n"
 				+ "Require: siprec\r\n"
 				+ "Content-Type: multipart/mixed; boundary=unique-boundary-1\r\n"
@@ -410,9 +410,9 @@ public final class PreviewEngineSmokeTest {
 				+ "Content-Type: application/sdp\r\n"
 				+ "\r\n"
 				+ "v=0\r\n"
-				+ "o=- 13849481 771639 IN IP4 10.23.90.68\r\n"
+				+ "o=- 13849481 771639 IN IP4 192.0.2.68\r\n"
 				+ "s=-\r\n"
-				+ "c=IN IP4 10.23.90.86\r\n"
+				+ "c=IN IP4 192.0.2.86\r\n"
 				+ "t=0 0\r\n"
 				+ "m=audio 33098 RTP/AVP 0 101\r\n"
 				+ "a=rtpmap:0 pcmu/8000\r\n"
@@ -454,12 +454,12 @@ public final class PreviewEngineSmokeTest {
 	/// available (AdminServer-side preview WAR). Parser stashes the raw
 	/// URI; serializer falls back to it when the typed URI is null.
 	private static void testRoundTripPreservesUriWithoutSipFactory() throws Exception {
-		String wire = "INVITE sip:10.73.217.237:5060 SIP/2.0\r\n"
+		String wire = "INVITE sip:192.0.2.10:5060 SIP/2.0\r\n"
 				+ "From: <sip:a@x>\r\nTo: <sip:b@y>\r\n\r\n";
 		javax.servlet.sip.SipServletMessage msg = SipMessageParser.parse(wire);
 		String out = SipMessageSerializer.serialize(msg);
 		check("roundtrip.uri-preserved",
-				out.startsWith("INVITE sip:10.73.217.237:5060 SIP/2.0\r\n")
+				out.startsWith("INVITE sip:192.0.2.10:5060 SIP/2.0\r\n")
 						|| logFail("got start line: " + out.split("\r\n")[0]));
 	}
 
@@ -546,18 +546,18 @@ public final class PreviewEngineSmokeTest {
 	/// the operator pasted (no `a=sendrecv` anywhere — the filter matches
 	/// nothing). Must complete without throwing or producing warnings.
 	private static void testSdpDeleteRealSiprecInvite() throws Exception {
-		String wire = "INVITE sip:10.73.217.237:5060 SIP/2.0\r\n"
-				+ "From: sip:acmeSrc@10.23.90.71;tag=6ee\r\n"
-				+ "To: <sip:10.73.217.237:5060>\r\n"
+		String wire = "INVITE sip:192.0.2.10:5060 SIP/2.0\r\n"
+				+ "From: sip:acmeSrc@192.0.2.71;tag=6ee\r\n"
+				+ "To: <sip:192.0.2.10:5060>\r\n"
 				+ "Content-Type: multipart/mixed; boundary=unique-boundary-1\r\n"
 				+ "\r\n"
 				+ "--unique-boundary-1\r\n"
 				+ "Content-Type: application/sdp\r\n"
 				+ "\r\n"
 				+ "v=0\r\n"
-				+ "o=- 13849481 771639 IN IP4 10.23.90.68\r\n"
+				+ "o=- 13849481 771639 IN IP4 192.0.2.68\r\n"
 				+ "s=-\r\n"
-				+ "c=IN IP4 10.23.90.86\r\n"
+				+ "c=IN IP4 192.0.2.86\r\n"
 				+ "t=0 0\r\n"
 				+ "m=audio 33098 RTP/AVP 0 101\r\n"
 				+ "a=rtpmap:0 pcmu/8000\r\n"
@@ -584,9 +584,9 @@ public final class PreviewEngineSmokeTest {
 	/// or `application/json`. They should silently no-op when no matching
 	/// part exists, not feed unrelated body content to the wrong parser.
 	private static void testExampleDeleteAgainstSiprecHasNoWarnings() throws Exception {
-		String wire = "INVITE sip:10.73.217.237:5060 SIP/2.0\r\n"
-				+ "From: sip:acmeSrc@10.23.90.71;tag=6ee\r\n"
-				+ "To: <sip:10.73.217.237:5060>\r\n"
+		String wire = "INVITE sip:192.0.2.10:5060 SIP/2.0\r\n"
+				+ "From: sip:acmeSrc@192.0.2.71;tag=6ee\r\n"
+				+ "To: <sip:192.0.2.10:5060>\r\n"
 				+ "P-Asserted-Identity: <sip:secret@internal>\r\n"
 				+ "Content-Type: multipart/mixed; boundary=unique-boundary-1\r\n"
 				+ "\r\n"
@@ -630,13 +630,13 @@ public final class PreviewEngineSmokeTest {
 	/// If MimeHelper has a bug returning the wrong part body, this will
 	/// surface a SAXParseException from XmlHelper.parse.
 	private static void testXmlDeleteAgainstActualRsMetadataReproducesError() throws Exception {
-		String wire = "INVITE sip:10.73.217.237:5060 SIP/2.0\r\n"
-				+ "Via: SIP/2.0/TCP 10.23.90.71:5060;branch=z9hG4bKgifh0s30bgs7grndfk30\r\n"
-				+ "From: sip:acmeSrc@10.23.90.71;tag=6ee628a7a2b7d79b7d93a863608005dd\r\n"
-				+ "To: <sip:10.73.217.237:5060;transport=tcp>\r\n"
-				+ "Call-ID: ef6aaf063cd6dce6837da8d85584e236070@10.73.217.237\r\n"
+		String wire = "INVITE sip:192.0.2.10:5060 SIP/2.0\r\n"
+				+ "Via: SIP/2.0/TCP 192.0.2.71:5060;branch=z9hG4bKgifh0s30bgs7grndfk30\r\n"
+				+ "From: sip:acmeSrc@192.0.2.71;tag=6ee628a7a2b7d79b7d93a863608005dd\r\n"
+				+ "To: <sip:192.0.2.10:5060;transport=tcp>\r\n"
+				+ "Call-ID: ef6aaf063cd6dce6837da8d85584e236070@192.0.2.10\r\n"
 				+ "CSeq: 58931781 INVITE\r\n"
-				+ "Contact: <sip:acmeSrc@10.23.90.71:5060;transport=tcp>;+sip.src\r\n"
+				+ "Contact: <sip:acmeSrc@192.0.2.71:5060;transport=tcp>;+sip.src\r\n"
 				+ "Max-Forwards: 70\r\n"
 				+ "Require: siprec\r\n"
 				+ "Content-Type: multipart/mixed; boundary=unique-boundary-1\r\n"
@@ -649,9 +649,9 @@ public final class PreviewEngineSmokeTest {
 				+ "Content-Type: application/sdp\r\n"
 				+ "\r\n"
 				+ "v=0\r\n"
-				+ "o=- 13849481 771639 IN IP4 10.23.90.68\r\n"
+				+ "o=- 13849481 771639 IN IP4 192.0.2.68\r\n"
 				+ "s=-\r\n"
-				+ "c=IN IP4 10.23.90.86\r\n"
+				+ "c=IN IP4 192.0.2.86\r\n"
 				+ "t=0 0\r\n"
 				+ "m=audio 33098 RTP/AVP 0 101\r\n"
 				+ "a=rtpmap:0 pcmu/8000\r\n"
@@ -659,7 +659,7 @@ public final class PreviewEngineSmokeTest {
 				+ "a=sendonly\r\n"
 				+ "a=label:268749245\r\n"
 				+ "m=audio 59064 RTP/AVP 0 8 18 4 9 100 101\r\n"
-				+ "c=IN IP4 10.23.90.113\r\n"
+				+ "c=IN IP4 192.0.2.113\r\n"
 				+ "a=label:268749246\r\n"
 				+ "a=inactive\r\n"
 				+ "\r\n"
@@ -855,13 +855,13 @@ public final class PreviewEngineSmokeTest {
 
 	/// The exact SIPREC INVITE the operator pasted. Verbatim.
 	private static final String USER_SIPREC_INVITE =
-			"INVITE sip:10.73.217.237:5060 SIP/2.0\r\n"
-			+ "Via: SIP/2.0/TCP 10.23.90.71:5060;branch=z9hG4bKgifh0s30bgs7grndfk30\r\n"
-			+ "From: sip:acmeSrc@10.23.90.71;tag=6ee628a7a2b7d79b7d93a863608005dd\r\n"
-			+ "To: <sip:10.73.217.237:5060;transport=tcp>\r\n"
-			+ "Call-ID: ef6aaf063cd6dce6837da8d85584e236070@10.73.217.237\r\n"
+			"INVITE sip:192.0.2.10:5060 SIP/2.0\r\n"
+			+ "Via: SIP/2.0/TCP 192.0.2.71:5060;branch=z9hG4bKgifh0s30bgs7grndfk30\r\n"
+			+ "From: sip:acmeSrc@192.0.2.71;tag=6ee628a7a2b7d79b7d93a863608005dd\r\n"
+			+ "To: <sip:192.0.2.10:5060;transport=tcp>\r\n"
+			+ "Call-ID: ef6aaf063cd6dce6837da8d85584e236070@192.0.2.10\r\n"
 			+ "CSeq: 58931781 INVITE\r\n"
-			+ "Contact: <sip:acmeSrc@10.23.90.71:5060;transport=tcp>;+sip.src\r\n"
+			+ "Contact: <sip:acmeSrc@192.0.2.71:5060;transport=tcp>;+sip.src\r\n"
 			+ "Max-Forwards: 70\r\n"
 			+ "Require: siprec\r\n"
 			+ "Content-Type: multipart/mixed; boundary=unique-boundary-1\r\n"
@@ -874,9 +874,9 @@ public final class PreviewEngineSmokeTest {
 			+ "Content-Type: application/sdp\r\n"
 			+ "\r\n"
 			+ "v=0\r\n"
-			+ "o=- 13849481 771639 IN IP4 10.23.90.68\r\n"
+			+ "o=- 13849481 771639 IN IP4 192.0.2.68\r\n"
 			+ "s=-\r\n"
-			+ "c=IN IP4 10.23.90.86\r\n"
+			+ "c=IN IP4 192.0.2.86\r\n"
 			+ "t=0 0\r\n"
 			+ "m=audio 33098 RTP/AVP 0 101\r\n"
 			+ "a=rtpmap:0 pcmu/8000a\r\n"
@@ -887,7 +887,7 @@ public final class PreviewEngineSmokeTest {
 			+ "a=sendonly\r\n"
 			+ "a=label:268749245\r\n"
 			+ "m=audio 59064 RTP/AVP 0 8 18 4 9 100 101\r\n"
-			+ "c=IN IP4 10.23.90.113\r\n"
+			+ "c=IN IP4 192.0.2.113\r\n"
 			+ "a=label:268749246\r\n"
 			+ "a=inactive\r\n"
 			+ "\r\n"

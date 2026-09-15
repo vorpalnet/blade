@@ -714,7 +714,7 @@ public abstract class Callflow implements Serializable {
 			// else: appSession already has VORPAL_SESSION — preserve it.
 			// Skipping this branch used to clobber it with a fresh random
 			// value on every initial inbound INVITE that arrived on an
-			// established appSession (e.g. shuffle's pac-man back-INVITE),
+			// established appSession (e.g. an application's own back-INVITE),
 			// causing logs and wire to disagree. The dialog ID for this new
 			// SipSession is filled in lazily by getVorpalDialogId on demand.
 

@@ -1873,8 +1873,8 @@ remove_engine_systemd_units() {
 
 # Who ACTUALLY owns a path, as "user:group" — for the systemd User=/Group= lines.
 # The configured install.user is what we'd LIKE to own the install; it isn't
-# necessarily what does. An install done as an ordinary login user (ashburn's
-# OCCAS is owned by 'opc') would otherwise get units that cannot read their own
+# necessarily what does. An install done as an ordinary login user (an OCI image
+# with OCCAS owned by 'opc') would otherwise get units that cannot read their own
 # domain and fail at boot with a permission error far from the cause. Falls back
 # to the configured pair when the path doesn't exist yet, which is the dry-run
 # and pre-install case. host="" means look locally.
@@ -4519,7 +4519,7 @@ place_nm_keystores() {  # $1 = destination dir (the nmdomain's config/certs)
 # PER SERVER (ServerStart.Arguments). The block carries what setDomainEnv used
 # to supply: the SIP jars on ClassPath and the wlss/security flags in
 # Arguments — without them an MBean-mode server boots with NO SIP container.
-# Ported from install-occas.sh (commit 7428496b), live-proven on the ashburn
+# Ported from install-occas.sh (commit 7428496b), proven on a live
 # cluster (SIP + the flowstate Coherence mesh intact). The heap here is only a
 # baseline (server.mem.args); Tuning overwrites Arguments per server, and its
 # extend/parse model preserves the SIP flags. Applied to the engine

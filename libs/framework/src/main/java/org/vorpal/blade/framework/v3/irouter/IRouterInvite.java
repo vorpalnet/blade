@@ -39,7 +39,7 @@ public class IRouterInvite extends Callflow {
 	private static final long serialVersionUID = 1L;
 
 	/// Snapshot of the active routing config, captured by the leaf
-	/// servlet (IRouterServlet, SecureLogixServlet, …) at instantiation
+	/// servlet (IRouterServlet or a subclass) at instantiation
 	/// time and passed in here. Per-request snapshot avoids mid-request
 	/// reload races and decouples the framework-resident IRouterInvite
 	/// from any one servlet's static `settings` field.
@@ -71,7 +71,7 @@ public class IRouterInvite extends Callflow {
 		Context ctx = new Context(request);
 
 		// Subclass extension point: write any pre-pipeline values into ctx
-		// (e.g. SecureLogix's `${sipJson}` formatter). Default is empty.
+		// (e.g. a screening subclass's `${sipJson}` formatter). Default is empty.
 		enrichContext(request, ctx);
 
 		// FINER: dump everything useful for diagnosing a table miss.
@@ -138,7 +138,7 @@ public class IRouterInvite extends Callflow {
 	/// Subclass hook: write extra values into the Context before the
 	/// pipeline runs. The default implementation does nothing — base
 	/// iRouter is fully driven by configured connectors. Subclasses
-	/// (e.g. SecureLogix) override this to inject values that don't fit
+	/// (e.g. a screening service) override this to inject values that don't fit
 	/// the connector/selector model — typically a customer-specific
 	/// formatting of the SIP request itself.
 	protected void enrichContext(SipServletRequest request, Context ctx) {
@@ -199,7 +199,7 @@ public class IRouterInvite extends Callflow {
 
 		// Direct-response routes (statusCode set) short-circuit before
 		// any forwarding logic — same path for proxy iRouter and for
-		// SecureLogix-style redirect subclasses.
+		// redirect-server subclasses.
 		if (route.getStatusCode() != null) {
 			try {
 				sendStatus(request, route, ctx);
@@ -268,7 +268,7 @@ public class IRouterInvite extends Callflow {
 	///
 	/// Reached only for routes WITHOUT a `statusCode` — a route that sets a
 	/// status code is a direct response and short-circuits to [#sendStatus] in
-	/// [#applyRouting] before this runs. SecureLogix mixes both with no Java
+	/// [#applyRouting] before this runs. A screening service can mix both with no Java
 	/// override: allow is a 302 with a `Contact` (sendStatus), block is a 603
 	/// Decline (sendStatus), and redirect is a forward route (`requestUri`,
 	/// no status code) that lands here and proxies to the SBC. Override this
@@ -319,7 +319,7 @@ public class IRouterInvite extends Callflow {
 
 	/// Last-resort response sender for terminal error paths in
 	/// [#applyRouting]. `protected` so subclasses' [#executeRoute]
-	/// overrides can use the same fallback (e.g. SecureLogix sending
+	/// overrides can use the same fallback (e.g. a redirect-server subclass sending
 	/// a 500 on redirect-build failure).
 	protected static void safeSend(SipServletRequest request, int status) {
 		try {

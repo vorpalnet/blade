@@ -218,7 +218,7 @@
         <tr><td class="ev">prod (--prod)</td><td class="df"><code>&lt;rev&gt;-&lt;build&gt;</code> — traceable</td><td class="df"><code>dist/&lt;rev&gt;-&lt;build&gt;/</code></td><td class="df">built</td></tr>
       </tbody>
     </table>
-    <p class="sub" style="margin-top:14px">A named environment reads its mode from the shared profile <code>~/.blade/&lt;env&gt;/profile.conf</code> — <code>./build.sh ashburn</code> builds in ashburn's mode.</p>
+    <p class="sub" style="margin-top:14px">A build never reads an environment profile. One <code>--prod</code> release serves every environment you deploy it to, and <code>--libs</code> publishes just the libraries to <code>~/.m2</code>.</p>
   </div>
 </section>
 

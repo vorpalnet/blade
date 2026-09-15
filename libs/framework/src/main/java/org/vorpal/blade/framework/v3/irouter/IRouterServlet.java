@@ -20,8 +20,8 @@ import org.vorpal.blade.framework.v2.snmp.Snmp;
 /// `@Inherited`; if they lived here, every WAR that subclasses this base would
 /// register *two* SIP servlets (base + leaf) in one app — invalid. So each
 /// deployable WAR ships a tiny annotated leaf that extends this class:
-/// `IRouterApp` for the standalone iRouter WAR, `SecureLogixServlet` for the
-/// SecureLogix WAR, and so on. Because this base lives in the framework JAR
+/// `IRouterApp` for the standalone iRouter WAR, a screening subclass for a
+/// screening WAR, and so on. Because this base lives in the framework JAR
 /// (bundled per-WAR), a commercial extension subclasses it with only the
 /// framework dependency — no cross-WAR class sharing needed.
 ///
@@ -60,7 +60,7 @@ public class IRouterServlet extends AsyncSipServlet {
 
 	/// Subclass seam: the callflow run for an initial INVITE. Override to supply
 	/// a customer-specific callflow — typically one whose `enrichContext`
-	/// injects bespoke pre-pipeline values (e.g. SecureLogix's `${sipJson}`).
+	/// injects bespoke pre-pipeline values (e.g. a screening subclass's `${sipJson}`).
 	/// Default: plain [IRouterInvite].
 	protected IRouterInvite newInvite(IRouterConfig config) {
 		return new IRouterInvite(config);
@@ -73,7 +73,7 @@ public class IRouterServlet extends AsyncSipServlet {
 		} catch (Exception e) {
 			// A failed startup is exactly what an NMS wants to hear about, so
 			// trap it (fail-closed off-OCCAS). getSimpleName() names the actual
-			// leaf (IRouterApp / SecureLogixServlet / …).
+			// leaf (IRouterApp or a subclass).
 			String msg = getClass().getSimpleName() + " init failed: " + e.getMessage();
 			sipLogger.severe(msg);
 			Snmp.trap(Snmp.Severity.ERROR, msg);

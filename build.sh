@@ -8,8 +8,8 @@
 # build (especially a --prod release) serves every environment. Narrowing what
 # compiles is a per-invocation choice:
 #   --libs               publish the framework only (parent POM + framework JAR into
-#                        ~/.m2, no dist) — THE consumer-repo interface: optum/
-#                        att-tao pin the blade submodule tag and run this; they
+#                        ~/.m2, no dist) — THE consumer-repo interface: consumer
+#                        repositories pin the blade submodule tag and run this; they
 #                        never select blade modules
 #   --apps=<csv>         build only these apps (bare module names)
 #   --no-ears            ship every tier as loose WARs (skip the .ear assemblers)
@@ -844,10 +844,10 @@ for arg in "$@"; do
         # An environment name (~/.blade/<name>). Environments no longer configure
         # builds — a build is product x platform x mode; an environment is where
         # artifacts DEPLOY (install.sh/deploy.sh territory). Accepted and ignored
-        # so `./build.sh ashburn` muscle memory doesn't break; noted below.
+        # so `./build.sh <env>` muscle memory doesn't break; noted below.
         IGNORED_ENV_ARG="$arg"
     elif [ "$arg" = "default" ] || [ "$arg" = "full" ] || [ "$arg" = "minimal" ]; then
-        # A retired module-profile name. optum/att-tao invoke `./build.sh default`;
+        # A retired module-profile name. Consumer repositories invoke `./build.sh default`;
         # accept and ignore it so those builds keep working (noted before the build).
         IGNORED_PROFILE_ARG="$arg"
     elif [ -z "$PLATFORM" ] && [ -f "${PLATFORMS_DIR}/${arg}.conf" ]; then
@@ -1019,7 +1019,7 @@ else
 fi
 
 # --- Always install ---
-# Downstream repos (optum, connect) resolve BLADE artifacts via Maven version
+# Downstream repositories resolve BLADE artifacts via Maven version
 # ranges (e.g. [1.0.0,)) against the local .m2 repository. If we don't install
 # here, those builds silently resolve to whatever older BLADE was installed
 # previously. So even when the user passes explicit goals like `clean package`,
@@ -1078,7 +1078,7 @@ fi
 
 # --- Purge installed BLADE artifacts on clean ---
 # `mvn clean` only reaches target/; installed artifacts in ~/.m2 are the
-# other place build output lands, and version-range consumers (optum's
+# other place build output lands, and version-range consumers (for example
 # [2.0.0,)) resolve to the highest version found there — so a stale install
 # silently shadows fresh builds. Scoped to org/vorpal/blade: the
 # bootstrapped OCCAS/WebLogic JARs (javax, com.oracle.*) are untouched.
@@ -1135,7 +1135,7 @@ fi
 # (libs/admin/services/test/proto) plus the per-tier EARs, no -Dskip flags (javadoc
 # excepted, below). A ~/.blade profile that carries an app/EAR selection narrows it
 # (apply_profile_selection). The LEGACY module-set names default/full/minimal are
-# retired: accepted and ignored so optum/att-tao's `./build.sh default` keeps
+# retired: accepted and ignored so a consumer repository's `./build.sh default` keeps
 # working. Clean-only runs build nothing.
 CONF_FILE=""
 SKIP_FLAGS=()
@@ -1157,7 +1157,7 @@ else
         # --libs: build every libs/* module; only the parent POM + framework JAR
         # install into ~/.m2 (the parent pom skips install; framework opts back
         # in). No apps, no EARs, no dist. This is the whole consumer-repo
-        # interface (optum/att-tao Step 0): a consumer pins the blade submodule
+        # interface (a consumer repository's first build step): a consumer pins the blade submodule
         # tag and asks for the framework its version range resolves; it never
         # selects blade modules.
         PROFILE="libraries only (--libs)"
@@ -1357,7 +1357,7 @@ if [ "$JAVADOC_ON" = true ]; then
     # WARs) resolve from ~/.m2, installed by pass 1.
     # -Dblade.skip.install=false: pass 2 is a separate reactor, so the admin WARs
     # apps/admin bundles must be resolvable from ~/.m2 — install them here (this is
-    # the same contract downstream repos rely on; see optum/build.sh Step 0).
+    # the same contract downstream repositories rely on in their own builds).
     run_maven \
         "${MAVEN_GOALS[@]}" \
         "${MAVEN_FLAGS[@]+"${MAVEN_FLAGS[@]}"}" \

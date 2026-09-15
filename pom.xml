@@ -271,7 +271,7 @@
 				<version>${nimbus-oauth2-oidc-sdk.version}</version>
 			</dependency>
 			<!-- Apache Oltu OAuth2 client — retired (Attic), but the
-			     OpenAPI-generated okhttp-gson client in Optum's cloud-routing
+			     OpenAPI-generated okhttp-gson client a consumer builds
 			     imports it (ApiClient / RetryingOAuth / OAuthOkHttpClient), so
 			     it must ship in blade-shared. Brings the .common jar + org.json
 			     transitively; org.json is pinned up below off the CVE-bearing

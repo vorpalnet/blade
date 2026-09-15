@@ -2,7 +2,7 @@
 
 The next-generation FSMAR — **F**inite **S**tate **M**achine **A**pplication **R**outer.
 
-This is BLADE's FSMAR, built on the v3 configuration system (`org.vorpal.blade.framework.v3.configuration`). Its config **model** lives in the framework (`org.vorpal.blade.framework.v3.fsmar`); this module holds the App Router runtime + the `approuter/` SPI registration. The original **FSMAR 2** is a separate, retired library (`retired/fsmar2/`, excluded from the standard build) — it shares no code with this one and will eventually be removed.
+This is BLADE's FSMAR, built on the v3 configuration system (`org.vorpal.blade.framework.v3.configuration`). Its config **model** lives in the framework (`org.vorpal.blade.framework.v3.fsmar`); this module holds the App Router runtime + the `approuter/` SPI registration. The original **FSMAR 2** is a separate, retired library (`retired/fsmar2/`, excluded from the standard build) — it shares no code with this one.
 
 ## What is FSMAR?
 
@@ -29,7 +29,7 @@ FSMAR uses state memory and pattern matching to route SIP traffic between applic
 
 ## How does it work?
 
-FSMAR is not a WebLogic deployment — it's a fat JAR that lives in the OCCAS domain's `approuter/` directory and is activated via the OCCAS admin console. See the **FSMAR install walkthrough** in [DEPLOYMENT.md](../../DEPLOYMENT.md#fsmar-install-walkthrough) for the full procedure.
+FSMAR is not a WebLogic deployment — it's a fat JAR that lives in the OCCAS domain's `approuter/` directory and is activated via the OCCAS admin console. See the **FSMAR install walkthrough** in [DEPLOYING.md](../../DEPLOYING.md#fsmar-install-walkthrough) for the full procedure.
 
 For automated installs, use `./deploy.sh <env> fsmar` from the repository root, which copies `blade-fsmar.jar` to the configured `approuter.dir` (locally or over SSH).
 

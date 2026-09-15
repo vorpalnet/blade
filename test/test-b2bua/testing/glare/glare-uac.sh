@@ -1,7 +1,7 @@
 #!/bin/bash
 
-export SERVICE=1983217114
+export SERVICE=2025550114
 export DURATION=5000
-export OCCAS=172.16.32.108
+export OCCAS=192.0.2.108
 
-sipp -d ${DURATION} -rsa ${OCCAS} -m 1 -s ${SERVICE} -sf glare-uac.xml 172.16.32.108:5099
+sipp -d ${DURATION} -rsa ${OCCAS} -m 1 -s ${SERVICE} -sf glare-uac.xml 192.0.2.108:5099

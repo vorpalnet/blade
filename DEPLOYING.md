@@ -82,16 +82,11 @@ The SIP service applications (Analytics, Hold, Proxy-Registrar, Gateway, etc.). 
 Each WAR is self-contained exactly as it deploys standalone: framework JAR inside + the `blade-shared` shared-library reference in its own `weblogic.xml` (filenames match the context-root: `hold.war`, `gateway.war`).
 
 - **Goes to:** the **cluster only** (engine tier). Services handle live SIP traffic; AdminServer doesn't.
-- **Test apps** (promoted to production 2026-06-05 as live-diagnostics tools): `test-uac`, `test-uas`, `test-b2bua` in `dist/<ver>/test/`.
+- **Test apps** (also used as live-diagnostics tools): `test-uac`, `test-uas`, `test-b2bua` in `dist/<ver>/test/`.
 
-**JSR-309 media apps** (`proto/player` today) are the one exception to "framework jar only": the
-309 driver they discover at runtime rides in `WEB-INF/lib` beside the framework jar. It cannot go
-in a shared library — a driver implements framework interfaces, and a shared library's classloader
-is the WAR's parent, so it cannot see them. The public WAR here has no driver; the driver's own
-repository builds the deployable `player.war` as a WAR overlay of this one. Deploy that WAR to the
-cluster like any service. The media server it drives is configured in the app's `driverProperties`,
-whose keys are the driver's own (typically its control URL: one node, or a comma-separated fleet the
-driver places sessions across — use names the engines resolve to the media subnet, not public ones).
+**JSR-309 media apps** (`proto/player`) speak JSR-309 and ship without a media driver. How to
+package a driver with the app, and which `driverProperties` keys it reads, come from your driver's
+documentation. Deploy the result to the cluster like any service.
 
 ## Quick start
 
@@ -244,4 +239,4 @@ The **whole-tier EARs sit at the dist root**; the loose artifacts sit in per-tie
 | `admin/` | AdminServer | `blade-*.war` admin apps |
 | `services/` | cluster | `<service>.war` (`gateway.war`, `hold.war`, …) — individually visible in Remote Console; context-root matches filename |
 | `test/` | engine0 | `test-uac.war` / `test-uas.war` / `test-b2bua.war` |
-| `proto/` | ad-hoc | incubator WARs (built by the `full` profile). **No proto EAR** — proto is a grab-bag; deploy its WARs individually. |
+| `proto/` | ad-hoc | incubator WARs (built with everything else). **No proto EAR** — proto is a grab-bag; deploy its WARs individually. |

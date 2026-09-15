@@ -26,9 +26,9 @@
 	<send retrans="500">
     <![CDATA[
 
-      INVITE sip:[service]@[remote_ip]:[remote_port];calluuid=029TVUHRHKBA34546D51O2LAES0002JS;dn=1992177021;otherdn=7637176791;agentid=ExampleCareService_Test4;ani=7637176791;connid=01920379ada9ba7c;datetime=2024-07-25T19:19:59Z;dnis=8008987029;gvp-tenant-id=Environment.record;recorddn=1992177021;sipsappname=cl2-sips-ELR_1a;media-id=029TVUHRHKBA34546D51O2LAES0002JS SIP/2.0 
+      INVITE sip:[service]@[remote_ip]:[remote_port];calluuid=029TVUHRHKBA34546D51O2LAES0002JS;dn=2025550121;otherdn=2025550191;agentid=ExampleService_Test4;ani=2025550191;connid=01920379ada9ba7c;datetime=2024-07-25T19:19:59Z;dnis=8005550129;gvp-tenant-id=Environment.record;recorddn=2025550121;sipsappname=sips-app-1a;media-id=029TVUHRHKBA34546D51O2LAES0002JS SIP/2.0 
       From: Genesys <sip:Genesys@[local_ip]:[local_port]>;tag=[pid]SIPpTag00[call_number]
-      To: [service] <sip:[service]@[remote_ip]:[remote_port]>;calluuid=029TVUHRHKBA34546D51O2LAES0002JS;recorddn=[service];sipsappname=cl2-sips-ELR_1a
+      To: [service] <sip:[service]@[remote_ip]:[remote_port]>;calluuid=029TVUHRHKBA34546D51O2LAES0002JS;recorddn=[service];sipsappname=sips-app-1a
       Via: SIP/2.0/[transport] [local_ip]:[local_port];branch=[branch]
       Allow: INVITE, ACK, BYE, CANCEL, REGISTER, OPTIONS, INFO 
       Session-Expires: 1800 
@@ -51,9 +51,9 @@
       Content-Type: application/sdp
 
       v=0
-      o=- 13849481 771639 IN IP4 10.23.90.68
+      o=- 13849481 771639 IN IP4 192.0.2.68
       s=-
-      c=IN IP4 10.23.90.86
+      c=IN IP4 192.0.2.86
       t=0 0
       m=audio 33098 RTP/AVP 0 101
       a=rtpmap:0 pcmu/8000a
@@ -64,11 +64,11 @@
       a=sendonly
       a=label:268749245
       m=audio 59064 RTP/AVP 0 8 18 4 9 100 101
-      c=IN IP4 10.23.90.113
+      c=IN IP4 192.0.2.113
       a=label:268749246
       a=inactive
       m=audio 29582 RTP/AVP 0 101
-      c=IN IP4 10.23.90.72
+      c=IN IP4 192.0.2.72
       a=rtpmap:0 pcmu/8000
       a=ptime:20
       a=maxptime:30
@@ -77,7 +77,7 @@
       a=sendonly
       a=label:268749247
       m=audio 59512 RTP/AVP 0 8 18 4 9 100 101
-      c=IN IP4 10.23.90.93
+      c=IN IP4 192.0.2.93
       a=label:268749248
       a=inactive
 
@@ -97,7 +97,7 @@
       	</session>
       	<participant id="jQysQaOQQKN+GPqD9ucaNw=="
       		session="gxwzQvnlSSVhNe2DPctt4Q==">
-      		<nameID aor="sip:Genesys@10.29.199.68">
+      		<nameID aor="sip:Genesys@192.0.2.199">
       			<name>Genesys</name>
       		</nameID>
       		<send>IHIwATMzRW1O9AnNhRZNcQ==</send>
@@ -105,12 +105,12 @@
       		<associate-time>2023-10-24T15:53:04</associate-time>
       		<extensiondata xmlns:apkt="http://acmepacket.com/siprec/extensiondata">
       			<apkt:callingParty>true</apkt:callingParty>
-      			<apkt:request-uri><!{CDATA{<sip:record=00U2QRJBLKAF3CCSEDB1Q2LAES0188NT_2023-10-24_15-53-28@10.23.90.11:5060;calluuid=00U2QRJBLKAF3CCSEDB1Q2LAES0188NT;dn=1992650688;otherdn=918008423210;agentid=001779572;ani=1992650688;connid=0c93035eb0bff2fd;datetime=2023-10-24T15:53:28Z;dnis=1992902490;gvp-tenant-id={Environment}.record;recorddn=1992650688;sipsappname=cl2-sips-CTC_7a;media-id=00U2QRJBLKAF3CCSEDB1Q2LAES0188NT>}}>
+      			<apkt:request-uri><!{CDATA{<sip:record=00U2QRJBLKAF3CCSEDB1Q2LAES0188NT_2023-10-24_15-53-28@192.0.2.11:5060;calluuid=00U2QRJBLKAF3CCSEDB1Q2LAES0188NT;dn=2025550188;otherdn=918005550110;agentid=000000001;ani=2025550188;connid=0c93035eb0bff2fd;datetime=2023-10-24T15:53:28Z;dnis=2025550190;gvp-tenant-id={Environment}.record;recorddn=2025550188;sipsappname=sips-app-7a;media-id=00U2QRJBLKAF3CCSEDB1Q2LAES0188NT>}}>
       	</apkt:request-uri>
-      		<apkt:realm>OMNI_MH_Ingress</apkt:realm>
+      		<apkt:realm>SBC_Ingress</apkt:realm>
       		<apkt:header label="Call-ID">
       			<value>
-      				wlss-51879a67-9C565000-8D9C-2A83-9619-EA8320AF242A-7090@10.29.199.68</value>
+      				wlss-51879a67-9C565000-8D9C-2A83-9619-EA8320AF242A-7090@192.0.2.199</value>
       		</apkt:header>
       	</extensiondata>
       	</participant>

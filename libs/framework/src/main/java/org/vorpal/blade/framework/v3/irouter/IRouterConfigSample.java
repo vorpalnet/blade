@@ -79,7 +79,7 @@ public class IRouterConfigSample extends IRouterConfig {
 		TranslationTable byOriginIp = new TranslationTable();
 		byOriginIp.setMatch(MatchStrategy.hash);
 		byOriginIp.setKeyExpression("${originIP}");
-		byOriginIp.createTranslation("172.16.32.173")
+		byOriginIp.createTranslation("192.0.2.173")
 				.put("customerId", "acme")
 				.put("customerTier", "premium")
 				.put("apiKey", "acme-api-key-redacted")

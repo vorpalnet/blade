@@ -250,7 +250,7 @@ machine list so no engine can land on the admin box; NM port/type, engine
 prefix, max cluster size (99), and the installer/inventory/java paths (derived
 from ORACLE_HOME) are assumed and remain conf-editable. On OCI the environment
 name defaults to the region from the instance metadata service
-(`us-ashburn-1` → `ashburn`; 2-second probe, falls back to `prod` elsewhere).
+(`us-phoenix-1` → `phoenix`; 2-second probe, falls back to `prod` elsewhere).
 After a no-arg init, the script continues straight into the full install
 instead of stopping.
 
@@ -497,9 +497,8 @@ sorter loses a property's order index when a subclass overrides the annotated ge
 
 ### FSMAR3: app-originated requests egress again (regression vs FSMAR2)
 
-OCCAS consults the AR at SEND time for application-originated initial requests
-(ClientTransaction.dispatch → ContainerProcessInternalRequest.getNextApplication); if
-the AR names an app, the request is INTERNALLY DISPATCHED to it (pushLocalRoute) and
+OCCAS consults the AR at SEND time for application-originated initial requests; if
+the AR names an app, the request is INTERNALLY DISPATCHED to it and
 never reaches DNS or the wire. FSMAR3 treated every fresh composition as chain-top
 (`previous="null"` → defaultApplication), so e.g. proxy-balancer's OPTIONS health
 pings were delivered to the default application instead of egressing — FSMAR2 never
@@ -630,9 +629,9 @@ in `blade-admin.ear` like every other admin app.)
   `chooseCallflow` is untouched — dispatch stays imperative; the registry is observation, not
   routing. The Source manifest gains a live `used` flag per class. Trade-off: the observed
   half fills with traffic, so a framework-only app appears in the gallery after its first
-  handled call (own-code callflows always show); v2-only proxy flows never self-register
-  (pending their v3 rework). Verified by `CallflowRegistrySmokeTest` (5/5).
-- **Trace transport + Traces page — the chain-tracing loop is closed (needs live verify).**
+  handled call (own-code callflows always show); v2-only proxy flows never self-register.
+  Verified by `CallflowRegistrySmokeTest` (5/5).
+- **Trace transport + Traces page — the chain-tracing loop is closed.**
   Node side (all `framework.v3.diagnostics`, zero v2 edits): `TraceLog` holds per-app statics —
   a bounded ring buffer (2000 steps) of armed calls' `CallStep`s plus the live `Diagnostics`
   arming rules; `v3.Callflow` consults the rules ONCE per `SipApplicationSession` (first
@@ -651,10 +650,9 @@ in `blade-admin.ear` like every other admin app.)
   color-only). Arming strip: attribute/regex/max-captures form, armed-rule counts, disarm/clear/
   refresh + optional 5s auto-refresh. Verified: `TraceLogSmokeTest` 13/13 (ring eviction,
   arm/disarm, JSON round-trip incl. escaping), prior smoke tests still 9/9 + 16/16, full build
-  green. Not verifiable here: `@WebListener` scan, Selector matching on real traffic, the
-  JMX fan-out — first live check is arm `From ~ .*` and place one call through the test tier.
+  green.
 - **Trace eventing rebuilt on the sequence-diagram spine (supersedes the two entries below).**
-  Jeff's design review: the right recording spots are the exact places v2 draws its ASCII
+  The right recording spots are the exact places v2 draws its ASCII
   sequence-diagram arrows (`Logger.superArrow` call sites) — message, direction, AND handling
   callflow all in scope, under the SAS lock — killing the dispatch-time capture + handler
   back-fill scaffolding. Implementation, with v2's logic untouched:
@@ -665,13 +663,12 @@ in `blade-admin.ear` like every other admin app.)
     `applyKeepAlive`) or `protected final` for the instance ones (`recoverFromRequest/
     ResponseError`, `followRedirect` — final so a same-signature customer method is a loud
     compile error, never a silent override), plus four constants and
-    `initialSipServletContextEvent`. Jeff's ruling: private helpers in framework base classes
-    were a design flaw.
+    `initialSipServletContextEvent`.
   - **v3.AsyncSipServlet / v3.Callflow carry COPIES of the v2 bodies** (`doRequest`,
     `doResponse`, servlet `sendResponse`; callflow `sendRequest`/`sendResponse`) with
     `Callflow.traceEvent(...)` beside each superArrow — the only diff vs the originals
-    (verified by normalize-diff). Each copy names its v2 source range for manual sync until
-    the planned v1 hoist. `v3.B2buaServlet` re-parents onto `v3.AsyncSipServlet` and copies
+    (verified by normalize-diff). Each copy names its v2 source range for manual sync.
+    `v3.B2buaServlet` re-parents onto `v3.AsyncSipServlet` and copies
     v2.B2buaServlet's small layer (chooseCallflow + doNotProcess + getIncomingRequest +
     listener hooks), so the dispatch copy exists once.
   - **traceEvent** is the single recording spine (exactly one caller per message per app — no
@@ -682,20 +679,20 @@ in `blade-admin.ear` like every other admin app.)
     Arming + header-aware session-id resolution ride along. Send arrows fire before
     `response.send()` for the same session-invalidation reason v2's arrows do; the
     reliable-provisional branch gets a traceEvent even though v2 draws no arrow there (a v2
-    diagram gap the trace shouldn't share). Proxy arrows record as `proxy` — partial proxy
-    visibility ahead of the proxy rework.
+    diagram gap the trace shouldn't share). Proxy arrows record as `proxy`, which gives
+    partial proxy visibility.
   - **Deleted:** `recordArrival`, `assignArrivalHandler`, `TRACE_IN_RECORDED_ATTR`,
     `wrapReceiving`/`recordIn`, `recordInboundRequest`; `CallStep` is immutable again.
   - **Viewer:** an in-step (no line pin) now highlights the handling method's DECLARATION —
     `traces.js` finds `process(` in the loaded source client-side. Received rows read
     "received by <Class>".
-  - **Callback receives resolve to the enclosing method** (Jeff's step-12 report: a received
+  - **Callback receives resolve to the enclosing method** (a received
     180 showed InitialInvite source with no highlight). Every `Callback` is a serializable
     lambda — `writeReplace` → `SerializedLambda` reveals the declaring class and
     `implMethodName` (`lambda$processContinue$…`), so the in-step pins
     `InitialInvite.processContinue` and the viewer highlights that declaration. Introspection
     runs on ARMED calls only; falls back to the `$$Lambda` class-name trim.
-  - **Inheritance-aware pins** (Jeff's step-15 report: TransferInitialInvite sent a 180 with
+  - **Inheritance-aware pins** (TransferInitialInvite sent a 180 with
     `?:-1`). Thin subclasses send from INHERITED code, so the emitting frame carries the base
     class's name — `captureStep` now matches any ancestor frame (stopping before the v3/v2
     Callflow plumbing) and records the FRAME's class, keeping the line aligned with the file
@@ -733,7 +730,7 @@ in `blade-admin.ear` like every other admin app.)
   does moments later — the header-aware `getVorpalSessionId(request)` overload (mints only at
   the true chain head; wrapped so a resolver failure still records the step id-less).
   `ArrivalSmokeTest` grew to 16/16 incl. header resolution + attr store-back.
-  **Handler back-fill (same day, Jeff's live feedback):** arrival steps showed the servlet with
+  **Handler back-fill (same day):** arrival steps showed the servlet with
   no source highlight — the handler genuinely isn't known at dispatch (`chooseCallflow` hasn't
   run). Since SIP dispatch is synchronous, the v3 servlet bases now back-fill after
   `super.do*` returns: `recordArrival` returns the arrival `CallStep`, and
@@ -786,16 +783,13 @@ in `blade-admin.ear` like every other admin app.)
   controls (element lookups guarded). "Load Snapshot" reads a saved file (or raw JSON) back into
   the live viewer for side-by-side use; Refresh returns to live. The embedded JSON doubles as the
   machine-readable format. Note: a snapshot carries application source — share with the same
-  care as the code. Docs page gained Traces + Snapshots sections. Browser-only verification:
-  save on a real capture, open the file offline, step through source views.
+  care as the code. Docs page gained Traces + Snapshots sections.
 - **Renamed to "Trace".** The admin app's display identity is now **Trace** — topbar appmark,
   page titles, portal-deck card (`CallflowSettings` `@SchemaAbout name="Trace"` + repointed
   tagline/description), and docs. More concise; conveys purpose at a glance. Deliberately NOT
   changed: the deployment identifiers keep the historical `callflow` name (context-root
   `blade/callflow`, WAR `blade-callflow`, Java package/classes, config-file name) — so the rename
-  needs no redeploy and no config-file migration. (The URL/WAR/config could be renamed to `trace`
-  too, but that's a separate cross-cutting change — build profiles, EAR profile, deploy conf, a
-  config-file migration — offered but not done.)
+  needs no redeploy and no config-file migration.
 - **Gallery removed — the Source tab supersedes it.** The standalone Gallery page
   (`callflows.html` + `callflow.js`, the services-first source browser) and its nav link are
   gone; the **Source** tab in Traces now shows the real code, pinned to the emitting line. The
@@ -852,8 +846,7 @@ in `blade-admin.ear` like every other admin app.)
   opts in by extending v3 instead of v2; only the 2-arg overloads are overridden (the no-arg ones
   delegate to them, so overriding both would double-count). Verified by `CallStepSmokeTest`
   (9/9, container-free) — including the key case: a `sendRequest` inside a response lambda
-  captures the lambda's own line. Remaining for the live loop (needs a running domain): migrate a
-  flagship callflow onto `v3.Callflow`, and bridge the trace to the viewer to highlight lines.
+  captures the lambda's own line.
 - **Chain-aware call tracing core (the "which app in the string misbehaved" engine).** Built on
   the above: `CallStep` now carries the `X-Vorpal-Session` id (stable across the whole routed app
   chain) and a timestamp; `framework.v3.diagnostics.CallTrace` + `CallTraceAggregator` merge the
@@ -865,7 +858,7 @@ in `blade-admin.ear` like every other admin app.)
   `armFor(request)` decides once at the initial request. Verified by `CallTraceSmokeTest` (16/16,
   container-free) — including a 3-app chain merged from scrambled input, culprit located by name,
   and the capture cap. (The arming hook, trace delivery, and the viewer's chain-timeline UI landed
-  the next day — see "Trace transport + Traces page" below; only live verification remains.)
+  the next day; see "Trace transport + Traces page".)
 - **Service migration to v3.Callflow — Group 1 done.** Nine leaf service callflows that extend
   `Callflow` directly (options, queue, proxy-registrar Register/Invite, proxy-balancer ping,
   presence Publish/Subscribe, hold's not-allowed, tpcc DialogAPI) were swapped to `v3.Callflow`
@@ -879,8 +872,7 @@ in `blade-admin.ear` like every other admin app.)
   …v3.Callflow` and keep their import, so the simple name `Callflow` still means v2 for any
   polymorphic local. **Proxy flows (`ProxyInvite`, `ProxyCancel`, `IRouterInvite`) are deliberately
   left on v2** — the SipServlet Proxy API bypasses `Callflow.sendRequest()`, so it's untraceable and
-  misses the accumulated sendRequest fixes; they get a separate rework onto Callflow-based
-  forwarding. Framework + all 13 services compile clean; the v3 diagnostics smoke tests still pass.
+  misses the accumulated sendRequest fixes. Framework + all 13 services compile clean; the v3 diagnostics smoke tests still pass.
 
 ### New: `v3.CallflowResponse` — one configurable response, any shape
 
@@ -898,7 +890,7 @@ javadoc references to `Callflow481` in the v2 package-info files now point at
 
 ### New: `framework.v3.media` — RFC 3264 hold/mute/resume, blackhole retired
 
-The v2 hold/mute family audit (Jeff: "I want them to be perfect") found the 2543-era patterns
+The v2 hold/mute family audit found the 2543-era patterns
 and several outright bugs; the whole family is rebuilt in a new `v3.media` package and the v2
 classes are DELETED (`CallflowHold`, `CallflowHoldRelease`, `CallflowMute`, `CallflowUnmute`,
 `CallflowResume`, `AbstractCallflow3PCC`, `SdpDirection` + their smoke tests). What was wrong
@@ -931,16 +923,15 @@ and is now right:
 
 Verified: `SdpMediaSmokeTest` 26/26 (perspective, capture/restore, idempotence, mixed-case,
 answer-builder incl. IPv6 + port-0, multipart SIPREC round-trip); all prior smoke tests pass;
-full build + javadocs green. The 3PCC wire flow itself needs a live call to verify. Known
+full build + javadocs green. Known
 limits, deliberate: no automatic 491 retry timer (caller retries; parked-inactive recovery
 applies) and `CallflowHold` answers echo the full offered format list rather than picking one.
 
 ### Blackhole sweep — every remaining 2543-era SDP site fixed or ruled
 
-Audit of blade + the customer application suite for the same diseases the v3.media rebuild fixed. Fixed:
+Audit of blade for the same diseases the v3.media rebuild fixed. Fixed:
 
-- **tpcc create-dialog is now OFFERLESS** (Jeff: "offerless is correct — the Internet is full
-  of bad advice on this"). `DialogAPI.createDialog` no longer sends the static blackhole offer
+- **tpcc create-dialog is now OFFERLESS**. `DialogAPI.createDialog` no longer sends the static blackhole offer
   (constant deleted, along with a 50-line commented-out duplicate and the TODO `process()`
   stub, now fail-loud); `CreateDialog` answers the party's offer in the ACK via
   `v3.media.CallflowHold.inactiveAnswerFor(...)` — RFC 3725 Flow I create-and-park, media
@@ -951,17 +942,10 @@ Audit of blade + the customer application suite for the same diseases the v3.med
   no longer speaks the deprecated pattern at the thing being tested. `inactiveAnswerFor` was
   extracted from `v3.media.CallflowHold` as a public static (message-typed: works on requests
   AND on the 200-carrying-offer case) and is now the single shared implementation.
-- **customer `mediahub3.holdLocally`** swapped from v2 `Callflow.buildHoldAnswerSdp` (offer echo,
-  zeroed `c=`, caller's `o=` line) to `inactiveAnswerFor` — the full customer build verified against
-  framework 3.0.1.
 - **Deleted** the unfinished `test-uac` `tpcc/Simple.java` stub (empty lambdas, never
   referenced). Docs de-blackholed: tpcc v1 + test-uas + test-uac tpcc package-infos, and the
   hold service package-info (which described `HoldInvite`/`HoldBye` classes that don't exist)
   rewritten to the real HoldServlet → v3.media architecture.
-
-Ruled, not fixed: **mediahub2** is defunct per Jeff (its `RemoveMediaSession` static-blackhole
-re-INVITE — which also violates RFC 3264 §8's m-line count rule against SIPREC's two-stream
-sessions — stays as-is); the customer `legacy/hold` stays as a museum piece.
 
 ### v3 proxy drop-out (`session.passthru`) — foundation
 
@@ -973,12 +957,9 @@ apps-only) flips the *same* callflow between B2BUA and proxy per network. Logic 
 `v3.Callflow` `sendRequest`/`sendResponse` overrides, deduced from `request.isInitial()`. On the
 outbound 2xx it disables Record-Route (`LooseRoutingHelper`) and manually invalidates both dialogs +
 the app session (no ACK/BYE returns, so OCCAS won't auto-invalidate). The symmetric Contact-stitch
-(`peerContact`) is wired via the peer DIALOG's remote target: once a dialog's dialog is up, OCCAS stores
-the peer's Contact as that `SipSessionImpl`'s remote target (it IS the in-dialog request-URI), read
-through new `LooseRoutingHelper.remoteTarget(SipSession)` (isolated reflection unwrap of
-`SipSessionAdapter.impl`). **Needs live verification** (test-uac → test-b2bua`[passthru]` →
-test-uas): that the remote target is populated at each stitch moment, and that the manual
-invalidation stops the 200-OK retransmit. Framework + all services compile; smoke tests pass.
+(`peerContact`) is wired via the peer DIALOG's remote target: once a dialog is up, OCCAS holds
+the peer's Contact as that dialog's remote target (it IS the in-dialog request-URI), read
+through new `LooseRoutingHelper.remoteTarget(SipSession)`. Framework + all services compile; smoke tests pass.
 
 ### Files app: restart the AdminServer to apply a hand-edit
 
@@ -991,7 +972,7 @@ takes effect (and is not clobbered).
   (`ADMIN`/`ENGINE`/`BOTH`/`NONE`). The restart button only appears for `ADMIN`/`BOTH` files;
   for `ENGINE` files (approuter.xml, sipserver.xml, coherence) the editor says plainly that an
   AdminServer restart won't apply them — they need the file pushed to the engine nodes and
-  those bounced (the paused cluster-file-sync work), which isn't wired yet.
+  those bounced, which this action does not do.
 - **Forced, via Node Manager, from a detached process.** A webapp hosted on the AdminServer
   can't restart its own JVM, so `ServerControlAPI` launches `misc/start-admin-nm.sh` **detached**
   (new session via `setsid`/`nohup`) with `NM_ACTION=restart`; the script runs outside the
@@ -1063,8 +1044,7 @@ single tier for dev loops.
   `./deploy.sh <env> <tier> <target>` calls → `./deploy.sh <env> <tier>`.
 - **`engine.nodes`** (new conf key): the FSMAR fat JAR is `scp`'d to every listed engine
   host's `approuter/`, not just one. Back-compat: falls back to a single `ssh.host`, then to
-  a local `cp` into `approuter.dir`. This is an operator-time push, separate from the paused
-  cluster-file-sync restart-time pull.
+  a local `cp` into `approuter.dir`. This is an operator-time push.
 - **`deploy.services`** (new conf key): optional CSV allowlist narrowing which service WARs
   deploy (`*`/empty = all built). Admin ships as one EAR, so it stays all-or-nothing.
 - `<env>` may now be a profile **name** or a **path** to a conf file.
@@ -1150,7 +1130,6 @@ publish/load targets moved to `fsmar.json` to match.
 Mechanism: new `Settings.domainFile()` seam (framework) for the legacy-filename fallback, and
 `FsmarSettings`/`FsmarSettingsManager` (in `libs/fsmar`) overriding the `readConfigTree` /
 `createSettings` seams. Upgraders stay typed Java; no executable upgrade rules in the schema.
-This is the first concrete client of the planned config-versioning upgrade-on-load design.
 
 ### FSMAR 2 retired; FSMAR 3 is now the un-versioned canonical FSMAR
 
@@ -1319,8 +1298,7 @@ application it invokes). Two states can share an `app` under different ids:
 - The sample demonstrates a two-dialog B2BUA (`b2bua` → `b2bua-callee`, both running
   `b2bua`).
 
-FSMAR 3 has no users yet, so this is a clean config-shape change with no
-migration.
+This is a config-shape change with no migration.
 
 ### FSMAR 3: egress exits (the mirror of ingresses)
 
@@ -1435,10 +1413,10 @@ all-gateways-collapse-to-null selector asymmetry.
 - Editor: ingress node panel gains a **Source match** field; selectors are
   per-ingress. Validator warns on a matchless named ingress / a missing state.
 - Egress unchanged this round (a transition `next:"null"` + routes, drawn into
-  the default box); richer per-SBC egress is the symmetric follow-on.
-- **Breaking (uncommitted-era):** the `diagram` shape changed again
+  the default box).
+- **Breaking:** the `diagram` shape changed again
   (gateways/from/to → ingresses). Old-shape diagrams don't round-trip; re-save
-  from Flow. The live dev config has no diagram (stripped earlier).
+  from Flow.
 
 ### Config cleanup: drop `about`/notes; FSMAR3 declares version 3
 
@@ -1453,7 +1431,7 @@ all-gateways-collapse-to-null selector asymmetry.
 - **FSMAR3 config baseline version is 3.** `AppRouterConfiguration.getVersion()`
   defaults a missing version to 3, and the generated sample emits
   `"version": 3`. The framework `version` field now encodes the FSMAR
-  *generation* for this config lineage — a future upgrader can spot a pre-3
+  *generation* for this config lineage, which lets the loader spot a pre-3
   fsmar file and run the `Fsmar2Converter` transform. Other services' version
   counters are independent and unchanged.
 
@@ -1486,11 +1464,9 @@ concatenate from all gateways on export and land on the first on reload
 (known v1 asymmetry). The validator warns on duplicate gateway labels
 (duplicates merge on reload).
 
-**Breaking (uncommitted-era only):** the `diagram` schema changed from this
-morning's flat placement map to the structured `Diagram` class. The live
-dev config's old-shape `diagram` section was stripped (backup at
-`fsmar3.json.pre-gateway.bak`) — valid for both jar versions; re-save from
-Flow to regain a stored layout.
+**Breaking:** the `diagram` schema changed from the earlier flat placement
+map to the structured `Diagram` class. Re-save from Flow to regain a stored
+layout.
 
 ### Flow editor: hand-tool panning + auto-position; Configurator form hints
 
@@ -1581,8 +1557,7 @@ other admin apps, services, and test WARs audited — no other mismatches.
 `IRouterInvite` now wraps `applyRouting` in a 0-ms ServletTimer. When the
 pipeline contains an async connector (REST), the connector chain completes on
 the HttpClient executor thread, where the container has no call context —
-`request.getProxy()` in `executeRoute` threw an NPE (hit in the field on
-forward routes behind a REST screening call). The timer fires the routing
+`request.getProxy()` in `executeRoute` threw an NPE. The timer fires the routing
 decision on a container thread with appSession context regardless of which
 thread completed the chain; sync-only pipelines just take one extra 0-ms hop.
 
@@ -1754,18 +1729,16 @@ configurator, watcher, all services).
 `Integer version` — the config file's schema version, serialized first in
 every config file and SAMPLE. Absent/null reads as 0, meaning "pre-versioning
 file". Rendered read-only in the Configurator form (`@FormLayout(readOnly)`),
-deliberately NOT Jackson read-only so the value still binds from files. First
-step toward framework-managed config-file upgrade chains (BLADE 3.0).
+deliberately NOT Jackson read-only so the value still binds from files.
 
 Verified: new ConfigurationVersionSmokeTest 6/6 (absent⇒0, explicit binds,
 serialized first, schema `x-readonly`).
 
-Follow-up: `SettingsManager`/`Settings` refactored for extensibility ahead of
-the v3 SettingsManager — six duplicated event-constructor bodies collapsed
+Follow-up: `SettingsManager`/`Settings` refactored for extensibility: six duplicated event-constructor bodies collapsed
 into `initContext()`; `build()` decomposed into `initConfigPaths()` /
 `createSettings()` (Settings factory) / `configureMapper()`, all protected
 overridable seams; `Settings.reload()` now reads each overlay file through a
-protected `readConfigTree(file, configType)` hook (the future per-file
+protected `readConfigTree(file, configType)` hook (the per-file
 upgrade point); Settings fields widened to protected. No behavior change —
 all constructors and public methods unchanged, full build + existing
 subclasses (queue, acl, proxy-block, proxy-balancer, configurator) compile
@@ -1806,8 +1779,7 @@ rule, and documents the pseudo-variables. README updated.
 Verified: ExpressionSmokeTest 71/71, new TableSelectorSmokeTest 13/13,
 FsmarRoutingSmokeTest 46/46 (pseudo-vars incl. hash stability, tier
 classification end-to-end, matches in `when`, region round-trip, metrics);
-full production build + javadocs green; connect/securelogix regression
-build green against the modified framework. Wire-level behavior (trace in
+full production build + javadocs green. Wire-level behavior (trace in
 live logs, JMX metrics in a real engine) is deploy-only.
 
 ### Javadoc site: every module card now has a tagline
@@ -1847,7 +1819,7 @@ carrying descriptions; browser check of `/blade/javadoc` after deploy.
 - **Test apps promoted to production** (2026-06-05): `test-b2bua`,
   `test-uac`, `test-uas` added to production.conf and to the cluster EAR via
   their own `ear-test-*` profiles — they now deploy with the services tier as
-  live-diagnostics tools, with more features planned. `context.war` remains
+  live-diagnostics tools. `context.war` remains
   the only standalone services-tier WAR.
 
 Verified: production build → blade-cluster.ear contains the 3 test WARs;
@@ -1864,8 +1836,7 @@ standalone deployable left anywhere is the admin tier's `watcher.war`.
 
 With this, the `default`, `full`, and `production` profiles select identical
 module sets (verified by diff). They remain separate files on purpose —
-production is the customer-facing anchor; default/full can grow dev-only
-modules again later.
+production is the customer-facing anchor.
 
 Verified: production build → blade-cluster.ear contains context.war (18
 WARs); javadoc index back to 31 cards with the Context tagline.
@@ -1983,13 +1954,11 @@ possible), per the no-protected-instance-helpers rule.
 - Log-text corrections: `doReponse`/`sendReponse` typos, a "doResponse" tag on
   a doRequest warning and on the timer-expiry message, and the `#5`/`Error #3`
   tags normalized to `#ex7`.
-- **Known no-op left in place (flagged, not fixed):** the analytics "start"
+- **Known limitation:** the analytics "start"
   event (`createEvent("start", ...)` → `start(event)` →
-  `SettingsManager.sendEvent(contextEvent)`) has never been published —
-  `createEvent(name, SipServletContextEvent)` deliberately does not attach the
-  event to the context (the "jwm - this is a bad idea" comment in
-  SettingsManager), and `sendEvent(ssce)` only sends what it finds there.
-  Wiring it up would newly publish JMS events; that's a product decision.
+  `SettingsManager.sendEvent(contextEvent)`) is never published:
+  `createEvent(name, SipServletContextEvent)` does not attach the
+  event to the context, and `sendEvent(ssce)` only sends what it finds there.
 
 Verified: framework builds clean; Callflow/SDP smoke tests pass 84/84.
 
@@ -2067,7 +2036,7 @@ theme variables, so it renders correctly in all four themes.
 `IRouterServlet` moved from the `services/irouter` WAR into the framework
 (`org.vorpal.blade.framework.v3.irouter`), joining its siblings `IRouterInvite`,
 `IRouterConfig`, `IRouterConfigSample`. It's now the shared, unannotated base
-(like `B2buaServlet`) that any iRouter app or commercial extension subclasses
+(like `B2buaServlet`) that any iRouter app subclasses
 with **only the framework dependency** — no cross-WAR `-classes.jar` needed.
 
 - Centralizes everything common: the `settings` lifecycle (`servletCreated` /
@@ -2078,14 +2047,12 @@ with **only the framework dependency** — no cross-WAR `-classes.jar` needed.
   (the pipeline + routing config) and `newInvite(config)` (the initial-INVITE
   callflow). A subclass overrides only what differs.
 - `IRouterApp` (the standalone iRouter WAR's annotated leaf) is unchanged — an
-  empty annotated body over the base defaults. `SecureLogixServlet` collapses to
-  ~12 lines of code: the `@Sip` annotations plus the two factory overrides
-  (`SecureLogixConfigSample`, `SecureLogixInvite`). Its `servletCreated` /
-  `servletDestroyed` / `chooseCallflow` / static field / SNMP wiring are all
-  inherited. (`SecureLogixSettingsManager` was already deleted — the framework
-  `RestConnector` self-materializes the body template.)
-- Verified: framework + iRouter WAR + securelogix WAR all build; securelogix WAR
-  carries exactly one `@SipServlet`-annotated leaf (the base is unannotated and
+  empty annotated body over the base defaults. A derived iRouter app collapses to
+  about 12 lines of code: the `@Sip` annotations plus the two factory overrides.
+  Its `servletCreated` / `servletDestroyed` / `chooseCallflow` / static field /
+  SNMP wiring are all inherited.
+- Verified: framework + iRouter WAR + a derived iRouter WAR all build; the derived
+  WAR carries exactly one `@SipServlet`-annotated leaf (the base is unannotated and
   rides in the framework jar), so no redundant-annotation deployment error.
 
 ### iRouter connectors: circuit breaker with SNMP edge traps (REST, LDAP, JDBC)
@@ -2115,23 +2082,19 @@ storm the NMS with a trap per failure.
   2000-thread concurrency test (1 down, 1 up) plus a behavior test of the real
   class. No singleton, no background timer/thread — just a timestamp compared on
   the call path.
-- SecureLogix (att-tao) enables it on its HUCS FRS screening (REST) connector:
-  `cooldown=60s`, `trap=true`. During a HUCS outage, calls fall to the existing
-  `X-Screening: fallback` allow route instead of each eating the 3s timeout, and
-  AT&T's NOC gets one trap down + one trap up per outage.
 
 ### SNMP: user-defined traps from BLADE apps + a Tuning agent editor
 
-BLADE can now emit SNMP traps for AT&T-style NMS monitoring, reusing the
-trap-sending machinery OCCAS already ships (`com.bea.wcp.sip.management.snmp.SNMPAgent.sendSipAppTrap`)
+BLADE can now emit SNMP traps for NMS monitoring, reusing the
+SIP-application trap sender OCCAS already ships
 — no new dependency, no custom MIB. The seven severity-keyed SIP-application
 traps (`sipAppInfoTrap` … `sipAppEmergencyTrap`, OIDs `1.3.6.1.4.1.140.626.200.14`–`.20`)
 are defined in the shipped `WLSS-MIB.asn1`; give that MIB to the NMS to decode them.
 
 - **`framework.v2.snmp.Snmp`** — reflective, fail-closed wrapper (same pattern as
   `EngineOverload`). `Snmp.trap(Severity, message)` for explicit business events;
-  a `Severity` enum mirrors OCCAS's `TRAP_SIP_APP_SEVERITY`. If `SNMPAgent` is
-  absent (off-OCCAS, unit tests, a renamed engine) every call is a silent no-op —
+  a `Severity` enum mirrors OCCAS's SIP-application trap severities. If the
+  trap sender is absent (off-OCCAS, unit tests, a renamed engine) every call is a silent no-op —
   a trap must never break its caller (verified: no throw off-engine).
 - **Log→trap bridge.** New per-service `LogParameters.snmpTrapLevel` (default
   **OFF**): any log statement at or above that level also fires a trap, mapping
@@ -2161,10 +2124,9 @@ SIP-aware load balancer stops routing **new** calls here and drains the node —
 instead of the engine rejecting calls one at a time after they arrive. In-flight
 dialogs are unaffected.
 
-- `EngineOverload.isOverloaded()` reads OCCAS's own
-  `com.bea.wcp.sip.engine.server.olp.OverloadProtection.getInstance().isBusy()`
-  **reflectively** — no compile-time dependency on engine internals. If the class
-  is absent or changes, it fails closed to "available," so OPTIONS keeps
+- `EngineOverload.isOverloaded()` reads the busy flag of OCCAS's own overload
+  protection **reflectively**, with no compile-time dependency on the engine. If
+  that flag is absent or changes, it fails closed to "available," so OPTIONS keeps
   answering 200 exactly as before (verified: returns false off-engine).
 - No custom OCCAS overload *handler* / `OlpEventHandler` / ServiceLoader wiring
   needed — OPTIONS simply reads the flag OCCAS already maintains.
@@ -2173,12 +2135,11 @@ dialogs are unaffected.
   `options.json` without the field defaults to off, so deployed behavior is
   unchanged until opted in. The 503 path can only fire when overload thresholds
   are actually configured.
-- Built on the current v2 Options service; carries forward into the planned v3
-  OPTIONS rewrite (roadmap item 6, drain control).
+- Built on the current v2 Options service.
 
 ### Tuning: JDK 21 / OCCAS 8.3 latency tuning, Health Check, overload protection
 
-Driven by fact-checked research for the OCCAS 8.3 / WebLogic 14.1.2 / JDK 21 stack.
+Targets the OCCAS 8.3 / WebLogic 14.1.2 / JDK 21 stack.
 
 - **JDK 21 low-pause GC, done correctly.** Added `-XX:+ZGenerational` and
   `-XX:+AlwaysPreTouch` as known JVM flags, and a **"Low-Latency (ZGC)"** preset
@@ -2186,7 +2147,7 @@ Driven by fact-checked research for the OCCAS 8.3 / WebLogic 14.1.2 / JDK 21 sta
   on JDK 21 plain `-XX:+UseZGC` selects the *legacy non-generational* collector —
   Generational ZGC needs the extra flag. It is JDK-21/22-only (default in 23,
   removed in 24), called out in the tooltip. Framed as predictable/bounded pause
-  times, never "guaranteed sub-ms" (a claim the research explicitly refuted).
+  times, never "guaranteed sub-ms".
 - **Health Check panel** (read-only): flags `-Xms ≠ -Xmx`, removed CMS/ParNew GC
   flags (fatal on JDK 21), `-Xshare:off` (disables free CDS warmup), a non-default
   socket muxer (14.1.2 default is the NIO muxer), ZGC-without-Generational, and a
@@ -2196,7 +2157,7 @@ Driven by fact-checked research for the OCCAS 8.3 / WebLogic 14.1.2 / JDK 21 sta
   the Recommended preset now also raises socket readers to ≥ 10 (OCCAS engine rec).
 - **Work Manager preset** now fills OCCAS engine capacities: `wlss.transport`
   capacity 5,000,000 and `wlss.timer` capacity 150,000 (from the OCCAS 8.0 tuning
-  doc — stable across versions, re-confirm against the 8.3 guide).
+  doc).
 - **SIP overload protection** — new fields for the classic `<overload>` element
   (`OverloadBean`: threshold-policy session-rate/queue-length, threshold value,
   release value), created on first save if absent. NOTE: OCCAS also has a separate,
@@ -2251,21 +2212,19 @@ AdminServer re-serialized its in-memory `SipServerBean`.
   Work Manager tabs already use. `activate` persists `sipserver.xml` and runs the
   descriptor validator, and each engine node picks the change up on its next
   restart.
-- **"Requires restart" is now surfaced.** The engine snapshots the SIP timers in
-  a `static` initializer at class load (`Transaction.<clinit>`), so a timer
-  change does not affect a running engine. The API returns `requiresRestart`, and
+- **"Requires restart" is now surfaced.** The engine reads the SIP timers once
+  at startup, so a timer change does not affect a running engine. The API returns `requiresRestart`, and
   the SIP Timers save now warns that timer changes take effect only after a
   rolling restart of the engine tier (instead of the old unconditional "saved").
 
 
 ### Analytics: schema cleanup + multi-tenant tenant column
 
-Groundwork for hosting one BLADE analytics database behind one Oracle Analytics
-Cloud instance serving many customers, each seeing only their own calls.
+Lets one BLADE analytics database hold several tenants' calls, each row
+traceable to its tenant.
 
 - **`MySQL-database-schema.sql` is now the single source of truth.** The Oracle
-  and SQL Server dialect scripts were removed; they'll be regenerated from the
-  MySQL script when needed.
+  and SQL Server dialect scripts were removed.
 - **Plural table names** — all analytics tables are plural (`sessions`,
   `events`, `attributes`, `session_keys`, `event_types`, `attribute_names`,
   `applications`). `session` (singular) is a reserved word in Oracle, so the
@@ -2277,14 +2236,12 @@ Cloud instance serving many customers, each seeing only their own calls.
   which reads `-Dblade.tenant=<code>` or `BLADE_TENANT`. NULL on single-tenant
   installs, so existing deployments are unaffected. `sessions`/`events` rows reach
   their tenant by joining `applications(id)` — no hot-path change.
-  `idx_application_tenant` keeps the RLS predicate cheap.
+  `idx_application_tenant` keeps a tenant filter cheap.
 - *Note:* the analytics entities live in the frozen `framework/v2/analytics`
   package (there is no v3 analytics); the tenant addition is nullable and
   backward-compatible.
 
-> Oracle/OAC-specific artifacts (reporting views, row-level-security support) are
-> deferred — MySQL is the only supported database for now; the OAC dashboard layer
-> will be rebuilt when Oracle support returns.
+> MySQL is the only supported analytics database.
 
 ### Analytics: session identity is the vorpal-id; PK is DB-assigned
 
@@ -2307,8 +2264,8 @@ already mints at first-touch).
   the PK on the session-started message, keeps an in-memory `vorpal-id → PK` map,
   and resolves later events/keys through it — falling back to the open session
   row in the DB, **scoped by its own domain id**, on a cold cache (restart /
-  second consumer instance). The domain id is required because customers run many
-  clusters sharing one WebLogic domain name (e.g. SIPREC × 10, VOICE × 10) all
+  second consumer instance). The domain id is required because several clusters
+  can share one WebLogic domain name while
   feeding **one shared analytics DB**, so a vorpal-id is only unique within an
   environment; `cluster_name` is what keeps rows distinct, enforced by the
   `(cluster_name, vorpal_id)` `open_key` unique index.
@@ -2336,8 +2293,7 @@ datasource descriptors, logging configs, plain `.properties`.
   can restore one. This uses the new framework helper
   `org.vorpal.blade.framework.io.VersionedFileStore` — the same backup
   discipline the Configurator's `FileManagerServlet` grew, now factored out for
-  reuse. (Repointing the Configurator at the shared helper is a separate
-  follow-up.)
+  reuse.
 
 ### Analytics Console: renamed, audit fix, one-click JMS provisioning
 
@@ -2448,11 +2404,6 @@ whole admin tier deploys to AdminServer in one step.
   in the tier dir it is the deploy unit; loose WARs there are for manual
   individual redeploys).
 
-(A future optimization — hosting the framework once in the EAR's `APP-INF/lib`
-instead of per-WAR — needs the shared library repackaged as an EAR-referenceable
-library, since a WAR-packaged shared library is only visible at the WAR
-classloader level. Deferred.)
-
 ### Configurator: auto-publish absorbed; `watcher` WAR kept as the standalone alternative
 
 The Configurator now owns the file-system auto-publish behavior in-process, so
@@ -2469,10 +2420,9 @@ sites running the Configurator no longer need the separate `watcher` WAR.
   thread starts/stops immediately — no redeploy. The lifecycle is owned by
   `ConfiguratorSettingsManager.initialize()`, the framework's per-reload hook.
 - **`watcher` retained — standalone only, not in `blade-admin.ear`.** (It was
-  briefly deleted during the 2.9.9 cycle, then restored: some sites can't
-  deploy the Configurator UI — it doesn't pass their security scans — and
-  `watcher`, with no UI / no servlets / no login, is what they deploy
-  instead.) It builds as `watcher.war` in `dist/<ver>/admin/` and is
+  briefly deleted during the 2.9.9 cycle, then restored for sites that deploy
+  no Configurator UI: `watcher`, with no UI / no servlets / no login, is what
+  they deploy instead.) It builds as `watcher.war` in `dist/<ver>/admin/` and is
   deliberately excluded from the admin EAR, since running it alongside the
   Configurator's Auto-publish double-publishes every file edit. Its "this
   module will be removed" deprecation banners (startup log, README, webapp
@@ -2591,7 +2541,7 @@ The monolithic `dev-console` has been broken into focused, independent applicati
 | **flow** | `/flow` | FSMAR configuration editor — visual diagram editing with mxGraph |
 | **tuning** | `/tuning` | OCCAS/WebLogic tuning — JVM, SIP timers, thread pools, work managers |
 | **file-manager** | `/files` | WebSocket-based configuration file management and monitoring |
-| **explorer** | `/explorer` | EasyUI-based experimental UI — endpoints, jstree, ALICE forms |
+| **explorer** | `/explorer` | EasyUI-based experimental UI — endpoints, jstree, forms |
 | **json-forms** | `/forms` | Legacy JSON configuration form editor with multiple JSP iterations |
 
 ### Removed

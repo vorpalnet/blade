@@ -42,17 +42,14 @@ The persistence unit is `BladeAnalytics`, bound to the `jdbc/BladeAnalytics` dat
 Schema DDL generation is off by design. Three dialects ship —
 `sql/MySQL-database-schema.sql`, `sql/Oracle-database-schema.sql` and
 `sql/MSSQL-database-schema.sql` — maintained side by side and kept in step by
-`SchemaAgreementTest`, which also checks each against the entities. That test exists
-because a mismatch between two of them once meant the Oracle write path had never worked
-at all. `install.sh` creates the data source for you (the "Analytics database" page +
-"Create the analytics data source" row, or headless `./install.sh <env> datasource`);
-WLST helpers for provisioning MySQL, Oracle ADB, SQL Server, and the schema live
-in `notes/`. (`notes/design.md` is historical JPA/JMS working notes from the
-pre-CloudEvents design — read `package-info.java` for the current architecture.)
+`SchemaAgreementTest`, which also checks each against the entities. `install.sh` creates
+the data source for you (the "Analytics database" page + "Create the analytics data
+source" row, or headless `./install.sh <env> datasource`); WLST helpers for provisioning
+MySQL, Oracle ADB, SQL Server, and the schema live in `notes/`. Read `package-info.java`
+for the architecture.
 
 A third dialect is cheap because **no key is assigned by the database**: nothing depends
-on what a given provider believes a given platform can generate, which is precisely what
-made Oracle expensive. SQL Server needs **2016 or later** — `events.payload` relies on
+on what a given provider believes a given platform can generate. SQL Server needs **2016 or later** — `events.payload` relies on
 `ISJSON` and `JSON_VALUE`, and on an older server the attribute bag has no home.
 
 **Retention is yours, and the default is unbounded growth.** Nothing in BLADE deletes a

@@ -47,7 +47,7 @@ supply it, and bundling it breaks the WebLogic Admin Console with
 
 Deployed to **both** the AdminServer and the engine cluster — WebLogic shared libraries
 are scoped to deployment targets, and both tiers host referencing WARs. Whole-environment
-order is shared → fsmar → admin → services (see [DEPLOYMENT.md](../../DEPLOYMENT.md));
+order is shared → fsmar → admin → services (see [DEPLOYING.md](../../DEPLOYING.md));
 undeploy is the reverse, so the library goes last.
 
 Two failure signatures worth knowing:

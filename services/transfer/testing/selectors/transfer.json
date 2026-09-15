@@ -24,7 +24,7 @@
       "additionalExpressions" : {
         "direction" : "inbound"
       },
-      "pattern" : "^.*shuffleib.*$"
+      "pattern" : "^.*xferib.*$"
     }, {
       "id" : "outbound",
       "description" : "Mark the session as outbound based on OSM-Features. No expression means no session key",
@@ -32,7 +32,7 @@
       "additionalExpressions" : {
         "direction" : "outbound"
       },
-      "pattern" : "^.*(?<direction>shuffleob).*$"
+      "pattern" : "^.*(?<direction>xferob).*$"
     }, {
       "id" : "gucidSelector",
       "description" : "Create index key based on the value of the Cisco-Gucid header",
@@ -137,6 +137,6 @@
   "transferAllRequests" : false,
   "defaultTransferStyle" : "blind",
   "allow" : "MESSAGE, REFER, NOTIFY, CANCEL, ACK, UPDATE, PRACK, OPTIONS, INVITE, INFO, SUBSCRIBE, BYE",
-  "preserveInviteHeaders" : [ "Cisco-Gucid", "User-to-User", "OSM-Features", "Allow", "X-Genesys-CallUUID", "P-Asserted-Identity", "X-Semafone-URL" ],
-  "preserveReferHeaders" : [ "Cisco-Gucid", "User-to-User", "OSM-Features", "Referred-By", "X-Omni-DestinationNumber", "X-Genesys-CallUUID", "x-User-To-User" ]
+  "preserveInviteHeaders" : [ "Cisco-Gucid", "User-to-User", "OSM-Features", "Allow", "X-Genesys-CallUUID", "P-Asserted-Identity", "X-Payment-URL" ],
+  "preserveReferHeaders" : [ "Cisco-Gucid", "User-to-User", "OSM-Features", "Referred-By", "X-Destination-Number", "X-Genesys-CallUUID", "x-User-To-User" ]
 }

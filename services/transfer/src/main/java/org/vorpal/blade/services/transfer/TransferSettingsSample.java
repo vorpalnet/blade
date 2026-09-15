@@ -33,7 +33,7 @@ public class TransferSettingsSample extends TransferSettings {
 //		inbound.setId("inbound");
 //		inbound.setDescription("Mark the session as inbound based on OSM-Features. No expression means no session key");
 //		inbound.setAttribute("OSM-Features");
-//		inbound.setPattern("^.*shuffleib.*$");
+//		inbound.setPattern("^.*xferib.*$");
 //		inbound.addAdditionalExpression("direction", "inbound");
 //		indexKeySelectors.add(inbound);
 //
@@ -42,7 +42,7 @@ public class TransferSettingsSample extends TransferSettings {
 //		outbound.setDescription(
 //				"Mark the session as outbound based on OSM-Features. No expression means no session key");
 //		outbound.setAttribute("OSM-Features");
-//		outbound.setPattern("^.*shuffleob.*$");
+//		outbound.setPattern("^.*xferob.*$");
 //		outbound.addAdditionalExpression("direction", "outbound");
 //		indexKeySelectors.add(outbound);
 //

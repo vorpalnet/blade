@@ -14,7 +14,7 @@ Copy the template, replace the placeholders, write the slides:
 
 | Placeholder | Is |
 |---|---|
-| `{{TITLE}}` | browser tab and gallery name — a short noun phrase, not a sentence |
+| `{{TITLE}}` | browser tab name, a short noun phrase, not a sentence |
 | `{{FOOTER}}` | the bottom-left label, e.g. `<b>BLADE</b> · services/webrtc` |
 | `{{YEAR}}` | copyright year |
 | `{{EYEBROW}}` `{{HEADLINE}}` `{{STANDFIRST}}` | the title slide |
@@ -41,8 +41,8 @@ tells the reader something. "Media handling" does not.
 colour into a slide. Two accents carry meaning — `--sig` for signaling, `--med` for media —
 and both are always labelled in words, never colour alone.
 
-**Self-contained.** No external fonts, scripts, images or stylesheets: these are published
-under a content policy that blocks every external host, and a linked asset fails silently.
+**Self-contained.** Decks are self-contained HTML with no external assets: no external fonts,
+scripts, images or stylesheets.
 The Vorpal mark is inlined in the shell for that reason — a copy of the canonical
 `admin/portal/src/main/webapp/brand/vorpal_logo.svg`, filled through the `--brand` token so
 it tracks the light/dark theme instead of a fixed purple or white. **When the logo changes

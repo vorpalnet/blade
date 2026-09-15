@@ -24,13 +24,15 @@ set -uo pipefail
 # --- which is exactly how an earlier version of this check passed everything.
 WS='[[:space:]]'
 COMMENT="^${WS}*(///|//|\*|#)"
-INTERNALS='SipServletRequestImpl|SipServletResponseImpl|SipServletMessageImpl|SipApplicationSessionImpl|WlssSipTargetedRequestInfo|LocalTransport|ProxyImpl|ProxyAdapter|CallStateManager|ContainerProcessRequest|NetworkAccessPointMBeanUtil|SipConstants|wlss\.jar|wlssapi\.jar'
+INTERNALS='SipServletRequestImpl|SipServletResponseImpl|SipServletMessageImpl|SipApplicationSessionImpl|WlssSipTargetedRequestInfo|LocalTransport|ProxyImpl|ProxyAdapter|CallStateManager|ContainerProcessRequest|NetworkAccessPointMBeanUtil|SipConstants|SipSessionImpl|SipSessionAdapter|pushLocalRoute|com\.bea\.wcp\.sip\.(engine|management|util)\.|wlss\.jar|wlssapi\.jar'
 DECOMPILE='[Dd]ecompil'
 
 # Files where the dependency is structural: the code itself casts to or reflects on
 # these classes, so scrubbing the comments would hide nothing and cost the next
 # maintainer the explanation they need.
-ALLOW='libs/framework/src/main/java/org/vorpal/blade/framework/v3/configuration/routing/LooseRoutingFilter\.java|libs/framework/src/main/java/org/vorpal/blade/framework/v3/configuration/routing/LooseRoutingHelper\.java|\.githooks/pre-commit'
+# Snmp and EngineOverload look up engine classes by name through reflection;
+# SipTimerSettings edits the sipserver.xml descriptor bean through JMX by its name.
+ALLOW='libs/framework/src/main/java/org/vorpal/blade/framework/v3/configuration/routing/LooseRoutingFilter\.java|libs/framework/src/main/java/org/vorpal/blade/framework/v3/configuration/routing/LooseRoutingHelper\.java|libs/framework/src/main/java/org/vorpal/blade/framework/v2/snmp/Snmp\.java|services/options/src/main/java/org/vorpal/blade/services/options/EngineOverload\.java|admin/tuning/src/main/java/org/vorpal/blade/applications/console/tuning/SipTimerSettings\.java|\.githooks/pre-commit'
 
 # --- ~/.m2 carries the framework JAR and nothing else. WebLogic deploys from dist/
 # --- and never reads a Maven repository; the parent pom skips install, and only

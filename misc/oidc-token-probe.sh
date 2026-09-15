@@ -2,8 +2,8 @@
 # oidc-token-probe.sh - what an identity provider actually puts in its tokens.
 #
 #   misc/oidc-token-probe.sh <env> <app> <user> <password> [scope ...]
-#   misc/oidc-token-probe.sh ashburn blade-recordings reviewer1 '...' openid
-#   misc/oidc-token-probe.sh ashburn blade-recordings reviewer1 '...' openid groups
+#   misc/oidc-token-probe.sh staging blade-recordings reviewer1 '...' openid
+#   misc/oidc-token-probe.sh staging blade-recordings reviewer1 '...' openid groups
 #
 # Uses the client settings deploy.sh injects (~/.blade/<env>/oidc/<app>.properties)
 # and the password grant, which the application allows for exactly this: seeing

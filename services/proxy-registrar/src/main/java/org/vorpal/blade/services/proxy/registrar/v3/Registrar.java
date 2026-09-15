@@ -182,15 +182,8 @@ public class Registrar implements Serializable {
 
 			if (contactsMap.size() > 1) {
 
-				// jwm - Failed to dispatch Sip message to servlet PRServlet
-				// java.lang.AssertionError at
-				// com.bea.wcp.sip.engine.ParameterableAdapter.setParameter(ParameterableAdapter.java:154)
-				// exception when modifying expires, try a deep copy
-				// contact.setParameter("expires",
-				// this.calculateExpires(contactInfo.getExpiration()));
-				// response.addAddressHeader("Contact", contact, false);
-
-				// jwm - does this work?
+				// The container refuses setParameter on a Contact address it handed us
+				// (AssertionError), so set "expires" on a copy built from its string form.
 				Address updatedContact = PRServlet.getSipFactory().createAddress(contact.toString());
 				updatedContact.setParameter("expires", this.calculateExpires(contactInfo.getExpiration()));
 

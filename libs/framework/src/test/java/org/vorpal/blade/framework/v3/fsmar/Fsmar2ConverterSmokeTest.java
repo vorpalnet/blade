@@ -23,7 +23,7 @@ public final class Fsmar2ConverterSmokeTest {
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
 	public static void main(String[] args) throws Exception {
-		testMediaHubShapedConfig();
+		testMediaAppShapedConfig();
 		testOperatorSpread();
 		testRepeatingHeaderAnyInstance();
 		testRegionLabelAndQuotes();
@@ -34,7 +34,7 @@ public final class Fsmar2ConverterSmokeTest {
 
 	/// The production shape: default app, unconditional OPTIONS route, and an
 	/// INVITE matched on the Contact header's host IP.
-	private static void testMediaHubShapedConfig() throws Exception {
+	private static void testMediaAppShapedConfig() throws Exception {
 		String fsmar2 = "{"
 				+ "\"defaultApplication\": \"b2bua\","
 				+ "\"previous\": { \"null\": { \"triggers\": {"
@@ -46,27 +46,27 @@ public final class Fsmar2ConverterSmokeTest {
 		Fsmar2Converter.Result r = Fsmar2Converter.convert(MAPPER.readTree(fsmar2));
 		String json = Fsmar2Converter.toValidatedJson(r);
 
-		check("mediahub-shape: no review items", !r.needsReview());
-		check("mediahub-shape: default app carried", "b2bua".equals(r.config.getDefaultApplication()));
+		check("media-app-shape: no review items", !r.needsReview());
+		check("media-app-shape: default app carried", "b2bua".equals(r.config.getDefaultApplication()));
 
 		AppRouterConfiguration cfg = MAPPER.readValue(json, AppRouterConfiguration.class);
 		State init = cfg.getStates().get("null");
-		check("mediahub-shape: null state exists", init != null);
+		check("media-app-shape: null state exists", init != null);
 
 		Transition opt = init.getTriggers().get("OPTIONS").getTransitions().get(0);
-		check("mediahub-shape: OPTIONS unconditional", opt.getWhen() == null);
-		check("mediahub-shape: OPTIONS next", "options".equals(opt.getNext()));
+		check("media-app-shape: OPTIONS unconditional", opt.getWhen() == null);
+		check("media-app-shape: OPTIONS next", "options".equals(opt.getNext()));
 
 		Transition inv = init.getTriggers().get("INVITE").getTransitions().get(0);
-		check("mediahub-shape: INVITE when is clean ==",
+		check("media-app-shape: INVITE when is clean ==",
 				"${Contact.host} == '192.0.2.71'".equals(inv.getWhen()));
 
 		// Behavioral: a request whose Contact carries the IP fires; another doesn't.
-		check("mediahub-shape: matching Contact fires",
+		check("media-app-shape: matching Contact fires",
 				fires(init, inv, payload("Contact", "<sip:rec@192.0.2.71:5060;transport=tcp>")));
-		check("mediahub-shape: port not mistaken for host",
+		check("media-app-shape: port not mistaken for host",
 				fires(init, inv, payload("Contact", "<sip:rec@192.0.2.71>")));
-		check("mediahub-shape: other host does not fire",
+		check("media-app-shape: other host does not fire",
 				!fires(init, inv, payload("Contact", "<sip:rec@192.0.2.99:5060>")));
 	}
 

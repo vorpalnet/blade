@@ -102,7 +102,7 @@ public class InboundToBrowser extends WebrtcCallflow {
 	/// parameters [BrowserRegistration] put in the registered contact and dispatched the request
 	/// into the registration's own application session, which already knows its browser. That is
 	/// the authoritative answer, and it has to be: the fork's Request-URI names this engine, not
-	/// the browser's domain, so parsing it would yield `alice@172.16.32.129`. The Request-URI
+	/// the browser's domain, so parsing it would yield `alice@192.0.2.129`. The Request-URI
 	/// fallback remains for INVITEs addressed to the browser directly.
 	private String claimBrowser(SipServletRequest invite, SipApplicationSession app) throws Exception {
 		String aor = (String) app.getAttribute(BrowserSignals.BROWSER_AOR);

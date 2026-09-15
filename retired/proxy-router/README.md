@@ -3,7 +3,7 @@
 Welcome to the BLADE R3, the Reductive Reasoning Router.
 
 The goal behind R3 is to build a universal router that can build translations maps based on any piece of data
-within a SIP message without scripting (for now). It is called "reductive" because it works upon a simple
+within a SIP message without scripting. It is called "reductive" because it works upon a simple
 concept of defining translation maps within translation maps, each operating on a single piece of information
 until the final route is chosen.
 
@@ -84,9 +84,9 @@ Consider this example:
     "description" : "Translations Map for Remote IP addresses",
     "selector" : "origin-ip",
     "map" : {
-      "10.28.82.132" : {
-        "description" : "CL2 STG OB",
-        "requestUri" : "sip:10.173.165.142:5060"
+      "198.51.100.10" : {
+        "description" : "staging_2 outbound",
+        "requestUri" : "sip:192.0.2.42:5060"
       }
     }
   }, {      
@@ -96,20 +96,20 @@ Consider this example:
     "selector" : "to-user",
     "map" : {
       "19951" : {
-        "description" : "CL2 DEV",
-        "requestUri" : "sip:10.29.68.26:5060"
+        "description" : "dev_2",
+        "requestUri" : "sip:198.51.100.13:5060"
       },
       "19954" : {
-        "description" : "CL2 STG",
-        "requestUri" : "sip:10.29.82.110:5060"
+        "description" : "staging_2",
+        "requestUri" : "sip:198.51.100.14:5060"
       }
     }
   } ]      
 ```
 
 From these two maps, you can see how:
-* a call comes from "10.28.82.132", it will be routed to the "CL2 STG OB" server
-* a dialed number looks like "1 (995) 1xxx-xxxx", it will be routed to the "CL2 DEV" server
+* a call comes from "198.51.100.10", it will be routed to the "staging_2 outbound" server
+* a dialed number looks like "1 (995) 1xxx-xxxx", it will be routed to the "dev_2" server
 
 ## Reductive Maps
 
@@ -125,9 +125,9 @@ Consider this variation:
     "description" : "Translations Map for Remote IP addresses",
     "selector" : "origin-ip",
     "map" : {
-      "10.28.82.132" : {
-        "description" : "CL2 STG OB",
-        "requestUri" : "sip:10.173.165.142:5060"
+      "198.51.100.10" : {
+        "description" : "staging_2 outbound",
+        "requestUri" : "sip:192.0.2.42:5060"
       }
     }
   }, {
@@ -137,7 +137,7 @@ Consider this variation:
     "selector" : "to-user",
     "map" : {
       "19974" : {
-        "description" : "CL1 STG",
+        "description" : "staging_1",
         "list" : [ "address-map-2" ],
       }
     }
@@ -145,8 +145,8 @@ Consider this variation:
 ```
 
 You'll notice that each 'translation' entry may contain a list to another map. In this case 
-if the call dialed number starts with "19974" _and_ originated from the "10.28.82.132", the it will
-be routed to the "CL2 STG OB" server. Being a list, if the first map's selector does not find a match,
+if the call dialed number starts with "19974" _and_ originated from the "198.51.100.10", the it will
+be routed to the "staging_2 outbound" server. Being a list, if the first map's selector does not find a match,
 the R3 router will try each subsequent map in the list until success.
 
 Try hard to avoid circular references!
@@ -156,9 +156,9 @@ entry, you can define a default address. Example:
 
 ```
       "19974" : {
-        "description" : "CL1 STG",
+        "description" : "staging_1",
         "list" : [ "address-map-2" ],
-        "requestUri" : "sip:10.204.67.59:5060" 
+        "requestUri" : "sip:198.51.100.30:5060" 
       }
 ```
 
@@ -168,16 +168,16 @@ this example:
 
 ```
       "19974" : {
-        "description" : "CL1 STG",
+        "description" : "staging_1",
         "list" : [ "address-map-2" ],
-        "requestUri" : "sip:$1@10.204.67.59:5060" 
+        "requestUri" : "sip:$1@198.51.100.30:5060" 
       }
 ```
 
 Can you spot the difference? The requestUri has "$1@" added to it to create an address similar to:
 
 ```
-sip:1997451234@10.204.67.59:5060
+sip:1997451234@198.51.100.30:5060
 ```
 
 How cool is that?
@@ -216,7 +216,6 @@ types of string maps to operate on other types of data in the SIP INVITE message
 A sample configuration file is saved as R3.SAMPLE.
 
 ```
-jeff@mothra vorpal % cat R3.SAMPLE
 {
   "selectors" : [ {
     "id" : "to-user",
@@ -235,61 +234,61 @@ jeff@mothra vorpal % cat R3.SAMPLE
     "description" : "Translations Map for Remote IP addresses",
     "selector" : "origin-ip",
     "map" : {
-      "10.28.82.132" : {
-        "description" : "CL2 STG OB",
-        "requestUri" : "sip:10.173.165.142:5060"
+      "198.51.100.10" : {
+        "description" : "staging_2 outbound",
+        "requestUri" : "sip:192.0.2.42:5060"
       },
-      "10.28.194.166" : {
-        "description" : "CL2 DEV OB",
-        "requestUri" : "sip:10.173.165.140:5060"
+      "198.51.100.11" : {
+        "description" : "dev_2 outbound",
+        "requestUri" : "sip:192.0.2.40:5060"
       },
-      "10.28.201.244" : {
-        "description" : "CL2 STG OB",
-        "requestUri" : "sip:10.173.165.142:5060"
+      "198.51.100.12" : {
+        "description" : "staging_2 outbound",
+        "requestUri" : "sip:192.0.2.42:5060"
       },
-      "10.29.68.26" : {
-        "description" : "CL2 DEV OB",
-        "requestUri" : "sip:10.173.165.140:5060"
+      "198.51.100.13" : {
+        "description" : "dev_2 outbound",
+        "requestUri" : "sip:192.0.2.40:5060"
       },
-      "10.29.82.110" : {
-        "description" : "CL2 STG OB",
-        "requestUri" : "sip:10.173.165.142:5060"
+      "198.51.100.14" : {
+        "description" : "staging_2 outbound",
+        "requestUri" : "sip:192.0.2.42:5060"
       },
-      "10.29.194.20" : {
-        "description" : "CL2 STG OB",
-        "requestUri" : "sip:10.173.165.142:5060"
+      "198.51.100.15" : {
+        "description" : "staging_2 outbound",
+        "requestUri" : "sip:192.0.2.42:5060"
       },
-      "10.87.152.172" : {
-        "description" : "CL1 STG OB",
-        "requestUri" : "sip:10.173.165.152:5060"
+      "198.51.100.16" : {
+        "description" : "staging_1 outbound",
+        "requestUri" : "sip:192.0.2.52:5060"
       },
-      "10.87.152.173" : {
-        "description" : "CL1 STG OB",
-        "requestUri" : "sip:10.173.165.152:5060"
+      "198.51.100.17" : {
+        "description" : "staging_1 outbound",
+        "requestUri" : "sip:192.0.2.52:5060"
       },
-      "10.173.101.86" : {
-        "id" : "STG_CL2_ATT_IB",
-        "requestUri" : "sip:10.173.165.128:5060"
+      "198.51.100.20" : {
+        "id" : "trunk_a_inbound_2",
+        "requestUri" : "sip:192.0.2.28:5060"
       },
-      "10.173.101.87" : {
-        "id" : "STG_CL2_VZB_IB",
-        "requestUri" : "sip:10.173.165.127:5060"
+      "198.51.100.21" : {
+        "id" : "trunk_b_inbound_2",
+        "requestUri" : "sip:192.0.2.27:5060"
       },
-      "10.173.101.120" : {
-        "id" : "STG_CL1_ATT_IB",
-        "requestUri" : "sip:10.173.165.70:5060"
+      "198.51.100.22" : {
+        "id" : "trunk_a_inbound_1",
+        "requestUri" : "sip:192.0.2.70:5060"
       },
-      "10.173.101.121" : {
-        "id" : "STG_CL1_VZB_IB",
-        "requestUri" : "sip:10.173.165.69:5060"
+      "198.51.100.23" : {
+        "id" : "trunk_b_inbound_1",
+        "requestUri" : "sip:192.0.2.69:5060"
       },
-      "10.204.67.59" : {
-        "description" : "CL1 STG OB",
-        "requestUri" : "sip:10.173.165.152:5060"
+      "198.51.100.30" : {
+        "description" : "staging_1 outbound",
+        "requestUri" : "sip:192.0.2.52:5060"
       },
-      "10.204.67.60" : {
-        "description" : "CL1 STG OB",
-        "requestUri" : "sip:10.173.165.152:5060"
+      "198.51.100.31" : {
+        "description" : "staging_1 outbound",
+        "requestUri" : "sip:192.0.2.52:5060"
       },
       "127.0.0.1" : {
         "requestUri" : "sip:localhost:5060"
@@ -302,21 +301,21 @@ jeff@mothra vorpal % cat R3.SAMPLE
     "selector" : "to-user",
     "map" : {
       "19951" : {
-        "description" : "CL2 DEV",
-        "requestUri" : "sip:10.29.68.26:5060"
+        "description" : "dev_2",
+        "requestUri" : "sip:198.51.100.13:5060"
       },
       "19954" : {
-        "description" : "CL2 STG",
-        "requestUri" : "sip:10.29.82.110:5060"
+        "description" : "staging_2",
+        "requestUri" : "sip:198.51.100.14:5060"
       },
       "19971" : {
-        "description" : "CL1 Dev2",
-        "requestUri" : "sip:10.86.34.184:5060"
+        "description" : "dev_1b",
+        "requestUri" : "sip:198.51.100.40:5060"
       },
       "19974" : {
-        "description" : "CL1 STG",
+        "description" : "staging_1",
         "list" : [ "address-map-1" ],
-        "requestUri" : "sip:10.204.67.59:5060"
+        "requestUri" : "sip:198.51.100.30:5060"
       }
     }
   } ],

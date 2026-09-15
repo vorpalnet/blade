@@ -48,7 +48,7 @@ import javax.servlet.http.HttpServletResponse;
 /// service-specific header) can list them via [#EXPOSE_HEADERS_PROPERTY]:
 ///
 /// ```
-/// -Dblade.cors.exposeHeaders=Location,X-SEMAFONE-TARGET,Date
+/// -Dblade.cors.exposeHeaders=Location,X-Request-Target,Date
 /// ```
 ///
 /// Unset ⇒ no `Access-Control-Expose-Headers` is emitted.

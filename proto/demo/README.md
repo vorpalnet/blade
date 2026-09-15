@@ -1,39 +1,36 @@
-# BLADE Demo Launcher (front-end mockup)
+# BLADE Demo Launcher
 
-A rep-facing web app that launches each BLADE demo from a simple HTML form —
-`index.html` *is* the demo matrix (5 pillars × 3 altitudes) and every box links
-to a page with the form a sales rep (or SE) actually fills in.
+A static web app, `blade-demo.war` (context-root `blade/demo`), with one page per BLADE
+demo. `index.html` lists the demos, and each entry links to a page that describes the demo
+and holds its input form.
 
-**Status: visualization only.** These are static pages so we can *see* what the
-demos look like to the rep before building anything. There is **no SIP plumbing
-behind them yet** — submitting a form shows a storyboard of what *would* happen,
-not a real call. The layout (`src/main/webapp/`) matches a future OCCAS WAR, so
-the servlets/callflows drop in later without moving files.
+The pages are HTML, CSS and JavaScript with no server-side code. Submitting a demo form
+does not place a call: it shows a storyboard of the call flow the demo exercises. The
+guided demo (`guided.html`) runs in mock mode by default and simulates each REST response.
+With `?mode=live` it calls the service the flow names instead (the default flow drives
+`tpcc`), which needs that WAR deployed and CORS enabled (`-Dblade.cors.allowedOrigins`).
 
-## Look at it
+## Open it
 
-Open `src/main/webapp/index.html` in a browser. Everything is relative-linked,
-so it works straight off the filesystem — no server needed for the mockup.
+Open `src/main/webapp/index.html` in a browser. All links are relative, so the pages work
+straight off the filesystem.
+
+To serve it from OCCAS, build with `./build.sh` and deploy `blade-demo.war` from
+`dist/proto/` to the AdminServer (`./deploy.sh <env> blade-demo.war AdminServer`). The
+`blade/` context-root gives it a card on the [Admin Portal](../../admin/portal/README.md).
+As a `proto/` app it ships loose and is never bundled in an EAR.
 
 ## Layout
 
 ```
 src/main/webapp/
-  index.html            # the demo matrix / cheat sheet (5 pillars x 3 altitudes).
-                        #   Each READY box highlights on hover and links to its demo page.
+  index.html            the demo index (self-contained, inline styles)
+  <demo>.html           one page per demo: description, form, storyboard
+  guided.html           the guided flow player
   assets/
-    demo.css            # shared design system for the demo pages (light + dark)
-    demo.js             # shared: intercepts submit, shows the storyboard + a "not wired yet" note
-  <demo>.html           # one page per demo: description + the rep's form + "what the rep sees".
-                        #   Their "All demos" link goes back to index.html (the cheat sheet).
+    demo.css            shared styles for the demo pages (light and dark)
+    demo.js             intercepts form submit and shows the storyboard
+    guided.css          styles for the guided flow player
+    guided.js           runs a flow step by step, in mock or live mode
+    flows.js            the flow definitions the guided player runs
 ```
-
-`index.html` is self-contained (its own inline styles). The per-demo pages share
-`assets/demo.css` / `demo.js`. Boxes without a page yet (Planned/roadmap) are not
-linked — add a `<demo>.html` and wire its box to light it up.
-
-## When we wire it up
-
-Each `<demo>.html` form will POST to a servlet in the demo WAR that kicks off the
-real call/scenario (e.g. click-to-call -> the `tpcc` service; call-blocking ->
-an iRouter/FSMAR rule). The storyboard panel becomes the live result view.

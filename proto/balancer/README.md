@@ -7,8 +7,8 @@ every engine node's independent view of every plan/tier/endpoint — UP, DOWN, o
 in 503 Retry-After BACKOFF — read live over federated DomainRuntime JMX from the
 per-node `vorpal.blade:Name=proxy-balancer,Type=EndpointHealth` MBeans.
 
-Status: **proto/** incubator — built by the `full` profile, deployed by hand,
-not shipped in `blade-admin.ear`. Promote to `admin/` once proven.
+Status: **proto/** incubator. `build.sh` builds it with everything else; it ships loose in
+`dist/proto/`, is deployed by hand, and is not in `blade-admin.ear`. Promote to `admin/` once proven.
 
 - Context root: `blade/balancer` (AdminServer target)
 - REST: `GET /blade/balancer/api/health` — every node's health JSON

@@ -51,8 +51,8 @@
 /// changes nothing functionally. A test or demo environment must run without
 /// one, because a retention rule makes every object undeletable for its whole
 /// duration, and a seven year rule means seven years of failed experiments
-/// nobody can clear. `gryphon/call-recording/oci/provision-recording.sh` creates
-/// no retention rule unless one is explicitly asked for.
+/// nobody can clear. Provisioning for a test or demo environment should therefore
+/// create no retention rule unless one is explicitly asked for.
 ///
 /// ## Two decisions worth knowing about
 ///

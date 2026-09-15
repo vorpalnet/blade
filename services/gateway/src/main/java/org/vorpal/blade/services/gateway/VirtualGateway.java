@@ -46,7 +46,7 @@ public class VirtualGateway implements Serializable {
 		this.transport = transport;
 	}
 
-	@JsonPropertyDescription("The carrier's registrar / SIP domain, e.g. us-east-va.sip.flowroute.com.")
+	@JsonPropertyDescription("The carrier's registrar / SIP domain, e.g. sip.carrier.example.com.")
 	public String getRegistrarDomain() {
 		return registrarDomain;
 	}

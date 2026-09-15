@@ -13,8 +13,8 @@
 	</wls:library-ref>
 
 	<!-- Shared session cookie across BLADE admin webapps. Same cookie-name
-	     + path=/ in every admin WAR (configurator, securelogix-admin,
-	     portal, …) gives WebLogic's realm-level SSO a single session to
+	     + path=/ in every admin WAR (configurator, portal and
+	     the other admin WARs) gives WebLogic's realm-level SSO a single session to
 	     recognize, so a user authenticates once across the whole admin
 	     tier. See memory: reference_wls_webapp_sso.md. -->
 	<wls:session-descriptor>

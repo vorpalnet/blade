@@ -2,20 +2,17 @@
 
 How callers authenticate to BLADE, and how to configure it. This is the map of
 a thing that is otherwise scattered across descriptors, WebLogic realm config,
-and OCCAS domain config — written down so the next round of work starts from a
-shared picture.
+and OCCAS domain config.
 
 For what a caller is allowed to do *after* they authenticate — the permission
 model for call content, the access policy, and the audit trail — see
 **[IAM.md](IAM.md)**. This document is the mechanism; that one is the model.
 
-> Status: v3.0 work in progress. The admin-tier hardening and the inbound-JWT
-> path described here are implemented. The configurable SIP trust model is
-> documented design plus the trusted-core behavior that already exists; the
-> digest opt-in is a deployment recipe, not yet shipped as a descriptor.
-> Items needing Jeff's OCCAS-domain knowledge are flagged **TODO**.
+> Status: the admin-tier hardening and the inbound-JWT path described here are
+> implemented. The SIP trust model ships as the trusted-core behavior; the digest
+> opt-in is a deployment recipe, not a shipped descriptor.
 
-## The three authentication surfaces
+## The four authentication surfaces
 
 BLADE authenticates in four independent places. WebLogic security realms own the
 first, and stand behind the second; they *can* own the third; they are
@@ -128,9 +125,7 @@ except the allowlist above must contain an `<auth-constraint>`. (See the
 > assignments — open inside the admin tier. `analytics-console` exposed
 > `POST /api/provision/jms`, which creates WebLogic JMS resources. All three now
 > carry the canonical snippet (FORM, four roles, role assignments) and a copy of
-> the `login/` form. **TODO (Jeff):** confirm no EAR-level/proxy protection was
-> masking this in production — i.e. whether they were ever actually reachable
-> unauthenticated.
+> the `login/` form.
 
 ---
 
@@ -147,7 +142,7 @@ IdP's signed token and maps its group/role claim onto the four `AdminRole`s.
     algorithm, username claim, roles claim, role mappings, clock skew).
   - `JwtValidator` — Nimbus-backed validation (signature via JWKS, issuer,
     audience, expiry) → `JwtIdentity`. Container-free and unit-tested offline
-    (`libs/framework/src/test/.../security/JwtValidatorSmokeTest.java`).
+    (`libs/framework/src/test/.../security/JwtValidatorTest.java`).
   - `JwtAuthFilter` — JAX-RS `ContainerRequestFilter`, the inbound counterpart
     to `BasicAuthFilter`. Installs a `JwtSecurityContext` on success.
   - `AdminRole`, `JwtIdentity`, `JwtSecurityContext`, `JwtAuthException`.
@@ -181,20 +176,10 @@ non-admin name grant nothing.
 In the `security` app config: set `jwt.issuer`, `jwt.jwksUri`, `jwt.audience`,
 `jwt.rolesClaim`, `jwt.roleMappings`, then `jwt.enabled = true`.
 
-> **TODO (Jeff) — IdP specifics:** issuer URL, JWKS URI, audience, and **which
-> claim carries roles** for the corporate IdP / your planned cloud OCCAS+BLADE
-> test instance, and the group→role mapping. The smoke test stands in for the
-> IdP today.
-
-> **Refinement — cross-WAR config:** the config supplier is published only by
-> the app that owns the settings, so JWT currently guards the `security` app
-> itself. To guard *every* admin WAR from one config, the next step is to
-> distribute `JwtAuthConfig` cluster-wide — e.g. each admin WAR reads the
-> `blade-security` config via the same `SettingsMXBean` JMX walk the Portal uses
-> for launcher metadata (`admin/portal/.../PortalCardsResource.java`), or the
-> security app pushes config into a shared store. Browser SSO (the OIDC redirect
-> dance) is intentionally **not** built into BLADE — terminate it at a reverse
-> proxy that injects the bearer token; BLADE validates it.
+> **Scope:** the config supplier is published only by the app that owns the
+> settings, so `JwtAuthFilter` guards the `security` app itself. To put an admin
+> WAR behind the corporate identity provider, browser sign-in included, name the
+> framework's `OidcLoginFilter` in its `web.xml`. See **[IAM.md](IAM.md)** §2.
 
 ---
 
@@ -298,20 +283,13 @@ issuer. `JwtValidator` does not change, because nothing in the consumer's
 configuration says the issuer was BLADE. That symmetry is the reason the issuer
 publishes a JWKS at all rather than sharing a secret.
 
-> **Not built in BLADE, and on 8.3 it does not need to be.** WebLogic still
-> cannot stand in as the *issuer*: its Embedded LDAP is an identity store, and
-> there is no authorization endpoint, no token endpoint and no JWKS anywhere in
-> the install. But it can be the *client*. **OCCAS 8.3 (WLS 14.1.2) ships an
-> OpenID Connect identity assertion provider** —
-> `wlserver/server/lib/mbeantypes/oidc-identity-asserter.jar`, absent from OCCAS
-> 8.1 — which runs the authorization-code + PKCE redirect itself, discovers the
-> IdP's endpoints from the issuer URL, reads a `groups` claim into realm
-> principals, and allows virtual users so nobody is provisioned twice. So on 8.3
-> the browser SSO dance is domain configuration, not a reverse proxy and not
-> BLADE code. See **[IAM.md](IAM.md)** §2 for the configuration and for the one
-> item still to confirm against Oracle's 14.1.2 security documentation. On 8.1
-> the position above stands: terminate it at a reverse proxy, or point these
-> settings at the IdP directly.
+> **Not built in BLADE: a WebLogic-backed issuer.** WebLogic cannot stand in as
+> the *issuer*: its Embedded LDAP is an identity store, and there is no
+> authorization endpoint, no token endpoint and no JWKS anywhere in the install.
+> Browser sign-in against a corporate provider is the framework's
+> `OidcLoginFilter`. OCCAS 8.3 (WLS 14.1.2) also ships an OpenID Connect identity
+> assertion provider, which rejects the tokens of some providers, an OCI identity
+> domain among them. See **[IAM.md](IAM.md)** §2 for both.
 
 ---
 
@@ -354,8 +332,7 @@ For deployments where BLADE itself challenges SIP (acting as registrar/edge):
   one-way hashes and **cannot** drive digest. Enabling digest means provisioning
   a digest-capable provider in the realm.
 - The OCCAS digest provider is **JDBC-backed and manually installed** into the
-  domain, so it is not present in a stock install. **TODO (Jeff):** record the
-  exact provider class / install steps once confirmed.
+  domain, so it is not present in a stock install.
 
 ---
 
@@ -380,8 +357,7 @@ cleartext secrets; never transcribe a secret into a log or doc.
 
 ## 6. Transport security — TLS everywhere (HTTPS / SIPS / t3s)
 
-Driven by a customer mandate that all apps be TLS-encrypted by 2027 —
-HTTPS and SIPS only. BLADE-side, this is tooling plus an operator switch;
+Every app can run TLS-only: HTTPS and SIPS. BLADE-side, this is tooling plus an operator switch;
 OCCAS terminates TLS for both HTTP and SIP. The WARs themselves do **not**
 force TLS: developers keep plain HTTP on :7001/:8001, and a customer goes
 TLS-only by disabling the plaintext ports (`tls.only=true`, below) once
@@ -405,7 +381,7 @@ HTTPS is proven — enforcement by port, not by descriptor.
 `./certs.sh <env> generate` builds a self-signed test PKI: a local CA
 (`ca.p12`/`ca.pem`), a server identity keystore whose SAN covers every host
 in the env conf, and a trust keystore — all PKCS12, written OUTSIDE the repo
-(default `~/.blade/certs/<env>`). The server cert carries EKU
+(default `~/.blade/<env>/certs/`). The server cert carries EKU
 serverAuth **and** clientAuth, so the same identity keystore serves as the
 client certificate where mutual TLS is demanded.
 
@@ -420,12 +396,12 @@ SSL listen port with the keystores on the AdminServer (:7002), the engine
 server-template, and the static engine (:8002). With `tls.only=true` in the
 env conf it also **disables the plaintext HTTP listen ports and deletes the
 plaintext `sip` network channels** — leaving HTTPS, SIPS (:5061), and t3s
-only. That flag is the 2027 posture; run without it first to prove the certs
+only. That flag is the TLS-only posture; run without it first to prove the certs
 while both ports are up. NodeManager is already `ssl` per machine conf.
 
 ### Management traffic (t3s)
 
-The mandate includes t3. `deploy.sh` and `misc/deploy-wls.sh` honor a
+Management traffic can use TLS too. `deploy.sh` and `misc/deploy-wls.sh` honor a
 `t3s://` admin URL and pass CustomTrust JVM flags when `wls.truststore`
 points at the CA trust keystore (password `wls.truststore.password` in the
 secret, or `$BLADE_STORE_PASSWORD`); without a truststore they fall back to
@@ -483,11 +459,8 @@ Locally verifiable (CI / build box):
   mint for. Both modes, plus rejection of addresses that are not `user@host` —
   including a CRLF header-injection attempt.
 
-  > These three replace `JwtValidatorSmokeTest`, a `main()`-driven pass/fail
-  > driver that Surefire never ran — it carried no JUnit annotations, so the JWT
-  > path had **no** coverage in the build while this section claimed it was
-  > verified. `TlsClientConfigSmokeTest` below is still in that shape and still
-  > does not run.
+  > `TlsClientConfigSmokeTest` below is a `main()`-driven pass/fail driver with
+  > no JUnit annotations, so Surefire does not run it.
 - **Descriptors / build** — `proto/security` packages as a skinny WAR (only
   `vorpal-blade-library-framework.jar` in `WEB-INF/lib`); the three hardened
   WARs and the admin EAR build.
@@ -513,13 +486,17 @@ Locally verifiable (CI / build box):
   and is not counted as protection — treating it as protection was the original
   mistake.
 
-  **Three apps fail it today, and it is a work list, not a gate:**
+  **The check reports; it does not gate the build. Three apps fail it:**
 
   | App | Why |
   |---|---|
-  | `services/transfer` | Same copied descriptor; deferred deliberately, to be fixed with the rest of that app |
-  | `services/tpcc` | Its one constraint carries no `<auth-constraint>`, so third-party call control is declared public. Unreviewed. |
-  | `test/test-uac` | Its entire security block is commented out. Test tier, but the app can originate calls. Unreviewed. |
+  | `services/transfer` | Same copied descriptor |
+  | `services/tpcc` | Its one constraint carries no `<auth-constraint>`, so third-party call control is declared public |
+  | `test/test-uac` | Its entire security block is commented out. Test tier, but the app can originate calls |
+
+  It also reports `proto/audit` and `proto/recordings`. Those declare no
+  `auth-constraint` on purpose: `OidcLoginFilter` authenticates every request
+  they serve (see **[IAM.md](IAM.md)** §2), and the check does not read filters.
 
   Fixed and passing: `services/context`, `services/proxy-block` (both now
   declare an `@ApplicationPath` and constrain it), and `services/crud`,
@@ -529,13 +506,10 @@ Locally verifiable (CI / build box):
   role — so a resource that ever loses its `@ApplicationPath` answers 403
   instead of answering the world.
 
-  The transport-guarantee and `cookie-secure` half is an **intent, not a
-  statement of the tree**: as of 2026-08-06 no WAR in any tree carries either,
-  so all 44 lines report MISSING. Closing it means editing every descriptor in
-  `admin`, `services`, `proto` and `test`, which is a cross-cutting change and
-  its own piece of work. Until then, read the second and third loops below as
-  the work list they are (`libs/shared` is a library container, not an app, and
-  inherits nothing here):
+  No WAR carries a `CONFIDENTIAL` transport guarantee or `cookie-secure`, by
+  design (see §6), so the second and third loops below report every descriptor
+  as MISSING (`libs/shared` is a library container, not an app, and inherits
+  nothing here):
 
   ```sh
   for d in admin/*/src/main/webapp/WEB-INF/web.xml; do
@@ -552,7 +526,7 @@ Locally verifiable (CI / build box):
   done
   ```
 
-Deploy-only (Jeff, in an OCCAS domain — "after you deploy, look for…"):
+After deploying to an OCCAS domain, check:
 
 - The four roles resolve to real realm groups; FORM/BASIC still authenticate on
   the three newly-constrained WARs; `BLADEADMINSESSION` SSO still spans the tier.
@@ -562,14 +536,11 @@ Deploy-only (Jeff, in an OCCAS domain — "after you deploy, look for…"):
 - TLS: once the certificate is on the template (install.sh rows `g`/`t`), the console answers
   on `https://…:7002`, engines on `:8002`, `openssl s_client -connect host:5061`
   shows the expected chain; with `tls.only=true`, ports 7001/8001/5060 refuse
-  connections and `./deploy.sh <env> status` works over `t3s`. The `secure`
-  step's WLST ran only in dry-run here — first execution against a real
-  stopped domain is yours.
+  connections and `./deploy.sh <env> status` works over `t3s`.
 - Mutual TLS outbound: point a `RestConnector` `tls.keyStore` at
   `identity.p12` against an endpoint requiring client certs (the generated
   cert carries EKU clientAuth).
-- WebRTC browser authentication, which has run only against unit tests here.
-  After deploying `blade-phone` and `webrtc`, and setting `jwt.jwksUri` in
+- WebRTC browser authentication. After deploying `blade-phone` and `webrtc`, and setting `jwt.jwksUri` in
   `webrtc.json` to the phone's JWKS URL:
   1. `curl -k https://<admin>:7002/blade/phone/api/v1/jwks.json` from an
      **engine** node — it must return a `keys` array with no admin session. If
@@ -588,22 +559,3 @@ Deploy-only (Jeff, in an OCCAS domain — "after you deploy, look for…"):
      address field alone will *not* reproduce it — the token is minted for
      whatever that field says, so the two agree and the socket is allowed. That
      is the mode working as configured, not the check failing.
-
-## Open items (next refinement)
-
-1. **TODO** Confirm logs/analytics/files had no EAR-level protection before the
-   hardening (were they ever reachable unauthenticated in production?).
-2. **TODO** Corporate IdP details for JWT (issuer, JWKS, audience, roles claim,
-   group→role map); wire the planned cloud OCCAS+BLADE test instance as the IdP.
-3. **Closed on 8.3, still open on 8.1** Distribute one `blade-security` JWT
-   config to every admin WAR so JWT can guard the whole tier, not just
-   `security`. On OCCAS 8.3 there is nothing to distribute: the container's
-   OIDC provider is realm-level and guards the whole tier from one place, which
-   is why the target moved there. On 8.1 the item stands as written. The
-   §2a first-party pair is unaffected either way — `webrtc.json` and
-   `blade-phone.json` still have to agree by hand on issuer and audience, and
-   nothing checks that they do.
-4. **TODO** Exact OCCAS 8.1 JDBC digest provider class + install steps, for the
-   edge/digest SIP mode.
-5. **Design** Ship the digest `sip.xml` variant (and decide whether it lives in
-   `acl` or a dedicated edge-auth SIP app).

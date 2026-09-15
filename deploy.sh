@@ -51,9 +51,9 @@
 #   3. Interactive prompt (read -s), with offer to save
 #
 # Examples:
-#   ./deploy.sh ashburn                          # deploy everything in the profile
-#   ./deploy.sh ashburn status                   # what's deployed
-#   ./deploy.sh ashburn undeploy                 # undeploy everything
+#   ./deploy.sh staging                          # deploy everything in the profile
+#   ./deploy.sh staging status                   # what's deployed
+#   ./deploy.sh staging undeploy                 # undeploy everything
 #   ./deploy.sh production blade-admin.ear AdminServer
 #   ./deploy.sh production gateway.war cluster1
 #   ./deploy.sh production blade-services.ear cluster1
@@ -648,7 +648,7 @@ log ""
 # --- EAR / loose-WAR collision pre-check -----------------------------------
 # A tier ships both ways: the whole-tier EAR (blade-admin.ear) AND its loose
 # member WARs (dist/admin/*.war). Both on the same target collide their context
-# roots and drop the tier to ADMIN mode — the ashburn engine1 failure. Before a
+# roots and drop the tier to ADMIN mode. Before a
 # single EAR- or member-WAR deploy, check the domain for the OTHER representation
 # on an overlapping target and refuse. --force overrides; an unreadable status
 # degrades to a warning (never block a deploy because the check couldn't run).

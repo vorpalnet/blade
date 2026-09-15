@@ -17,8 +17,8 @@ A build is **product × platform × mode** and never reads an environment: one
 belongs to `install.sh`/`deploy.sh` alone.
 
 Narrowing what compiles is a per-invocation choice: `--libs` publishes just the
-libraries to `~/.m2` (the consumer-repo interface — optum/att-tao pin the blade
-submodule tag and run exactly this); `--apps=a,b` and `--no-ears` trim a dev
+libraries to `~/.m2` (the consumer-repo interface: a consumer repository pins a
+blade tag and runs exactly this); `--apps=a,b` and `--no-ears` trim a dev
 loop; `--edit` opens a checkbox tree that writes `./build.conf` (gitignored,
 personal — picked up automatically by later builds; a team can check in a named
 file and pass `--conf=`). To iterate on a single module, run Maven directly
@@ -34,8 +34,8 @@ file and pass `--conf=`). To iterate on a single module, run Maven directly
 - **The OCCAS JARs in your local Maven repo.** `./bootstrap.sh <occas-home>`
   installs them into `~/.m2`; `build.sh` runs it for you from `$MW_HOME` when they
   are missing.
-- **Maven** comes from the bundled `./mvnw` wrapper — nothing to install. (The
-  ANT-to-Maven migration is complete; Maven is the only build path.)
+- **Maven** comes from the bundled `./mvnw` wrapper — nothing to install. Maven is
+  the only build path.
 
 ---
 

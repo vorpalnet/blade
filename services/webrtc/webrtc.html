@@ -177,26 +177,26 @@
   <div class="head">
     <p class="eyebrow">Why this matters</p>
     <h2>Oracle shipped WebRTC Session Controller once, then discontinued it.</h2>
-    <p class="sub">The BLADE gateway brings that capability back on OCCAS — without the three things that made the original hard to live with.</p>
+    <p class="sub">The BLADE gateway brings that capability back on OCCAS.</p>
   </div>
   <div class="body">
     <div class="two" style="grid-template-columns:repeat(3,1fr);gap:clamp(14px,2vw,30px);align-items:start">
       <div class="stack">
         <span class="tag"><span class="dot"></span>1 · the translation</span>
         <p class="pull" style="font-size:clamp(13px,1.36vw,17px)">No custom scripting.</p>
-        <p class="lede" style="font-size:clamp(11.5px,1.2vw,13.5px)">With WSC, every deployment had to hand-write and maintain the code that translated between the browser and SIP.</p>
+        <p class="lede" style="font-size:clamp(11.5px,1.2vw,13.5px)">No deployment writes or maintains its own browser-to-SIP translation code.</p>
         <p class="lede" style="font-size:clamp(11.5px,1.2vw,13.5px);color:var(--ink)">Here that translation is built into the gateway — written and tested once, the same for everyone.</p>
       </div>
       <div class="stack">
         <span class="tag"><span class="dot"></span>2 · the media plane</span>
         <p class="pull" style="font-size:clamp(13px,1.36vw,17px)">No locked-in media server.</p>
-        <p class="lede" style="font-size:clamp(11.5px,1.2vw,13.5px)">WSC handed the media plane to the ASC, an end-of-life product that took copious, poorly-documented configuration to get working at all.</p>
-        <p class="lede" style="font-size:clamp(11.5px,1.2vw,13.5px);color:var(--ink)">This gateway reaches the media server through a vendor-neutral interface — the choice stays open, and no vendor is named in the product.</p>
+        <p class="lede" style="font-size:clamp(11.5px,1.2vw,13.5px)">The gateway reaches the media server through JSR-309.</p>
+        <p class="lede" style="font-size:clamp(11.5px,1.2vw,13.5px);color:var(--ink)">The choice of media server stays open.</p>
       </div>
       <div class="stack">
         <span class="tag"><span class="dot"></span>3 · the client</span>
         <p class="pull" style="font-size:clamp(13px,1.36vw,17px)">A current browser client.</p>
-        <p class="lede" style="font-size:clamp(11.5px,1.2vw,13.5px)">The old client was written against browser features that no longer exist. The BLADE softphone is built to today's standards.</p>
+        <p class="lede" style="font-size:clamp(11.5px,1.2vw,13.5px)">The BLADE softphone is built to current browser standards.</p>
       </div>
     </div>
   </div>
@@ -402,21 +402,21 @@
 </section>
 
 <!-- 9 -->
-<section class="slide" aria-label="Two verbs removed">
+<section class="slide" aria-label="No accept, no record">
   <div class="head">
     <p class="eyebrow">The protocol</p>
-    <h2>Two verbs were defined early and then deliberately removed.</h2>
+    <h2>There is no call.accept and no call.record.</h2>
   </div>
   <div class="body"><div class="two">
     <div class="stack">
       <span class="tag"><span class="dot"></span>call.accept</span>
-      <p class="pull" style="font-size:clamp(14px,1.5vw,19px)">Meant "yes, without SDP".</p>
-      <p class="lede">There is no SIP message it can honestly produce: <b style="color:var(--ink)">both answer paths build the <code>200 OK</code> from an SDP only the browser has.</b></p>
+      <p class="pull" style="font-size:clamp(14px,1.5vw,19px)">Accepting without SDP.</p>
+      <p class="lede">No SIP message can carry it: <b style="color:var(--ink)">both answer paths build the <code>200 OK</code> from an SDP only the browser has.</b></p>
       <p class="lede"><code>call.answer</code> is a moment away and does the job properly.</p>
     </div>
     <div class="stack">
       <span class="tag"><span class="dot"></span>call.record</span>
-      <p class="pull" style="font-size:clamp(14px,1.5vw,19px)">A browser asking this gateway to record.</p>
+      <p class="pull" style="font-size:clamp(14px,1.5vw,19px)">Recording from the browser.</p>
       <p class="lede"><b style="color:var(--ink)">Recording belongs to a service of its own.</b></p>
       <p class="lede">What the gateway owes such a service is the one decision only it can make — <b style="color:var(--ink)">whether the call's media is anchored at all</b> — and that is <code>mediaMode</code>, a configuration field, not an event.</p>
     </div>
@@ -457,9 +457,8 @@
     </div>
     <ul class="facts">
       <li><code>negotiated</code> is false when the far end answered with no SDP and nothing was applied to the media dialog: <b>a call that is up for signaling and silent for media.</b></li>
-      <li>Previously that case was reported as an ordinary <code>call.established</code> and <b>looked healthy.</b></li>
       <li><code>call.connected</code> also declares an <code>sdp</code> field, <b>reserved and unset on every path today.</b> The ACK is a real SDP-carrying moment — in late media the caller's answer arrives there — so the field is declared to describe the message honestly. Clients must tolerate its absence, which is the ordinary case.</li>
-      <li><code>call.update</code> is the one that makes escalation possible: a fresh SDP offer for a call already up. Without it a call's media path could never change after setup — the same mechanism WSC's mobile SDKs exposed as <code>Call.update()</code>.</li>
+      <li><code>call.update</code> is the one that makes escalation possible: a fresh SDP offer for a call already up. Without it a call's media path could never change after setup.</li>
     </ul>
   </div></div>
 </section>
@@ -596,7 +595,7 @@
 <section class="slide" aria-label="Late media">
   <div class="head">
     <p class="eyebrow">Late media</p>
-    <h2>An INVITE with no SDP — the case the earlier product dropped.</h2>
+    <h2>An INVITE with no SDP is handled.</h2>
   </div>
   <div class="body"><div class="two">
     <figure>
@@ -627,7 +626,7 @@
     </figure>
     <ul class="facts m">
       <li>This is <b>the one path where <code>call.established</code> and <code>call.connected</code> are genuinely far apart</b>, and the only one where the ACK can arrive owing an answer it does not carry — hence <code>negotiated: false</code>.</li>
-      <li><b>Late media always anchors, and cannot be made to work without a media server.</b> Having the browser offer instead was considered and rejected: late media is a pattern browsers never originate, so the caller is a phone or a trunk, and the answer coming back in the <code>ACK</code> is plain RTP with no DTLS fingerprint — which a browser will not set up media against.</li>
+      <li><b>Late media always anchors, and cannot be made to work without a media server.</b> The browser cannot offer instead: late media is a pattern browsers never originate, so the caller is a phone or a trunk, and the answer coming back in the <code>ACK</code> is plain RTP with no DTLS fingerprint — which a browser will not set up media against.</li>
       <li>On this call shape <b>the media server is the only party present that can speak to both ends.</b> Without a driver the gateway refuses with <code>503</code> and says so by name in the log.</li>
     </ul>
   </div></div>
@@ -638,7 +637,7 @@
   <div class="head">
     <p class="eyebrow">What a call reports to analytics</p>
     <h2>A browser call is a call, to everything downstream.</h2>
-    <p class="sub">A WebRTC call used to be invisible to analytics — none of the framework's own publishers ever ran for it, and a browser call left no trace in any report.</p>
+    <p class="sub">It publishes the framework's own six call facts, the same ones a phone call publishes.</p>
   </div>
   <div class="body"><div class="two l">
     <div class="scroll">
@@ -670,11 +669,11 @@
     <div class="two">
       <ul class="facts m">
         <li><b>A reachable STUN or TURN server is mandatory, not optional.</b> Since Chrome 76 browsers publish <code>&lt;uuid&gt;.local</code> mDNS host candidates instead of private addresses; without a server-reflexive path there is frequently no routable candidate pair. <b>This is the most likely cause of "works on a laptop, fails on OCI".</b></li>
-        <li><b>Set the media node's public address.</b> On OCI the instance cannot see its own public IP, so the provider must be given <code>external.ipv4</code> or it will advertise an unreachable candidate. Both of these apply only to anchored calls — a relayed browser-to-browser call needs neither.</li>
+        <li><b>Set the media node's public address.</b> On OCI the instance cannot see its own public IP, so the media server must be told its public address (see your driver's documentation) or it will advertise an unreachable candidate. Both of these apply only to anchored calls — a relayed browser-to-browser call needs neither.</li>
       </ul>
       <ul class="facts">
-        <li><b>Media-plane settings live in <code>webrtc.json</code> under <code>driverProperties</code></b> and are handed to the JSR-309 driver verbatim; <code>driverName</code> picks between drivers when more than one is installed. Both are read <b>once, at deployment</b> — republishing configuration does not rebuild the factory, so a change needs a redeploy.</li>
-        <li><b>The driver jar has to be visible to this WAR.</b> Skinny-WAR policy keeps everything but the framework out of <code>WEB-INF/lib</code>, so driver jars go in the <code>blade-shared</code> shared library or the domain's <code>lib/</code>. Without it the servlet says so plainly: browser-to-browser still works, calls to phones do not.</li>
+        <li><b>Media-plane settings live in <code>webrtc.json</code> under <code>driverProperties</code></b> and are handed to the JSR-309 driver verbatim; the keys come from your driver's documentation. <code>driverName</code> picks between drivers when more than one is installed. Both are read <b>once, at deployment</b> — republishing configuration does not rebuild the factory, so a change needs a redeploy.</li>
+        <li><b>The driver jar has to be visible to this WAR.</b> Your driver's documentation says how to package it. Without it the servlet says so plainly: browser-to-browser still works, calls to phones do not.</li>
       </ul>
     </div>
   </div>

@@ -7,10 +7,10 @@ libraries — each WAR inside is self-contained (its own framework JAR, referenc
 
 ## How it's assembled
 
-One Maven profile per WAR (`ear-portal`, `ear-configurator`, …), each active unless the
-build profile sets `-Dskip.<name>` — so a module skipped by the active
-`build-profiles/*.conf` drops cleanly out of the EAR. The `javadoc` WAR rides the
-`javadocs` profile instead, joining the EAR whenever javadocs are built.
+One Maven profile per WAR (`ear-portal`, `ear-configurator`, …), each active unless
+`build.sh` sets `-Dskip.<name>`, so an app left out of a build selection (`build.apps` in
+`./build.conf`) drops cleanly out of the EAR. The `javadoc` WAR rides the `ear-javadoc`
+profile and joins the EAR on a `--prod` build.
 
 Context roots are restated per module here because `application.xml` outranks each WAR's
 `weblogic.xml` inside an EAR. **They are fixed deployment identifiers — never change
@@ -32,7 +32,7 @@ them.**
 [phone](../../admin/phone/README.md) (`blade/phone`) ·
 [analytics-console](../../admin/analytics-console/README.md) (`blade/analytics`) ·
 [events-console](../../admin/events-console/README.md) (`blade/events`) ·
-[javadoc](../../admin/javadoc/README.md) (`blade/javadoc`, javadocs builds only)
+[javadoc](../../admin/javadoc/README.md) (`blade/javadoc`, `--prod` builds only)
 
 Not bundled: the `proto/` incubator apps ([security](../../proto/security/README.md),
 [test-console](../../proto/test-console/README.md)) — promotion adds their `ear-<name>`
@@ -40,10 +40,10 @@ profile here.
 
 ## The other tiers
 
-The test tier has its own EAR ([apps/test](../test/README.md), `blade-test.ear`).
-**There is deliberately no services EAR** — Oracle's Remote Console can't show the status
-of an app inside an EAR, so service WARs deploy individually to the cluster (see
-[DEPLOYMENT.md](../../DEPLOYMENT.md)).
+The test tier has its own EAR ([apps/test](../test/README.md), `blade-test.ear`), and the
+services tier builds `blade-services.ear` from `apps/services`. Service WARs also ship
+loose, so deploy either the EAR or the individual WARs (see [DEPLOYING.md](../../DEPLOYING.md)).
+A build conf can turn a tier's EAR off with `ear.<tier>=off`.
 
 ## Maven Coordinates
 

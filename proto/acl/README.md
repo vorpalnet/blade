@@ -24,8 +24,8 @@ matches no rule. Edit and publish through the
 
 ## Incubator status
 
-This module lives in `proto/` — it builds under the `full` profile (WAR: `acl.war`) but is
-excluded from the everyday `default`/`production` builds. Promotion moves it to
+This module lives in `proto/`. `build.sh` builds it with everything else and ships
+`acl.war` loose in `dist/proto/`; it is never bundled in an EAR. Promotion moves it to
 `services/`.
 
 ## Related modules

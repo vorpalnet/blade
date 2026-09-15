@@ -12,10 +12,9 @@ authenticates. Read this for what they are allowed to do afterwards.
 
 > Status: the access-control layer described in §3 and §4 ships in the framework
 > jar and is unit-tested. The identity provider integration in §2 ships in the
-> framework jar too and was proven end to end against an OCI IAM identity domain
-> on 2026-09-08: a reviewer with no account on the platform signed in through the
-> domain and was shown every recording the reviewer rule grants. §6 is design,
-> not code.
+> framework jar too, and works with an OCI IAM identity domain: a reviewer with no
+> account on the platform signs in through the domain and sees every recording
+> the reviewer rule grants.
 
 ---
 
@@ -29,14 +28,14 @@ configuration, restart a node, read a server log. BLADE has answered this since
 3.0 with four roles, `Admin`, `Operator`, `Deployer` and `Monitor`, mapped onto
 groups in the customer's directory.
 
-**Who may hear a patient's call?** Play a recording, read a transcript, export a
+**Who may hear a caller's call?** Play a recording, read a transcript, export a
 file. This is a question about *content*, it is asked of individual records, and
 the answer depends on the job the person does and their relationship to that
 particular call.
 
 The two are orthogonal, and BLADE keeps them orthogonal. **A platform role
 grants no access to content.** A read-only `Monitor` watching a cluster has no
-job-function reason to hear a patient, and a supervisor who may review their own
+job-function reason to hear a caller, and a supervisor who may review their own
 team's calls has no reason to redeploy an application. Systems that collapse
 these two vocabularies end up handing call audio to whoever can already read a
 dashboard, and cannot explain to an auditor why.
@@ -120,8 +119,8 @@ a settings file that says `provider=container` lands in the WAR as its
 `WEB-INF/oidcAuth.properties`. The vendor lists Keycloak and Azure as the
 providers it tested against.
 
-It was taken to the last step against an OCI identity domain on 2026-09-08,
-and two things stopped it that have no setting on either side:
+It does not work with an OCI identity domain, for two reasons that no setting
+on either side changes:
 
 - Its key matcher accepts only a key marked `use: sig`. An identity domain
   publishes its signing key without a `use` field, so every ID token is
@@ -133,13 +132,12 @@ and two things stopped it that have no setting on either side:
   scope and refuses a custom claim by that name, so even a verified token
   would carry no roles.
 
-Four more things it needed were found on the way and are worth knowing for any
-provider. Its redirect URL must carry the port, `https://host:443/...`,
+It also needs four things that apply to any provider. Its redirect URL must carry the port, `https://host:443/...`,
 because the container writes the port into every request URL it rebuilds and
 the provider compares the callback character for character. The proxy in
 front must speak TLS to the server's SSL listener, because the container takes
 the scheme from its own connection, not from `X-Forwarded-Proto`; `install.sh`
-renders nginx that way now. The domain trust store must hold the public roots
+renders nginx that way. The domain trust store must hold the public roots
 (below). And `misc/configure-oidc.py` takes a server name as its last argument
 to turn on that server's authentication debug, the only place the provider
 says what it did with a token.
@@ -165,12 +163,11 @@ settings file above, and creates the groups and a test user:
   access to its signing certificate. The keys are public material; the switch
   only says so.
 - The servers reach it over public TLS. Every OCCAS server validates outbound
-  connections against the domain trust store (`blade-trust.p12`), which held
-  only BLADE's own CA, so the first fetch of the discovery document failed with
-  "PKIX path building failed". `certs.sh`, `make-certs.sh` and `install.sh`
-  now seed that store with the JDK's public roots; an existing environment gets
-  them on its next `install.sh` pass, and the servers pick the store up on
-  restart.
+  connections against the domain trust store (`blade-trust.p12`), so that store
+  must hold the public roots, or the first fetch of the discovery document fails
+  with "PKIX path building failed". `certs.sh`, `make-certs.sh` and `install.sh`
+  seed it with the JDK's public roots; an existing environment gets them on its
+  next `install.sh` pass, and the servers pick the store up on restart.
 
 Single sign-on means exactly that. A browser that already holds a session in
 the identity domain, such as an administrator signed in to the OCI console in
@@ -180,7 +177,7 @@ try a test user, use a private window.
 The applications declare a fifth role, `Reviewer`, beside the four platform roles,
 externally defined like them, so a group called `Reviewer` in the identity domain
 is the reviewer role with no mapping to maintain, and a policy rule naming
-`Reviewer` grants the transcript to sixty thousand agents' supervisors without one
+`Reviewer` grants the transcript to every supervisor in that group without one
 of them being given an account here. A directory that must keep its own group
 names maps them with `role.<group>=Reviewer` in the settings file.
 
@@ -188,10 +185,10 @@ names maps them with `role.<group>=Reviewer` in the settings file.
 
 `JwtAuthFilter` and `SECURITY.md` §2a's first-party tokens are unaffected and
 still required: a browser cannot attach an `Authorization` header to a
-WebSocket handshake, and no amount of OpenID Connect changes that.
-`SECURITY.md` open item 3, distributing one JWT configuration to every admin
-WAR, is answered differently now: an application that wants the corporate
-identity provider names `OidcLoginFilter` and gets its settings at deploy time.
+WebSocket handshake, and no amount of OpenID Connect changes that. No JWT
+configuration has to be shared across the admin WARs: an application that wants
+the corporate identity provider names `OidcLoginFilter` and gets its settings at
+deploy time.
 
 ---
 
@@ -304,9 +301,9 @@ Three properties of step 3 are load-bearing.
 unclassified while it runs, and stays unclassified forever if the node dies
 mid-call. That would leave content in the store that no rule can describe.
 
-**Written once.** The OCI implementation writes to a bucket carrying a retention
-rule, so a second write is refused. Verified against the live service: an attempt
-to reclassify a recording from `cardiology` to `billing` returns
+**Written once.** Keep recordings in a store that refuses a second write, such as
+an object storage bucket under a retention rule. There, an attempt to reclassify
+a recording from `cardiology` to `billing` fails with
 `403 RetentionRuleViolation` and the stored department does not change. Nobody
 can relabel a recording to widen who may hear it.
 
@@ -361,9 +358,7 @@ session id and moves only the version, so a changed origin identity is a
 changed party. Then the conversation closes, the party gets a fresh leg on the
 media server, and the next conversation opens on it. A change of address with
 the same origin is followed as a move inside one conversation, with a gap in
-the manifest saying so. Proven on 2026-09-09 with a caller that re-INVITEd
-under a new origin: one call, two complete conversations, the second starting
-under a second later, both under the same `call` attribute.
+the manifest saying so.
 
 ### Matching a caller against a record
 
@@ -443,23 +438,15 @@ different integrity requirements.
 
 > **Where the records land.** `AuditSink` is the interface, in the framework; the
 > subscriber is `proto/audit`, and it writes through whatever `AuditSink` the
-> deployment installs. Gryphon's `OciAuditSink` keeps them in OCI Object Storage,
-> one object per record, named `audit/yyyy/MM/dd/<millis>-<eventId>.json` so a
-> period reads as a prefix listing.
+> deployment installs. A sink over object storage keeps one object per record,
+> named `audit/yyyy/MM/dd/<millis>-<eventId>.json` so a period reads as a prefix
+> listing.
 >
 > Object storage rather than the analytics datasource, and the reason is property
 > 3. In a bucket carrying a retention rule the append-only property belongs to the
 > store; with a database grant of `INSERT` and `SELECT` it belongs to whoever
 > administers the grant, and they can widen it from inside without leaving a trace
 > in the thing being widened.
->
-> Verified against the live service, on a stored access record:
->
-> ```
-> rewrite a denial as a permit -> 403 RetentionRuleViolation
-> delete it                    -> 403 RetentionRuleViolation
-> read it back                 -> still "org.vorpal.blade.access.denied"
-> ```
 >
 > The subscription is durable, so records queue while the application is down
 > rather than being dropped, and `AuditRecorder` rethrows anything the sink
@@ -472,7 +459,7 @@ different integrity requirements.
 > compliance and produces nothing.
 >
 > **Reading it back** is `GET /blade/audit/api/v1/audit/yyyy/MM/dd`, behind
-> `phi:audit`. Verified over HTTP: a caller holding all four platform roles and
+> `phi:audit`. A caller holding all four platform roles and
 > no `phi:audit` gets `403`; granted the permission, the same caller reads the
 > day. Every read publishes its own access record, because a trail that logs
 > every access except accesses to itself has a hole in exactly the shape of
@@ -540,14 +527,9 @@ second permission, `phi:unredact`, evaluated and audited as its own decision.
 A span the recognizer could not time cannot be muted, and the audio is then
 refused rather than played with the value audible.
 
-Measured on the rig on 2026-09-08 against a call that read out a member id, a
-card and a phone number: the three spans decode as digital silence and the
-speech around them is unchanged to the decibel.
-
 What is not there: a name the call did not already know. A caller who says a
 third party's name, or their own when nothing looked it up, is redacted only if
-the name happens to match a shape, and a name has none. That needs an entity
-model on the transcript, the same class of work as the biasing. And a long
+the name happens to match a shape, and a name has none. And a long
 digit string is only as good as the recognizer's digit runs: a card read out
 in four groups came back as thirteen digits, which failed the check digit and
 was redacted as a number rather than a card. Redacted either way.
@@ -582,9 +564,9 @@ at the application's root is the reviewer's front door: search, the transcript
 with protected spans as tags, the recording muted or verbatim by the same
 permission.
 
-Index rows must expire with the recordings they describe; the reaper keyed on
-the bucket's retention rule is not built yet. Neither is the label layer,
-`BLADE_LABEL`, which the schema carries for the classifier that will fill it.
+Index rows do not expire with the recordings they describe: nothing removes a
+row when its recording is disposed of. The schema's `BLADE_LABEL` column is
+reserved, and nothing fills it.
 
 ### The one trap worth knowing about
 
@@ -623,54 +605,20 @@ identity is not reaching the application and no policy change will fix it.
 
 ---
 
-## 6. Design, not yet code
+## 6. Hardened deployment profile
 
-### The recording vault
-
-There is no recording store today. The `player` service hands the media server a
-recording URI the application chose and forgets it: no index, no metadata, no
-retention, no mediated read path. Nothing exists to migrate, which is the
-opportunity to build it correctly once.
-
-Two rules shape it. **Media is never served from a filesystem path.** A read
-goes through the application, after a decision, and emits a record either way.
-**The recording URI is never chosen by the application.** An application-supplied
-path is a write primitive, so the service mints it.
-
-The index carries the record attributes §3's rules match on: identifier, call
-correlator, times, participants, tenant, queue, team, agent, and a classification
-label. The index schema and the policy vocabulary have to be designed together,
-because one is what the other matches on.
-
-It also owns retention. The analytics service is candid that "retention is yours,
-and the default is unbounded growth. Nothing in BLADE deletes a row." For call
-content that is a defect rather than a default: retention per classification,
-with disposal recorded in the audit trail.
-
-### Machine identity
-
-§164.312(d) says "person **or entity** authentication," and about half of a media
-deployment's surface is machine-to-machine. Where network reachability is the
-only control today, the remedy is configuration rather than new machinery:
-`certs.sh` already issues a server identity whose certificate carries both
-`serverAuth` and `clientAuth` extended key usage, precisely so the same keystore
-can be a client identity, and `RestConnector`'s `TlsClientConfig` already accepts
-a client keystore for mutual TLS.
-
-### Hardened deployment profile
-
-A checklist rather than a design, for a deployment handling regulated content:
+A checklist for a deployment handling regulated content:
 
 - `AddressPolicy.allowChosenAddress` defaults to true in the WebRTC phone, a
   deliberate trade for demonstrability, documented in `SECURITY.md` §2a. Set it
   false.
 - The admin session timeout is 3600 seconds. Automatic logoff is addressable
   under §164.312(a)(2)(iii); an hour is long for a shared workstation.
-- `<cookie-secure>` and `CONFIDENTIAL` transport guarantees are `SECURITY.md`'s
-  acknowledged intent rather than the state of the tree. TLS-only is already
-  reachable with `tls.only=true`.
-- Three applications still serve a JAX-RS API outside their security
-  constraints. See the check in `SECURITY.md`.
+- No WAR sets `<cookie-secure>` or a `CONFIDENTIAL` transport guarantee. Go
+  TLS-only with `tls.only=true`, and add the secure cookie flag with a
+  deployment plan where it is required.
+- Three applications serve a JAX-RS API outside their security constraints. See
+  the constraint check in `SECURITY.md`.
 
 ---
 
@@ -687,9 +635,9 @@ their counsel and their risk analysis.
 | §164.312(a)(1) Access control, unique user identification | §2. One federated identity, no shared accounts, no local user store |
 | §164.312(a)(2)(ii) Emergency access procedure | `phi:breakglass`, which requires a stated justification and records itself distinctly |
 | §164.312(a)(2)(iii) Automatic logoff | §6, session timeout. Configuration |
-| §164.312(a)(2)(iv) Encryption at rest | §6, the vault. Not built |
+| §164.312(a)(2)(iv) Encryption at rest | Not provided by BLADE; a property of the store the deployment chooses |
 | §164.312(b) Audit controls | §4 |
-| §164.312(d) Person or entity authentication | §2 for people, §6 for machines |
+| §164.312(d) Person or entity authentication | §2 for people; mutual TLS for machines, `SECURITY.md` §6 |
 | §164.312(e) Transmission security | `SECURITY.md` §6, TLS/SIPS/t3s |
 | §164.502(b) Minimum necessary | §3. The permission ladder exists for this obligation |
 

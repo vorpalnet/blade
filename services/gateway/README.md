@@ -3,9 +3,8 @@
 A BLADE v3 service that **registers with upstream SIP trunks and originates outbound calls
 onto them** — the PSTN front door out of BLADE.
 
-Modernized from the 2020 `vorpal-blade-gateway` (recovered from an SD card): on the current
-v3 framework, with a pluggable per-carrier registration technique, timer-driven refresh,
-encrypted credentials, and multiple trunks per servlet.
+It runs on the v3 framework, with a pluggable per-carrier registration technique,
+timer-driven refresh, encrypted credentials, and multiple trunks per servlet.
 
 ## Model
 
@@ -18,7 +17,7 @@ One `GatewaySipServlet` hosts **N `VirtualGateway`s** — one per outbound trunk
     challenge, kept alive by a recurring SIP servlet timer at `expires − margin`. The
     `password` getter is `@FormLayout(password=true)` and stored encrypted
     (`{CLEARTEXT}`→`{AES}`) by the Configurator. Runtime: `RegisterCallflow`.
-  - **`ip-auth`** (`IpAuthStyle`) — IP-allowlisted carriers (Twilio/BYOC) that need no
+  - **`ip-auth`** (`IpAuthStyle`) — IP-allowlisted carriers that need no
     REGISTER; `newRegistrar()` returns null.
   - **new carriers** = one `@JsonSubTypes.Type` line + a subclass.
 - optionally names an **`outboundInterface`** — multi-homed engines only, to originate that
@@ -50,7 +49,7 @@ b2buaCallee.getTrigger("INVITE").createTransition("gateway")   // next = a state
     .setId("offnet-via-gateway")
     .setWhen("${To.user} matches '\\+?1[2-9]\\d{9}'")
     .setSubscriber("To")
-    .setRoutes(new String[] { "sip:${To.user}@gateway;vgw=flowroute-primary" });
+    .setRoutes(new String[] { "sip:${To.user}@gateway;vgw=carrier-primary" });
 ```
 
 In the Flow editor this is the **transition into the gateway state**, whose *Virtual gateway*
@@ -68,7 +67,6 @@ transition targets).
   (`InitialInvite.processContinue`, `v2/b2bua/InitialInvite.java`). Answering the challenge
   needs a re-auth-aware outbound dialog (a gateway `InitialInvite` variant mirroring
   `RegisterCallflow.onResponse`: `createRequest(response,"INVITE")` + `addAuthHeader` + loop guard).
-  Add it when a target carrier re-challenges INVITEs.
 
 ## Build / test
 

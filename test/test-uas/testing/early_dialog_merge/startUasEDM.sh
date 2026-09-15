@@ -1,5 +1,5 @@
 #!/bin/bash
 
-sipp -sf uas.good.xml -i 192.168.1.247 -p 5099
+sipp -sf uas.good.xml -i 192.0.2.247 -p 5099
 
 

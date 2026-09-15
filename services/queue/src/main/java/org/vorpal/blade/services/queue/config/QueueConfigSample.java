@@ -29,14 +29,14 @@ public class QueueConfigSample extends QueueConfig {
 				.setRate(10) //
 				.setRingPeriod(90) //
 				.setRingDuration(60 * 1000) //
-				.setAnnouncement("sip:ann1@192.168.1.227"));
+				.setAnnouncement("sip:ann1@192.0.2.227"));
 
 		this.addQueue("medium", new QueueAttributes() //
 				.setPeriod(15 * 1000) //
 				.setRate(5) //
 				.setRingPeriod(90) //
 				.setRingDuration(60 * 1000) //
-				.setAnnouncement("sip:ann1@192.168.1.227"));
+				.setAnnouncement("sip:ann1@192.0.2.227"));
 
 		this.addQueue("slow", new QueueAttributes() //
 				.setPeriod(30 * 1000) //

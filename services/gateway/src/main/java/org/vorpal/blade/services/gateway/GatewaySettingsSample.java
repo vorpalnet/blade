@@ -16,10 +16,10 @@ public class GatewaySettingsSample extends GatewaySettings implements Serializab
 		this.logging = new LogParametersDefault();
 		this.logging.setLoggingLevel(LoggingLevel.INFO);
 
-		VirtualGateway flowroute = new VirtualGateway();
-		flowroute.setName("flowroute-primary");
-		flowroute.setTransport("tcp");
-		flowroute.setRegistrarDomain("us-east-nj.sip.flowroute.com");
+		VirtualGateway carrier = new VirtualGateway();
+		carrier.setName("carrier-primary");
+		carrier.setTransport("tcp");
+		carrier.setRegistrarDomain("sip.carrier.example.com");
 		// outboundInterface is left unset: single-interface engines originate on the
 		// container's own SIP channel. Set it only on a multi-homed engine, to the
 		// advertised host of the channel this trunk should send from.
@@ -27,7 +27,7 @@ public class GatewaySettingsSample extends GatewaySettings implements Serializab
 		digest.setUserId("15551234567");
 		digest.setAuthName("00000000");
 		digest.setPassword(""); // set via the Configurator; stored {CLEARTEXT}->{AES}
-		flowroute.setStyle(digest);
+		carrier.setStyle(digest);
 
 		VirtualGateway ipauth = new VirtualGateway();
 		ipauth.setName("carrier-b-ipauth");
@@ -35,7 +35,7 @@ public class GatewaySettingsSample extends GatewaySettings implements Serializab
 		ipauth.setRegistrarDomain("sip.example-carrier.net");
 		ipauth.setStyle(new IpAuthStyle());
 
-		getGateways().add(flowroute);
+		getGateways().add(carrier);
 		getGateways().add(ipauth);
 	}
 }

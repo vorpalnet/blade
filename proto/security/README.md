@@ -32,9 +32,9 @@ before flipping anything on.
 
 ## Incubator status
 
-This module lives in `proto/` — it builds under the `full` profile (WAR:
-`blade-security.war`, context-root `blade/security`) but is **not** bundled into
-`blade-admin.ear`. Promotion moves it to `admin/` and adds its `ear-security` profile to
+This module lives in `proto/`. `build.sh` builds it with everything else and ships
+`blade-security.war` (context-root `blade/security`) loose in `dist/proto/`; it is **not**
+bundled into `blade-admin.ear`. Promotion moves it to `admin/` and adds its `ear-security` profile to
 the EAR pom in [apps/admin](../../apps/admin/README.md).
 
 ## Related modules

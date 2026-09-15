@@ -39,9 +39,6 @@ once, top to bottom, in a single method. The events still arrive one at a time,
 minutes apart, perhaps on different machines — but the code reads in the order
 the conversation happens.
 
-> **PLACEHOLDER:** code snippet contrasting the traditional style with the
-> BLADE style. *(Jeff to supply.)*
-
 ## 2. OCCAS and the SIP Servlet API
 
 BLADE applications run on OCCAS — Oracle Communications Converged Application
@@ -61,10 +58,6 @@ with a status code. Responses below 200 are *provisional* — `180 Ringing`
 reports progress. Responses of 200 and above are *final* — `200 OK` accepts,
 `486 Busy Here` declines. A caller confirms a final answer to an INVITE with an
 ACK. A basic call is INVITE, 180, 200, ACK — conversation — BYE, 200.
-
-> **PLACEHOLDER:** sequence diagram, call setup. *(Jeff to supply.)*
-
-> **PLACEHOLDER:** sequence diagram, call teardown. *(Jeff to supply.)*
 
 Import BLADE classes from `org.vorpal.blade.framework.v3`. Your IDE will also
 offer older packages whose names it strikes through as deprecated; skip them.

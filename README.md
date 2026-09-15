@@ -95,9 +95,9 @@ Deployed to the OCCAS cluster as individual WARs — one per service — and als
 | [Hold](services/hold/README.md) | Call parking — answers with RFC 3264 inactive SDP until the far end resumes the dialog |
 | [iRouter](services/irouter/README.md) | Universal, config-driven SIP proxy; two-phase enrichment + routing pipeline edited in the Configurator |
 | [Options](services/options/README.md) | SIP OPTIONS handling and node lifecycle signaling |
-| [Presence](services/presence/README.md) | SIP/SIMPLE presence endpoint (skeleton — accepts SUBSCRIBE/PUBLISH; NOTIFY fan-out on the roadmap) |
+| [Presence](services/presence/README.md) | SIP/SIMPLE presence endpoint (skeleton: accepts SUBSCRIBE/PUBLISH, does not fan out NOTIFY) |
 | [Proxy-Balancer](services/proxy-balancer/README.md) | A simple load balancer |
-| [Proxy-Block](services/proxy-block/README.md) | Number-based translate-and-forward proxy (deny rules on the roadmap) |
+| [Proxy-Block](services/proxy-block/README.md) | Number-based translate-and-forward proxy (no deny rules) |
 | [Proxy-Registrar](services/proxy-registrar/README.md) | A small, elegant SIP proxy-registrar |
 | [Queue](services/queue/README.md) | Call queuing and distribution |
 | [TPCC](services/tpcc/README.md) | Third-party call control |
@@ -106,20 +106,20 @@ Deployed to the OCCAS cluster as individual WARs — one per service — and als
 
 ### Incubator (`proto/`)
 
-New apps start in `proto/` — they build under the `full` profile but stay out of the everyday builds and the admin EAR until promoted.
+New apps start in `proto/`. They build with everything else and ship loose in `dist/proto/`, but no EAR bundles them until they are promoted.
 
 | Module | Description |
 | --- | --- |
 | [ACL](proto/acl/README.md) | Allow or deny calls by remote IP address |
 | [Balancer](proto/balancer/README.md) | Load-balancer prototype |
-| [Demo](proto/demo/README.md) | The rep-facing demo launcher and matrix hub |
+| [Demo](proto/demo/README.md) | Demo launcher and index of the BLADE demos |
 | [Player](proto/player/README.md) | Vendor-neutral JSR-309 media player/recorder |
 | [Security](proto/security/README.md) | Admin-tier authentication configuration (JWT SSO) |
 | [Test Console](proto/test-console/README.md) | Cluster-wide control surface for the test apps |
 
 ### Test Applications
 
-Deployed to the cluster alongside production applications (or to a standalone test server via [apps/test](apps/test/README.md)). Excluded by the `production` build profile. Together, the Test UAC and Test UAS form a complete SIP load testing tool that replaces SIPp for production performance tuning.
+Deployed to the cluster alongside production applications (or to a standalone test server via [apps/test](apps/test/README.md)). They ship as `blade-test.ear` and as loose WARs in `dist/test/`. Together, the Test UAC and Test UAS form a complete SIP load testing tool that replaces SIPp for production performance tuning.
 
 | Module | Description |
 | --- | --- |
@@ -160,9 +160,9 @@ services/       Services (one WAR each, deployed to the cluster)
 apps/           EAR packaging
   admin/          blade-admin.ear — the whole admin tier in one deployable
   test/           blade-test.ear — every service + test app, for a test server
-proto/          Incubator — new apps start here (built by the full profile only)
+proto/          Incubator: new apps start here (built, never bundled in an EAR)
   acl/  balancer/  demo/  player/  security/  test-console/  webrtc/
-test/           Test applications (excluded by production profile)
+test/           Test applications (blade-test.ear)
   test-b2bua/     Reference B2BUA
   test-uac/       REST-operated User Agent Client
   test-uas/       Configurable User Agent Server
@@ -186,14 +186,14 @@ retired/        Legacy modules kept for reference — not built
 Add this to your shell rc (`~/.zshrc`, `~/.bashrc`, etc.):
 
 ```bash
-export MW_HOME=/path/to/your/occas/install     # e.g. /Users/jeff/Oracle/occas-8.3
+export MW_HOME=/path/to/your/occas/install     # e.g. /opt/oracle/occas-8.3
 ```
 
 Both scripts read `$MW_HOME/inventory/registry.xml` to derive the OCCAS and WebLogic versions automatically — you never need to type a version number.
 
 To switch OCCAS versions, point `$MW_HOME` at a different install — no edits to build configs
-required. You can keep multiple installs side-by-side (e.g. `/Users/jeff/Oracle/occas-8.1`,
-`.../occas-8.3`). For a one-off build against a different version, pass the platform on the
+required. You can keep multiple installs side-by-side (e.g. `/opt/oracle/occas-8.1`,
+`/opt/oracle/occas-8.3`). For a one-off build against a different version, pass the platform on the
 command line instead of re-exporting: `./build.sh occas-8.1 …` overrides `$MW_HOME` for that run.
 
 > **Whichever way you switch, add `clean`.** Bytecode target is invisible to Maven's up-to-date
@@ -211,7 +211,7 @@ command line instead of re-exporting: `./build.sh occas-8.1 …` overrides `$MW_
 Example output:
 
 ```
-Installing OCCAS JARs from: /home/jetty/occas-8.3
+Installing OCCAS JARs from: /opt/oracle/occas-8.3
   WebLogic version: 14.1.2
   OCCAS version:    8.3
 ```
@@ -227,8 +227,7 @@ A build is the **whole shippable set** — no module to pick, just a mode:
 ```
 
 To iterate on one module, run Maven directly (`./mvnw -pl services/hold package`).
-See **[Building](#building)** below. (Clean-only runs need no
-profile: `./build.sh clean`.)
+See **[Building](#building)** below. (Clean only: `./build.sh clean`.)
 
 ### Building Individual Modules
 
@@ -259,7 +258,7 @@ Two things `./mvnw -pl` does **not** do, because it bypasses `build.sh` entirely
 
 ## Output
 
-Every WAR/JAR built by the active profile is copied to `dist/<version>-<build>/`, organized into tier subdirectories matching where each artifact deploys. Library artifacts and build conf files stay at the root.
+Every WAR/JAR the build produces is copied to `dist/` (dev) or `dist/<version>-<build>/` (prod), organized into tier subdirectories matching where each artifact deploys. Library artifacts and build conf files stay at the root.
 
 ```
 dist/<version>-<build>/
@@ -280,7 +279,6 @@ dist/<version>-<build>/
     irouter.war                              # one WAR per service → cluster
     hold.war
     ...
-  default.conf                               # build profile used
   occas-<ver>.conf                           # platform profile used
   DEPLOYMENT.txt                             # generated manifest classifying every artifact
 ```
@@ -340,8 +338,8 @@ EARs. There is no module to pick; to iterate on one module, run Maven directly
 | `prod` (`--prod`) | `<rev>-<build>` — traceable | `dist/<rev>-<build>/` | built |
 
 An optional **platform** (which OCCAS/Java version to target) and plain Maven
-arguments follow. Naming an environment reads its mode from the shared profile
-(`~/.blade/<env>/profile.conf`).
+arguments follow. A build never reads an environment profile: one `--prod`
+release serves every environment you deploy it to.
 
 ```bash
 ./build.sh                              # dev build, platform from $MW_HOME

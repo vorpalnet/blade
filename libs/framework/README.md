@@ -91,7 +91,7 @@ API definitions and interfaces for call transfer functionality.
 
 ### Vorpal Blade Framework v3 Packages
 
-v3 introduces the **config-driven router model** used by the `irouter` service and any future service that routes calls by consulting external systems. A single JSON configuration file expresses the entire decision: how to parse the inbound request, which REST / JDBC / LDAP / table lookups to consult, how to combine their output, and where to proxy the call.
+v3 introduces the **config-driven router model** used by the `irouter` service to route calls by consulting external systems. A single JSON configuration file expresses the entire decision: how to parse the inbound request, which REST / JDBC / LDAP / table lookups to consult, how to combine their output, and where to proxy the call.
 
 The model has two phases — an ordered **enrichment pipeline** that writes values into a shared per-call `Context`, and a single **routing decision** that reads the enriched Context and produces a concrete `Route`. Every polymorphic type (connector, selector, authentication, routing) is driven by a `type` discriminator in JSON so the Configurator form editor can dynamically reshape forms as operators pick subtypes.
 

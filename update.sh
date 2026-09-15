@@ -94,7 +94,7 @@ if [ "$UPD_VERB" = "_patch-inner" ]; then
     exit $?
 fi
 
-# --- BLADE as a library (the gryphon/install.sh pattern): re-point argv at
+# --- BLADE as a library (the pattern downstream installers use): re-point argv at
 # what install.sh's parser expects (profile name + flags ONLY), source it, load.
 set -- "$UPD_ENV" ${UPD_DRY:+-n}
 # shellcheck disable=SC1091

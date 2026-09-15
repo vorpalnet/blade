@@ -2,17 +2,13 @@
 
 Javadocs: `/blade/javadoc/presence/` on the Admin Portal
 
-The starting point for a SIP/SIMPLE presence server. **Today it is a skeleton**: it
-accepts SUBSCRIBE and PUBLISH, answers 200 OK echoing the request's Expires, and rejects
-anything else with 500. It does not yet send NOTIFY, keep a subscriber list, or store
-presence documents — the intended event model is sketched in the source (`Event.java`)
-and waiting to be built.
+A skeleton SIP/SIMPLE presence service. It accepts SUBSCRIBE and PUBLISH, answers 200 OK
+echoing the request's Expires, and rejects anything else with 500. It does not send
+NOTIFY, keep a subscriber list, or store presence documents.
 
-What the skeleton already gets right is the session model: a `@SipApplicationKey`
-selector keys every request by the presentity (the To header's `user@host`, lowercased),
-so all SUBSCRIBE and PUBLISH traffic for one presentity converges on a single
-`SipApplicationSession`. That is the anchor a real subscriber list and NOTIFY fan-out
-will hang from.
+The session model is in place: a `@SipApplicationKey` selector keys every request by the
+presentity (the To header's `user@host`, lowercased), so all SUBSCRIBE and PUBLISH
+traffic for one presentity converges on a single `SipApplicationSession`.
 
 `PresenceServlet` extends the framework's `v3.AsyncSipServlet`; the two callflows extend
 `v3.Callflow`.
@@ -20,7 +16,7 @@ will hang from.
 ## Configuration
 
 A single placeholder setting, edited through the
-[Configurator](../../admin/configurator/README.md). No sample config yet.
+[Configurator](../../admin/configurator/README.md). There is no sample config.
 
 ## Related modules
 

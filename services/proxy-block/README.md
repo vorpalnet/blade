@@ -6,10 +6,9 @@ A rule-driven SIP proxy that routes calls by calling number and dialed number: s
 capture the From, To, and Request-URI; a translation table maps calling numbers (and,
 nested under each, dialed numbers) to `forwardTo` targets built from `${...}` captures.
 
-One thing to know up front: **despite the name, the shipped rule engine translates and
-forwards — a deny/reject action is not implemented yet.** A call that matches no rule
-follows the `defaultRoute` (by default, a pass-through of the request URI). Treat
-"blocking" as the roadmap; number-based routing is what it does today.
+One thing to know up front: **despite the name, the rule engine translates and forwards;
+it has no deny or reject action.** A call that matches no rule follows the `defaultRoute`
+(by default, a pass-through of the request URI).
 
 ## How it works
 

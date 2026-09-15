@@ -6,12 +6,12 @@ The designer and the JMS administration console are the other half, on the admin
 tier, in `admin/events-console`.
 
 ```
-  Attendant sidecar (Python)              BLADE (OCCAS engine tier)
+  Producer (any HTTP client)              BLADE (OCCAS engine tier)
   ┌────────────────────┐   HTTP POST     ┌──────────────────────────────────────┐
-  │ ASR→extract→gate→  │  CloudEvents    │  EventIngestResource  (JAX-RS)       │
-  │ confirm→emit_task  ├────────────────►│    POST /events/api/v1/events        │
+  │ your application   │  CloudEvents    │  EventIngestResource  (JAX-RS)       │
+  │                    ├────────────────►│    POST /events/api/v1/events        │
   └────────────────────┘  application/   │            │                         │
-        (unchanged)       cloudevents+   │            ▼  EventValidator         │
+                          cloudevents+   │            ▼  EventValidator         │
                           json           │      schema from the catalog         │
                                          │            │                         │
                                          │            ▼  EventPublisher         │
@@ -112,27 +112,27 @@ the next reload; publishers for destinations that did not change are left alone.
    `dist/<ver>-<build>/services/events.war`, deployed on its own like every
    other service.
 
-3. **Point the producer at it** — no code change, just the sink URL and
-   credentials:
-   ```bash
-   ATTENDANT_SINK=http://<engine>:<port>/events/api/v1/events
+3. **Point the producer at it.** Nothing changes in BLADE; the producer needs the
+   ingress URL and credentials:
+   ```
+   http://<engine>:<port>/events/api/v1/events
    ```
 
 ## The ingress requires authentication
 
 `POST /api/v1/*` is behind BASIC auth with role `authenticated-users`, mapped to
-`users` in `weblogic.xml` — the same pattern `services/analytics` uses. This was
-deliberately open while the app lived in `proto/` and the only producer was a
-trusted in-network sidecar. It publishes onto a cluster-wide bus that downstream
-apps act on, so that could not survive promotion.
+`users` in `weblogic.xml` — the same pattern `services/analytics` uses. It publishes
+onto a cluster-wide bus that downstream apps act on.
 
 ```bash
 curl -i -u weblogic:<password> -X POST \
   http://<engine>:<port>/events/api/v1/events \
   -H 'Content-Type: application/cloudevents+json' \
-  -d '{"specversion":"1.0","type":"net.vorpal.attendant.meeting.scheduled",
-       "source":"/attendant","subject":"demo-1",
-       "data":{"who":"Sarah","when_text":"next Tuesday at 3"}}'
+  -d '{"specversion":"1.0","type":"org.vorpal.blade.transfer.completed",
+       "source":"//example_co/producer","subject":"call-0001",
+       "data":{"occurredAt":"2026-01-15T14:03:00Z","appName":"transfer",
+               "domain":"example_domain","server":"engine1",
+               "appStartedAt":"2026-01-15T08:00:00Z"}}'
 # => 202 Accepted, {"id":"..."}
 ```
 

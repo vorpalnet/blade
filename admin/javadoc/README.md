@@ -6,8 +6,7 @@ It is the only admin app with no login: the Javadoc site is deliberately public.
 
 ## How it's built
 
-`javadoc` is a normal build-profile module: profiles that list it (`default`, `full`) build
-the docs; others don't. Because this app aggregates every module's apidocs, build.sh runs it
+`javadoc` is built by a `--prod` build and skipped in dev, because it is the slow part. Because this app aggregates every module's apidocs, build.sh runs it
 in a final pass — it first builds the whole project with per-module generation (the
 `javadoc-gen` Maven profile), then builds this module + the admin EAR over the now-complete
 set, so blade-javadoc.war is never missing a module. Needs a build JDK ≥ 23 (BLADE's `///`
@@ -16,9 +15,9 @@ diagrams alongside the HTML — plus BLADE's own stylesheet and a topbar linking
 [Portal](../portal/README.md).
 
 At packaging time, `collect-javadocs.sh` walks the sibling modules, copies each generated
-`apidocs` tree into `target/javadoc-content/<module>/`, and generates the index page. When
-`build.sh` passes the active profile's module list, only those modules are collected, so
-the WAR matches what the build actually shipped. New modules appear on the index
+`apidocs` tree into `target/javadoc-content/<module>/`, and generates the index page. `build.sh`
+passes the list of modules in the build, and only those are collected, so the WAR matches
+what the build actually shipped. New modules appear on the index
 automatically — no build changes needed.
 
 This is the canonical home of the API reference — module READMEs across the repo cite

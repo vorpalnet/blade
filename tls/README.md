@@ -10,9 +10,9 @@ serves all three.
 | `make-certs.sh <env>` | anywhere with a JDK | Stand up a private CA, issue the identity cert, build the identity + trust PKCS12 keystores |
 | `install-ssl.sh <env>` | **on the AdminServer** | Push the keystores to every node, then WLST-configure server SSL + the SIPS channel |
 
-Both read the **same env conf as `deploy.sh`** — `build-profiles/deploy/<env>.conf`
-plus the gitignored `<env>.secret`. Host facts (engine nodes, ssh user, admin
-URL) and the SAN/keystore settings live in exactly one place.
+Both read the **same profile as `deploy.sh`**: `~/.blade/<env>/profile.conf` (a legacy
+`build-profiles/deploy/<env>.conf` is read as a fallback). Host facts (engine nodes, ssh
+user, admin URL), the SAN/keystore settings and the passphrases live in that one file.
 
 ## Why a private CA (not bare self-signed)
 
@@ -26,7 +26,7 @@ you're ready for a real CA, the same identity CSR goes to it instead (see
 
 Node Manager presents its own **permanent** self-signed certificate
 (`nm-identity.p12`, alias `blade-nm`, ~100-year validity), generated once by
-install.sh's `n` step into the same `tls/out/<env>/` directory. The NM channel is
+install.sh's `n` step into the same `~/.blade/<env>/certs/` directory. The NM channel is
 a closed loop — AdminServer ↔ NM inside the cluster, authenticated by the NM
 username/password — so it gets the ssh-host-key treatment: one pinned cert,
 never rotated, never expiring in practice. Reissuing or replacing the identity
@@ -37,9 +37,8 @@ validate NM.
 
 ## Conf keys
 
-These are added to the env conf alongside the deploy keys. See the committed
-`oci.conf` for a filled-in example, and `production.secret.example` for the
-passphrase keys.
+These are added to the profile alongside the deploy keys.
+`build-profiles/deploy/production.secret.example` lists the passphrase keys.
 
 ```
 tls.san=dns:host,ip:1.2.3.4,...   # SAN list (keytool form); the one place it lives
@@ -58,32 +57,33 @@ sip.tls.twoway=false              # true = mTLS to the SBC
 # sip.tls.servers=...             # default: members of wls.targets.cluster
 ```
 
-Secrets (`<env>.secret`, or env vars): `tls.ca.passphrase` /
+Secrets are keys in the same profile, or env vars: `tls.ca.passphrase` /
 `BLADE_TLS_CA_PASS`, `tls.keystore.passphrase` / `BLADE_TLS_KEYSTORE_PASS`,
 `tls.trust.passphrase` / `BLADE_TLS_TRUST_PASS`, plus the existing
-`wls.password` / `BLADE_WLS_PASSWORD`.
+`wls.password` / `BLADE_WLS_PASSWORD`. A passphrase supplied by env var or at the prompt
+is written back into the profile as `ENC(...)`.
 
-## Procedure (OCI example, run on the AdminServer)
+## Procedure (run on the AdminServer)
 
 ```bash
-# 1. Generate the keystores (writes to tls/out/<env>/, gitignored).
-./tls/make-certs.sh oci
+# 1. Generate the keystores (writes to ~/.blade/<env>/certs/; certs.dir in the profile overrides).
+./tls/make-certs.sh <env>
 
 # 2. Look before you leap.
-./tls/install-ssl.sh oci --dry-run
+./tls/install-ssl.sh <env> --dry-run
 
 # 3. Push keystores + configure SSL + SIP TLS.
-./tls/install-ssl.sh oci
+./tls/install-ssl.sh <env>
 
 # 4. Restart the affected servers — config is read at boot:
 #    - AdminServer  → HTTPS console + t3s
 #    - engine tier  → SIP TLS (the sips channel)
 
 # 5. Verify.
-./tls/install-ssl.sh oci status
+./tls/install-ssl.sh <env> status
 ```
 
-You can run a single tier: `./tls/install-ssl.sh oci keystores`, `... ssl`,
+You can run a single tier: `./tls/install-ssl.sh <env> keystores`, `... ssl`,
 `... sip`.
 
 ## SBC trust: one-way vs mTLS
@@ -99,10 +99,10 @@ You can run a single tier: `./tls/install-ssl.sh oci keystores`, `... ssl`,
 ## Real-CA path (instead of the private CA)
 
 ```bash
-./tls/make-certs.sh oci --csr-only          # emits tls/out/oci/blade-identity.csr
+./tls/make-certs.sh <env> --csr-only        # emits ~/.blade/<env>/certs/blade-identity.csr
 # → send the CSR to your CA; save the signed chain as
-#   tls/out/oci/blade-identity-signed.pem
-./tls/make-certs.sh oci                      # picks up the signed chain, assembles the keystores
+#   ~/.blade/<env>/certs/blade-identity-signed.pem
+./tls/make-certs.sh <env>                    # picks up the signed chain, assembles the keystores
 ```
 
 Put the real CA's root/intermediates where the trust store needs them (drop the
@@ -118,13 +118,7 @@ verified:
   in the env conf.
 - Disable the plaintext listen ports (admin console, or a follow-up WLST step).
 
-## What's verified vs not
+## Checking a run
 
-- **Verified locally**: `make-certs.sh` end-to-end — CA creation, SAN embedding,
-  CA-signed chain, trust store, and `openssl verify` of the chain.
-- **Not verifiable off-box**: the WLST in `install-ssl.sh` needs a running OCCAS
-  domain. The WebLogic SSL MBean attributes are standard; the `sips` protocol and
-  the `EnabledProtocolVersions`-defaults-to-TLSv1 behavior were confirmed against
-  OCCAS 8.1.
-  Run `--dry-run` first, and `status` after, to confirm against your 8.3 domain.
-```
+`install-ssl.sh` needs a running OCCAS domain. Run it with `--dry-run` first, and with
+`status` after, to confirm the result against your domain.

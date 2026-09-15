@@ -94,30 +94,30 @@
                 "matches" : ".*sip:acmeSrc.*"
               } ],
               "Contact" : [ {
-                "matches" : ".*10.173.172.24.*"
+                "matches" : ".*192.0.2.24.*"
               } ]
             },
             "action" : {
               "terminating" : "To"
             }
           }, {
-            "next" : "genrec",
+            "next" : "recorder",
             "condition" : {
               "From" : [ {
                 "matches" : ".*sip:Genesys.*"
               } ],
               "Contact" : [ {
-                "matches" : ".*10.173.172.24.*"
+                "matches" : ".*192.0.2.24.*"
               } ]
             },
             "action" : {
               "terminating" : "To"
             }
           }, {
-            "next" : "mediahub",
+            "next" : "media-app",
             "condition" : {
               "Contact" : [ {
-                "matches" : ".*10.173.172.6.*"
+                "matches" : ".*192.0.2.6.*"
               } ]
             },
             "action" : {

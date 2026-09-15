@@ -17,18 +17,13 @@ browser  ⇄  [ WebRTC Gateway ]  ⇄  phone network
 ## Why this matters
 
 Oracle offered browser calling once before, as WebRTC Session Controller, and later
-discontinued it. The BLADE gateway brings that capability back on OCCAS, without the three
-things that made the original hard to live with:
+discontinued it. The BLADE gateway brings that capability back on OCCAS:
 
-- **No custom scripting.** With WSC, every deployment had to hand-write and maintain the
-  code that translated between the browser and SIP. Here that translation is built into the
-  gateway — written and tested once, the same for everyone.
-- **No locked-in media server.** WSC handed the media plane to the ASC, an end-of-life
-  product that took copious, poorly-documented configuration to get working at all. This
-  gateway reaches the media server through a vendor-neutral interface instead — the choice
-  of media server stays open, and no vendor is named in the product.
-- **A current browser client.** The old client was written against browser features that no
-  longer exist. The BLADE softphone is built to today's standards.
+- **No custom scripting.** The translation between the browser and SIP is built into the
+  gateway, written and tested once, the same for every deployment.
+- **No locked-in media server.** The gateway reaches the media server through JSR-309, so
+  the choice of media server stays open.
+- **A current browser client.** The BLADE softphone is built to current browser standards.
 
 ## Every call is a real SIP call
 
@@ -144,13 +139,11 @@ scopes, because an error can belong either to a call or to the session as a whol
 `subject` field says which — set to a call when the error is about a call, absent when it
 concerns the socket itself.
 
-**Two verbs were defined early and then deliberately removed.** `call.accept` was meant to
-accept a call without providing SDP, but there is no SIP message it could honestly produce —
-both answer paths build the `200 OK` from an SDP that only the browser has, and `call.answer`
-does the job properly a step later. `call.record` was a browser asking the gateway to record
-the call, but recording belongs to a separate service; the only thing the gateway decides on
-its behalf is whether the call's media is anchored at all, and that is the `mediaMode`
-setting, not an event.
+**There is no `call.accept` and no `call.record`.** Accepting a call without SDP has no SIP
+message to produce: both answer paths build the `200 OK` from an SDP that only the browser
+has, so the browser answers with `call.answer`. Recording belongs to a separate service. The
+only thing the gateway decides on its behalf is whether the call's media is anchored at all,
+and that is the `mediaMode` setting, not an event.
 
 **Answered and connected are two separate events, because SIP answers a call in three
 messages, not two.** `call.established` corresponds to the `200 OK`; `call.connected`
@@ -158,18 +151,16 @@ corresponds to the `ACK` that completes the handshake, and never arrives before 
 split follows the framework's own call lifecycle (`CALL_ANSWERED` then `CALL_CONNECTED`), and
 it exists because that third message carries information worth surfacing. `call.connected`
 reports a `negotiated` flag, which is false when the far end answered without SDP and nothing
-was applied to the media dialog — a call that is up for signaling but silent for media. Reported
-as a plain `call.established`, as it was before, such a call looked perfectly healthy.
+was applied to the media dialog — a call that is up for signaling but silent for media.
 
 `call.connected` also declares an `sdp` field that is reserved and currently unset on every
 path. The ACK can legitimately carry SDP — in late media, the caller's answer arrives there —
-so the field is declared now to describe the message honestly and leave room for that case.
+so the field is declared to describe the message honestly.
 Clients should tolerate its absence, which is the normal situation today.
 
 `call.update` is what makes mid-call escalation possible: a fresh SDP offer for a call that
-is already established. Without it, a call's media path could never change after setup. It is
-the same mechanism WSC's mobile SDKs exposed as `Call.update()` for upgrading audio to video,
-and BLADE already has the SIP equivalent in its B2BUA re-INVITE and hold callflows.
+is already established. Without it, a call's media path could never change after setup. BLADE
+has the SIP equivalent in its B2BUA re-INVITE and hold callflows.
 
 **ICE candidates are not trickled; the SDP is complete in both directions.** A browser sends
 its entire offer or answer once candidate gathering has finished, and the gateway forwards
@@ -273,7 +264,7 @@ when the browser returns, it registers again from wherever it lands.
 
 ## Late media
 
-An INVITE that arrives with no SDP is handled — the case the earlier product dropped. On this
+An INVITE that arrives with no SDP is handled. On this
 kind of call the offer and answer run in the opposite order on the network dialog: the media
 server puts its offer in the `200 OK`, and the caller's answer is read back out of the `ACK`.
 
@@ -281,8 +272,8 @@ This is the one path where `call.established` and `call.connected` are genuinely
 time, and the only one where the ACK can arrive still owing an answer that it does not
 actually carry — which is what `negotiated: false` reports.
 
-**Late media always anchors, and cannot work without a media server.** Having the browser
-make the offer instead was considered and rejected: late media is a pattern browsers never
+**Late media always anchors, and cannot work without a media server.** The browser cannot
+make the offer instead: late media is a pattern browsers never
 originate, so the caller is always a phone or a trunk, and the answer that comes back in the
 `ACK` is plain RTP with no DTLS fingerprint — which a browser will not set up media against.
 On a call of this shape, the media server is the only party present that can speak to both
@@ -291,11 +282,8 @@ the missing driver in the log.
 
 ## What a call reports to analytics
 
-A WebRTC call used to be invisible to analytics. The servlet extends `AsyncSipServlet` rather
-than `B2buaServlet`, so none of the framework's usual call publishers ran for it, and a
-browser call left no trace in any report.
-
-It now publishes the framework's own six call facts — `callStarted`, `callAnswered`,
+The servlet extends `AsyncSipServlet` rather than `B2buaServlet`, so the framework's B2BUA
+call publishers do not run for it. It publishes the framework's own six call facts — `callStarted`, `callAnswered`,
 `callConnected`, `callCompleted`, `callAbandoned`, and `callDeclined` — which
 `BladeEventTypes.forEventName` maps onto the canonical `org.vorpal.blade.call.*` event types.
 Reusing the existing facts is the whole point: a single subscription picks up browser calls
@@ -328,21 +316,18 @@ rather than commands, so a reverse-DNS name on an imperative would describe it w
   server-reflexive path there is often no routable candidate pair at all. This is the most
   likely cause of a gateway that "works on a laptop but fails on OCI."
 - **Set the media node's public address.** On OCI an instance cannot see its own public IP,
-  so the media provider must be given `external.ipv4` explicitly, or it will advertise a
-  candidate no one can reach. Both of these requirements apply only to anchored calls — a
+  so the media server must be told its public address explicitly (see your driver's
+  documentation), or it will advertise a candidate no one can reach. Both of these requirements apply only to anchored calls — a
   relayed browser-to-browser call needs neither.
 - **Media-plane settings live in `webrtc.json` under `driverProperties`** and are passed to
-  the JSR-309 driver verbatim; see the driver's own documentation for the keys it accepts
-  (the media server's WebSocket URL, `stun.address`, `stun.port`, `turn.url`, `external.ipv4`,
-  `network.interfaces`). `driverName` selects among drivers when more than one is installed,
+  the JSR-309 driver verbatim; the keys it accepts come from your driver's documentation.
+  `driverName` selects among drivers when more than one is installed,
   and can be left blank in the usual single-driver case. These are read **once, at
   deployment** — the media factory is built at startup and is not rebuilt when configuration
   is republished, so a change here requires a redeploy.
-- **The driver jar must be visible to this WAR.** Skinny-WAR policy keeps everything but the
-  framework out of `WEB-INF/lib`, and `DriverManager` only finds what the classloader can see,
-  so the JSR-309 driver jars have to be deployed into the `blade-shared` shared library or the
-  domain's `lib/` directory — the same deployment story as the driver behind `proto/player`.
-  Without it, the servlet logs "no JSR-309 driver registered": browser-to-browser calls still
+- **The driver jar must be visible to this WAR.** `DriverManager` only finds what the WAR's
+  classloader can see. Your driver's documentation says how to package
+  the driver so that it can. Without it, the servlet logs "no JSR-309 driver registered": browser-to-browser calls still
   work, but calls to phones do not.
 
 ## The browser client is a separate app
@@ -361,7 +346,7 @@ it — in JavaScript for the browser, or natively for iOS or Android.
 ## Build
 
 ```bash
-./blade/mvnw -f blade/services/webrtc/pom.xml package
+./mvnw -pl services/webrtc package
 ```
 
 Skinny WAR: `WEB-INF/lib` carries only `vorpal-blade-library-framework.jar`. `javax.websocket`

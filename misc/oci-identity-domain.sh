@@ -3,10 +3,10 @@
 #
 #   misc/oci-identity-domain.sh <env> <domain-url> <app-name> <redirect-url> [test-user]
 #
-#   misc/oci-identity-domain.sh ashburn \
-#       https://idcs-91a6cb8f5f2a41fa9b8f019c659b700b.identity.oraclecloud.com \
+#   misc/oci-identity-domain.sh staging \
+#       https://idcs-0123456789abcdef0123456789abcdef.identity.oraclecloud.com \
 #       blade-recordings \
-#       https://apps.ashburn.vorpal.net/blade/recordings/oidc/callback \
+#       https://apps.example.com/blade/recordings/oidc/callback \
 #       reviewer1
 #
 # Runs with the OCI CLI's own identity (~/.oci/config), which must be an

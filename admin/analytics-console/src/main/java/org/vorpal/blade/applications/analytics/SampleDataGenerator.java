@@ -80,7 +80,7 @@ final class SampleDataGenerator {
 			CALL_STARTED, CALL_ANSWERED, CALL_CONNECTED, CALL_COMPLETED, CALL_ABANDONED, CALL_DECLINED,
 			TRANSFER_REQUESTED, TRANSFER_INITIATED, TRANSFER_COMPLETED, TRANSFER_DECLINED, TRANSFER_ABANDONED };
 
-	// Not a framework name — the GryphonRiskTap detector's assessment, which lands
+	// Not a framework name. A media-server risk detector publishes this assessment
 	// on BladeEventTypes.CALL_EVENT with its name in the payload, like any other
 	// operator-defined event. Emitted only when riskProbability > 0.
 	private static final String CALL_RISK_ASSESSED = "callRiskAssessed";

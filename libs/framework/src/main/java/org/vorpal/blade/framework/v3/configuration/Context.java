@@ -151,7 +151,7 @@ public class Context {
 	/// the static `substitute`), then `System.getenv(NAME)`, then
 	/// `System.getProperty(NAME)`, then left literal. This matches
 	/// the v2 `AttributeSelector` precedence and lets operators
-	/// write `${HOME}`, `${user.dir}`, `${SECURELOGIX_API_KEY}`,
+	/// write `${HOME}`, `${user.dir}`, `${SCREENING_API_KEY}`,
 	/// etc., without wrapping them in `env:` or `sys:` prefixes.
 	///
 	/// Per-call caching: within a single substitution pass, all

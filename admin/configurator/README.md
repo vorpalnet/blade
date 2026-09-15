@@ -16,7 +16,7 @@ The configurator module serves as the central configuration hub for the Vorpal B
 
 The editor's Use AI button lets an operator describe a configuration in plain
 language — "add a queue named support that releases 2 calls every 10 seconds" —
-and have Claude draft it. The draft is constrained by the app's own JSON Schema
+and have a language model draft it. The draft is constrained by the app's own JSON Schema
 (the same schema that generates the form, `@JsonPropertyDescription` docs and
 all), validated server-side with one automatic repair retry, and loaded into
 the editor as a **proposal**: the diff view opens showing exactly what changed

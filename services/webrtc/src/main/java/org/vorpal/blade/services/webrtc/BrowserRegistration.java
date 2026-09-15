@@ -19,7 +19,7 @@ import org.vorpal.blade.framework.v3.Callflow;
 /// long-lived per-browser application session:
 ///
 /// ```
-/// Contact: <sip:alice@172.16.32.129:5060;transport=tcp;sipappsessionid=<prefix>:<callId>:webrtc;wlsscid=…>
+/// Contact: <sip:alice@192.0.2.129:5060;transport=tcp;sipappsessionid=<prefix>:<callId>:webrtc;wlsscid=…>
 /// ```
 ///
 /// That single header is the entire inbound routing story. When the registrar

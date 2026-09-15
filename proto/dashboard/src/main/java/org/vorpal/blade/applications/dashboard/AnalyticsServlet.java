@@ -20,7 +20,7 @@ import javax.sql.DataSource;
 /// VIEWS (never the raw tables), and writes the rows out as JSON for the chart
 /// JavaScript to draw.
 ///
-/// The queries are Oracle SQL because the ashburn analytics store is an Oracle
+/// The queries are Oracle SQL because the analytics store it reads is an Oracle
 /// Autonomous DB. They read `v_calls`, the CDR view, so they survive the
 /// underlying table shape changing.
 ///

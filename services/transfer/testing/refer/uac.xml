@@ -25,7 +25,7 @@
 	<send retrans="500">
     <![CDATA[
 
-      REFER sip:wlssuser@172.16.32.129:5060;transport=tcp;wlsscid=5fbb8cb142088f50;sipappsessionid=app-1fyd3a611v7sq;wlssfcid=sip-12f6jb4sjjrth SIP/2.0
+      REFER sip:wlssuser@192.0.2.129:5060;transport=tcp;wlsscid=5fbb8cb142088f50;sipappsessionid=app-1fyd3a611v7sq;wlssfcid=sip-12f6jb4sjjrth SIP/2.0
       Via: SIP/2.0/[transport] [local_ip]:[local_port];branch=[branch]
       From: <sip:bob@vorpal.net>;tag=1aa0bff0
       To: "Alice" <sip:alice@vorpal.net>;tag=bf00dc31

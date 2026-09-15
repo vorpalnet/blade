@@ -41,7 +41,8 @@ them; it doesn't define them.
 
 ## Deployment
 
-Part of `blade-admin.ear` (AdminServer):
+Ships loose in `dist/proto/` as `blade-test.war` and deploys by hand to the AdminServer.
+As a `proto/` app it is never bundled in an EAR.
 
 - **Context root**: `blade/test-console`
 - **Auth**: FORM, shared `BLADEADMINSESSION` cookie (portal SSO)

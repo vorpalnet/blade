@@ -502,8 +502,8 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	/// Derived from the LINKED dialog's remote target: once a dialog's dialog is up,
 	/// OCCAS stores the peer's Contact as that session's remote target (the URI it
 	/// uses for in-dialog requests). So the peer dialog's remote target IS the peer's
-	/// Contact — read via [LooseRoutingHelper#remoteTarget] (public
-	/// `SipSessionImpl.getRemoteTarget()`, unwrapped by reflection). Null safely
+	/// Contact — read via [LooseRoutingHelper#remoteTarget] (the container's own
+	/// remote target for the session, read by reflection). Null safely
 	/// degrades to record-route-only drop-out. NEEDS LIVE VERIFICATION — the
 	/// remote target must already be populated at the moment of each stitch (the
 	/// caller dialog's at the outbound-INVITE send; the callee dialog's at the 2xx).

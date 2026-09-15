@@ -2,12 +2,11 @@
 
 A single deployable for the standalone engine0 test server: every BLADE service —
 including the wide-open [proxy-registrar](../../services/proxy-registrar/README.md) —
-plus the test harness apps, in one EAR. **Never deployed to the production cluster**; the
-`production` build profile excludes it.
+plus the test harness apps, in one EAR. **Never deploy it to the production cluster.**
 
 Like [the admin EAR](../admin/README.md), it bundles no libraries — every WAR inside is a
 self-contained skinny WAR referencing [blade-shared](../../libs/shared/README.md). One
-Maven profile per WAR (`ear-<name>`), so whatever the active build profile skips drops out
+Maven profile per WAR (`ear-<name>`), so an app left out of a build selection drops out
 of the EAR cleanly.
 
 ## What's inside

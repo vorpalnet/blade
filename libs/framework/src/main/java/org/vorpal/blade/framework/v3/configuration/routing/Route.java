@@ -20,7 +20,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// - **Forward** — `requestUri` is set, `statusCode` is null. The
 ///   call goes downstream; how depends on the subclass of
 ///   [org.vorpal.blade.framework.v3.irouter.IRouterInvite] handling it.
-///   Plain iRouter proxies to the URI; SecureLogix returns
+///   Plain iRouter proxies to the URI; a redirect-server subclass returns
 ///   `302 Moved Temporarily` with the URI in `Contact`.
 ///
 /// - **Direct response** — `statusCode` is set. The router answers
@@ -39,7 +39,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// Headers (both unconditional and `conditionalHeaders`) are
 /// stamped on whichever message the route produces — outbound
 /// INVITE for a forward, the response itself for a direct response
-/// or for a SecureLogix-style 302.
+/// or for a redirect-server subclass's 302.
 @JsonPropertyOrder({ "requestUri", "statusCode", "reasonPhrase",
 		"headers", "conditionalHeaders" })
 // `description` retired (folded into Configuration.notes); tolerate in old configs.

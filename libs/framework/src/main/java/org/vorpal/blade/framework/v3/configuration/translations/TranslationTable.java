@@ -94,7 +94,7 @@ public class TranslationTable implements Serializable {
 
 		// Hash: try direct match first (the common case), then resolve any
 		// ${var}-templated keys against the Context. This lets sample/live
-		// configs use env-var keys like "${SECURELOGIX_ORIGIN_IP}" without
+		// configs use env-var keys like "${SCREENING_ORIGIN_IP}" without
 		// baking real values into the JSON — Context.resolve falls back to
 		// System.getenv / System.getProperty when no session attribute matches.
 		Translation t = translations.get(key);

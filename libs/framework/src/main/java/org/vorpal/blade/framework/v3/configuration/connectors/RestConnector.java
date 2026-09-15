@@ -354,7 +354,7 @@ public class RestConnector extends Connector implements Serializable {
 	/// `cachedTemplate` thereafter), at FINE when no bundled copy
 	/// exists, and at WARNING on I/O failure.
 	///
-	/// @param filename     bare filename, e.g. `securelogix.txt`
+	/// @param filename     bare filename, e.g. `screening.txt`
 	/// @param destination  absolute path under
 	///                     `./config/custom/vorpal/_templates/`
 	private void materializeBundledTemplate(String filename, Path destination) {

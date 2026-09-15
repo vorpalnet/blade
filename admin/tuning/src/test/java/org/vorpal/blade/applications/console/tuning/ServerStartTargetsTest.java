@@ -80,8 +80,8 @@ public class ServerStartTargetsTest {
 				new Bean().with("ClassPath", cp).with("Arguments", args).with("JavaHome", "").with("JavaVendor", ""));
 	}
 
-	/// The ashburn shape: AdminServer + static engine0 + a dynamic cluster of two engines.
-	private ObjectName ashburn() throws Exception {
+	/// A typical shape: AdminServer + static engine0 + a dynamic cluster of two engines.
+	private ObjectName typicalDomain() throws Exception {
 		ObjectName cluster = register("com.bea:Name=engines,Type=Cluster", new Bean().with("Name", "engines"));
 		ObjectName machine = register("com.bea:Name=admin-box,Type=Machine", new Bean().with("Name", "admin-box"));
 
@@ -114,7 +114,7 @@ public class ServerStartTargetsTest {
 
 	@Test
 	public void staticServersAndTemplatesAreTargetsDynamicEnginesAreNot() throws Exception {
-		List<Target> targets = ServerStartTargets.list(mbs, ashburn());
+		List<Target> targets = ServerStartTargets.list(mbs, typicalDomain());
 
 		assertEquals(Arrays.asList("AdminServer", "engine0", "engines-template"),
 				Arrays.asList(targets.stream().map(t -> t.name).toArray()));
@@ -124,7 +124,7 @@ public class ServerStartTargetsTest {
 
 	@Test
 	public void aTemplateKnowsItsClusterAndTheEnginesItProduces() throws Exception {
-		List<Target> targets = ServerStartTargets.list(mbs, ashburn());
+		List<Target> targets = ServerStartTargets.list(mbs, typicalDomain());
 		Target template = ServerStartTargets.find(targets, "engines-template");
 
 		assertEquals(Kind.TEMPLATE, template.kind);
@@ -137,7 +137,7 @@ public class ServerStartTargetsTest {
 
 	@Test
 	public void aStaticServerCarriesItsMachineAndServerStart() throws Exception {
-		List<Target> targets = ServerStartTargets.list(mbs, ashburn());
+		List<Target> targets = ServerStartTargets.list(mbs, typicalDomain());
 		Target engine0 = ServerStartTargets.find(targets, "engine0");
 
 		assertEquals(Kind.SERVER, engine0.kind);
@@ -150,7 +150,7 @@ public class ServerStartTargetsTest {
 
 	@Test
 	public void writeSetsOnlyWhatItIsGiven() throws Exception {
-		List<Target> targets = ServerStartTargets.list(mbs, ashburn());
+		List<Target> targets = ServerStartTargets.list(mbs, typicalDomain());
 		Target engine0 = ServerStartTargets.find(targets, "engine0");
 
 		ServerStartTargets.write(mbs, engine0, null, "-Xmx2g");

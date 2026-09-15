@@ -22,11 +22,11 @@ An incoming INVITE runs through two phases:
 
 **Phase 2 — Routing.** A single polymorphic `Routing` field that reads the now-enriched Context and returns a concrete `Route`: a destination SIP URI plus optional outbound INVITE headers. The SIP Servlet Proxy API then proxies the call to that URI.
 
-Why two phases? Jeff's formulation: *"first we gather all the information via the pipeline; then we make the routing decision."* The split keeps table connectors singular in purpose, makes the routing step visually prominent, and lets any enrichment type (table, REST, JDBC, LDAP) sit alongside any other.
+Why two phases? First gather all the information in the pipeline, then make the routing decision. The split keeps table connectors singular in purpose, makes the routing step visually prominent, and lets any enrichment type (table, REST, JDBC, LDAP) sit alongside any other.
 
 ## Proxy, not B2BUA
 
-iRouter uses the JSR 289 Proxy API. Re-INVITEs and in-dialog traffic pass through the container's proxy machinery unchanged once `proxy.proxyTo()` has been called for the initial INVITE. The servlet stays out of the mid-call path — the routing decision is made once, on the initial INVITE, and the proxy handles everything after. Use a B2BUA-based service (e.g. [call queueing](../queue/README.md)) if you need dialog-mid intervention. (The old stateless `proxy-router` this section once pointed to is retired — iRouter superseded it.)
+iRouter uses the JSR 289 Proxy API. Re-INVITEs and in-dialog traffic pass through the container's proxy machinery unchanged once `proxy.proxyTo()` has been called for the initial INVITE. The servlet stays out of the mid-call path — the routing decision is made once, on the initial INVITE, and the proxy handles everything after. Use a B2BUA-based service (e.g. [call queueing](../queue/README.md)) if you need dialog-mid intervention.
 
 ## Pipeline connectors
 
@@ -77,8 +77,8 @@ That enables `"find the customer by remote IP, else by source number, else by do
   "id": "customers",
   "description": "Fetch this customer's credentials from whichever hint they gave us",
   "tables": [
-    { "match": "hash",   "keyExpression": "${originIP}", "translations": { "172.16.32.173": { "customerId": "acme" } } },
-    { "match": "prefix", "keyExpression": "${srcNum}",   "translations": { "1816": { "customerId": "kcco" } } },
+    { "match": "hash",   "keyExpression": "${originIP}", "translations": { "192.0.2.173": { "customerId": "customer_a" } } },
+    { "match": "prefix", "keyExpression": "${srcNum}",   "translations": { "1816": { "customerId": "customer_b" } } },
     { "match": "hash",   "keyExpression": "${fromHost}", "translations": { "example.com": { "customerId": "exampleCo" } } }
   ]
 }
@@ -86,13 +86,13 @@ That enables `"find the customer by remote IP, else by source number, else by do
 
 ### Translations
 
-A `Translation` is a plain object with an optional `description` plus any number of arbitrary string key/value pairs. On match, every key/value flows directly into the Context — so a translation like `{ "customerId": "acme", "apiKey": "..." }` makes `${customerId}` and `${apiKey}` available to every downstream stage (and to the final routing decision).
+A `Translation` is a plain object with an optional `description` plus any number of arbitrary string key/value pairs. On match, every key/value flows directly into the Context — so a translation like `{ "customerId": "customer_a", "apiKey": "..." }` makes `${customerId}` and `${apiKey}` available to every downstream stage (and to the final routing decision).
 
 No Java class per payload type, no generics. Operators write whatever fields they want and rely on `${var}` to pipe them through.
 
 ## Authentication on REST calls
 
-`RestConnector.authentication` is a polymorphic field; pick a `type` and the form reshapes to that scheme's fields. Ten subtypes today:
+`RestConnector.authentication` is a polymorphic field; pick a `type` and the form reshapes to that scheme's fields. Eleven subtypes:
 
 | `type` | Scheme | Fields |
 |---|---|---|
@@ -104,18 +104,19 @@ No Java class per payload type, no generics. Operators write whatever fields the
 | `oauth2-refresh-token` | OAuth 2.0 Refresh Token (RFC 6749 §6) | `tokenUrl`, `refreshToken`, `clientId?`, `clientSecret?`, `scope?` |
 | `oauth2-jwt-bearer` | JWT Bearer assertion (RFC 7523) | `tokenUrl`, `assertion`, `clientId?`, `clientSecret?`, `scope?` |
 | `oauth2-saml-bearer` | SAML 2.0 Bearer assertion (RFC 7522) | `tokenUrl`, `assertion`, `clientId?`, `clientSecret?`, `scope?` |
-| `hmac` | Generic HMAC request signing (webhook-style: GitHub, Shopify, Twilio, Stripe) | `algorithm`, `secret`, `header`, `payloadTemplate?`, `encoding?`, `prefix?` |
+| `hmac` | Generic HMAC request signing (webhook-style APIs) | `algorithm`, `secret`, `header`, `payloadTemplate?`, `encoding?`, `prefix?` |
 | `aws-sigv4` | AWS Signature Version 4 (API Gateway, S3, Lambda URLs, …) | `accessKeyId`, `secretAccessKey`, `region`, `service`, `sessionToken?` |
+| `oci-signature` | OCI API request signing | `tenancyOcid`, `userOcid`, `fingerprint`, `privateKey` |
 
 OAuth subtypes share `AbstractOAuth2Authentication`, which caches the access token in memory with a `refreshSkewSeconds` (default 60) window and refreshes on demand via the Nimbus OAuth 2.0/OIDC SDK. Parallel calls with the same Authentication instance serialize through one `synchronized` refresh so you don't hammer the token endpoint.
 
-`hmac` and `aws-sigv4` are **request-signing** schemes — unlike the other subtypes, they need access to the HTTP method, URL, and body to compute the signature. They see those via `Authentication.RequestSignature`, which RestConnector supplies at stamp time.
+`hmac`, `aws-sigv4` and `oci-signature` are **request-signing** schemes — unlike the other subtypes, they need access to the HTTP method, URL, and body to compute the signature. They see those via `Authentication.RequestSignature`, which RestConnector supplies at stamp time.
 
 Every field is `${var}`-resolvable — credentials can come from environment variables, system properties, or values an upstream table connector wrote to the Context (`${apiKey}` from a customers lookup, etc.).
 
 ### HMAC
 
-Generic request signing for webhook-style APIs. Sign a template of the request (default: just `${body}`) with a shared secret, then stamp the hex or base64 digest into a header. Covers GitHub (`X-Hub-Signature-256: sha256=…`), Shopify, Twilio, Stripe, and most custom APIs that use the HMAC pattern.
+Generic request signing for webhook-style APIs. Sign a template of the request (default: just `${body}`) with a shared secret, then stamp the hex or base64 digest into a header. Covers the common `X-Hub-Signature-256: sha256=…` style and most custom APIs that use the HMAC pattern.
 
 ```json
 "authentication": {
@@ -129,7 +130,7 @@ Generic request signing for webhook-style APIs. Sign a template of the request (
 }
 ```
 
-Three request-level placeholders are substituted *after* normal `${var}` resolution: `${method}` (uppercase), `${url}` (resolved request URL), and `${body}` (resolved request body; empty for GETs). Stripe-style `timestamp.body` signing becomes `"payloadTemplate": "${now}.${body}"`.
+Three request-level placeholders are substituted *after* normal `${var}` resolution: `${method}` (uppercase), `${url}` (resolved request URL), and `${body}` (resolved request body; empty for GETs). `timestamp.body` signing becomes `"payloadTemplate": "${now}.${body}"`.
 
 ### AWS SigV4
 
@@ -300,7 +301,7 @@ The combination of `requestUri` and `statusCode` selects one of three behaviors 
 | unset | unset | Forward (pass-through) — base class proxies to the INVITE's original Request-URI | Pipeline-enrichment-only flows; the routing decision adds headers but doesn't change the destination |
 | any | **set** | Direct response — `request.createResponse(statusCode, reasonPhrase)`, then `headers` and `conditionalHeaders` are applied to that response | Rejections (`new Route(403, "Forbidden")`), redirects (`new Route(302, "Moved Temporarily").addHeader("Contact", "sip:…")`), success responses (`new Route(200, "OK")`) |
 
-The direct-response shape is how a service like SecureLogix expresses "I'm a redirect server, not a proxy" entirely in config — set `statusCode: 302` plus a `Contact` header, and the framework's `sendStatus` path does the rest. No subclass override required.
+The direct-response shape is how a redirect server, rather than a proxy, is expressed entirely in config — set `statusCode: 302` plus a `Contact` header, and the framework's `sendStatus` path does the rest. No subclass override required.
 
 ### Conditional headers
 
@@ -422,7 +423,7 @@ X-Request-ID: ${uuid}
 
 ### JDBC
 
-Plain SQL; Jeff recommends computing derived fields in SQL rather than bending selectors:
+Plain SQL. Compute derived fields in SQL rather than in selectors:
 
 ```sql
 -- _templates/office-hours.sql
@@ -507,7 +508,7 @@ Context root: `/irouter`. The WAR depends on the `blade-shared` shared library f
 
 **Framework — authentication**
 
-- `Authentication` — eight auth subtypes for `RestConnector`
+- `Authentication` — eleven auth subtypes for `RestConnector`
 - `AbstractOAuth2Authentication` — shared Nimbus-backed token cache + refresh
 
 **Framework — expressions**
