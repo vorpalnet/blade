@@ -13,8 +13,8 @@ window.flowUtils = (function() {
 	// by the icon URL fragment (e.g. "save.svg") because the toolbar items
 	// don't carry their `as` attribute through to the DOM.
 	var tooltipsByIcon = {
-		'folder-open.svg':       'Open / Load FSMAR — choose a file, paste JSON, or load the live config / sample',
-		'save.svg':              'Save / Export FSMAR — download, copy, or publish to the live config (with validation)',
+		'folder-open.svg':       'Open FSMAR: a live configuration, the generated sample, or a saved flow',
+		'save.svg':              'Save FSMAR: save under a name, publish to the live configuration, or download',
 		'image.svg':             'Export image — download the diagram as a scalable SVG file',
 		'print.svg':             'Print Report — open the current routing plan as a printable report (diagram + transitions table)',
 		'simulate.svg':          'Route Simulator — simulate, replay, and live traffic overlay',

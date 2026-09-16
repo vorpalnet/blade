@@ -118,7 +118,18 @@ window.flowFsmar = (function() {
 		return {
 			row: row,
 			target: function() { return selected().id; },
-			targetInfo: selected
+			targetInfo: selected,
+			// Lets the file browser drive the picker: clicking a live row is
+			// the same statement as choosing its target from the pull-down,
+			// and two controls that disagree about where a publish goes is
+			// exactly the mistake worth designing out.
+			set: function(id) {
+				select.value = id;
+				if (select.value === id) {
+					currentTarget = id;
+					refreshNote();
+				}
+			}
 		};
 	}
 
@@ -270,7 +281,7 @@ window.flowFsmar = (function() {
 						findings = JSON.parse(vresp.getText());
 					} catch (e) { /* show JSON without findings */ }
 				}
-				showJsonDialog(json, findings);
+				showJsonDialog(json, findings, editor);
 			});
 		});
 	}
@@ -303,7 +314,7 @@ window.flowFsmar = (function() {
 	}
 
 	function importFromJson(editor) {
-		showImportDialog(editor, function(json) {
+		showOpenDialog(editor, function(json) {
 			importJsonText(editor, json);
 		});
 	}
@@ -557,7 +568,7 @@ window.flowFsmar = (function() {
 		return wnd;
 	}
 
-	function showJsonDialog(json, findings) {
+	function showJsonDialog(json, findings, editor) {
 		var div = dialogBody();
 
 		var fdiv = document.createElement('div');
@@ -581,6 +592,42 @@ window.flowFsmar = (function() {
 		picker.row.style.marginTop = '6px';
 		div.appendChild(picker.row);
 
+		// The same list the Open dialog shows, so a save names a file in the
+		// place you will go looking for it. Clicking a row fills the name field.
+		var saveBrowser = fileBrowser({
+			onSelect: function(row) {
+				nameInput.value = row.name;
+				if (row.kind === 'live') {
+					picker.set(row.target);
+				}
+			}
+		});
+		saveBrowser.el.style.flex = '0 0 auto';
+		saveBrowser.el.style.maxHeight = '150px';
+		saveBrowser.el.style.minHeight = '0';
+		saveBrowser.el.style.marginTop = '6px';
+		div.appendChild(saveBrowser.el);
+
+		// "fsmar.json" is the live configuration's name, so saving under it is
+		// how you publish from here — through the same diff and confirmation
+		// the Save to fsmar button uses. Any other name writes a file and
+		// changes nothing about the running router.
+		var nameRow = document.createElement('div');
+		nameRow.style.marginTop = '6px';
+		nameRow.style.flexShrink = '0';
+		var nameLabel = document.createElement('span');
+		nameLabel.textContent = 'Save as: ';
+		nameLabel.style.fontSize = '11px';
+		nameRow.appendChild(nameLabel);
+		var nameInput = document.createElement('input');
+		nameInput.type = 'text';
+		nameInput.style.fontSize = '11px';
+		nameInput.style.fontFamily = 'var(--vorpal-font-mono, monospace)';
+		nameInput.style.width = '260px';
+		nameInput.value = (editor && editor.filename) ? editor.filename : 'demo1.json';
+		nameRow.appendChild(nameInput);
+		div.appendChild(nameRow);
+
 		// Publish outcome, labeled by text (PUBLISHED/FAILED), not color alone.
 		var status = document.createElement('div');
 		status.style.marginTop = '6px';
@@ -597,6 +644,45 @@ window.flowFsmar = (function() {
 		// file a Configurator save writes; the engine SettingsManager reloads
 		// it live. Overwrites the running config, hence the confirm(), which
 		// names the target so a cluster/server publish can't be a slip.
+		var saveBtn = document.createElement('button');
+		saveBtn.textContent = 'Save';
+		saveBtn.style.cssFloat = 'left';
+		saveBtn.style.marginRight = '6px';
+		saveBtn.title = 'Save this configuration under the name above';
+		saveBtn.onclick = function() {
+			var name = (nameInput.value || '').trim();
+			if (!name) {
+				mxUtils.alert('Name the file, for example demo1.json.');
+				return;
+			}
+			if (name.toLowerCase() === 'fsmar.json') {
+				// The live file: take the publish path, confirmation and all.
+				pubBtn.onclick();
+				return;
+			}
+			saveBtn.disabled = true;
+			status.style.color = '';
+			status.textContent = 'Saving\u2026';
+			flowRequest('fsmarFiles',
+					'name=' + encodeURIComponent(name) + '&json=' + encodeURIComponent(textarea.value),
+					'POST', function(resp) {
+				saveBtn.disabled = false;
+				if (resp.getStatus() >= 200 && resp.getStatus() < 300) {
+					var r = {};
+					try { r = JSON.parse(resp.getText()); } catch (e) { /* show without detail */ }
+					status.style.color = '#060';
+					status.textContent = 'SAVED ' + (r.name || name)
+						+ (r.bytes ? ' (' + r.bytes + ' bytes)' : '');
+					if (editor) editor.filename = r.name || name;
+					saveBrowser.refresh();
+				} else {
+					status.style.color = '#a00';
+					status.textContent = 'FAILED: ' + resp.getStatus() + ' ' + resp.getText();
+				}
+			});
+		};
+		btnDiv.appendChild(saveBtn);
+
 		var pubBtn = document.createElement('button');
 		pubBtn.textContent = 'Save to fsmar';
 		pubBtn.style.cssFloat = 'left';
@@ -922,6 +1008,276 @@ window.flowFsmar = (function() {
 		wnd.setVisible(true);
 		refresh();
 		selectionListener(); // pick up any pre-existing selection
+	}
+
+	// ----- saved flows (the file browser) -------------------------------------
+	//
+	// A saved flow is an ordinary FSMAR 3 file kept under _flows/ (see
+	// FlowFiles). The browser lists those beside the live configurations and the
+	// generated sample, so "what can I open?" and "where does this go?" are one
+	// list instead of four buttons. Nothing in _flows/ is live: opening a flow
+	// only fills the canvas, and publishing stays the one act that changes how
+	// calls route.
+	//
+	// Selection is carried by a marker and a heavy left border, never by color.
+
+	function formatBytes(n) {
+		if (n == null) return '';
+		if (n < 1024) return n + ' B';
+		if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' kB';
+		return (n / (1024 * 1024)).toFixed(1) + ' MB';
+	}
+
+	function formatWhen(ms) {
+		return ms ? new Date(ms).toLocaleString() : '';
+	}
+
+	// Builds the list. `onChoose` fires on double-click, `onSelect` on a click.
+	function fileBrowser(options) {
+		options = options || {};
+
+		var el = document.createElement('div');
+		el.style.flex = '1 1 auto';
+		el.style.minHeight = '140px';
+		el.style.overflowY = 'auto';
+		el.style.border = '1px solid var(--vorpal-slate-300, #ccc)';
+		el.style.borderRadius = 'var(--vorpal-radius-sm, 4px)';
+		el.style.background = 'var(--vorpal-surface, #fff)';
+		el.style.fontSize = '11px';
+
+		var rows = [];
+		var chosen = null;
+
+		function select(row) {
+			chosen = row;
+			for (var i = 0; i < rows.length; i++) {
+				var on = (rows[i].data === row);
+				rows[i].el.style.borderLeft = on
+					? '4px solid var(--vorpal-purple, #602671)' : '4px solid transparent';
+				rows[i].el.style.background = on ? 'var(--vorpal-purple-100, #ece1f0)' : 'transparent';
+				rows[i].el.style.fontWeight = on ? '700' : '400';
+				rows[i].marker.innerHTML = on ? '&#9656;' : '&#160;';
+			}
+			if (options.onSelect) options.onSelect(row);
+		}
+
+		function heading(text) {
+			var h = document.createElement('div');
+			h.textContent = text;
+			h.style.padding = '6px 8px 3px';
+			h.style.fontSize = '10px';
+			h.style.letterSpacing = '0.08em';
+			h.style.textTransform = 'uppercase';
+			h.style.color = 'var(--vorpal-slate-600, #5a6677)';
+			h.style.borderTop = rows.length ? '1px solid var(--vorpal-divider, #dde2ec)' : 'none';
+			el.appendChild(h);
+		}
+
+		function addRow(data, name, meta) {
+			var row = document.createElement('div');
+			row.style.display = 'flex';
+			row.style.alignItems = 'baseline';
+			row.style.padding = '3px 8px';
+			row.style.cursor = 'pointer';
+			row.style.borderLeft = '4px solid transparent';
+
+			var marker = document.createElement('span');
+			marker.innerHTML = '&#160;';
+			marker.style.width = '10px';
+			marker.style.flexShrink = '0';
+			row.appendChild(marker);
+
+			var label = document.createElement('span');
+			label.textContent = name;
+			label.style.fontFamily = 'var(--vorpal-font-mono, monospace)';
+			label.style.flex = '1 1 auto';
+			row.appendChild(label);
+
+			var detail = document.createElement('span');
+			detail.textContent = meta || '';
+			detail.style.color = 'var(--vorpal-slate-600, #5a6677)';
+			detail.style.flexShrink = '0';
+			row.appendChild(detail);
+
+			row.onclick = function() { select(data); };
+			row.ondblclick = function() {
+				select(data);
+				if (options.onChoose) options.onChoose(data);
+			};
+
+			el.appendChild(row);
+			rows.push({ el: row, marker: marker, data: data });
+		}
+
+		// One live row, then the sample, then the library. Config is edited on
+		// the admin server and the Configurator pushes it to the engines, so
+		// the domain file is THE live configuration — listing a row per cluster
+		// and server would be five spellings of the same file. An overlay is
+		// still reachable through the Configuration pull-down in the save
+		// dialog, which is where that rarer choice belongs.
+		function refresh() {
+			el.innerHTML = '';
+			rows = [];
+			chosen = null;
+
+			heading('Live configuration');
+			addRow({ kind: 'live', target: DEFAULT_TARGET, name: 'fsmar.json' }, 'fsmar.json',
+				'live \u00b7 pushed to the engines');
+
+			heading('Sample');
+			addRow({ kind: 'sample', name: 'fsmar.json.SAMPLE' }, 'fsmar.json.SAMPLE', 'generated');
+
+			// Fails soft: an older deployment without the files servlet still
+			// lists its live configuration and sample.
+			flowRequest('fsmarFiles', null, 'GET', function(fresp) {
+				var files = [];
+				if (fresp.getStatus() >= 200 && fresp.getStatus() < 300) {
+					try {
+						files = JSON.parse(fresp.getText()).files || [];
+					} catch (e) {
+						files = [];
+					}
+				}
+				heading('Saved flows' + (files.length ? '' : ' (none yet)'));
+				for (var j = 0; j < files.length; j++) {
+					addRow({ kind: 'flow', name: files[j].name }, files[j].name,
+						formatBytes(files[j].bytes) + ' \u00b7 ' + formatWhen(files[j].modified));
+				}
+				if (options.onReady) options.onReady();
+			});
+		}
+
+		refresh();
+
+		return {
+			el: el,
+			refresh: refresh,
+			selected: function() { return chosen; }
+		};
+	}
+
+	// Reads whichever row is selected: a live target, the sample, or a flow.
+	function loadRow(row, onText) {
+		var url;
+		if (row.kind === 'live') {
+			url = 'fsmarPublish?target=' + encodeURIComponent(row.target);
+		} else if (row.kind === 'sample') {
+			url = 'fsmarPublish?sample=1';
+		} else {
+			url = 'fsmarFiles?name=' + encodeURIComponent(row.name);
+		}
+		flowRequest(url, null, 'GET', function(resp) {
+			if (resp.getStatus() >= 200 && resp.getStatus() < 300) {
+				onText(resp.getText());
+			} else {
+				mxUtils.alert('Open failed: ' + resp.getStatus() + ' ' + resp.getText());
+			}
+		});
+	}
+
+	// The Open dialog. Pasting and opening a local file are still here, as
+	// buttons, for the cases a server-side list cannot cover.
+	function showOpenDialog(editor, callback) {
+		var div = dialogBody();
+
+		var label = document.createElement('div');
+		label.innerHTML = '<b>Open:</b> a live configuration, the generated sample, or a saved flow. '
+			+ 'Double-click a row to open it.';
+		label.style.marginBottom = '6px';
+		label.style.flexShrink = '0';
+		div.appendChild(label);
+
+		function openRow(row) {
+			if (!row) {
+				mxUtils.alert('Select a file to open.');
+				return;
+			}
+			loadRow(row, function(text) {
+				wnd.setVisible(false);
+				wnd.destroy();
+				if (row.kind !== 'sample') {
+					editor.filename = row.name;
+				}
+				callback(text);
+			});
+		}
+
+		var browser = fileBrowser({ onChoose: openRow });
+		div.appendChild(browser.el);
+
+		var btnDiv = document.createElement('div');
+		btnDiv.style.marginTop = '8px';
+		btnDiv.style.textAlign = 'right';
+		btnDiv.style.flexShrink = '0';
+
+		var fileBtn = document.createElement('button');
+		fileBtn.textContent = 'Choose file\u2026';
+		fileBtn.style.cssFloat = 'left';
+		fileBtn.title = 'Open a file from this computer (FSMAR 2 configs and legacy XML diagrams also open)';
+		fileBtn.onclick = function() {
+			wnd.setVisible(false);
+			wnd.destroy();
+			window.flowUtils.selectFile(editor);
+		};
+		btnDiv.appendChild(fileBtn);
+
+		var pasteBtn = document.createElement('button');
+		pasteBtn.textContent = 'Paste JSON\u2026';
+		pasteBtn.style.cssFloat = 'left';
+		pasteBtn.style.marginLeft = '6px';
+		pasteBtn.title = 'Paste a configuration instead of opening a file';
+		pasteBtn.onclick = function() {
+			wnd.setVisible(false);
+			wnd.destroy();
+			showImportDialog(editor, callback);
+		};
+		btnDiv.appendChild(pasteBtn);
+
+		var delBtn = document.createElement('button');
+		delBtn.textContent = 'Delete';
+		delBtn.style.cssFloat = 'left';
+		delBtn.style.marginLeft = '6px';
+		delBtn.title = 'Delete the selected saved flow. Live configurations are not deleted here.';
+		delBtn.onclick = function() {
+			var row = browser.selected();
+			if (!row || row.kind !== 'flow') {
+				mxUtils.alert('Select a saved flow to delete. Live configurations are not deleted here.');
+				return;
+			}
+			if (!confirm('Delete ' + row.name + '?')) {
+				return;
+			}
+			flowRequest('fsmarFiles?name=' + encodeURIComponent(row.name), null, 'DELETE', function(resp) {
+				if (resp.getStatus() >= 200 && resp.getStatus() < 300) {
+					browser.refresh();
+				} else {
+					mxUtils.alert('Delete failed: ' + resp.getStatus() + ' ' + resp.getText());
+				}
+			});
+		};
+		btnDiv.appendChild(delBtn);
+
+		var openBtn = document.createElement('button');
+		openBtn.textContent = 'Open';
+		openBtn.onclick = function() {
+			openRow(browser.selected());
+		};
+		btnDiv.appendChild(openBtn);
+
+		var cancelBtn = document.createElement('button');
+		cancelBtn.textContent = 'Cancel';
+		cancelBtn.style.marginLeft = '6px';
+		cancelBtn.onclick = function() {
+			wnd.setVisible(false);
+			wnd.destroy();
+		};
+		btnDiv.appendChild(cancelBtn);
+
+		div.appendChild(btnDiv);
+
+		var wnd = dialogWindow('Open FSMAR configuration', div);
+		wnd.setClosable(true);
+		wnd.setVisible(true);
 	}
 
 	function showImportDialog(editor, callback) {

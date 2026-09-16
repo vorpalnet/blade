@@ -11,6 +11,23 @@ Flow and the [Configurator](../configurator/README.md) divide the work on `fsmar
 Flow edits the topology (states, transitions, routes) visually; the Configurator's
 schema-driven forms cover everything else.
 
+## Opening and saving
+
+The toolbar's Open button lists everything there is to open: the live `fsmar.json`, the
+generated sample, and the saved flows under `config/custom/vorpal/_flows/`. Config is
+edited on the admin server and pushed to the engines from there, so the domain file is the
+live configuration; the rarer per-cluster and per-server overlays stay behind the
+Configuration pull-down in the save dialog. A saved flow is an ordinary FSMAR 3 file under
+a name of its own (`demo1.json`), kept so a staged routing change, or a demo, can be
+reopened later. Nothing in `_flows/` is live: opening one fills the canvas and changes no
+call.
+
+Saving is the same list in reverse. Name the file and it lands in the library; name it
+`fsmar.json` and it publishes to the selected target instead, through the same diff and
+confirmation the Save to fsmar button uses. `FlowFiles` validates every name (letters,
+digits, dot, dash and underscore, ending in `.json`), so a save cannot escape the library
+directory, and saves go through `VersionedFileStore` like every other config write.
+
 ## Publishing
 
 Publish writes `config/custom/vorpal/fsmar.json` in the domain root through the
