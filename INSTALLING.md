@@ -396,6 +396,31 @@ whole-tier EAR *and* its constituent loose WARs both on the engine cluster, whic
 collides on every context root. Deploy either the tier EAR or the loose WARs to a
 given target, never both.
 
+**Every remote engine fails to start, and Node Manager gives no reason.** The Node
+Manager message is only "Server failed to start up but Node Manager was not aware of
+the reason"; the server's own `servers/<name>/logs/<name>.out` carries the real one:
+
+```
+java.io.IOException: Reached EOF for file: FileInfo(name=config/custom/…)
+```
+
+and the AdminServer logs `BEA-290087` naming that file. A managed server downloads the
+whole domain config at boot. The AdminServer lists each file, so the advertised length
+comes from the directory entry, then streams the bytes; a file it cannot **read** yields
+a short stream, and the managed server treats the truncated transfer as a critical
+service failure and shuts itself down. One `sudo cp` into `config/` causes it, because
+the copy lands as `root:root` while the AdminServer runs as the install user. The server
+on the AdminServer host never shows it: it reads the domain directory instead of
+downloading it, which is why the symptom looks like "the remote engines are broken".
+
+```bash
+misc/check-domain-config.sh /opt/oracle/domains/<domain>          # report
+misc/check-domain-config.sh /opt/oracle/domains/<domain> --fix    # chown, park stray .bak files
+```
+
+Keep hand-made backups out of `config/` entirely. The supported backup path is the
+`.versions/` directory the admin apps write through.
+
 **A boot service dies with `trustAnchors parameter must be non-empty`.** The
 boot-time WLST client loaded an *empty* Node Manager trust store. Two causes: the
 unit is running as a user that cannot read the owner-only `nm-trust.p12`, or the

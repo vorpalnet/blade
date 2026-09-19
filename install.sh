@@ -6223,6 +6223,10 @@ do_status() {
     _st "Node Manager listening on :${nmport}"                 nm_listening "$nmport"
     _st "app domain '${dom}' present"                          test -d "${DOMAINS_DIR}/${dom}"
     _st "app domain '${dom}' enrolled in Node Manager"         grep -q "^${dom}=" "$nmfile"
+    # An unreadable file under config/ truncates the config download every remote
+    # managed server does at boot, so they all fail with no usable message.
+    _st "config/ readable by '${INSTALL_USER:-oracle}' (remote engines can start)" \
+        bash "${SCRIPT_DIR}/misc/check-domain-config.sh" "${DOMAINS_DIR}/${dom}"
     _st "AdminServer process running"                          admin_running
     log ""
     log "  ${C_BOLD}Patch level per host${C_RESET}"
