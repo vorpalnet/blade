@@ -226,7 +226,12 @@ public class CallBlockingConfigSample extends CallBlockingConfig {
 				.addConditionalHeader("X-Call-Screen", "watch;reason=stale-passport",
 						STIR_ON + "${stir} != '' && ${stir.age} > 60")
 				.addConditionalHeader("X-Call-Screen-Attest", "${stir}", STIR_ON + "${stir} != ''")
-				.addConditionalHeader("X-Call-Screen-Verstat", "${verstat}", STIR_ON + "${verstat} != ''");
+				.addConditionalHeader("X-Call-Screen-Verstat", "${verstat}", STIR_ON + "${verstat} != ''")
+				// Carry this number's per-node call rate downstream so a media-tier
+				// risk score can weigh it as behaviour. A call below the challenge
+				// threshold above still has a rate worth fusing with a borderline
+				// acoustic score.
+				.addConditionalHeader("X-Call-Rate", "${callRate}", "${callRate} != ''");
 		routing.setDefaultRoute(clear);
 
 		this.setRouting(routing);

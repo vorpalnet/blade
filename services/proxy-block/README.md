@@ -92,6 +92,10 @@ The consumer honours the header only from a trusted BLADE hop (see `blade.truste
 from a caller, so the verdict cannot be forged from outside. Nothing extra to configure here: the
 header this app already stamps is the contract.
 
+A passed call also carries `X-Call-Rate`, this number's per-node call rate, so the same score can
+weigh call velocity as behaviour even for a call that stayed under the challenge threshold. It is
+honoured under the same trust rule.
+
 ## Deploying
 
 Build and deploy it like any other SIP service. The WAR is `proxy-block.war`, its context root is `proxy-block`, and its SIP application name is `block`, which is the name an FSMAR `next` must use. On first deploy the sample lands in `_samples/proxy-block.json.SAMPLE`. Copy it to a live config in the Configurator, then replace the sample numbers, your own numbers, and the challenge IVR's URI.
