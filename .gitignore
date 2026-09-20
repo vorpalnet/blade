@@ -72,3 +72,6 @@ misc/.nmsecret
 
 # personal build selection (written by ./build.sh --edit); teams share via --conf=
 /build.conf
+
+# Obsidian workspace settings (editor artifacts, not project files)
+.obsidian/

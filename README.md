@@ -97,7 +97,7 @@ Deployed to the OCCAS cluster as individual WARs — one per service — and als
 | [Options](services/options/README.md) | SIP OPTIONS handling and node lifecycle signaling |
 | [Presence](services/presence/README.md) | SIP/SIMPLE presence endpoint (skeleton: accepts SUBSCRIBE/PUBLISH, does not fan out NOTIFY) |
 | [Proxy-Balancer](services/proxy-balancer/README.md) | A simple load balancer |
-| [Proxy-Block](services/proxy-block/README.md) | Number-based translate-and-forward proxy (no deny rules) |
+| [Call Blocking](services/proxy-block/README.md) | Robocall and spoofed caller ID screening; the iRouter with a call-screening configuration |
 | [Proxy-Registrar](services/proxy-registrar/README.md) | A small, elegant SIP proxy-registrar |
 | [Queue](services/queue/README.md) | Call queuing and distribution |
 | [TPCC](services/tpcc/README.md) | Third-party call control |

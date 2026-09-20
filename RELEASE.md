@@ -1,6 +1,303 @@
 # BLADE Release Notes
 
-## 3.0.4 (unreleased)
+## 3.0.7 (unreleased)
+
+### Options: queue-pressure health signal replaces the overload mirror
+
+OPTIONS now answers `503 Busy` when the `wlss.transport` or `wlss.timer`
+work-manager queue reaches `queuePressurePercent` of its capacity (absent =
+80, `0` = off). At 100% OCCAS answers every request `503 Server Busy` itself,
+calls included; the early 503 moves new calls elsewhere first.
+
+The `unavailableWhenOverloaded` / `overloadRetryAfter` settings and
+`EngineOverload` are removed. OCCAS overload protection rejects new requests
+before any application sees them, so the health ping was refused along with
+everything else and the mirror never answered. Existing `options.json` files
+that still carry the two fields load unchanged; the fields are ignored.
+
+## 3.0.6 (2026-09-14)
+
+### Upgrade notes
+
+- **v3 `SettingsManager` is abstract.** Subclasses must implement `sample()`
+  and `refreshed(T)`, which replaces `onRefresh(T)`. `initialize()` and
+  `getConfigName()` are final.
+- **Session listener hooks moved.** `AsyncSipServlet.sessionCreated`,
+  `sessionExpired`, `sessionDestroyed` and `sessionReadyToInvalidate` are final.
+  Override `onSessionCreated`, `onSessionExpired`, `onSessionDestroyed` and
+  `onSessionReadyToInvalidate` instead.
+- **Keep-alive style `UPDATE` is removed.** Only `DISABLED` and `REINVITE` remain.
+- **Analytics schema is new.** `event_types`, `attributes` and `attribute_names`
+  are gone and the migration script is deleted: recreate the schema. The event
+  consumers are no longer MDBs, and their durable subscriptions have new names
+  (`<subscription>@<member>`). The old `analytics-db` and `transfer`
+  subscriptions are not reused; remove them from the topic.
+- **JSR-309 driver contract changed.** `DtmfSink` and `MediaSessionRecovery`
+  are deleted. A driver now needs only `javax.media.mscontrol` plus string
+  names (see Media below).
+- **`services/context` REST** moved to `/context/api/v1`, and its three
+  call-rewriting methods require the `Admin` or `Operator` role. It previously
+  answered unauthenticated under `/resources`.
+- **The installer is `install.sh`.** `blade.sh` remains as a shim that warns
+  and forwards.
+- **Environment profiles moved** to one folder per environment,
+  `~/.blade/<env>/` (see Installer). Existing files migrate on first use; the
+  password key is now `admin.password`.
+
+### Recording, transcription and review (`proto/`)
+
+A recording path built from JSR-309 and SIP, in four incubator apps:
+
+- `recorder` (`/recorder`), a B2BUA that FSMAR routes calls through. It
+  anchors both dialogs at setup and joins them in an audio mixer, so one
+  recorder captures the conversation. Hold (`sendonly`/`inactive`) pauses the
+  recording; a new initial INVITE starts a new conversation under the same
+  call. Re-INVITEs are answered with the media server's SDP. Every failure lets
+  the call through unrecorded. `proto/recorder/ROUTING.md` covers the FSMAR
+  wiring.
+- `blade-recordings` (`/blade/recordings`), the review app: list, play,
+  transcript, export and search by day, number, call or attribute. Media and
+  transcripts are redacted unless the caller holds `phi:unredact`. Every permit
+  and refusal publishes an access event.
+- `blade-catalog` (`/blade/catalog`), a searchable index rebuilt from the
+  archive. It consumes the new `org.vorpal.blade.conversation.closed` event.
+- `blade-audit` (`/blade/audit`), which keeps access events through an
+  `AuditSink` and serves them back under `phi:audit`.
+
+Supporting framework:
+
+- `v3.media.manifest` stores a recording as call → conversation → track →
+  segment.
+- `RecordingDestinations` and `RecordingArchive` are ServiceLoader SPIs for
+  where recordings go and how they are read back. No implementation ships in
+  this repository.
+- Transcription runs over the standard SignalDetector (`MediaCallflow.transcribe`,
+  `expectInTranscript`, `stopTranscribing`); `pauseRecording` pauses it too.
+  `ContextBias` corrects decoded text toward expected phrases.
+- `Redactor` finds cards (Luhn-checked), SSNs, phone numbers, member ids and
+  dates, and keeps both renditions with timed spans. `MutingOutputStream`
+  silences redacted spans in streamed AAC and refuses audio it cannot mute.
+- `recordingAttributes(sas, names)` stamps the attributes access rules match
+  on (department, queue, agent) when recording starts.
+
+### Access control and SSO
+
+- `v3.security` gains attribute-based access: `DataPermission` (`phi:list`,
+  `phi:transcript`, `phi:play`, `phi:export`, `phi:unredact`, `phi:audit`,
+  `phi:breakglass`), `AccessPolicy`, `AccessRule` and `AccessEvaluator`.
+  Decisions publish `org.vorpal.blade.access.permitted` / `.denied`. IAM.md
+  describes the model.
+- `OidcLoginFilter` adds OIDC login (authorization code with PKCE, bearer
+  tokens, group claims mapped to roles, `/oidc/logout`), falling back to the
+  container login when a WAR carries no `WEB-INF/blade-oidc.properties`.
+  `deploy.sh` injects `~/.blade/<env>/oidc/<app>.properties` into the WAR.
+- `OciSignatureAuthentication` (`oci-signature`) signs OCI REST requests
+  without an SDK.
+- `JwtValidator` accepts keys published without `use`; `blade-trust.p12` is
+  seeded with the JDK's public roots.
+
+### Media (JSR-309)
+
+- Conference: `MediaCallflow.bindMediaObject` lets dialogs that share one
+  mixer continue under their own SipApplicationSession. The player's
+  `conference=true` puts callers to the same user in one room on each node.
+- Failover: a `MediaRefresh` EJB (one-line `@Stateless` subclass per media WAR)
+  reattaches media sessions after an engine is lost. When the media server is
+  lost, the player re-anchors a conference room on a new mixer and re-INVITEs
+  its members.
+- Driver contract: the driver publishes the MediaSession attribute
+  `org.vorpal.blade.v3.media.recovery`, and loss arrives as
+  `AllocationEvent.IRRECOVERABLE_FAILURE`. Out-of-band DTMF (INFO) completes a
+  pending prompt in the framework, with no driver involved.
+- `MediaCallflow.sendInfoDtmf` sends a digit as `application/dtmf-relay`.
+- Player: `recordUri` accepts `{id}` and `{recording}` tokens;
+  `recordAttributes` is new.
+
+### WebRTC gateway
+
+- Moved from `proto/` to `services/webrtc` and into `blade-services.ear`.
+- Protocol: `call.accept` and `call.record` are removed, `error` is now
+  `signal.error`, and `call.dtmf` is sent as an INFO.
+- Re-INVITEs work on both paths: anchored calls are answered from the media
+  server, pass-through calls reach the browser as `call.update`.
+- REGISTER refreshes at the expiry the registrar granted.
+- The outbound INVITE carries `P-Asserted-Identity` from the token's address.
+- Call events (`callStarted` … `callConnected`) are published, keyed `dialog`.
+- Deck at `services/webrtc/webrtc.html`.
+
+### Event bus and analytics
+
+- `EventSubscriber` replaces the MDB consumers: one durable subscriber per
+  member of the distributed topic, batched (64 messages or 250 ms), rolled
+  back for redelivery on failure. A failing batch drops to size 1 until a
+  clean pass. A member that fails to attach is retried, so a surviving node
+  takes over a departed peer's partition.
+- `SubscriptionRegistrar` re-reads the catalog (`events.json`) every 10 s and
+  rebuilds the selector, so a catalog edit reaches running consumers without a
+  redeploy. The publisher follows config reloads too.
+- Undeliverable events go to `jms/BladeEventBusErrorQueue` after 5 attempts.
+- `vorpal.blade:Type=EventBus,Name=<app>` reports destinations, subscriptions,
+  consumer counts and error-queue depth; `selfTest()` runs a publish-and-receive
+  round trip.
+- Analytics rows are keyed by a hash of their natural key, and writes are
+  idempotent, so redelivery never fails. The sink pauses its subscription while
+  the database is down instead of discarding. Only catalog types marked
+  `persist` are stored.
+- SQL Server joins MySQL and Oracle (`MSSQL-database-schema.sql`,
+  `notes/configure-mssql.py`). Reporting views for all three: `v_calls`,
+  `v_events`, `v_call_risk`, `v_conversation` and others.
+
+### Admin apps
+
+- Dashboard (`proto/dashboard`): a `/health` endpoint with per-server state,
+  heap, threads, JDBC pools, SIP sessions and drain flag, plus new charts. The
+  chart queries are Oracle SQL only.
+- Configurator: a value with any `{SCHEME}` prefix, including WebLogic's
+  `{AES256}`, is treated as already encrypted.
+- test-b2bua rewritten on the v3 API, with a six-step tutorial
+  (`TUTORIAL.md`) and the new `docs/tutorial-template.html`.
+- `Expression` `when` evaluation and regex selector misses trace at FINEST.
+
+### Framework SIP
+
+- Keep-alive: each dialog is refreshed on its own by re-offering the peer's
+  cached SDP. Only `refresher=uac` makes a hop stand down, Min-SE has a floor
+  of 90, and expirations are staggered along a B2BUA chain. A session that
+  expires is probed with a re-INVITE (`session.expirationProbe`, default on),
+  up to `session.maxSessionMinutes` (default 720).
+- Glare: any final response releases glare. Parked requests replay in order,
+  one transaction at a time, once the dialog is clear.
+- A response to a CANCEL is dropped with a warning.
+- `OriginateCallflow` resolves its dialogs from the timer's own session.
+- Per-app logging: a redeploy reuses `<app>.0.log` instead of rotating.
+- `v3.Callflow.createCancel` added.
+
+### Installer (`install.sh`)
+
+- Profiles: each environment is `~/.blade/<env>/` holding `profile.conf`,
+  `certs/`, a log and a URL list. Secrets are stored as `key=ENC(value)` in a
+  mode-600 file. The dashboard can clone, rename and delete profiles.
+- Dashboard: a banner and breadcrumb on every page, only the current step
+  expanded, keys 1–8 jump to a step, and Esc then Enter leaves a page unsaved.
+  Preflight shows pass or fail and raises a low open-files limit itself.
+  `install.sh <env> configure` and `provision` run without the dashboard.
+- Patching applies OPatch in place to the registered Oracle home, lowest patch
+  first, OPatch updates before patches. It refuses while any server or Node
+  Manager runs, and rolls back with `opatch rollback -id`.
+- JDK: the runtime is the OCCAS-certified major (21 for 8.3) at
+  `<java.dir>/current`; a build JDK (default 25) is linked at
+  `<java.dir>/build`. OPatch always runs on the certified JDK. An unchanged
+  JDK is not downloaded again.
+- Certificates: domain keystores live in `<domain>/config/certs`. Configure
+  refuses a domain on WebLogic's demo certificates. Each TLS passphrase is
+  generated once and never overwritten. The Verify step opens the identity
+  keystore with the passphrase in config.xml, catching a mismatch before boot.
+  Supplied certificates can be PKCS12 or PEM, including root-only sources such
+  as `/etc/letsencrypt`.
+- Node Manager has its own certificate: a self-signed `blade-nm` identity good
+  for about 100 years (`nm-identity.p12`, `nm-trust.p12`). Replacing or
+  renewing the domain identity can never take down the control plane. Node
+  Manager always listens on SSL (`nm.type=plain` is gone), its properties file
+  is mode 600, and it logs to `/var/log/weblogic/nodemanager`.
+- Servers start in MBean mode again: Node Manager builds each java line from
+  the ServerStart ClassPath and Arguments in config.xml, so Tuning's JVM
+  arguments apply. Metaspace is left unbounded.
+- The AdminServer stops through a graceful WLST shutdown, with a signal only
+  after 40 s.
+- Cluster: a static `engine0` on the admin machine plus dynamic `engine1..N`,
+  one per engine machine. Resize and machine changes are idempotent, and an
+  online resize that would move a running member is refused.
+- Boot services never run as root, prefer the `current` JDK link, and
+  `Want` Node Manager rather than `Require` it. SELinux labels are restored
+  on freshly formatted volumes (fixes `203/EXEC`).
+- Optional nginx front end: an admin host to the AdminServer and an apps host
+  to engine0 over SSL, WebSocket forwarded, config validated and rolled
+  back on failure.
+- FSMAR deploys to the AdminServer only; engines fetch it from there.
+
+### Build and deploy
+
+- Two build modes. Dev (the default) writes a flat `dist/` and stamps no
+  application version, so a redeploy replaces an app in place. `--prod`
+  writes `dist/<rev>-<build>/`, stamps `<revision>-<build>`, and builds the
+  Javadoc.
+- `./build.sh` builds the whole shippable set. Narrow it with `--apps=`,
+  `--no-ears`, a selection file (`--conf=`, or `./build.conf`), or the
+  `--edit` checkbox editor. `--libs` builds only the parent POM and libraries
+  for consumer repositories. Builds never read `~/.blade`.
+- Proto apps ship as loose WARs in `dist/proto/`; the proto EAR is gone.
+- `deploy.sh <env>` deploys the whole build in order (shared library, admin,
+  services, test) and undeploys in reverse; `deploy.sh <env> <file>` deploys
+  one artifact. A tier deploys as its EAR when the EAR is in the build,
+  otherwise as loose WARs, and a guard refuses to deploy one form over the
+  other. It uses WLST when an OCCAS home is present, REST when the admin URL
+  is http(s), and Maven otherwise.
+
+### Documentation
+
+- New BUILDING.md and INSTALLING.md (written for the Sales Engineer);
+  DEPLOYMENT.md is now DEPLOYING.md. Each has a presentation deck.
+- `docs/deck-template.html` and `docs/tutorial-template.html` are the shared
+  shells for app decks and tutorials.
+- Light purple is the official logo color; the white logos are retired.
+- `.githooks/pre-commit` refuses commits that publish container internals
+  (install with `git config core.hooksPath .githooks`).
+
+## 3.0.5 (2026-08-12)
+
+### Framework: detached SIP objects; version faces deprecated
+
+The nine `Dummy*` classes left `v2.testing` for `org.vorpal.blade.framework.sip`
+as `Detached*` (`DetachedRequest`, `DetachedResponse`, `DetachedSipFactory`, …).
+They were never test-only: `Callflow.sendRequest` returns a `DetachedResponse`
+carrying 500 when a callflow throws, the v3 CRUD parser and serializer render
+SIP text through them, and `TransferAPI` builds the request a REST caller asks
+for. "Detached" says what they are: no transaction, no dialog, no socket. No
+compatibility name remains, so code importing `v2.testing.Dummy*` must switch to
+the new names.
+
+Five version faces are deprecated in favor of the baseline names:
+`v2.AsyncSipServlet`, `v2.callflow.Callback`, `v3.Callback`, `v3.sdp.Sdp` and
+`v3.analytics.Analytics`. They still compile, and serialized session state still
+deserializes across a rolling upgrade. BLADE's own modules moved to the baseline
+imports first, so the build adds no deprecation warnings.
+`CorsFilter` moved to `org.vorpal.blade.framework.cors` (the `v2` class remains,
+deprecated) and `VersionedFileStore` to `org.vorpal.blade.framework.io`.
+
+### Phone: signed tokens carry the login to the WebRTC gateway
+
+The gateway runs on the engine tier, so neither the admin session cookie nor an
+`Authorization` header (which the browser WebSocket API cannot set) reaches it.
+`admin/phone` now mints a short-lived RS256 JWT for the signed-in user:
+`GET api/v1/session`, `POST api/v1/token[?aor=]` behind the FORM login, and an
+open `GET api/v1/jwks.json` the gateway fetches like an IdP's. The token names
+the address and the gateway honors nothing else. `allowChosenAddress` (default
+on) decides whether a user may ask for an address other than
+`<username>@<aorDomain>`. Settings live in `blade-phone.json`; `jwt.issuer` and
+`jwt.audience` must match the gateway's `webrtc.json`. The framework gained
+`v3.security.JwtIssuer`, and SECURITY.md a section on first-party tokens.
+
+The vendored JSR-SDP reference sources (`javax.sdp`, `gov.nist`) are removed
+from the framework JAR; nothing used them.
+
+### Installer and build
+
+- `blade.sh` hands the install to `install.user`: every step that writes into
+  the install runs as that user, while the invoker stays whatever account the
+  cloud image logs in as. Secrets are written with the mode applied first, so
+  they never exist world-readable.
+- Patching covers the JDK: Oracle's NFTC JDK is downloaded, verified and
+  unpacked, and switching JDKs is a symlink flip that rolls back with one flip.
+- Privileged engine transfers (`misc/xfer.sh`) are shared by `blade.sh`,
+  `sync-occas.sh` and `tls/install-ssl.sh`.
+- `blade.sh` runs under the bash 3.2 that macOS ships.
+- `build.sh` writes the full build console to `dist/<ver>-<build>/build.log`
+  beside `DEPLOYMENT.txt`; `./build.sh cleanAll` deletes the whole `dist/` tree.
+- `blade-shared` adds the Apache Oltu OAuth2 client, which OpenAPI-generated
+  clients need at runtime.
+- DEVELOPING.md rewritten.
+
+## 3.0.4 (2026-08-05)
 
 ### Framework baseline refactor: version-neutral `org.vorpal.blade.framework`
 
@@ -67,43 +364,6 @@ editing panels and a dispatch-fidelity test suite for the round-trip.
 
 ### Installer and operations
 
-- Node Manager now has its **own permanent certificate**: a self-signed
-  ~100-year `blade-nm` cert (`nm-identity.p12`/`nm-trust.p12`, minted once by
-  install.sh's `n` step, its passphrase auto-generated as
-  `nm.keystore.passphrase`) replaces the env identity on NM's listener — and
-  is the only supported NM deployment (the `nm.type=plain` option is gone; a
-  plain listener carries the NM password cleartext). The NM channel is a
-  closed loop authenticated by NM username/password, so this is the
-  ssh-host-key model: rotating or replacing the env identity — including a
-  90-day Let's Encrypt lease on the supply path — can never take down the
-  control plane. WLST `nmConnect` now trusts `nm-trust.p12`; the trust-store
-  builders (`make-certs.sh`, `certs.sh import`) keep a `blade-nm` entry in
-  `blade-trust.p12` so the AdminServer's built-in NM client validates NM too.
-  Also: AdminServer→NM hostname verification is off
-  (`-Dweblogic.nodemanager.sslHostNameVerificationEnabled=false` via
-  `setUserOverrides.sh`, `HostnameVerificationIgnored` on the server SSL
-  MBeans) — inside the cluster, machines get dialed by addresses no SAN list
-  reliably covers, and trust is the real authentication; and
-  `nodemanager.properties` is now written mode 600 (it holds plaintext
-  passphrases until NM's first start encrypts them).
-- **MBean-mode server start restored** (install.sh had regressed to script mode;
-  install-occas.sh gained this in 3.0.3): `weblogic.StartScriptEnabled=false`
-  (the prefixed key — the plain one is silently ignored by this OCCAS NM) plus
-  per-server `ServerStart` MBeans on the engine ServerTemplate and the
-  AdminServer, baked in at domain create — SIP jars on ClassPath, wlss/
-  security flags + the `server.mem.args` heap baseline + the NM
-  hostname-verification flag in Arguments. Node Manager builds each server's
-  java line from config.xml, so Tuning-driven `ServerStart.Arguments` govern
-  the JVM again. `setUserOverrides.sh` remains for hand-run start scripts
-  only. Paths in ClassPath/Arguments ride the Oracle-home `current` symlink,
-  and systemd units now prefer the `<java.dir>/current` JDK link over a
-  versioned path when both resolve to the same JDK — neither a PSU flip nor a
-  JDK upgrade strands them.
-- `server.mem.args` default raised to `-XX:MaxMetaspaceSize=1g` (was 512m):
-  the full production suite boots inside 512m but redeploy cycles load fresh
-  classloaders and hit the ceiling — observed live as
-  `ModuleException: OutOfMemoryError: Metaspace` failing every subsequent
-  deploy to the engine until restart.
 - `install-occas.sh`: servers are configured for MBean-mode start so
   Tuning-driven JVM arguments actually apply; production-mode hardening
   (domain file permissions, internal servlets); a new `console` step deploys
