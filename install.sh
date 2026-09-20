@@ -2268,6 +2268,10 @@ render_admin_nm_unit() {
         printf 'Restart=always\n'
         printf 'RestartSec=15\n'
     else
+        # Consequence of oneshot+RemainAfterExit: once this has succeeded, systemd
+        # reports 'active' forever and `systemctl start` does nothing at all, even
+        # after the JVM dies. Restarting an engine is `systemctl restart`, and any
+        # health check must look at the process (do_verify does), never the unit.
         printf 'Type=oneshot\n'
         printf 'RemainAfterExit=yes\n'
     fi
@@ -5771,6 +5775,19 @@ do_verify() {
         if ! _vrun "$i" "true"; then _vbad "unreachable"; continue; fi
         [ "$(_vrun "$i" "sudo systemctl is-active nodemanager.service")" = active ] \
             && _vok "Node Manager active" || _vbad "Node Manager NOT active"
+        # weblogic-engine.service is Type=oneshot + RemainAfterExit, so it reports
+        # 'active' forever after its first success and a later `systemctl start` is a
+        # silent NO-OP even with the JVM gone (`restart` is the one that works).
+        # Health therefore has to come from the process, matched on cmdline the way
+        # misc/stop-admin-os.sh does it -- is-active on that unit proves nothing.
+        if [ "$i" -ge 1 ] && [ "${H_ROLE[$i]}" = "engine" ]; then
+            local esrv="${prefix:-engine}${i}"
+            if _vrun "$i" "pgrep -f '\-Dweblogic.Name=${esrv}( |\$)' >/dev/null && echo y" | grep -qx y; then
+                _vok "${esrv} JVM running"
+            else
+                _vbad "${esrv} JVM NOT running (the unit may still report 'active' -- 'sudo systemctl restart weblogic-engine.service' there)"
+            fi
+        fi
         _vrun "$i" "test -x /opt/oracle/java/current/bin/java && echo y" | grep -qx y \
             && _vok "JDK link resolves" || _vbad "/opt/oracle/java/current/bin/java missing"
         _vrun "$i" "test -d ${LOG_DIR:-/var/log/weblogic}/nodemanager && echo y" | grep -qx y \
