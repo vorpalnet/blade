@@ -48,6 +48,24 @@ public class TransferSettings extends RouterConfig implements Serializable {
 
 	protected List<String> preserveReferHeaders = new ArrayList<>();
 
+	@JsonProperty(defaultValue = "false")
+	protected Boolean allowCallerRefer;
+
+	/// Whether a REFER from the caller's leg may start a transfer. Off by default:
+	/// the caller is outside the contact center, and a REFER from that side
+	/// names any destination it likes, so honouring it lets a caller place a
+	/// call to an international or premium number at the operator's expense.
+	/// The contact-center platform sends its REFERs on the callee leg.
+	@JsonPropertyDescription("Allow a REFER from the caller's leg to start a transfer. Default false: only the callee"
+			+ " (contact-center) leg may transfer, since a caller-side REFER can name any destination.")
+	public Boolean getAllowCallerRefer() {
+		return allowCallerRefer;
+	}
+
+	public void setAllowCallerRefer(Boolean allowCallerRefer) {
+		this.allowCallerRefer = allowCallerRefer;
+	}
+
 	@JsonPropertyDescription("List of SIP header names to preserve when forwarding REFER requests during transfer")
 	public List<String> getPreserveReferHeaders() {
 		return preserveReferHeaders;

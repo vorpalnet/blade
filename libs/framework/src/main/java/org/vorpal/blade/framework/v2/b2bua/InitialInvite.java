@@ -51,7 +51,8 @@ public class InitialInvite extends org.vorpal.blade.framework.v3.Callflow {
 	private static final String ATTR_USER_AGENT = "userAgent";
 	private static final String ATTR_X_ORIGINAL_DN = "X-Original-DN";
 	private static final String ATTR_X_PREVIOUS_DN = "X-Previous-DN";
-	private static final String ATTR_INITIAL_INVITE = "initial_invite";
+	/// Set on the SipSession of the leg this callflow placed, the callee side.
+	public static final String ATTR_INITIAL_INVITE = "initial_invite";
 	private static final String ATTR_SIP_ADDRESS = "sipAddress";
 	private static final String ATTR_CALLFLOW = "callflow";
 	private static final String HEADER_SESSION_EXPIRES = "Session-Expires";

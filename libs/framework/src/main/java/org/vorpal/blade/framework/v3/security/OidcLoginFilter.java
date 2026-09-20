@@ -94,6 +94,9 @@ public class OidcLoginFilter implements Filter {
 	static final String VERIFIER_ATTR = "org.vorpal.blade.oidc.verifier";
 	static final String RETURN_ATTR = "org.vorpal.blade.oidc.return";
 
+	/// When the identity in this session signed in, epoch milliseconds.
+	static final String SIGNED_IN_ATTR = "org.vorpal.blade.oidc.signedIn";
+
 	private static final String BEARER_PREFIX = "Bearer ";
 	private static final Logger logger = Logger.getLogger(OidcLoginFilter.class.getName());
 	private static final SecureRandom random = new SecureRandom();
@@ -205,6 +208,14 @@ public class OidcLoginFilter implements Filter {
 		// 4. signed in earlier
 		HttpSession session = req.getSession(false);
 		JwtIdentity identity = (session == null) ? null : (JwtIdentity) session.getAttribute(IDENTITY_ATTR);
+		if (identity != null && signInExpired(session, cfg)) {
+			// A session kept busy never times out, so without an absolute limit a
+			// sign-in outlives a disabled account or a removed group indefinitely.
+			logger.info("sign-in of " + identity + " is older than " + cfg.maxSessionHours() + "h; signing in again");
+			session.invalidate();
+			session = null;
+			identity = null;
+		}
 		if (identity != null) {
 			if (path.equals(cfg.callbackPath())) {
 				res.sendRedirect(returnTo(session, req));
@@ -226,6 +237,17 @@ public class OidcLoginFilter implements Filter {
 			return;
 		}
 		login(req, res, cfg);
+	}
+
+	/// True when the session's sign-in is older than the configured maximum. A
+	/// session from before this limit existed carries no sign-in time and counts
+	/// as expired, so it signs in once more.
+	static boolean signInExpired(HttpSession session, OidcLoginConfig cfg) {
+		Object signedIn = session.getAttribute(SIGNED_IN_ATTR);
+		if (!(signedIn instanceof Long)) {
+			return true;
+		}
+		return System.currentTimeMillis() - (Long) signedIn > cfg.maxSessionHours() * 3_600_000L;
 	}
 
 	private void bearer(HttpServletRequest req, HttpServletResponse res, FilterChain chain, OidcLoginConfig cfg,
@@ -343,6 +365,7 @@ public class OidcLoginFilter implements Filter {
 			logger.log(Level.FINE, "session id not changed", e);
 		}
 		session.setAttribute(IDENTITY_ATTR, identity);
+		session.setAttribute(SIGNED_IN_ATTR, System.currentTimeMillis());
 		// One line per sign-in, with the groups as the token carried them: the
 		// first thing to look at when a rule that names a group does not match.
 		logger.info("signed in " + identity + " from " + req.getRemoteAddr());

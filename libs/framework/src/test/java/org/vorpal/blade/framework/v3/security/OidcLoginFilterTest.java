@@ -403,6 +403,7 @@ class OidcLoginFilterTest {
 			req.session = new Session();
 			req.session.attributes.put(OidcLoginFilter.IDENTITY_ATTR,
 					new JwtIdentity("reviewer1", Collections.emptySet(), null, new java.util.LinkedHashSet<>(groups)));
+			req.session.attributes.put(OidcLoginFilter.SIGNED_IN_ATTR, System.currentTimeMillis());
 			return req;
 		}
 
@@ -428,6 +429,21 @@ class OidcLoginFilterTest {
 			f.doFilter(req.proxy(), new Response().proxy(), chain);
 			assertTrue(chain.http().isUserInRole("Reviewer"));
 			assertTrue(chain.http().isUserInRole("cardiology-supervisors"), "the raw group name still answers");
+		}
+
+		@Test
+		void aStaleSignInReauthenticates() throws Exception {
+			OidcLoginFilter f = filter(config(), providerKeys(), null);
+			Request req = signedIn(Arrays.asList("Reviewer"));
+			// 13 hours old, past the 12-hour default: the session is dropped and a
+			// login begins rather than proceeding as the stored identity.
+			req.session.attributes.put(OidcLoginFilter.SIGNED_IN_ATTR,
+					System.currentTimeMillis() - 13L * 3_600_000L);
+			Response res = new Response();
+			Chain chain = new Chain();
+			f.doFilter(req.proxy(), res.proxy(), chain);
+			assertTrue(req.session.invalidated);
+			assertNull(chain.passed);
 		}
 
 		@Test

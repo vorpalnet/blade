@@ -147,6 +147,10 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// Session attribute key for glare request queue
 	protected static final String GLARE_QUEUE = "GLARE_QUEUE";
 
+	/// Most in-dialog requests held while waiting for an ACK; beyond it they are
+	/// answered 491.
+	static final int MAX_GLARE_QUEUE = 4;
+
 	/// Session attribute key for linked session references
 	private static final String LINKED_SESSION = "LINKED_SESSION";
 
@@ -689,6 +693,16 @@ public abstract class AsyncSipServlet extends SipServlet
 					sendResponse(request.createResponse(491));
 					return; // -- RETURN, STOP PROCESSING
 				case QUEUE:
+					// The queue waits for the far end's ACK, which a caller can withhold
+					// while sending request after request; each would be kept and
+					// replicated for the life of the session. A handful covers any real
+					// overlap; past that, answer 491 as for PROTECT.
+					if (glareQueue.size() >= MAX_GLARE_QUEUE) {
+						sipLogger.warning(request, "AsyncSipServlet.doRequest - glare queue full ("
+								+ MAX_GLARE_QUEUE + "), sending 491 response");
+						sendResponse(request.createResponse(491));
+						return; // -- RETURN, STOP PROCESSING
+					}
 					sipLogger.warning(request, "AsyncSipServlet.doRequest - glare, adding to queue");
 					glareQueue.add(request);
 					sipSession.setAttribute(GLARE_QUEUE, glareQueue);

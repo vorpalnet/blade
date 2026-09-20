@@ -630,7 +630,13 @@ public abstract class Callflow implements Serializable {
 			SipSession sipSession = request.getSession();
 
 			indexKey = (String) appSession.getAttribute(VORPAL_SESSION);
-			if (indexKey == null) {
+			boolean trusted = indexKey == null && TrustedPeers.isTrusted(request);
+			if (indexKey == null && !trusted && sipLogger.isLoggable(Level.FINE)
+					&& (request.getHeader(X_VORPAL_ID) != null || request.getHeader(X_VORPAL_SESSION) != null)) {
+				sipLogger.fine(request, "Callflow.getVorpalSessionId - ignoring X-Vorpal headers from untrusted peer "
+						+ request.getRemoteAddr() + "; see TrustedPeers");
+			}
+			if (trusted) {
 
 				// Try X-Vorpal-ID (new parameterable format) first
 				try {
@@ -658,7 +664,8 @@ public abstract class Callflow implements Serializable {
 						String se = xVorpalId.getParameter(SE_PARAM);
 						if (se != null && !se.isEmpty()) {
 							try {
-								appSession.setAttribute(VORPAL_SESSION_EXPIRES, Integer.parseInt(se.trim()) + 1);
+								appSession.setAttribute(VORPAL_SESSION_EXPIRES,
+										Math.min(Integer.parseInt(se.trim()) + 1, maxSessionMinutes()));
 							} catch (NumberFormatException nfe) {
 								// malformed upstream value: fall back to this app's own config
 							}
@@ -995,6 +1002,14 @@ public abstract class Callflow implements Serializable {
 	/// highest-value-wins rule, but without the initial-request guard so a
 	/// session-timer refresh (re-INVITE) can also push the appSession
 	/// expiration out on long calls.
+	/// The most minutes a value from a request, a `Session-Expires` header or an
+	/// upstream `se`, may add to a session's lifetime: `maxSessionMinutes` from
+	/// the session configuration, 720 when unset.
+	static int maxSessionMinutes() {
+		SessionParameters params = Callflow.getSessionParameters();
+		return (params != null && params.getMaxSessionMinutes() != null) ? params.getMaxSessionMinutes() : 720;
+	}
+
 	public static void extendSessionExpiration(SipServletRequest request, SipApplicationSession appSession)
 			throws ServletParseException {
 
@@ -1014,7 +1029,7 @@ public abstract class Callflow implements Serializable {
 			// chain each downstream hop lands one minute later than the one before.
 			Integer staggered = (Integer) appSession.getAttribute(VORPAL_SESSION_EXPIRES);
 			if (staggered != null) {
-				expiresInMinutes = Math.max(expiresInMinutes, staggered);
+				expiresInMinutes = Math.max(expiresInMinutes, Math.min(staggered, maxSessionMinutes()));
 			}
 
 			// Check Session-Expires header (value is in seconds)
@@ -1023,8 +1038,10 @@ public abstract class Callflow implements Serializable {
 				sessionExpires = (Parameterable) appSession.getAttribute(SESSION_EXPIRES);
 			}
 			if (sessionExpires != null) {
+				// The header is the caller's to write. Capped, or one INVITE with
+				// Session-Expires: 2147483647 holds a replicated session for decades.
 				int headerExpiresInMinutes = Integer.parseInt(sessionExpires.getValue()) / 60;
-				expiresInMinutes = Math.max(expiresInMinutes, headerExpiresInMinutes);
+				expiresInMinutes = Math.max(expiresInMinutes, Math.min(headerExpiresInMinutes, maxSessionMinutes()));
 			}
 
 			appSession.setExpires(expiresInMinutes);

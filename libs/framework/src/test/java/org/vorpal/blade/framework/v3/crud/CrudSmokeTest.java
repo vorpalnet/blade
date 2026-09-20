@@ -605,14 +605,15 @@ public final class CrudSmokeTest {
 		check("env.user-home-resolved", stamped != null && stamped.contains(home));
 	}
 
-	/// `${a}` resolves to "Hello ${b}!", which after one pass still contains
-	/// `${b}` — Context must keep iterating until stable.
+	/// A variable's value is data: `${greeting}` inserts "Hello ${name}!" and
+	/// the inserted `${name}` is not resolved, so text from a SIP message can
+	/// never reach the environment or system-property fallback.
 	private static void testIterativeSubstitution() throws Exception {
 		java.util.Map<String, String> vars = new java.util.HashMap<>();
 		vars.put("greeting", "Hello ${name}!");
 		vars.put("name", "World");
 		String result = Context.substitute("${greeting}", vars);
-		check("iterative.fully-resolved", "Hello World!".equals(result));
+		check("single-pass.inserted-text-literal", "Hello ${name}!".equals(result));
 	}
 
 	/// v2's Configuration.resolveVariables now delegates to Context.substitute,

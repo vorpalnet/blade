@@ -11,6 +11,7 @@ import javax.servlet.sip.Parameterable;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 
+import org.vorpal.blade.framework.TrustedPeers;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v3.configuration.Context;
@@ -34,6 +35,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 /// - [RegexSelector] — regex with named groups + expression template
 /// - [TableSelector] — TranslationTable lookup over already-extracted
 ///   values (classification/tiering as data)
+/// - [IdentitySelector] — STIR/SHAKEN PASSporT claims from the `Identity` header
 ///
 /// They are peers — none extends another. If you need regex parsing
 /// on top of a JSON-extracted value, chain a [JsonSelector] (writes
@@ -68,7 +70,8 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 		@JsonSubTypes.Type(value = XmlSelector.class, name = "xml"),
 		@JsonSubTypes.Type(value = SdpSelector.class, name = "sdp"),
 		@JsonSubTypes.Type(value = RegexSelector.class, name = "regex"),
-		@JsonSubTypes.Type(value = TableSelector.class, name = "table")
+		@JsonSubTypes.Type(value = TableSelector.class, name = "table"),
+		@JsonSubTypes.Type(value = IdentitySelector.class, name = "identity")
 })
 @JsonPropertyOrder({ "type", "id", "attribute" })
 // Tolerate the legacy `index` and `applicationSession` fields, plus the
@@ -101,16 +104,19 @@ public abstract class Selector implements Serializable {
 	/// value. Errors are swallowed by the parent connector.
 	public abstract void extract(Context ctx, Object payload);
 
-	/// Write a value to the SIP session. `${var}` placeholders in the
-	/// value are resolved against the current session state (via
-	/// [Context#resolve]) before storage.
+	/// Write a value to the SIP session, as given apart from any NUL. Extracted
+	/// values come from the call, so a `${...}` inside one is the caller's text,
+	/// not a placeholder; see [Context]. NUL is removed because it is
+	/// [Context#MULTI_VALUE_DELIMITER]: a JSON or XML body can decode to it, and
+	/// a stored `basic\u0000gold` would satisfy `matches 'gold'` as if two
+	/// header instances had been read.
 	///
 	/// Application-session storage and session-index keying are now a
 	/// session-level concern — they're configured on `SessionParameters`
 	/// rather than per-selector. Future work.
 	protected void store(Context ctx, String name, String value) {
 		if (name == null || value == null || ctx == null) return;
-		ctx.put(name, value);
+		ctx.put(name, value.replace(Context.MULTI_VALUE_DELIMITER, ""));
 	}
 
 	/// Read a raw string value identified by `name` from the connector
@@ -241,6 +247,11 @@ public abstract class Selector implements Serializable {
 	// Goal: identify the UA that sent the ORIGINAL request even when the
 	// consumer lives several proxy / B2BUA hops downstream.
 	//
+	// A caller writes its own headers, including an X-Vorpal-ID and Via
+	// parameters, so steps 1, 3 and 4 are read only from a trusted BLADE hop
+	// (see TrustedPeers). A request straight from outside is its own origin:
+	// the answer is its transport peer.
+	//
 	// Fallback chain (first non-null wins):
 	//   1. X-Vorpal-ID `origin` parameter — stamped by Callflow on the
 	//      first BLADE service to see the request and propagated through
@@ -276,22 +287,32 @@ public abstract class Selector implements Serializable {
 	static String resolveOriginalSourceIp(SipServletRequest request) {
 		if (request == null) return "127.0.0.1";
 
-		// 1. X-Vorpal-ID;origin=<ip> — the preferred answer when present.
-		try {
-			Parameterable xVorpalId = request.getParameterableHeader(Callflow.X_VORPAL_ID);
-			if (xVorpalId != null) {
-				String origin = xVorpalId.getParameter(Callflow.ORIGIN_PARAM);
-				if (origin != null && !origin.isEmpty()) return origin;
+		boolean trusted = TrustedPeers.isTrusted(request);
+
+		// 1. X-Vorpal-ID;origin=<ip> — the preferred answer when present, and
+		//    only from a trusted BLADE hop.
+		if (trusted) {
+			try {
+				Parameterable xVorpalId = request.getParameterableHeader(Callflow.X_VORPAL_ID);
+				if (xVorpalId != null) {
+					String origin = xVorpalId.getParameter(Callflow.ORIGIN_PARAM);
+					if (origin != null && !origin.isEmpty()) return origin;
+				}
+			} catch (Throwable ignore) {
+				// Neither a malformed header nor a static-init failure
+				// (ExceptionInInitializerError outside a real container) should
+				// break the pipeline — fall through to the next step.
 			}
-		} catch (Throwable ignore) {
-			// Neither a malformed header nor a static-init failure
-			// (ExceptionInInitializerError outside a real container) should
-			// break the pipeline — fall through to the next step.
 		}
 
 		// 2. Container-derived initial remote addr
 		String initial = request.getInitialRemoteAddr();
 		if (initial != null && !initial.isEmpty()) return initial;
+
+		// From outside, the transport peer is the sender; its Via is its own claim.
+		if (!trusted) {
+			return request.getRemoteAddr();
+		}
 
 		// 3/4. Walk Via stack to the bottom; prefer received, else sent-by
 		String bottomVia = bottomOfViaStack(request);

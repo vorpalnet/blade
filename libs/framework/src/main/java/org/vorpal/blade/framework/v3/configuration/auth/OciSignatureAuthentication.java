@@ -14,6 +14,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.Locale;
 
+import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v3.configuration.Context;
@@ -230,6 +231,7 @@ public class OciSignatureAuthentication extends Authentication {
 	}
 
 	@JsonPropertyDescription("API signing key, PEM PKCS#8 (-----BEGIN PRIVATE KEY-----). Store it encrypted: SettingsManager decrypts {AES} values on load.")
+	@FormLayout(password = true)
 	public String getPrivateKey() {
 		return privateKey;
 	}

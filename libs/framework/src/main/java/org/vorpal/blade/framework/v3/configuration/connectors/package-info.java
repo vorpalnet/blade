@@ -13,8 +13,9 @@
 /// | `jdbc`  | [org.vorpal.blade.framework.v3.configuration.connectors.JdbcConnector]  | First row of a parameterized SQL query against a WebLogic `DataSource` |
 /// | `ldap`  | [org.vorpal.blade.framework.v3.configuration.connectors.LdapConnector]  | First entry of an LDAP search |
 /// | `table` | [org.vorpal.blade.framework.v3.configuration.connectors.TableConnector] | First-match-wins lookup across a list of [org.vorpal.blade.framework.v3.configuration.translations.TranslationTable]s |
+/// | `rate`  | [org.vorpal.blade.framework.v3.configuration.connectors.RateConnector]  | Calls per key over a sliding window, counted on this node |
 ///
-/// Each connector (except `table`) carries a list of
+/// Each connector (except `table` and `rate`) carries a list of
 /// [org.vorpal.blade.framework.v3.configuration.selectors.Selector]s
 /// that parse its payload and write named values into the Context.
 /// `TableConnector` doesn't need selectors — the matched Translation's

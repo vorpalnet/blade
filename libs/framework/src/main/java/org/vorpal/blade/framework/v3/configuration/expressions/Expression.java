@@ -182,16 +182,20 @@ public class Expression implements Serializable {
 			return eval(ctx);
 		}
 
-		/// Lazily compiled regex for the `matches` operator, keyed by its
-		/// source so a dynamic (variable) right side recompiles only when it
-		/// changes. Transient — recompiled after deserialization.
-		private transient java.util.regex.Pattern cachedPattern;
-		private transient String cachedPatternSource;
+		/// Lazily compiled regex for the `matches` operator with the source it was
+		/// compiled from, held as one immutable pair so a dynamic (variable) right
+		/// side recompiles only when it changes. A config's expressions are shared
+		/// by every call thread; two separate fields could be read half-updated,
+		/// pairing one call's source with another call's pattern. Transient,
+		/// recompiled after deserialization.
+		///
+		/// A variable right side makes the pattern whatever that variable holds.
+		/// Never let it hold caller data: a caller-chosen regex can be made to run
+		/// for seconds, or to match anything.
+		private transient volatile Cached<java.util.regex.Pattern> cachedPattern;
 
-		/// Lazily parsed subnet/IP for the `insubnet` operator, keyed by its
-		/// source (same caching rationale as the regex). Transient.
-		private transient inet.ipaddr.IPAddress cachedSubnet;
-		private transient String cachedSubnetSource;
+		/// Lazily parsed subnet/IP for the `insubnet` operator, same pairing.
+		private transient volatile Cached<inet.ipaddr.IPAddress> cachedSubnet;
 
 		@Override
 		public boolean eval(Context ctx) {
@@ -213,10 +217,12 @@ public class Expression implements Serializable {
 					return ls.contains(rs);
 				}
 				try {
-					if (cachedPattern == null || !rs.equals(cachedPatternSource)) {
-						cachedPattern = java.util.regex.Pattern.compile(rs, java.util.regex.Pattern.DOTALL);
-						cachedPatternSource = rs;
+					Cached<java.util.regex.Pattern> cached = cachedPattern;
+					if (cached == null || !rs.equals(cached.source)) {
+						cached = new Cached<>(rs, java.util.regex.Pattern.compile(rs, java.util.regex.Pattern.DOTALL));
+						cachedPattern = cached;
 					}
+					java.util.regex.Pattern pattern = cached.value;
 					// "Any instance" semantics: a value carrying the multi-value
 					// delimiter (a repeating header read by an allInstances
 					// selector) matches if ANY of its instances matches. An
@@ -224,11 +230,11 @@ public class Expression implements Serializable {
 					// identical to a plain full-string match — so iRouter and
 					// every existing condition are unaffected.
 					if (!ls.contains(Context.MULTI_VALUE_DELIMITER)) {
-						return cachedPattern.matcher(ls).matches();
+						return pattern.matcher(ls).matches();
 					}
 					for (String element : ls.split(
 							java.util.regex.Pattern.quote(Context.MULTI_VALUE_DELIMITER), -1)) {
-						if (cachedPattern.matcher(element).matches()) {
+						if (pattern.matcher(element).matches()) {
 							return true;
 						}
 					}
@@ -247,13 +253,15 @@ public class Expression implements Serializable {
 				String ls = (l == null) ? "" : l.toString();
 				String rs = (r == null) ? "" : r.toString();
 				try {
-					if (cachedSubnet == null || !rs.equals(cachedSubnetSource)) {
+					Cached<inet.ipaddr.IPAddress> cached = cachedSubnet;
+					if (cached == null || !rs.equals(cached.source)) {
 						inet.ipaddr.IPAddress net = new inet.ipaddr.IPAddressString(rs).getAddress();
-						cachedSubnet = (net != null) ? net.toPrefixBlock() : null;
-						cachedSubnetSource = rs;
+						cached = new Cached<>(rs, (net != null) ? net.toPrefixBlock() : null);
+						cachedSubnet = cached;
 					}
+					inet.ipaddr.IPAddress subnet = cached.value;
 					inet.ipaddr.IPAddress ip = new inet.ipaddr.IPAddressString(ls).getAddress();
-					return cachedSubnet != null && ip != null && cachedSubnet.contains(ip);
+					return subnet != null && ip != null && subnet.contains(ip);
 				} catch (Exception e) {
 					return false;
 				}
@@ -584,6 +592,17 @@ public class Expression implements Serializable {
 
 		private void skipWhitespace() {
 			while (pos < src.length() && Character.isWhitespace(src.charAt(pos))) pos++;
+		}
+	}
+
+	/// A parsed value with the text it was parsed from, swapped as one.
+	private static final class Cached<T> {
+		final String source;
+		final T value;
+
+		Cached(String source, T value) {
+			this.source = source;
+			this.value = value;
 		}
 	}
 }

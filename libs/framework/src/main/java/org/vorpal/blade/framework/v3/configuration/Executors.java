@@ -14,16 +14,28 @@ import java.util.concurrent.atomic.AtomicInteger;
 /// on a bounded pool sized to roughly match typical JDBC connection
 /// pools.
 ///
-/// Tunable via `-Dvorpal.blade.db.executor.threads=N`; default 50.
+/// Tunable via `-Dvorpal.blade.db.executor.threads=N` (default 50) and
+/// `-Dvorpal.blade.db.executor.queue=N` (default 1000).
+///
+/// The queue is bounded too. With a slow database every waiting lookup holds a
+/// request and its session, so an unbounded queue under a call flood grows
+/// until the heap goes. When it is full a new lookup is refused at once
+/// ([java.util.concurrent.RejectedExecutionException]); the connector's error
+/// handling lets the call continue to its default route.
 public final class Executors {
 
 	private static final int DB_THREADS =
 			Integer.getInteger("vorpal.blade.db.executor.threads", 50);
 
+	private static final int DB_QUEUE =
+			Integer.getInteger("vorpal.blade.db.executor.queue", 1000);
+
 	/// Bounded executor for JDBC / LDAP blocking work. Daemon threads
 	/// so they don't keep the JVM alive on shutdown.
-	public static final ExecutorService DB = java.util.concurrent.Executors.newFixedThreadPool(
-			DB_THREADS, new NamedDaemonThreadFactory("blade-db"));
+	public static final ExecutorService DB = new java.util.concurrent.ThreadPoolExecutor(
+			DB_THREADS, DB_THREADS, 0L, java.util.concurrent.TimeUnit.MILLISECONDS,
+			new java.util.concurrent.ArrayBlockingQueue<>(DB_QUEUE), new NamedDaemonThreadFactory("blade-db"),
+			new java.util.concurrent.ThreadPoolExecutor.AbortPolicy());
 
 	private Executors() {
 	}

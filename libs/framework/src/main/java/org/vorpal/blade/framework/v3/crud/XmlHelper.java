@@ -6,6 +6,7 @@ import java.io.Serializable;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 
+import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.OutputKeys;
@@ -33,13 +34,45 @@ public class XmlHelper implements Serializable {
 	private XmlHelper() {
 	}
 
+	/// A parser factory safe for XML the caller wrote, such as a SIPREC metadata
+	/// body. Document type declarations are refused outright, which rules out
+	/// external entities (`<!ENTITY x SYSTEM "file:///etc/passwd">` reads a file
+	/// into the document, `SYSTEM "http://..."` makes the engine fetch a URL) and
+	/// entity-expansion bombs. SIP bodies never need a DTD. Every feature is set
+	/// best-effort, since not every JAXP implementation supports each one;
+	/// refusing the doctype alone closes all three.
+	public static DocumentBuilderFactory secureDocumentBuilderFactory(boolean namespaceAware) {
+		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+		factory.setNamespaceAware(namespaceAware);
+		setFeature(factory, "http://apache.org/xml/features/disallow-doctype-decl", true);
+		setFeature(factory, XMLConstants.FEATURE_SECURE_PROCESSING, true);
+		setFeature(factory, "http://xml.org/sax/features/external-general-entities", false);
+		setFeature(factory, "http://xml.org/sax/features/external-parameter-entities", false);
+		setFeature(factory, "http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+		try {
+			factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+			factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+		} catch (IllegalArgumentException unsupported) {
+			// the doctype refusal above already covers this
+		}
+		factory.setXIncludeAware(false);
+		factory.setExpandEntityReferences(false);
+		return factory;
+	}
+
+	private static void setFeature(DocumentBuilderFactory factory, String feature, boolean value) {
+		try {
+			factory.setFeature(feature, value);
+		} catch (Exception unsupported) {
+			// best effort; see secureDocumentBuilderFactory
+		}
+	}
+
 	/**
 	 * Parses an XML string into a DOM Document.
 	 */
 	public static Document parse(String xml) throws Exception {
-		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-		factory.setNamespaceAware(true);
-		DocumentBuilder builder = factory.newDocumentBuilder();
+		DocumentBuilder builder = secureDocumentBuilderFactory(true).newDocumentBuilder();
 		return builder.parse(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)));
 	}
 

@@ -160,7 +160,10 @@ public class Sdp implements Serializable {
 	}
 
 	private static void appendLine(StringBuilder sb, String type, String value) {
-		sb.append(type).append('=').append(value).append("\r\n");
+		// A field value is one line. A CR or LF in it, from a caller-derived value
+		// spliced in by a CRUD SDP update, would otherwise start an SDP line the
+		// operator never wrote (an extra a=, c=, ...). Fold them to spaces.
+		sb.append(type).append('=').append(value.replace('\r', ' ').replace('\n', ' ')).append("\r\n");
 	}
 
 	public String getVersion() { return version; }

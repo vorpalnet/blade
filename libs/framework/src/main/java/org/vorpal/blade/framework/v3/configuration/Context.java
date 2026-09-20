@@ -7,6 +7,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -35,12 +36,20 @@ import javax.servlet.sip.SipSession;
 /// selector explicitly copied the To header into session state.
 /// This keeps data flow explicit.
 ///
-/// ## `${var}` on writes
+/// ## Values are data; only configuration is a template
 ///
-/// [#put] and [#putAppSession] both run the value through
-/// [#resolve] before storing — so a selector can produce values like
-/// `"sip:fraud@${customerDomain}"` and the stored attribute is the
-/// fully-resolved URI.
+/// [#put] and [#putAppSession] store the value exactly as given, and
+/// [#resolve] replaces each placeholder once without scanning the text it
+/// inserted. Most stored values come from the call: a header, a REST
+/// response, a database row. A caller controls that text, and a From
+/// display name may legally contain `${DB_PASSWORD}`. If stored values were
+/// templates, that name would reach the environment-variable fallback and
+/// the secret would travel on in an outbound header, a REST body, or a
+/// redirect's `Contact`.
+///
+/// Configuration text is still a template. A caller writing a value it took
+/// from the configuration resolves it first, `ctx.put(name, ctx.resolve(v))`,
+/// as the table connector and table selector do for their extras.
 public class Context {
 	private static final Pattern PLACEHOLDER = Pattern.compile("\\$\\{([^}]+)\\}");
 
@@ -53,11 +62,6 @@ public class Context {
 	/// apply "any instance" semantics while leaving every ordinary single value
 	/// (no delimiter) untouched.
 	public static final String MULTI_VALUE_DELIMITER = "\u0000";
-
-	/// Iteration cap for `${var}` re-resolution. A resolved value that
-	/// itself contains `${...}` is fed back through substitution; this
-	/// cap stops cycles. Matches v2's historical iteration limit.
-	private static final int MAX_ITERATIONS = 10;
 
 	private final SipServletRequest request;
 
@@ -89,19 +93,19 @@ public class Context {
 		return null;
 	}
 
-	/// Write to the SIP session. `${var}` placeholders in the value
-	/// are resolved before storage.
+	/// Write to the SIP session. The value is stored as given; see the class
+	/// comment for why placeholders in it are not resolved.
 	public void put(String name, String value) {
 		if (name == null || value == null || request == null) return;
 		SipSession session = request.getSession();
-		if (session != null) session.setAttribute(name, resolve(value));
+		if (session != null) session.setAttribute(name, value);
 	}
 
-	/// Write to the SIP application session. `${var}` resolved.
+	/// Write to the SIP application session, stored as given.
 	public void putAppSession(String name, String value) {
 		if (name == null || value == null || request == null) return;
 		SipApplicationSession appSession = request.getApplicationSession();
-		if (appSession != null) appSession.setAttribute(name, resolve(value));
+		if (appSession != null) appSession.setAttribute(name, value);
 	}
 
 	/// Snapshot of all currently-resolvable string attributes from
@@ -215,44 +219,42 @@ public class Context {
 
 	/// Resolve `${name}` placeholders in `template` against session
 	/// state. Reserved meta-variables (see [#reserved]) take precedence.
-	/// Resolution is iterative: a resolved value containing `${...}` is
-	/// re-resolved up to [#MAX_ITERATIONS] times. Unresolved placeholders
-	/// are left as-is.
+	/// Each placeholder is replaced once: text a replacement inserts is not
+	/// scanned again, so a value holding `${...}` stays literal. Unresolved
+	/// placeholders are left as-is.
 	public String resolve(String template) {
 		if (template == null) return null;
-		return iterate(template, this::get);
+		return singlePass(template, this::get, null);
+	}
+
+	/// Resolve like [#resolve], passing each inserted value through `encode`
+	/// before it lands in the output. `encode` receives the placeholder's
+	/// offset in `template` and the value, so a caller that knows the
+	/// template's syntax can escape by position, for example only inside a
+	/// JSON string. Unresolved placeholders are left as-is and not encoded.
+	public String resolve(String template, BiFunction<Integer, String, String> encode) {
+		if (template == null) return null;
+		return singlePass(template, this::get, encode);
 	}
 
 	/// Substitute `${name}` placeholders in `template` against an
 	/// arbitrary `vars` map (does not consult the SIP session).
 	/// Reserved meta-variables (see [#reserved]) take precedence.
-	/// Resolution is iterative: a resolved value containing `${...}` is
-	/// re-resolved up to [#MAX_ITERATIONS] times. Unresolved placeholders
-	/// are left as-is.
+	/// Each placeholder is replaced once, as in [#resolve]. Unresolved
+	/// placeholders are left as-is.
 	public static String substitute(String template, Map<String, String> vars) {
 		if (template == null) return null;
-		return iterate(template, name -> (vars != null) ? vars.get(name) : null);
+		return singlePass(template, name -> (vars != null) ? vars.get(name) : null, null);
 	}
 
-	/// Iterative wrapper around [#singlePass]. Re-renders the template
-	/// while the output keeps changing, until either a fixed point or
-	/// [#MAX_ITERATIONS] is reached. The cap is a safety against
-	/// `${a}` ↔ `${b}` cycles; in normal usage one or two passes suffice.
-	private static String iterate(String template, Function<String, String> lookup) {
-		String prev = template;
-		for (int i = 0; i < MAX_ITERATIONS; i++) {
-			String next = singlePass(prev, lookup);
-			if (next.equals(prev)) return next;
-			prev = next;
-		}
-		return prev;
-	}
-
-	/// One pass of placeholder resolution. Reserved meta-variables win
-	/// first; otherwise the supplied `lookup` is consulted, then env-var
-	/// and system-property fallback, and finally the placeholder is left
-	/// literal. Iteration is the caller's responsibility — see [#iterate].
-	private static String singlePass(String template, Function<String, String> lookup) {
+	/// Replaces every placeholder in one scan of `template`. Reserved
+	/// meta-variables win first; otherwise the supplied `lookup` is consulted,
+	/// then env-var and system-property fallback, and finally the placeholder is
+	/// left literal. The matcher runs over the template only, never over the
+	/// text it appends, which is what keeps a looked-up value from being read
+	/// as a template.
+	private static String singlePass(String template, Function<String, String> lookup,
+			BiFunction<Integer, String, String> encode) {
 		Matcher m = PLACEHOLDER.matcher(template);
 		StringBuilder out = new StringBuilder();
 		Reserved cache = new Reserved();
@@ -265,6 +267,7 @@ public class Context {
 				value = lookup.apply(bare);
 				if (value == null) value = fallback(bare);
 			}
+			if (value != null && encode != null) value = encode.apply(m.start(), value);
 			m.appendReplacement(out, Matcher.quoteReplacement(value != null ? value : m.group(0)));
 		}
 		m.appendTail(out);

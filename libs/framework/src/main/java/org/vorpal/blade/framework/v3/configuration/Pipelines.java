@@ -17,10 +17,17 @@ import org.vorpal.blade.framework.v3.configuration.connectors.Connector;
 /// Each connector's future is joined before the next runs; sync connectors
 /// (`sip`, `table`) are already complete when `invoke` returns, so
 /// joining costs nothing. An I/O connector (`rest`, `jdbc`, `ldap`) blocks
-/// for its round-trip — callers on the SIP container thread should prefer
+/// for its round-trip, at most [#WAIT_SECONDS] — callers on the SIP container thread should prefer
 /// message-derived enrichment. A connector failure is logged and skipped so
 /// the rest of the pipeline still runs, same policy as the async chain.
 public final class Pipelines {
+
+	/// Longest this thread waits for one connector, set with
+	/// `-Dvorpal.blade.pipeline.waitSeconds` (default 5). The caller may be a SIP
+	/// container thread, so an unbounded wait on a hung database or REST service
+	/// would hold that thread, and each new call takes another, until the engine
+	/// stops answering. A connector that runs over is skipped like one that failed.
+	static final long WAIT_SECONDS = Long.getLong("vorpal.blade.pipeline.waitSeconds", 5L);
 
 	private Pipelines() {
 	}
@@ -33,7 +40,7 @@ public final class Pipelines {
 			for (Connector connector : pipeline) {
 				try {
 					CompletableFuture<Void> f = connector.invoke(ctx);
-					if (f != null) f.join();
+					if (f != null) f.get(WAIT_SECONDS, java.util.concurrent.TimeUnit.SECONDS);
 				} catch (Exception e) {
 					if (sipLogger != null) {
 						sipLogger.warning(request, "pipeline connector " + connector.getId()

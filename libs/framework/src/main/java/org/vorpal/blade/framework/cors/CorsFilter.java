@@ -73,9 +73,8 @@ public class CorsFilter implements Filter {
 		exposeHeaders = expose.isEmpty() ? null : String.join(", ", expose);
 	}
 
-	/// Parse a comma-separated origin list into a set, trimming blanks. Package
-	/// visibility so it can be unit-tested without a servlet container.
-	static Set<String> parseOrigins(String csv) {
+	/// Parse a comma-separated origin list into a set, trimming blanks.
+	public static Set<String> parseOrigins(String csv) {
 		Set<String> out = new LinkedHashSet<>();
 		if (csv != null) {
 			for (String token : csv.split(",")) {

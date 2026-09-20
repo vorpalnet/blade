@@ -24,7 +24,8 @@ import java.util.Properties;
 /// | `scope`         | the scopes to request, default `openid`; an OCI identity domain emits its `groups` claim only for `openid groups` |
 /// | `usernameClaim` | the claim that names the user, default `sub`                     |
 /// | `groupsClaim`   | the claim that carries the user's groups, default `groups`       |
-/// | `audience`      | the `aud` a bearer token must carry, when API clients send access tokens rather than ID tokens; unset, a bearer token is checked for issuer and signature only |
+/// | `audience`      | the `aud` a bearer token must carry; unset, it must name this client (`clientId`). Set it to the API's audience when API clients send access tokens, or to `*` to skip the check |
+/// | `maxSessionHours` | hours a sign-in lasts before the provider is asked again, however active the session; default 12 |
 /// | `role.<group>`  | maps a group name from the provider to a BLADE role, for a directory that must keep its own names; a group already named for a role needs no entry |
 ///
 /// `discoveryUrl` exists for the provider whose discovery document is served
@@ -48,6 +49,7 @@ public final class OidcLoginConfig {
 	private final String usernameClaim;
 	private final String groupsClaim;
 	private final String audience;
+	private final int maxSessionHours;
 	private final Map<String, String> roleMappings;
 
 	private OidcLoginConfig(Properties p) {
@@ -64,6 +66,8 @@ public final class OidcLoginConfig {
 		String g = trimmed(p, "groupsClaim");
 		this.groupsClaim = (g != null) ? g : "groups";
 		this.audience = trimmed(p, "audience");
+		String hours = trimmed(p, "maxSessionHours");
+		this.maxSessionHours = (hours != null) ? Integer.parseInt(hours) : 12;
 		Map<String, String> roles = new LinkedHashMap<>();
 		for (String key : p.stringPropertyNames()) {
 			if (key.startsWith("role.") && key.length() > 5) {
@@ -132,6 +136,10 @@ public final class OidcLoginConfig {
 		return audience;
 	}
 
+	public int maxSessionHours() {
+		return maxSessionHours;
+	}
+
 	public Map<String, String> roleMappings() {
 		return roleMappings;
 	}
@@ -161,12 +169,21 @@ public final class OidcLoginConfig {
 		return cfg;
 	}
 
-	/// The [JwtAuthConfig] for a bearer token from an API client, which is
-	/// usually an access token issued for a different audience: the `audience`
-	/// key when set, otherwise no audience check.
+	/// The [JwtAuthConfig] for a bearer token from an API client: the `audience`
+	/// key when set, otherwise this client's id, and no check only for an
+	/// explicit `*`.
+	///
+	/// Skipping the check by default let any application registered with the
+	/// same identity provider replay a user's token, minted for itself, as an
+	/// admin credential here; the issuer check alone does not tell BLADE's
+	/// tokens from theirs.
 	public JwtAuthConfig bearerConfig(String jwksUri) {
 		JwtAuthConfig cfg = baseConfig(jwksUri);
-		cfg.setAudience(audience);
+		if (audience == null) {
+			cfg.setAudience(clientId);
+		} else if (!"*".equals(audience)) {
+			cfg.setAudience(audience);
+		}
 		return cfg;
 	}
 

@@ -45,6 +45,26 @@ public class IRouterInvite extends Callflow {
 	/// from any one servlet's static `settings` field.
 	protected final IRouterConfig config;
 
+	/// Analytics event for a forwarded call, published after the route's
+	/// headers are stamped on the outbound INVITE.
+	///
+	/// Every routing decision publishes one of three events, so a screening
+	/// config can report what it decided without code: add the event under
+	/// `analytics.events` with attribute selectors for the headers the route
+	/// stamps (for example `X-Call-Screen`) and set `analytics.enabled`.
+	/// Nothing is created while analytics is off, unless the logger is at its
+	/// analytics logging level, which collects events for the log.
+	public static final String EVENT_ROUTED = "callRouted";
+
+	/// Analytics event for a direct response of 400 or above. Shares the
+	/// framework's `callDeclined` type, so a subscriber selecting declined calls
+	/// sees the router's too.
+	public static final String EVENT_DECLINED = "callDeclined";
+
+	/// Analytics event for a direct response below 400, such as a redirect
+	/// server's 302.
+	public static final String EVENT_RESPONDED = "callResponded";
+
 	public IRouterInvite(IRouterConfig config) {
 		this.config = config;
 	}
@@ -249,6 +269,10 @@ public class IRouterInvite extends Callflow {
 				? request.createResponse(code, reason)
 				: request.createResponse(code);
 		applyHeaders(response, route, ctx);
+		// The decision event reads the response after its headers are stamped,
+		// and must go before sendResponse for the same reason the log line does.
+		SettingsManager.createEvent(code >= 400 ? EVENT_DECLINED : EVENT_RESPONDED, response);
+		SettingsManager.sendEvent(response);
 		// Log before send — a final non-2xx response invalidates the session,
 		// after which the logger's hexHash → getGlareState → session.getAttribute
 		// path throws "Invalid attribute store!". Same reasoning as
@@ -284,6 +308,8 @@ public class IRouterInvite extends Callflow {
 					+ " supervised=" + proxy.getSupervised());
 		}
 		applyHeaders(request, route, ctx);
+		SettingsManager.createEvent(EVENT_ROUTED, request);
+		SettingsManager.sendEvent(request);
 		proxyRequest(proxy, destination);
 	}
 

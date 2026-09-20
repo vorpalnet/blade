@@ -25,16 +25,19 @@ import org.vorpal.blade.framework.v2.snmp.Snmp;
 /// (bundled per-WAR), a commercial extension subclasses it with only the
 /// framework dependency — no cross-WAR class sharing needed.
 ///
-/// ## Two subclass seams
+/// ## Subclass seams
 ///
 /// Everything an iRouter servlet does — settings lifecycle, the static
 /// `settings` snapshot, and the INVITE dispatch — is shared here. A subclass
-/// customizes exactly two things:
+/// customizes up to three things:
 ///  - [#newSampleConfig] — the sample/default config (pipeline + routing).
 ///  - [#newInvite] — the callflow for an initial INVITE (override its
 ///    `enrichContext` to inject bespoke pre-pipeline values).
+///  - [#configClass] — the config type read from disk, so an app built from
+///    configs alone can carry its own `@SchemaAbout` name in the Configurator
+///    and Portal.
 ///
-/// Both have working defaults (plain iRouter), so the standalone WAR's leaf is
+/// All have working defaults (plain iRouter), so the standalone WAR's leaf is
 /// pure annotations with an empty body.
 ///
 /// Re-INVITE / ACK / BYE need no handling here: [IRouterInvite] proxies via
@@ -58,6 +61,16 @@ public class IRouterServlet extends AsyncSipServlet {
 		return new IRouterConfigSample();
 	}
 
+	/// Subclass seam: the config type deserialized from the live JSON. The
+	/// Configurator schema, and so the app's name on its Portal card, comes from
+	/// this class's `@SchemaAbout`. Override with a field-less [IRouterConfig]
+	/// subclass that only renames the app; put sample data in a further subclass
+	/// returned by [#newSampleConfig], never in this one, or Jackson would keep
+	/// sample values for every field the live JSON omits. Default: [IRouterConfig].
+	protected Class<? extends IRouterConfig> configClass() {
+		return IRouterConfig.class;
+	}
+
 	/// Subclass seam: the callflow run for an initial INVITE. Override to supply
 	/// a customer-specific callflow — typically one whose `enrichContext`
 	/// injects bespoke pre-pipeline values (e.g. a screening subclass's `${sipJson}`).
@@ -69,7 +82,9 @@ public class IRouterServlet extends AsyncSipServlet {
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
 		try {
-			settings = new SettingsManager<>(event, IRouterConfig.class, newSampleConfig());
+			@SuppressWarnings("unchecked")
+			Class<IRouterConfig> type = (Class<IRouterConfig>) configClass();
+			settings = new SettingsManager<>(event, type, newSampleConfig());
 		} catch (Exception e) {
 			// A failed startup is exactly what an NMS wants to hear about, so
 			// trap it (fail-closed off-OCCAS). getSimpleName() names the actual

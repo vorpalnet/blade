@@ -77,7 +77,12 @@ public class AttributeSelector extends Selector implements Serializable {
 				: readSource(payload, attribute);
 		if (raw == null) return;
 
-		store(ctx, id, raw);
+		if (allInstances && payload instanceof SipServletRequest) {
+			// Already joined on the delimiter by readAllInstances; store as is.
+			if (id != null && ctx != null) ctx.put(id, raw);
+		} else {
+			store(ctx, id, raw);
+		}
 
 		Logger sipLogger = SettingsManager.getSipLogger();
 		if (sipLogger != null && sipLogger.isLoggable(Level.FINER)) {
@@ -99,7 +104,7 @@ public class AttributeSelector extends Selector implements Serializable {
 				StringBuilder sb = new StringBuilder();
 				while (it.hasNext()) {
 					if (sb.length() > 0) sb.append(Context.MULTI_VALUE_DELIMITER);
-					sb.append(it.next());
+					sb.append(it.next().replace(Context.MULTI_VALUE_DELIMITER, ""));
 				}
 				return sb.toString();
 			}

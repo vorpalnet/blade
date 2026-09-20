@@ -70,6 +70,7 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
+import javax.servlet.sip.SipSession;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.transfer.api.Header;
@@ -154,6 +155,22 @@ public class Transfer extends org.vorpal.blade.framework.v3.Callflow {
 	 * @throws IOException              if an I/O error occurs
 	 * @throws IllegalArgumentException if request is null
 	 */
+	/// True when `refer` arrived on the callee leg: the leg BLADE placed with the
+	/// initial INVITE, or after a completed transfer the leg to the new target.
+	/// That is the contact-center side, the only side that transfers calls; see
+	/// [TransferSettings#getAllowCallerRefer].
+	public static boolean isFromCalleeLeg(SipServletRequest refer) {
+		SipSession session = (refer != null) ? refer.getSession() : null;
+		if (session == null) {
+			return false;
+		}
+		Object userAgent = session.getAttribute("userAgent");
+		if (userAgent != null) {
+			return "callee".equals(userAgent);
+		}
+		return session.getAttribute(org.vorpal.blade.framework.v2.b2bua.InitialInvite.ATTR_INITIAL_INVITE) != null;
+	}
+
 	protected void createRequests(SipServletRequest request) throws ServletException, IOException {
 		if (request == null) {
 			throw new IllegalArgumentException("Request cannot be null");

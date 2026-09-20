@@ -1,6 +1,9 @@
 package org.vorpal.blade.framework.v3.configuration.connectors;
 
+import java.io.IOException;
 import java.io.Serializable;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -66,7 +69,8 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 		@JsonSubTypes.Type(value = RestConnector.class, name = "rest"),
 		@JsonSubTypes.Type(value = JdbcConnector.class, name = "jdbc"),
 		@JsonSubTypes.Type(value = LdapConnector.class, name = "ldap"),
-		@JsonSubTypes.Type(value = TableConnector.class, name = "table")
+		@JsonSubTypes.Type(value = TableConnector.class, name = "table"),
+		@JsonSubTypes.Type(value = RateConnector.class, name = "rate")
 })
 @JsonPropertyOrder({ "type", "id", "description", "selectors" })
 public abstract class Connector implements Serializable {
@@ -126,6 +130,57 @@ public abstract class Connector implements Serializable {
 							getClass().getSimpleName() + "[" + id + "] selector "
 									+ selector.getId() + " failed: " + e.getMessage());
 				}
+			}
+		}
+	}
+
+	/// Copy the WAR-bundled template at
+	/// `classpath:_templates/<filename>` to the on-disk location
+	/// `destination`, creating parent directories as needed. Called
+	/// only when the disk file is missing — never overwrites an
+	/// existing file. Silently no-ops if no bundled copy is on the
+	/// classpath; the caller will then surface a "template not found"
+	/// error.
+	///
+	/// Uses the **thread context classloader** rather than this class's
+	/// own loader: the framework JAR (where this class lives) is
+	/// bundled inside each WAR, but `WEB-INF/classes/_templates/` is
+	/// owned by the WAR-level WebappClassLoader. The context loader is
+	/// the WAR's loader at SIP-container request time, so it can see
+	/// both `WEB-INF/classes/` and `WEB-INF/lib/*.jar`. Falls back to
+	/// `getClass().getClassLoader()` when no context loader is set
+	/// (e.g. a static unit test).
+	///
+	/// Logs at INFO on successful bootstrap (one line per template
+	/// per JVM lifetime, since the result is cached in
+	/// `cachedTemplate` thereafter), at FINE when no bundled copy
+	/// exists, and at WARNING on I/O failure.
+	///
+	/// @param filename     bare filename, e.g. `screening.txt` or `spam-numbers.sql`
+	/// @param destination  absolute path under
+	///                     `./config/custom/vorpal/_templates/`
+	protected void materializeBundledTemplate(String filename, Path destination) {
+		Logger sipLogger = SettingsManager.getSipLogger();
+		String resourcePath = "_templates/" + filename;
+		ClassLoader cl = Thread.currentThread().getContextClassLoader();
+		if (cl == null) cl = getClass().getClassLoader();
+		try (java.io.InputStream in = cl.getResourceAsStream(resourcePath)) {
+			if (in == null) {
+				if (sipLogger != null && sipLogger.isLoggable(Level.FINE)) {
+					sipLogger.fine(tag() + " no bundled template at classpath:" + resourcePath);
+				}
+				return;
+			}
+			Files.createDirectories(destination.getParent());
+			Files.copy(in, destination);
+			if (sipLogger != null) {
+				sipLogger.info(tag() + " bootstrapped template from WAR: "
+						+ destination + " (source: classpath:" + resourcePath + ")");
+			}
+		} catch (IOException e) {
+			if (sipLogger != null) {
+				sipLogger.warning(tag() + " failed to materialize bundled template "
+						+ resourcePath + " to " + destination + ": " + e.getMessage());
 			}
 		}
 	}

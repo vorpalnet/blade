@@ -44,8 +44,7 @@ import java.util.logging.Level;
 ///    statement at or above that level also emits a trap (see the bridge in
 ///    `org.vorpal.blade.framework.v2.logging.Logger`).
 ///
-/// Resolved reflectively on purpose, mirroring `EngineOverload` in the Options
-/// service: if `SNMPAgent` is absent (running outside OCCAS, unit tests, or a
+/// Resolved reflectively on purpose: if `SNMPAgent` is absent (running outside OCCAS, unit tests, or a
 /// future engine that renames it) every lookup fails closed and `trap(...)`
 /// becomes a silent no-op. Whether a trap actually leaves the box is still
 /// governed by the WebLogic SNMP agent — the domain agent must be enabled with

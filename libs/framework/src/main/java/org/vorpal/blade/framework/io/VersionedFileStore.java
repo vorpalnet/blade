@@ -3,6 +3,8 @@ package org.vorpal.blade.framework.io;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
@@ -82,8 +84,26 @@ public final class VersionedFileStore {
 		} else if (file.getParent() != null) {
 			Files.createDirectories(file.getParent());
 		}
-		Files.write(file, content.getBytes(StandardCharsets.UTF_8),
-				StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+		// Write beside the target, then move it into place. Truncating the live
+		// file in situ leaves a window in which a reader sees a short file, and
+		// the engine tier reloads config ON CHANGE: a reload landing inside that
+		// window takes the router's configuration away and answers 500 until the
+		// next good write. A move is atomic on the same filesystem, so a reader
+		// gets the old content or the new one, never a prefix of either.
+		Path dir = (file.getParent() != null) ? file.getParent() : Paths.get(".");
+		Path temp = Files.createTempFile(dir, file.getFileName().toString(), ".tmp");
+		try {
+			Files.write(temp, content.getBytes(StandardCharsets.UTF_8));
+			try {
+				Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING,
+						StandardCopyOption.ATOMIC_MOVE);
+			} catch (AtomicMoveNotSupportedException unsupported) {
+				// Exotic filesystem: still better than truncate-in-place.
+				Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING);
+			}
+		} finally {
+			Files.deleteIfExists(temp);
+		}
 	}
 
 	/// Copy the current file into `.versions/<name>.<millis>.version` and prune
@@ -93,9 +113,16 @@ public final class VersionedFileStore {
 		Files.createDirectories(versionsDir);
 
 		String fileName = file.getFileName().toString();
+		// Two saves inside one millisecond used to land on the same name, and the
+		// second REPLACE_EXISTING copy destroyed the first version. Step forward
+		// until the name is free: the suffix stays fixed-width millis, so the
+		// lexical sort that orders versions still reads chronologically.
 		long timestamp = System.currentTimeMillis();
 		Path versionPath = versionsDir.resolve(fileName + "." + timestamp + VERSION_SUFFIX);
-		Files.copy(file, versionPath, StandardCopyOption.REPLACE_EXISTING);
+		for (int spin = 0; Files.exists(versionPath) && spin < 1000; spin++) {
+			versionPath = versionsDir.resolve(fileName + "." + (++timestamp) + VERSION_SUFFIX);
+		}
+		Files.copy(file, versionPath);
 
 		cleanupOldVersions(versionsDir, fileName);
 	}

@@ -23,7 +23,14 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 @JsonPropertyOrder({ "version", "notes", "logging", "session", "analytics", "events" })
 public class Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
-	public static final String SIP_ADDRESS_PATTERN = "^(?:\"?(?<name>.*?)\"?\\s*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$";
+	/// A SIP name-addr or addr-spec, with named groups `name`, `proto`, `user`,
+	/// `host`, `port`, `uriparams` and `addrparams`.
+	///
+	/// The caller writes the display name, so the pattern must stay linear in its
+	/// length. The display name is matched possessively and only when a `<`
+	/// follows it; the earlier form (`"?(?<name>.*?)"?\s*[<]*`) backtracked over
+	/// every split of the name, and a 16 KB name of spaces took a second per match.
+	public static final String SIP_ADDRESS_PATTERN = "^\\s*+\"?(?<name>(?:(?:[^\"<\\s]|\\s++(?=[^\"<\\s]))*+(?=\"?\\s*+<))?+)\"?\\s*+<?(?<proto>sips?):(?:(?<user>.*)@)?(?<host>[^:;>]*)(?::(?<port>[0-9]+))?(?:;(?<uriparams>[^>]*))?>?;?(?<addrparams>.*)$";
 
 	protected Integer version;
 	protected String notes;

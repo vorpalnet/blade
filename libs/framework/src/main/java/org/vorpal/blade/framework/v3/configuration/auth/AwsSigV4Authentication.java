@@ -13,6 +13,7 @@ import java.util.TreeMap;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
+import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v3.configuration.Context;
@@ -95,6 +96,7 @@ public class AwsSigV4Authentication extends Authentication {
 	}
 
 	@JsonPropertyDescription("AWS secret access key; supports ${var}")
+	@FormLayout(password = true)
 	public String getSecretAccessKey() {
 		return secretAccessKey;
 	}
@@ -122,6 +124,7 @@ public class AwsSigV4Authentication extends Authentication {
 	}
 
 	@JsonPropertyDescription("Optional STS session token (for temporary credentials); supports ${var}")
+	@FormLayout(password = true)
 	public String getSessionToken() {
 		return sessionToken;
 	}

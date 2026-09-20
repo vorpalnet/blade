@@ -84,10 +84,12 @@ public class TableSelector extends Selector {
 			return;
 		}
 
+		// Extras are configuration, so they are templates; resolve before storing.
 		for (Map.Entry<String, String> e : match.getExtras().entrySet()) {
-			store(ctx, e.getKey(), e.getValue());
+			String value = ctx.resolve(e.getValue());
+			store(ctx, e.getKey(), value);
 			if (id != null) {
-				store(ctx, id + "." + e.getKey(), e.getValue());
+				store(ctx, id + "." + e.getKey(), value);
 			}
 		}
 	}

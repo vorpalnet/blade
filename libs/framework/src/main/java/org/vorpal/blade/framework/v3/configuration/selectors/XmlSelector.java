@@ -16,6 +16,7 @@ import org.vorpal.blade.framework.v2.config.FormLayoutGroup;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v3.configuration.Context;
+import org.vorpal.blade.framework.v3.crud.XmlHelper;
 import org.w3c.dom.Document;
 import org.xml.sax.InputSource;
 
@@ -55,10 +56,8 @@ public class XmlSelector extends Selector implements Serializable {
 		Logger sipLogger = SettingsManager.getSipLogger();
 
 		try {
-			DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-			if (namespaces != null && !namespaces.isEmpty()) {
-				dbf.setNamespaceAware(true);
-			}
+			DocumentBuilderFactory dbf = XmlHelper.secureDocumentBuilderFactory(
+					namespaces != null && !namespaces.isEmpty());
 			Document doc = dbf.newDocumentBuilder().parse(new InputSource(new StringReader(text)));
 
 			XPath xp = XPathFactory.newInstance().newXPath();

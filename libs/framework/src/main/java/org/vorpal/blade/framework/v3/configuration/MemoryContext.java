@@ -14,7 +14,7 @@ import java.util.Map;
 ///
 /// Only the backing store (`get`/`put`/`snapshot`) is overridden; the full
 /// `${var}` substitution machinery — reserved vars (`${now}`, `${uuid}`),
-/// env/sysprop fallback, iterative re-resolution — is inherited from [Context]
+/// env/sysprop fallback, values stored as given — is inherited from [Context]
 /// unchanged, because [Context#resolve] routes through the overridable [#get].
 public class MemoryContext extends Context {
 
@@ -48,7 +48,7 @@ public class MemoryContext extends Context {
 		if (name == null || value == null) {
 			return;
 		}
-		vars.put(name, resolve(value));
+		vars.put(name, value);
 	}
 
 	@Override

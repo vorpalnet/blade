@@ -7,6 +7,7 @@ import java.util.Base64;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
+import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v3.configuration.Context;
@@ -72,6 +73,7 @@ public class HmacAuthentication extends Authentication {
 	}
 
 	@JsonPropertyDescription("Shared secret; supports ${var}")
+	@FormLayout(password = true)
 	public String getSecret() {
 		return secret;
 	}

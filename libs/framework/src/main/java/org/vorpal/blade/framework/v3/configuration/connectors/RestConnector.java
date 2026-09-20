@@ -10,8 +10,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 
@@ -25,6 +28,7 @@ import org.vorpal.blade.framework.v3.configuration.auth.Authentication;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+import com.fasterxml.jackson.core.io.JsonStringEncoder;
 
 /// HTTP/REST connector. Asynchronously calls a remote API (`url`,
 /// optionally with a `bodyTemplate` for POST), then passes the
@@ -51,6 +55,16 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// non-whitespace character is `#` are treated as comments and
 /// stripped at load time — use them to annotate the template
 /// without ending up in the wire payload.
+///
+/// ## Values from the call are escaped
+///
+/// A template's placeholders are usually filled from the SIP message, which
+/// the caller writes. In a JSON body, a value that lands inside a string is
+/// JSON-escaped, so a display name holding a quote cannot close the string and
+/// add a field; a placeholder outside a string is inserted as written, for
+/// values that are JSON already. A header value has its line breaks folded,
+/// so it cannot add a header. The URL is not encoded: build it from
+/// configuration values, not from caller text.
 ///
 /// ## Body-template bootstrap (self-materializing)
 ///
@@ -311,92 +325,116 @@ public class RestConnector extends Connector implements Serializable {
 			cachedTemplate = COMMENT_LINE.matcher(Files.readString(p)).replaceAll("");
 		}
 
-		String resolved = ctx.resolve(cachedTemplate);
+		// Split the template before resolving anything, so a value from the call
+		// holding a line break can neither move the header/body boundary nor
+		// add a header line of its own.
 		TemplateResult result = new TemplateResult();
-		int blank = findBlankLine(resolved);
+		int blank = findBlankLine(cachedTemplate);
+		String bodyTemplate = ((blank >= 0) ? cachedTemplate.substring(blank) : cachedTemplate).trim();
 
 		if (blank >= 0) {
-			String headerSection = resolved.substring(0, blank).trim();
-			result.body = resolved.substring(blank).trim();
-			for (String line : headerSection.split("\\r?\\n")) {
+			for (String line : cachedTemplate.substring(0, blank).split("\\r?\\n")) {
 				line = line.trim();
 				if (line.isEmpty()) continue;
 				int colon = line.indexOf(':');
 				if (colon > 0) {
-					result.headers.put(line.substring(0, colon).trim(), line.substring(colon + 1).trim());
+					result.headers.put(line.substring(0, colon).trim(),
+							stripLineBreaks(ctx.resolve(line.substring(colon + 1).trim())));
 				}
 			}
-		} else {
-			result.body = resolved.trim();
 		}
+		result.body = isJson(result.headers, bodyTemplate)
+				? resolveJson(bodyTemplate, ctx)
+				: ctx.resolve(bodyTemplate);
 		return result;
 	}
 
-	/// Copy the WAR-bundled body template at
-	/// `classpath:_templates/<filename>` to the on-disk location
-	/// `destination`, creating parent directories as needed. Called
-	/// only when the disk file is missing — never overwrites an
-	/// existing file. Silently no-ops if no bundled copy is on the
-	/// classpath; the caller will then surface a "template not found"
-	/// error.
-	///
-	/// Uses the **thread context classloader** rather than this class's
-	/// own loader: the framework JAR (where this class lives) is
-	/// bundled inside each WAR, but `WEB-INF/classes/_templates/` is
-	/// owned by the WAR-level WebappClassLoader. The context loader is
-	/// the WAR's loader at SIP-container request time, so it can see
-	/// both `WEB-INF/classes/` and `WEB-INF/lib/*.jar`. Falls back to
-	/// `getClass().getClassLoader()` when no context loader is set
-	/// (e.g. a static unit test).
-	///
-	/// Logs at INFO on successful bootstrap (one line per template
-	/// per JVM lifetime, since the result is cached in
-	/// `cachedTemplate` thereafter), at FINE when no bundled copy
-	/// exists, and at WARNING on I/O failure.
-	///
-	/// @param filename     bare filename, e.g. `screening.txt`
-	/// @param destination  absolute path under
-	///                     `./config/custom/vorpal/_templates/`
-	private void materializeBundledTemplate(String filename, Path destination) {
-		Logger sipLogger = SettingsManager.getSipLogger();
-		String resourcePath = "_templates/" + filename;
-		ClassLoader cl = Thread.currentThread().getContextClassLoader();
-		if (cl == null) cl = getClass().getClassLoader();
-		try (java.io.InputStream in = cl.getResourceAsStream(resourcePath)) {
-			if (in == null) {
-				if (sipLogger != null && sipLogger.isLoggable(Level.FINE)) {
-					sipLogger.fine("RestConnector[" + id + "] no bundled template at classpath:" + resourcePath);
-				}
-				return;
-			}
-			Files.createDirectories(destination.getParent());
-			Files.copy(in, destination);
-			if (sipLogger != null) {
-				sipLogger.info("RestConnector[" + id + "] bootstrapped template from WAR: "
-						+ destination + " (source: classpath:" + resourcePath + ")");
-			}
-		} catch (IOException e) {
-			if (sipLogger != null) {
-				sipLogger.warning("RestConnector[" + id + "] failed to materialize bundled template "
-						+ resourcePath + " to " + destination + ": " + e.getMessage());
-			}
-		}
+	/// A header value cannot contain a line break; one from the call is folded
+	/// to a space rather than failing the request.
+	static String stripLineBreaks(String value) {
+		return value.replaceAll("[\\r\\n]+", " ");
 	}
 
-	/// HTTP-message-style render of the outbound request for FINEST logs.
-	/// Includes Authorization / api-key headers verbatim — FINEST is a
-	/// debug-only level, so operators opting in have accepted that.
-	private static String formatHttpRequest(String connectorId, String method,
+	/// A JSON body is one whose template declares a JSON `Content-Type`, or
+	/// declares none and starts with `{` or `[`.
+	static boolean isJson(Map<String, String> headers, String bodyTemplate) {
+		for (Map.Entry<String, String> h : headers.entrySet()) {
+			if ("content-type".equalsIgnoreCase(h.getKey())) {
+				return h.getValue().toLowerCase(Locale.ROOT).contains("json");
+			}
+		}
+		return bodyTemplate.startsWith("{") || bodyTemplate.startsWith("[");
+	}
+
+	/// Resolves a JSON body template, escaping each value that lands inside a
+	/// JSON string. Values come from the call, and a display name holding
+	/// `", "admin": true, "x": "` would otherwise close the string and add a
+	/// field. A placeholder outside a string, such as `"strategy": ${strategy}`
+	/// or a pre-built object like `${sipJson}`, is inserted as written: the
+	/// template author put it there to be JSON, so it must only ever hold
+	/// values the configuration or the application built, not raw caller text.
+	static String resolveJson(String template, Context ctx) {
+		Set<Integer> inString = placeholdersInStrings(template);
+		JsonStringEncoder encoder = JsonStringEncoder.getInstance();
+		return ctx.resolve(template,
+				(offset, value) -> inString.contains(offset) ? new String(encoder.quoteAsString(value)) : value);
+	}
+
+	/// Offsets of every `${` that falls inside a JSON string literal.
+	private static Set<Integer> placeholdersInStrings(String template) {
+		Set<Integer> offsets = new HashSet<>();
+		boolean inString = false;
+		for (int i = 0; i < template.length(); i++) {
+			char c = template.charAt(i);
+			if (inString && c == '\\') {
+				i++;
+			} else if (c == '"') {
+				inString = !inString;
+			} else if (inString && c == '$' && i + 1 < template.length() && template.charAt(i + 1) == '{') {
+				offsets.add(i);
+			}
+		}
+		return offsets;
+	}
+
+	/// HTTP-message-style render of the outbound request for FINEST logs, with
+	/// credential headers masked. Log files are read by the logs app and by
+	/// anyone with file access, and a live bearer token, API key or signature in
+	/// them is as good as the credential itself.
+	private String formatHttpRequest(String connectorId, String method,
 			String resolvedUrl, HttpRequest httpReq, String body) {
 		StringBuilder sb = new StringBuilder();
 		sb.append("RestConnector[").append(connectorId).append("] HTTP request:\n");
 		sb.append(method).append(' ').append(resolvedUrl).append('\n');
 		httpReq.headers().map().forEach((k, vs) -> {
-			for (String v : vs) sb.append(k).append(": ").append(v).append('\n');
+			for (String v : vs) {
+				sb.append(k).append(": ").append(isCredentialHeader(k, authentication) ? "********" : v).append('\n');
+			}
 		});
 		sb.append('\n');
 		if (body != null) sb.append(body);
 		return sb.toString();
+	}
+
+	/// A header that carries a credential: the one an API-key or HMAC scheme
+	/// stamps, or any whose name says authorization, key, token, secret or
+	/// signature (`Authorization`, `X-API-Key`, `X-Amz-Security-Token`, ...).
+	static boolean isCredentialHeader(String name, Authentication authentication) {
+		if (name == null) {
+			return false;
+		}
+		String lower = name.toLowerCase(java.util.Locale.ROOT);
+		if (lower.contains("auth") || lower.contains("key") || lower.contains("token")
+				|| lower.contains("secret") || lower.contains("signature") || lower.contains("cookie")) {
+			return true;
+		}
+		String schemeHeader = null;
+		if (authentication instanceof org.vorpal.blade.framework.v3.configuration.auth.ApiKeyAuthentication) {
+			schemeHeader = ((org.vorpal.blade.framework.v3.configuration.auth.ApiKeyAuthentication) authentication).getHeader();
+		} else if (authentication instanceof org.vorpal.blade.framework.v3.configuration.auth.HmacAuthentication) {
+			schemeHeader = ((org.vorpal.blade.framework.v3.configuration.auth.HmacAuthentication) authentication).getHeader();
+		}
+		return schemeHeader != null && schemeHeader.equalsIgnoreCase(name);
 	}
 
 	private static String formatHttpResponse(String connectorId, HttpResponse<String> httpResp) {

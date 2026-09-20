@@ -11,6 +11,8 @@ import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
 
+import org.vorpal.blade.framework.v2.config.FormLayout;
+
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
@@ -57,6 +59,7 @@ public class TlsClientConfig implements Serializable {
 	}
 
 	@JsonPropertyDescription("Password for the truststore.")
+	@FormLayout(password = true)
 	public String getTrustStorePassword() {
 		return trustStorePassword;
 	}
@@ -84,6 +87,7 @@ public class TlsClientConfig implements Serializable {
 	}
 
 	@JsonPropertyDescription("Password for the client keystore (also used for its private-key entries).")
+	@FormLayout(password = true)
 	public String getKeyStorePassword() {
 		return keyStorePassword;
 	}

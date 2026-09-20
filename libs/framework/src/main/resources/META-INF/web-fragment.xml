@@ -38,5 +38,33 @@
         <url-pattern>/*</url-pattern>
     </filter-mapping>
 
+    <!-- Cross-site request forgery defence: refuses a state-changing request,
+         or a WebSocket upgrade, that a browser sends from a page on another
+         site. Same-site pages, the origins in blade.cors.allowedOrigins, and
+         clients that send no Origin or Referer (scripts, SIP-side tools) pass.
+         Mapped after CorsFilter so a permitted preflight is answered first. -->
+    <filter>
+        <filter-name>BladeSameOriginFilter</filter-name>
+        <filter-class>org.vorpal.blade.framework.cors.SameOriginFilter</filter-class>
+        <async-supported>true</async-supported>
+    </filter>
+    <filter-mapping>
+        <filter-name>BladeSameOriginFilter</filter-name>
+        <url-pattern>/*</url-pattern>
+    </filter-mapping>
+
+    <!-- The Monitor role is read-only: a user holding Monitor and none of
+         Admin, Operator or Deployer cannot send a state-changing request to
+         any BLADE web app. -->
+    <filter>
+        <filter-name>BladeMonitorReadOnlyFilter</filter-name>
+        <filter-class>org.vorpal.blade.framework.v3.security.MonitorReadOnlyFilter</filter-class>
+        <async-supported>true</async-supported>
+    </filter>
+    <filter-mapping>
+        <filter-name>BladeMonitorReadOnlyFilter</filter-name>
+        <url-pattern>/*</url-pattern>
+    </filter-mapping>
+
     <distributable/>
 </web-fragment>

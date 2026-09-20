@@ -46,11 +46,14 @@ public final class MemoryContextSmokeTest {
 	}
 
 	private static void testWriteTimeResolution() {
-		// put() resolves ${var} before storing, matching base Context.put semantics.
+		// put() stores as given, matching base Context.put; a configuration
+		// template is resolved by its caller before it is stored.
 		MemoryContext ctx = new MemoryContext();
 		ctx.put("domain", "example.com");
-		ctx.put("contact", "sip:fraud@${domain}");
-		check("write-time resolution", "sip:fraud@example.com".equals(ctx.get("contact")));
+		ctx.put("raw", "sip:fraud@${domain}");
+		check("write-time: stored as given", "sip:fraud@${domain}".equals(ctx.get("raw")));
+		ctx.put("contact", ctx.resolve("sip:fraud@${domain}"));
+		check("write-time resolution by caller", "sip:fraud@example.com".equals(ctx.get("contact")));
 	}
 
 	private static void testReservedVars() {
@@ -73,13 +76,12 @@ public final class MemoryContextSmokeTest {
 
 	private static void testIterativeResolution() {
 		MemoryContext ctx = new MemoryContext();
-		// put resolves at write time against then-current state: 'b' isn't set
-		// yet, so 'a' is stored as the literal "${b}" (not "deep").
+		// Stored values are data, never templates: put keeps "${b}" as given,
+		// and resolve replaces ${a} once without rescanning what it inserted.
 		ctx.put("a", "${b}");
 		ctx.put("b", "deep");
-		check("write-time: a stays literal (b was unset)", "${b}".equals(ctx.get("a")));
-		// At read time, resolve() iterates: ${a} -> ${b} -> deep.
-		check("read-time iterative resolve", "deep".equals(ctx.resolve("${a}")));
+		check("write-time: a stored as given", "${b}".equals(ctx.get("a")));
+		check("read-time: inserted text is not rescanned", "${b}".equals(ctx.resolve("${a}")));
 	}
 
 	private static void testSnapshot() {

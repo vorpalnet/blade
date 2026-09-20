@@ -98,8 +98,10 @@ public class TableConnector extends Connector implements Serializable {
 									+ table.getKeyExpression() + "=" + resolvedKey
 									+ " → " + stamped);
 				}
+				// Extras are configuration, so they are templates: resolve each
+				// before storing. In order, so a later extra can use an earlier one.
 				for (Map.Entry<String, String> e : match.getExtras().entrySet()) {
-					ctx.put(e.getKey(), e.getValue());
+					ctx.put(e.getKey(), ctx.resolve(e.getValue()));
 				}
 				return CompletableFuture.completedFuture(null);
 			}

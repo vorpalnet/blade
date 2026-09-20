@@ -3,7 +3,7 @@
 ///
 /// Every selector is polymorphic via a `type` discriminator
 /// ([org.vorpal.blade.framework.v3.configuration.selectors.Selector]
-/// is the abstract base). Five concrete subtypes cover the common
+/// is the abstract base). Seven concrete subtypes cover the common
 /// extraction techniques:
 ///
 /// | `type` | Class | Source format |
@@ -13,6 +13,8 @@
 /// | `json`      | [org.vorpal.blade.framework.v3.configuration.selectors.JsonSelector]      | JsonPath against a JSON response body |
 /// | `xml`       | [org.vorpal.blade.framework.v3.configuration.selectors.XmlSelector]       | XPath against an XML payload; optional namespace map |
 /// | `sdp`       | [org.vorpal.blade.framework.v3.configuration.selectors.SdpSelector]       | SDP field-code lookup |
+/// | `table`     | [org.vorpal.blade.framework.v3.configuration.selectors.TableSelector]     | Translation-table lookup over values already extracted |
+/// | `identity`  | [org.vorpal.blade.framework.v3.configuration.selectors.IdentitySelector]  | STIR/SHAKEN PASSporT claims from the `Identity` header |
 ///
 /// Selectors are peers — none extends another. Chaining one selector's
 /// output into another's input is supported by reading from the session

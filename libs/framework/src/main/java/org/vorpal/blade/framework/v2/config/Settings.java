@@ -32,6 +32,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.List;
 
 import org.vorpal.blade.framework.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.analytics.Analytics;
@@ -41,9 +42,16 @@ import org.vorpal.blade.framework.v2.logging.LogParameters;
 import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
+import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.BeanDescription;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationConfig;
+import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.fasterxml.jackson.databind.ser.BeanPropertyWriter;
+import com.fasterxml.jackson.databind.ser.BeanSerializerModifier;
 import com.fasterxml.jackson.databind.node.NullNode;
 
 /**
@@ -217,16 +225,77 @@ public class Settings<T> implements SettingsMXBean {
 		return line;
 	}
 
+	/// The running configuration as JSON, with every credential masked.
+	///
+	/// The in-memory config holds credentials decrypted, and this attribute is
+	/// read over JMX and served by the portal's config view to every admin role,
+	/// Monitor included. So any property marked `@FormLayout(password = true)`,
+	/// the same mark that masks the field in the Configurator, is written as
+	/// `********`. Code that needs a real credential reads the settings object in
+	/// process, never this string, and nothing may write this string back to a
+	/// config file: a masked credential saved to disk replaces the real one.
 	@Override
 	public String getCurrentJson() {
 		if (config == null) {
 			return null;
 		}
 		try {
-			return objectMapper.writeValueAsString(config);
+			return maskingMapper().writeValueAsString(config);
 		} catch (JsonProcessingException e) {
 			sipLogger.severe(e);
 			return null;
+		}
+	}
+
+	/// Written in place of a credential in [#getCurrentJson].
+	public static final String MASK = "********";
+
+	private transient ObjectMapper maskingMapper;
+
+	private synchronized ObjectMapper maskingMapper() {
+		if (maskingMapper == null) {
+			maskingMapper = masking(objectMapper);
+		}
+		return maskingMapper;
+	}
+
+	/// A copy of `base` that writes password-marked properties as [#MASK].
+	static ObjectMapper masking(ObjectMapper base) {
+		ObjectMapper copy = base.copy();
+		copy.registerModule(new SimpleModule().setSerializerModifier(new BeanSerializerModifier() {
+			private static final long serialVersionUID = 1L;
+
+			@Override
+			public List<BeanPropertyWriter> changeProperties(SerializationConfig config, BeanDescription bean,
+					List<BeanPropertyWriter> properties) {
+				for (int i = 0; i < properties.size(); i++) {
+					FormLayout layout = properties.get(i).getAnnotation(FormLayout.class);
+					if (layout != null && layout.password()) {
+						properties.set(i, new MaskedPropertyWriter(properties.get(i)));
+					}
+				}
+				return properties;
+			}
+		}));
+		return copy;
+	}
+
+	/// Writes a non-null credential as [#MASK]; a null one is left to the base
+	/// writer, so an unset credential still reads as unset.
+	private static final class MaskedPropertyWriter extends BeanPropertyWriter {
+		private static final long serialVersionUID = 1L;
+
+		MaskedPropertyWriter(BeanPropertyWriter base) {
+			super(base);
+		}
+
+		@Override
+		public void serializeAsField(Object bean, JsonGenerator gen, SerializerProvider prov) throws Exception {
+			if (get(bean) == null) {
+				super.serializeAsField(bean, gen, prov);
+				return;
+			}
+			gen.writeStringField(getName(), MASK);
 		}
 	}
 
