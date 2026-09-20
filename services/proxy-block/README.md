@@ -75,6 +75,23 @@ Oracle reports the columns as `LISTED` and `TREATMENT`; on MySQL or PostgreSQL u
 
 Every decision is an analytics event: `callRouted` when the call passes or is forwarded to the challenge, the review mailbox or the tarpit, `callDeclined` when it is declined. The sample defines both with the caller, the dialed number and the `X-Call-Screen` verdict. Set `analytics.enabled` to `true` and each call puts one event on the BLADE event bus, where the analytics service stores it and any other subscriber can count blocks by reason.
 
+## Feeding the call risk score
+
+`X-Call-Screen` is not only for people. On a call this app passes downstream, the header is the
+SIP-layer read a fraud risk score wants: a screening app has already checked the caller against the
+same signals (spoofed own number, invalid number, carrier verification, anonymity, call rate) that
+a downstream signaling probe would otherwise re-derive. A media-tier consumer that fuses signals
+(acoustic, provenance, signaling, behaviour) reads this verdict as its signaling input instead of
+re-deriving it, so the two are not double-counted and the earlier, richer read wins:
+
+- `clear` lowers signaling concern (a trusted edge looked and found nothing);
+- `watch` raises it a little;
+- a blocking verdict that still arrived reads as strong.
+
+The consumer honours the header only from a trusted BLADE hop (see `blade.trustedPeers`), never
+from a caller, so the verdict cannot be forged from outside. Nothing extra to configure here: the
+header this app already stamps is the contract.
+
 ## Deploying
 
 Build and deploy it like any other SIP service. The WAR is `proxy-block.war`, its context root is `proxy-block`, and its SIP application name is `block`, which is the name an FSMAR `next` must use. On first deploy the sample lands in `_samples/proxy-block.json.SAMPLE`. Copy it to a live config in the Configurator, then replace the sample numbers, your own numbers, and the challenge IVR's URI.
