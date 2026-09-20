@@ -88,6 +88,18 @@ public class Queue {
 												+ callflows.size() + ", callflow=" + callflow);
 							}
 
+							if (callflow != null
+									&& QueueCallflow.QueueState.CANCELED == callflow.getState()) {
+								// A caller who hung up while waiting is still in the deque.
+								// Drop it without a drain slot, so a flood of INVITE+CANCEL
+								// cannot starve callers who are still on the line.
+								if (sipLogger.isLoggable(Level.FINER)) {
+									sipLogger.finer(callflow.aliceRequest,
+											"Queue.initialize - queueTask, discarding CANCELED callflow");
+								}
+								continue;
+							}
+
 							if (callflow != null) {
 								if (sipLogger.isLoggable(Level.FINER)) {
 									sipLogger.finer(callflow.aliceRequest,

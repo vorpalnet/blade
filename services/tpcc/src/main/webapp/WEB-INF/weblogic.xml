@@ -13,12 +13,18 @@
 	</wls:session-descriptor>
 
 
-	<!-- Any defined user (aka 'weblogic') can invoke the REST APIs. -->
-	<!-- 
+	<!-- authenticated-users is any user in the realm; the write roles map to realm groups of the same name. -->
 	<wls:security-role-assignment>
 		<wls:role-name>authenticated-users</wls:role-name>
 		<wls:principal-name>users</wls:principal-name>
 	</wls:security-role-assignment>
-    -->
+	<wls:security-role-assignment>
+		<wls:role-name>Admin</wls:role-name>
+		<wls:externally-defined/>
+	</wls:security-role-assignment>
+	<wls:security-role-assignment>
+		<wls:role-name>Operator</wls:role-name>
+		<wls:externally-defined/>
+	</wls:security-role-assignment>
 
 </wls:weblogic-web-app>

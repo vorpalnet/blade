@@ -251,6 +251,18 @@ public class SignalEndpoint {
 			return;
 		}
 
+		// Only the browser the call belongs to may act on it. The id is all an event names, so
+		// without this any signed-in browser that learned another call's id could answer it (and
+		// take its audio), hang it up or send it DTMF. A call that is not this browser's reads
+		// exactly like one that does not exist.
+		String sender = BrowserRegistry.addressOf(session);
+		if (!sender.equals(app.getAttribute(BrowserSignals.BROWSER_AOR))) {
+			log().warning("webrtc: " + sender + " sent " + event.getType() + " for call " + callId
+					+ " owned by " + app.getAttribute(BrowserSignals.BROWSER_AOR) + "; refused");
+			send(session, SignalProtocol.reason(SignalProtocol.CALL_ENDED, callId, "no such call"));
+			return;
+		}
+
 		// Stamp the sender, so a continuation never has to trust an event's own claim about who
 		// sent it — the socket it arrived on is the authority.
 		if (event.getData() != null && event.getData().isObject()) {

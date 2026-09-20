@@ -23,6 +23,7 @@ import org.vorpal.blade.framework.v2.config.Translation;
 import org.vorpal.blade.framework.v2.transfer.AttendedTransfer;
 import org.vorpal.blade.framework.v2.transfer.BlindTransfer;
 import org.vorpal.blade.framework.v2.transfer.ConferenceTransfer;
+import org.vorpal.blade.framework.v2.transfer.Transfer;
 import org.vorpal.blade.framework.v2.transfer.TransferInitialInvite;
 import org.vorpal.blade.framework.v2.transfer.TransferListener;
 import org.vorpal.blade.framework.v2.transfer.TransferSettings;
@@ -107,6 +108,12 @@ public class TransferServlet extends B2buaServlet
 			break;
 
 		case "REFER":
+			if (!Transfer.isFromCalleeLeg(request) && !Boolean.TRUE.equals(settings.getAllowCallerRefer())) {
+				sipLogger.warning(request, "TransferServlet.chooseCallflow - REFER from the caller's leg refused;"
+						+ " set allowCallerRefer to permit it. Refer-To: " + request.getHeader("Refer-To"));
+				return new CallflowResponseCode(403, "Forbidden");
+			}
+
 			if (request.getApplicationSession().getAttribute("INITIAL_REFER") == null) {
 				request.getApplicationSession().setAttribute("INITIAL_REFER", request);
 			}

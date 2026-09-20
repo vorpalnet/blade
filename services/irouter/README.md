@@ -39,9 +39,9 @@ All six connector types are polymorphic via `"type"`. The Configurator dropdown 
 | `rest` | HTTP/REST API call | `url`, `method`, `authentication`, `bodyTemplate`, `selectors` |
 | `jdbc` | SQL query against a WebLogic DataSource | `dataSource`, `queryTemplate`, `selectors` |
 | `ldap` | LDAP directory lookup | `ldapUrl`, `bindDn`, `bindPassword`, `searchTemplate`, `selectors` |
-| `map` | In-memory static key→value map | `keyExpression`, `entries`, `selectors` |
+| `rate` | Calls per key over a sliding window, counted on each node | `keyExpression`, `variable`, `windowSeconds`, `maxKeys` |
 
-Each connector (except `table`) carries a list of `Selector`s that extract values from whatever payload the connector produced and write them into the Context. Selector subtypes — `attribute`, `regex`, `json`, `xml`, `sdp` — cover the common extraction techniques.
+Each connector (except `table` and `rate`) carries a list of `Selector`s that extract values from whatever payload the connector produced and write them into the Context. Selector subtypes (`attribute`, `regex`, `json`, `xml`, `sdp`, `table`, `identity`) cover the common extraction techniques; `identity` decodes a STIR/SHAKEN PASSporT from the `Identity` header.
 
 #### SIP pseudo-attributes
 
@@ -330,6 +330,10 @@ For the "always stamp this header" case, use the plain `headers` map — it stay
 
 Each entry has three fields: `name` (the header), `value` (the template to stamp, `${var}`-resolvable), `when` (a boolean expression). Same grammar as `ConditionalRouting` clauses. If the expression parses cleanly and evaluates true, the header is stamped. Otherwise it's skipped — silently and without error.
 
+## Decision events
+
+Each decision publishes an analytics event after the route's headers are stamped: `callRouted` for a forward, `callDeclined` for a direct response of 400 or above, `callResponded` for one below 400. Define the event under `analytics.events` with attribute selectors for the headers you want recorded, and set `analytics.enabled`. With analytics off nothing is created, unless logging is at the analytics level.
+
 ## Boolean expressions
 
 `ConditionalRouting` clauses and `ConditionalHeader.when` fields both evaluate a small, safe boolean expression language against the routing Context. It's intentionally constrained — variable lookups, literal values, comparisons, and boolean combinators. No method invocation, no scripting, no arbitrary code execution from config files.
@@ -398,14 +402,11 @@ The grammar can only evaluate — never invoke. There's no syntax for calling Ja
 
 ## Template files
 
-REST bodies, SQL queries, and LDAP search templates live as plain text files under `<domain>/config/custom/vorpal/_templates/`. All three formats support:
-
-- **`${var}` substitution** against the session Context (env vars, system properties, and earlier pipeline output).
-- **`#` comments** — any line whose first non-whitespace character is `#` is stripped at load time, before substitution, so commented `${…}` placeholders can't accidentally leak.
+REST bodies, SQL queries, and LDAP search templates live as plain text files under `<domain>/config/custom/vorpal/_templates/`. All three support `${var}` against the session Context (env vars, system properties, and earlier pipeline output). REST templates also take `#` comments: a line whose first non-whitespace character is `#` is stripped at load time, before substitution, so a commented `${…}` placeholder can't leak. SQL uses its own `--` comments; LDAP templates have none.
 
 ### REST (HTTP-message format)
 
-Headers above a blank line, body below:
+Headers above a blank line, body below. The two are split before anything is resolved. In a JSON body (a JSON `Content-Type`, or none and a body starting with `{` or `[`), a value that lands inside a string is JSON-escaped, so a caller's quote cannot close the string and add a field. A placeholder outside a string, such as `"strategy": ${strategy}`, is inserted as written, for values that are already JSON; never put caller text there. Line breaks in a header value are folded to spaces. The URL is not encoded, so build it from configuration values.
 
 ```
 # Bearer authentication is handled by authentication.type; no Authorization header here.
@@ -423,7 +424,7 @@ X-Request-ID: ${uuid}
 
 ### JDBC
 
-Plain SQL. Compute derived fields in SQL rather than in selectors:
+Plain SQL. Each `${var}` is bound as a query parameter, never pasted into the text, so a caller cannot rewrite the query from a SIP header. A placeholder can stand wherever a value can, bare or as a whole quoted literal (`'${destNum}'`), but not inside a longer literal: write `LIKE '%' || ${name} || '%'`, not `LIKE '%${name}%'`. Compute derived fields in SQL rather than in selectors:
 
 ```sql
 -- _templates/office-hours.sql
@@ -442,18 +443,21 @@ LIMIT 1;
 
 ### LDAP
 
-Search parameters above a blank line, filter below:
+Search parameters above a blank line, filter below. Each `${var}` in the filter is passed as an escaped filter argument, so a value such as `*)(objectClass=*` matches literally instead of widening the search:
 
 ```
-# _templates/caller-permission.ldap
-base=OU=Users,DC=corp,DC=example,DC=com
-filter=(&(telephoneNumber=${pai})(memberOf=CN=VoipOutbound,OU=Groups,DC=corp,DC=example,DC=com))
-attributes=callPermission,department
+base: OU=Users,DC=corp,DC=example,DC=com
+scope: SUBTREE
+attributes: callPermission,department
+
+(&(telephoneNumber=${pai})(memberOf=CN=VoipOutbound,OU=Groups,DC=corp,DC=example,DC=com))
 ```
 
 ## Reserved template variables
 
 Every `${var}` expression is resolved against the session Context. If the name isn't a session attribute, the fallback chain is: environment variable → system property → reserved meta-variable → literal `${name}` left in place.
+
+Only templates in the configuration are resolved. A value taken from the call, such as a header a selector stored or a field of a REST response, is data: a `${...}` inside it stays literal, and substituting it into a template does not resolve it again. Without that rule, a caller could put `${SCREENING_API_KEY}` in a From display name and read the key back.
 
 Reserved meta-variables (always win over same-named session/env values):
 

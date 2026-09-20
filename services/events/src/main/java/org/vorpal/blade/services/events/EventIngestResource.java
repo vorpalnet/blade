@@ -48,6 +48,15 @@ public class EventIngestResource {
 	private static final Logger logger = Logger.getLogger(EventIngestResource.class.getName());
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
+	/// Prefix of every framework-emitted event type ([org.vorpal.blade.framework.v3.events.BladeEventTypes]);
+	/// refused over HTTP so a client cannot forge one.
+	static final String RESERVED_TYPE_PREFIX = "org.vorpal.blade.";
+
+	/// True for a framework-emitted type, refused at HTTP ingest.
+	static boolean isReservedType(String type) {
+		return type != null && type.startsWith(RESERVED_TYPE_PREFIX);
+	}
+
 	/// Holds the compiled schemas. JAX-RS creates the resource per request by
 	/// default, but the compiled set is keyed on the catalog instance, so a
 	/// longer-lived resource simply reuses it. See [EventValidator].
@@ -84,6 +93,16 @@ public class EventIngestResource {
 
 		if (event.getType() == null || event.getType().isEmpty()) {
 			return error(Response.Status.BAD_REQUEST, "CloudEvent 'type' is required");
+		}
+
+		// The framework's own event types all begin org.vorpal.blade. — call,
+		// session and access facts other apps trust, the audit trail among them.
+		// An HTTP client must not forge one (e.g. an access.permitted record that
+		// never happened). BLADE code publishes these straight to the bus, never
+		// through this endpoint, so refusing the prefix here costs nothing.
+		if (isReservedType(event.getType())) {
+			return error(Response.Status.FORBIDDEN,
+					"event type '" + event.getType() + "' is reserved for the framework");
 		}
 
 		EventType declaration = (catalog == null) ? null : catalog.findType(event.getType());
