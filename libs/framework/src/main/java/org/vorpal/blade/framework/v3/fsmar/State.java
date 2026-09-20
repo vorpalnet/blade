@@ -95,8 +95,12 @@ public class State implements Serializable {
 		return triggers;
 	}
 
+	/// Null-coerced like [#setSelectors]: `"triggers": null` in a hand-edited
+	/// config used to deserialize to a null map, pass validation, and then throw
+	/// on the first request routed to this state — a 500 per call for the life
+	/// of that configuration.
 	public void setTriggers(HashMap<String, Trigger> triggers) {
-		this.triggers = triggers;
+		this.triggers = (triggers != null) ? triggers : new HashMap<>();
 	}
 
 	/// Gets or creates a trigger for the given SIP method.

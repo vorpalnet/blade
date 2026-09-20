@@ -23,8 +23,12 @@ public class Trigger implements Serializable {
 		return transitions;
 	}
 
+	/// Null-coerced: `"transitions": null` would otherwise deserialize to a null
+	/// list and throw when the router evaluates this trigger. An EMPTY list is a
+	/// different, meaningful thing (an implicit match that routes the request
+	/// downstream) and is preserved as written.
 	public void setTransitions(ArrayList<Transition> transitions) {
-		this.transitions = transitions;
+		this.transitions = (transitions != null) ? transitions : new ArrayList<>();
 	}
 
 	/// Creates a new transition targeting the given application and adds it to this trigger.
