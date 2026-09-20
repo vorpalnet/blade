@@ -19,6 +19,8 @@
 	<add as="group" action="group" icon="svg/object-group.svg"/>
 	<add as="ungroup" action="ungroup" icon="svg/object-ungroup.svg"/>
 	<add as="autoLayout" action="autoLayout" icon="svg/auto-layout.svg"/>
+	<!-- Redraw arrows: re-route transitions, every box stays put. -->
+	<add as="redrawEdges" action="redrawEdges" icon="svg/redraw-edges.svg"/>
 
 	<br/><hr/>
 	<add as="Gateway" template="gateway" style="gateway" icon="svg/cloud.svg"/>

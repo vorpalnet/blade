@@ -443,7 +443,8 @@ window.flowTasks = (function() {
 		'json':      'Attribute (JsonPath, e.g. $.callDirection)',
 		'xml':       'Attribute (XPath)',
 		'sdp':       'Attribute (SDP field code)',
-		'table':     ''  // TableSelector hides attribute — key lives on the table
+		'table':     '',  // TableSelector hides attribute — key lives on the table
+		'identity':  'Attribute (header holding the PASSporT, normally Identity)'
 	};
 
 	// ----- table selector editor ----------------------------------------------

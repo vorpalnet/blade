@@ -237,6 +237,21 @@
 		}
 
 		
+		// Re-fit on resize. The canvas is a fixed pane inside the page, so a
+		// window that changes size (or a panel that opens) otherwise leaves the
+		// diagram half off-screen. Debounced: a drag-resize fires continuously.
+		if (editor != null) {
+			var refitTimer = null;
+			mxEvent.addListener(window, 'resize', function() {
+				window.clearTimeout(refitTimer);
+				refitTimer = window.setTimeout(function() {
+					if (window.flowFsmar && window.flowFsmar.fitView) {
+						window.flowFsmar.fitView(editor);
+					}
+				}, 150);
+			});
+		}
+
 		console.log('mxClient.basePath: ' + mxClient.basePath);
 		
 		

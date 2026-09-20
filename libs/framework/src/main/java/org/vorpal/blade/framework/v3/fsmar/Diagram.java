@@ -12,8 +12,10 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// entirely; deleting it costs nothing but the saved layout (the editor
 /// auto-lays-out whatever has no stored placement).
 ///
-/// - [#getStates]: position per vertex, keyed by state name (includes
-///   `"null"`, the default ingress, and every ingress state).
+/// - [#getStates]: position per vertex, keyed by state name. **Legacy.** The
+///   editor lays a config out on open, so a stored grid never reaches the
+///   canvas; it no longer writes this, and a save drops whatever an older file
+///   carried. Still read, so those files open without complaint.
 /// - [#getIngresses]: which states are ingress entry points and each one's
 ///   source-match. An ingress is a real FSMAR state (its own selectors and
 ///   transitions); the `"null"` state is the implicit default ingress
@@ -35,7 +37,7 @@ public class Diagram implements Serializable {
 	private HashMap<String, Ingress> ingresses;
 	private HashMap<String, Egress> egresses;
 
-	@JsonPropertyDescription("Position per vertex, keyed by state name (includes 'null' and ingress states)")
+	@JsonPropertyDescription("Legacy vertex positions, keyed by state name. The editor lays out on open and no longer writes these; a save drops them.")
 	public HashMap<String, Placement> getStates() {
 		return states;
 	}

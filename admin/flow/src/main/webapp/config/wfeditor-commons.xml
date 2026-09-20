@@ -96,7 +96,9 @@
 			state.className = 'task';
 			state.style.display = 'none';
 			div.appendChild(state);
-			$('#State').load('./state.html #state-view');
+			$('#State').load('./state.html #state-view', function() {
+				if (window.flowUtils) window.flowUtils.foldHintsIntoTips(this);
+			});
 
 			// Gateway properties panel (same template as State). #Ingress and
 			// #Egress remain for legacy saved-XML diagrams.
@@ -105,21 +107,27 @@
 			gateway.className = 'task';
 			gateway.style.display = 'none';
 			div.appendChild(gateway);
-			$('#Gateway').load('./state.html #state-view');
+			$('#Gateway').load('./state.html #state-view', function() {
+				if (window.flowUtils) window.flowUtils.foldHintsIntoTips(this);
+			});
 
 			var ingress = document.createElement('div');
 			ingress.id = 'Ingress';
 			ingress.className = 'task';
 			ingress.style.display = 'none';
 			div.appendChild(ingress);
-			$('#Ingress').load('./state.html #state-view');
+			$('#Ingress').load('./state.html #state-view', function() {
+				if (window.flowUtils) window.flowUtils.foldHintsIntoTips(this);
+			});
 
 			var egress = document.createElement('div');
 			egress.id = 'Egress';
 			egress.className = 'task';
 			egress.style.display = 'none';
 			div.appendChild(egress);
-			$('#Egress').load('./state.html #state-view');
+			$('#Egress').load('./state.html #state-view', function() {
+				if (window.flowUtils) window.flowUtils.foldHintsIntoTips(this);
+			});
 
 			// Transition properties panel
 			var transition = document.createElement('div');
@@ -127,7 +135,9 @@
 			transition.className = 'task';
 			transition.style.display = 'none';
 			div.appendChild(transition);
-			$('#Transition').load('./transition.html #transition-view');
+			$('#Transition').load('./transition.html #transition-view', function() {
+				if (window.flowUtils) window.flowUtils.foldHintsIntoTips(this);
+			});
 
 			// Global config panel (FlowModel root)
 			var config = document.createElement('div');
@@ -135,7 +145,34 @@
 			config.className = 'task';
 			config.style.display = 'none';
 			div.appendChild(config);
-			$('#FlowModel').load('./config.html #config-view');
+			$('#FlowModel').load('./config.html #config-view', function() {
+				if (window.flowUtils) window.flowUtils.foldHintsIntoTips(this);
+			});
+		}
+	]]></add>
+
+	<add as="fitTasksWindow"><![CDATA[
+		function (div)
+		{
+			// The panels differ in height — State carries selectors and plans,
+			// Transition a couple of fields — and mxWindow keeps whatever height
+			// it was built with, so the taller panel used to lose its last row
+			// off the bottom edge. Size the window to the panel each time, and
+			// only scroll when the panel is taller than the screen allows.
+			if (this.tasks == null || this.tasks.div == null || div == null) {
+				return;
+			}
+			var wnd = this.tasks;
+			var titleHeight = (wnd.title != null) ? wnd.title.offsetHeight : 22;
+			// The +14 is breathing room: sized to the exact content height, the
+			// last control sits flush against the window's bottom edge and
+			// reads as cut off even when all of it is there.
+			var chrome = titleHeight + wnd.contentHeightCorrection + 14;
+			var natural = div.scrollHeight + chrome;
+			var room = window.innerHeight - wnd.div.offsetTop - 24;
+			var height = Math.min(natural, Math.max(160, room));
+			wnd.setSize(wnd.div.offsetWidth, height);
+			wnd.setScrollable(height < natural);
 		}
 	]]></add>
 
@@ -171,9 +208,17 @@
 				this.tasks.setTitle(title);
 				$('#'+title).css('display','block');
 
+				// Selector fieldsets are rebuilt per selection, so their hints
+				// arrive after the panel's own load callback ran.
+				if (window.flowUtils) {
+					window.flowUtils.foldHintsIntoTips(document.getElementById(title));
+				}
+
 				if (typeof window.flowTasks !== 'undefined' && window.flowTasks.loadFromCell) {
 					window.flowTasks.loadFromCell(window.flowSelectedCell);
 				}
+
+				this.fitTasksWindow(div);
 			}
 		}
 	]]></add>
@@ -185,11 +230,15 @@
 
 			if (this.tasks == null) {
 				var div = document.createElement('div');
-				div.style.padding = '8px';
+				div.style.padding = '6px';
 
+				// 260, not 300: the root panel is two fields and a line of
+				// prose now, and the State and Transition panels that share
+				// this window are input rows rather than reading. Every pixel
+				// here is taken off the canvas, which is the subject.
 				var w = document.body.clientWidth;
 				var wnd = new mxWindow(mxResources.get(this.tasksResource)
-						|| this.tasksResource, div, w - 320, this.tasksTop, 300);
+						|| this.tasksResource, div, w - 280, this.tasksTop, 260);
 				wnd.setClosable(true);
 				wnd.destroyOnClose = false;
 
@@ -211,6 +260,7 @@
 			}
 
 			this.tasks.setVisible(true);
+			this.fitTasksWindow(this.tasks.content);
 		}
 	]]></add>
 

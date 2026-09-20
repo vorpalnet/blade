@@ -343,31 +343,20 @@ window.flowFsmar = (function() {
 	// right, ingress through states to egress, so a bare config still renders as
 	// a readable callflow.
 	function importFsmar3Text(editor, json, onDone) {
-		var hadDiagram = false;
-		try {
-			var parsed = JSON.parse(json);
-			hadDiagram = !!(parsed && parsed.diagram && Object.keys(parsed.diagram).length > 0);
-		} catch (e) {
-			// Malformed JSON — fall through; the import servlet reports it.
-		}
 		flowRequest('fsmarImport', 'json=' + encodeURIComponent(json), 'POST', function(resp) {
 			if (resp.getStatus() >= 200 && resp.getStatus() < 300) {
 				try {
 					var doc = mxUtils.parseXml(resp.getText());
 					var dec = new mxCodec(doc);
 					dec.decode(doc.documentElement, editor.graph.getModel());
-					if (!hadDiagram) {
-						autoLayout(editor);
-					} else {
-						// Stored positions are intentional — keep them, but
-						// separate any parallel edges (autoLayout would have,
-						// but we're not running it) and center the view (the
-						// view translate isn't part of the stored layout).
-						if (window.flowParallelEdges) {
-							window.flowParallelEdges(editor.graph);
-						}
-						centerView(editor);
-					}
+					// Always lay the diagram out on open, whether or not the
+					// file carried positions. The coordinates in a config came
+					// from an earlier auto-layout rather than from anyone
+					// arranging boxes, and a stored grid that no longer suits
+					// the states in it is what draws arrows through boxes. The
+					// redraw button is the position-preserving alternative:
+					// same arrows, every box left alone.
+					autoLayout(editor);
 					// Freshly loaded from a file — a clean baseline, not edits.
 					if (window.flowDirty) window.flowDirty.clear();
 					if (onDone) onDone(true);
@@ -505,8 +494,264 @@ window.flowFsmar = (function() {
 	// channels lets the layout route those edges between the boxes.
 	// disableEdgeStyle stays true (the layout's default) so it routes the
 	// edges rather than pinning the elbow style.
+	// ----- redraw the arrows --------------------------------------------------
+	//
+	// Re-routes every transition and leaves every box where it is.
+	//
+	// A config that arrives with stored box positions can still draw badly: the
+	// waypoints saved with its edges, and any anchor points pinned to a box
+	// side, are positions from a layout that no longer holds, so arrows cut
+	// across states and parallel transitions stack into one line. Dropping the
+	// per-edge routing and re-running the parallel separation fixes the picture
+	// without moving a diagram someone arranged on purpose. That is the whole
+	// difference from auto-layout, which moves everything.
+
+	// Routing that a config carries, or that an earlier redraw stamped in: saved
+	// bend points, anchors pinned to a box face, and the polyline override. All
+	// of it is position-dependent, so it is wrong as soon as anything moves, and
+	// leaving it in place is what makes a freshly loaded diagram unreadable and
+	// what made auto-position draw every arrow out of a single point per box.
+	var ROUTING_KEYS = ['exitX', 'exitY', 'entryX', 'entryY', 'exitDx', 'exitDy',
+		'entryDx', 'entryDy', 'exitPerimeter', 'entryPerimeter', 'noEdgeStyle', 'edgeStyle'];
+
+	function clearRouting(graph) {
+		var model = graph.getModel();
+		var cells = model.getDescendants(graph.getDefaultParent());
+		model.beginUpdate();
+		try {
+			for (var i = 0; i < cells.length; i++) {
+				var cell = cells[i];
+				if (!model.isEdge(cell)) {
+					continue;
+				}
+
+				var geo = model.getGeometry(cell);
+				if (geo && geo.points && geo.points.length) {
+					geo = geo.clone();
+					geo.points = null;
+					model.setGeometry(cell, geo);
+				}
+
+				var style = cell.getStyle();
+				if (style !== null && style !== undefined) {
+					var cleaned = style;
+					for (var k = 0; k < ROUTING_KEYS.length; k++) {
+						cleaned = mxUtils.setStyle(cleaned, ROUTING_KEYS[k], null);
+					}
+					if (cleaned !== style) {
+						model.setStyle(cell, cleaned);
+					}
+				}
+			}
+		} finally {
+			model.endUpdate();
+		}
+	}
+
+	// ----- redraw the arrows --------------------------------------------------
+	//
+	// Re-routes every transition and leaves every box where it is.
+	//
+	// A config arrives with box positions but no edge routing, so whatever bend
+	// points it carries came from some other layout and draw as tangles. This
+	// drops them, lets the stylesheet's router lay each edge out again from the
+	// current positions, and fans apart transitions that share both ends.
+	//
+	// It deliberately does NOT choose which face of a box an edge attaches to.
+	// Pinning that per edge reads well in a sketch and badly on a real config:
+	// every arrow into a state converges on one point, and the next auto-layout
+	// inherits the pins and draws a starburst.
+	// ----- arrows that cut through boxes --------------------------------------
+	//
+	// mxGraph routes each edge as if the canvas were empty, so on a ranked
+	// layout an arrow crossing the column passes through whatever sits in
+	// between. This walks the path the renderer actually drew and, for any edge
+	// that crosses a box, tries routes through the free channels around it.
+	//
+	// The gate is what makes it safe: a candidate is adopted only when it
+	// provably crosses nothing. An edge whose every candidate still crosses is
+	// left exactly as the router drew it, so the worst case is the picture we
+	// already had rather than a wandering detour that reads worse.
+
+	function vertexRects(model, parent) {
+		var rects = [];
+		var count = model.getChildCount(parent);
+		for (var i = 0; i < count; i++) {
+			var cell = model.getChildAt(parent, i);
+			if (!model.isVertex(cell)) {
+				continue;
+			}
+			var g = model.getGeometry(cell);
+			if (g != null) {
+				rects.push({ cell: cell, x: g.x, y: g.y, w: g.width, h: g.height });
+			}
+		}
+		return rects;
+	}
+
+	/// Segment/rectangle overlap, as a clip: walk the segment against the four
+	/// slabs and see whether any of it survives inside.
+	function segmentHitsRect(a, b, r) {
+		var t0 = 0;
+		var t1 = 1;
+		var dx = b.x - a.x;
+		var dy = b.y - a.y;
+		var checks = [
+			{ p: -dx, q: a.x - r.x }, { p: dx, q: (r.x + r.w) - a.x },
+			{ p: -dy, q: a.y - r.y }, { p: dy, q: (r.y + r.h) - a.y }
+		];
+		for (var i = 0; i < checks.length; i++) {
+			var p = checks[i].p;
+			var q = checks[i].q;
+			if (p === 0) {
+				if (q < 0) {
+					return false;
+				}
+			} else {
+				var t = q / p;
+				if (p < 0) {
+					if (t > t1) { return false; }
+					if (t > t0) { t0 = t; }
+				} else {
+					if (t < t0) { return false; }
+					if (t < t1) { t1 = t; }
+				}
+			}
+		}
+		return true;
+	}
+
+	/// How many boxes a polyline passes through, ignoring its own two ends.
+	function crossingCount(points, rects, source, target) {
+		var margin = 6;
+		var hits = 0;
+		for (var i = 0; i + 1 < points.length; i++) {
+			for (var r = 0; r < rects.length; r++) {
+				var box = rects[r];
+				if (box.cell === source || box.cell === target) {
+					continue;
+				}
+				var inset = { x: box.x - margin, y: box.y - margin,
+					w: box.w + margin * 2, h: box.h + margin * 2 };
+				if (segmentHitsRect(points[i], points[i + 1], inset)) {
+					hits++;
+				}
+			}
+		}
+		return hits;
+	}
+
+	/// The path as drawn, in model coordinates.
+	function drawnPath(graph, edge) {
+		var state = graph.view.getState(edge);
+		if (state == null || state.absolutePoints == null) {
+			return null;
+		}
+		var scale = graph.view.scale;
+		var translate = graph.view.translate;
+		var points = [];
+		for (var i = 0; i < state.absolutePoints.length; i++) {
+			var p = state.absolutePoints[i];
+			if (p == null) {
+				return null;
+			}
+			points.push(new mxPoint(p.x / scale - translate.x, p.y / scale - translate.y));
+		}
+		return (points.length >= 2) ? points : null;
+	}
+
+	/// Candidate routes, in the order worth trying: out of the exit face, along
+	/// a channel clear of the boxes in between, back into the entry face.
+	/// Offsets grow until one clears or we give up on this edge.
+	function candidateRoutes(from, to) {
+		var routes = [];
+		var lead = 22;
+		var outX = from.x + ((to.x >= from.x) ? lead : -lead);
+		var inX = to.x - ((to.x >= from.x) ? lead : -lead);
+		var outY = from.y + ((to.y >= from.y) ? lead : -lead);
+		var inY = to.y - ((to.y >= from.y) ? lead : -lead);
+
+		for (var step = 1; step <= 8; step++) {
+			var spread = step * 26;
+			var above = Math.min(from.y, to.y) - spread;
+			var below = Math.max(from.y, to.y) + spread;
+			var left = Math.min(from.x, to.x) - spread;
+			var right = Math.max(from.x, to.x) + spread;
+			routes.push([new mxPoint(outX, from.y), new mxPoint(outX, above),
+				new mxPoint(inX, above), new mxPoint(inX, to.y)]);
+			routes.push([new mxPoint(outX, from.y), new mxPoint(outX, below),
+				new mxPoint(inX, below), new mxPoint(inX, to.y)]);
+			routes.push([new mxPoint(from.x, outY), new mxPoint(left, outY),
+				new mxPoint(left, inY), new mxPoint(to.x, inY)]);
+			routes.push([new mxPoint(from.x, outY), new mxPoint(right, outY),
+				new mxPoint(right, inY), new mxPoint(to.x, inY)]);
+		}
+		return routes;
+	}
+
+	function clearCrossings(graph) {
+		var model = graph.getModel();
+		var parent = graph.getDefaultParent();
+		var rects = vertexRects(model, parent);
+		var cells = model.getDescendants(parent);
+
+		model.beginUpdate();
+		try {
+			for (var i = 0; i < cells.length; i++) {
+				var edge = cells[i];
+				if (!model.isEdge(edge)) {
+					continue;
+				}
+				var source = model.getTerminal(edge, true);
+				var target = model.getTerminal(edge, false);
+				if (source == null || target == null || source === target) {
+					continue;
+				}
+
+				var drawn = drawnPath(graph, edge);
+				if (drawn == null || crossingCount(drawn, rects, source, target) === 0) {
+					continue;
+				}
+
+				var from = drawn[0];
+				var to = drawn[drawn.length - 1];
+				var routes = candidateRoutes(from, to);
+				for (var r = 0; r < routes.length; r++) {
+					var full = [from].concat(routes[r], [to]);
+					if (crossingCount(full, rects, source, target) === 0) {
+						var geo = model.getGeometry(edge);
+						geo = (geo == null) ? new mxGeometry() : geo.clone();
+						geo.points = routes[r];
+						model.setGeometry(edge, geo);
+						model.setStyle(edge, mxUtils.setStyle(
+							mxUtils.setStyle(edge.getStyle() || '', 'noEdgeStyle', 1),
+							'rounded', 1));
+						break;
+					}
+				}
+			}
+		} finally {
+			model.endUpdate();
+		}
+		graph.refresh();
+	}
+
+	function redrawEdges(editor) {
+		var graph = editor.graph;
+		clearRouting(graph);
+		if (window.flowParallelEdges) {
+			window.flowParallelEdges(graph);
+		}
+		graph.refresh();
+		// Reading the drawn path is why this runs last.
+		clearCrossings(graph);
+	}
+
 	function autoLayout(editor) {
 		var graph = editor.graph;
+		// Start from unrouted edges: a pinned anchor left by an earlier redraw
+		// (or by hand) survives the layout and drags its arrow to one face.
+		clearRouting(graph);
 		var layout = new mxHierarchicalLayout(graph, mxConstants.DIRECTION_WEST);
 		layout.intraCellSpacing = 60;      // vertical gap between boxes in a column
 		layout.interRankCellSpacing = 140; // horizontal gap between columns (label room)
@@ -523,12 +768,73 @@ window.flowFsmar = (function() {
 		if (window.flowParallelEdges) {
 			window.flowParallelEdges(graph);
 		}
-		centerView(editor);
+		clearCrossings(graph);
+		fitView(editor);
 	}
 
-	// Centers the diagram in the visible canvas without changing zoom.
-	function centerView(editor) {
-		editor.graph.center(true, true);
+	// The part of the canvas nothing is floating over. The toolbar and the
+	// inspector are mxWindows drawn ON TOP of the graph container rather than
+	// beside it, so the container's own width lies: fitting to it hides boxes
+	// behind a panel, which is how `conference` ended up under the inspector.
+	function clearArea(graph) {
+		var canvas = graph.container.getBoundingClientRect();
+		var left = 0;
+		var right = 0;
+		var windows = document.querySelectorAll('.mxWindow');
+		for (var i = 0; i < windows.length; i++) {
+			var el = windows[i];
+			if (el.offsetParent === null) {
+				continue;   // minimized or hidden
+			}
+			var r = el.getBoundingClientRect();
+			if (r.width === 0 || r.height === 0 || r.right < canvas.left || r.left > canvas.right) {
+				continue;
+			}
+			// Which side it hugs decides which margin it eats.
+			if ((r.left + r.right) / 2 < (canvas.left + canvas.right) / 2) {
+				left = Math.max(left, r.right - canvas.left);
+			} else {
+				right = Math.max(right, canvas.right - r.left);
+			}
+		}
+		return {
+			left: left,
+			width: Math.max(160, canvas.width - left - right),
+			height: Math.max(120, canvas.height)
+		};
+	}
+
+	// Scales the whole diagram into that clear area and centers it there.
+	// Never magnifies past 100%: a three-box config blown up to fill a monitor
+	// looks like a mistake, and the labels are drawn for this size.
+	function fitView(editor) {
+		var graph = editor.graph;
+		var view = graph.view;
+		var bounds = graph.getGraphBounds();
+		if (bounds == null || bounds.width <= 0 || bounds.height <= 0) {
+			return;
+		}
+
+		var pad = 28;
+		var area = clearArea(graph);
+		var scale = view.scale;
+
+		// Graph bounds are screen coordinates; undo the current view to get the
+		// model rectangle, which is what the new scale has to be computed from.
+		var modelX = bounds.x / scale - view.translate.x;
+		var modelY = bounds.y / scale - view.translate.y;
+		var modelW = bounds.width / scale;
+		var modelH = bounds.height / scale;
+
+		var usableW = area.width - pad * 2;
+		var usableH = area.height - pad * 2;
+		var next = Math.min(usableW / modelW, usableH / modelH);
+		next = Math.max(0.25, Math.min(next, 1));
+
+		var offsetX = area.left + pad + (usableW - modelW * next) / 2;
+		var offsetY = pad + (usableH - modelH * next) / 2;
+
+		view.scaleAndTranslate(next, offsetX / next - modelX, offsetY / next - modelY);
 	}
 
 	// Flex-column dialog body that fills the mxWindow content area. The
@@ -1388,6 +1694,8 @@ window.flowFsmar = (function() {
 		importJsonText: importJsonText,
 		getConfigJson: getConfigJson,
 		autoLayout: autoLayout,
+		redrawEdges: redrawEdges,
+		fitView: fitView,
 		toggleJsonView: toggleJsonView
 	};
 

@@ -14,6 +14,7 @@ window.flowUtils = (function() {
 	// don't carry their `as` attribute through to the DOM.
 	var tooltipsByIcon = {
 		'folder-open.svg':       'Open FSMAR: a live configuration, the generated sample, or a saved flow',
+		'redraw-edges.svg':      'Redraw arrows: re-route every transition, leaving the boxes where they are',
 		'save.svg':              'Save FSMAR: save under a name, publish to the live configuration, or download',
 		'image.svg':             'Export image — download the diagram as a scalable SVG file',
 		'print.svg':             'Print Report — open the current routing plan as a printable report (diagram + transitions table)',
@@ -274,6 +275,77 @@ window.flowUtils = (function() {
 		return (target && target.closest) ? target.closest('.info-tip') : null;
 	}
 
+	// Field hints fold into that same popup. They were written as a
+	// parenthetical under every label, which on a 260px panel is most of the
+	// panel: the reader wants to know what the field IS, and asks what it means
+	// only when the answer is not obvious.
+	//
+	// Hints inside the operator reference stay put. That block exists to be
+	// read, so hiding its glossary behind hovers would be the wrong trade.
+	function foldHintsIntoTips(root) {
+		var scope = (root && root.querySelectorAll) ? root : document;
+		var hints = scope.querySelectorAll('.hint, .state-hint, .config-hint');
+		for (var i = 0; i < hints.length; i++) {
+			var hint = hints[i];
+			if (hint.closest('.expr-help')) {
+				continue;
+			}
+			// An id or an inline display means script owns this one: the exit
+			// note under Next Application is shown and hidden per selection,
+			// not field help. Folding it away would delete the element the
+			// panel code looks up.
+			if (hint.id || hint.style.display) {
+				continue;
+			}
+			var label = hint.closest('label') || previousLabel(hint);
+			if (!label) {
+				continue;
+			}
+			var html = hint.innerHTML.trim();
+			hint.parentNode.removeChild(hint);
+			if (html) {
+				attachTip(label, html);
+			}
+		}
+	}
+
+	/// The label a sibling hint belongs to: the nearest one before it.
+	function previousLabel(el) {
+		var prev = el.previousElementSibling;
+		while (prev && prev.nodeName !== 'LABEL') {
+			prev = prev.previousElementSibling;
+		}
+		return prev;
+	}
+
+	/// Hangs the hint text where showInfoTip will find it: behind an ⓘ in the
+	/// label, the same affordance the hand-written explanations use. One symbol
+	/// means "there is more here", everywhere in the panels — a label that
+	/// revealed its own text on hover was a second, invisible convention.
+	///
+	/// A label that already carries an ⓘ keeps exactly one popup: the short
+	/// hint goes in front of the long explanation rather than adding a second
+	/// thing to find.
+	function attachTip(label, html) {
+		var existing = label.querySelector('.info-tip .info-tip-text');
+		if (existing) {
+			existing.innerHTML = '<p>' + html + '</p>' + existing.innerHTML;
+			return;
+		}
+
+		var icon = document.createElement('span');
+		icon.className = 'info-tip';
+		icon.setAttribute('tabindex', '0');
+		icon.setAttribute('role', 'button');
+		icon.setAttribute('aria-label', 'About ' + label.textContent.trim());
+		icon.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true">'
+			+ '<circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/>'
+			+ '<path d="M8 7v4.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'
+			+ '<circle cx="8" cy="4.7" r="1" fill="currentColor" stroke="none"/>'
+			+ '</svg><span class="info-tip-text">' + html + '</span>';
+		label.appendChild(icon);
+	}
+
 	function initInfoTips() {
 		document.addEventListener('mouseover', function(e) {
 			var tip = closestInfoTip(e.target);
@@ -355,7 +427,8 @@ window.flowUtils = (function() {
 		graphToSvgString: graphToSvgString,
 		downloadSvg: downloadSvg,
 		isExitCloud: isExitCloud,
-		hideInfoTip: hideInfoTip
+		hideInfoTip: hideInfoTip,
+		foldHintsIntoTips: foldHintsIntoTips
 	};
 
 })();

@@ -68,8 +68,7 @@
 		<add as="fit"><![CDATA[
 			function (editor)
 			{
-				editor.graph.fit();
-				editor.graph.center(true, true);
+				flowFsmar.fitView(editor);
 			}
 		]]></add>
 		<add as="exportFsmar"><![CDATA[
@@ -88,6 +87,12 @@
 			function (editor)
 			{
 				flowFsmar.autoLayout(editor);
+			}
+		]]></add>
+		<add as="redrawEdges"><![CDATA[
+			function (editor)
+			{
+				flowFsmar.redrawEdges(editor);
 			}
 		]]></add>
 		<add as="jsonView"><![CDATA[

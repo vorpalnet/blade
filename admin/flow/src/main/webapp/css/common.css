@@ -129,16 +129,18 @@ td.mxWindowPane button.sim-tab {
 }
 
 /* --- Toolbar / palette ---------------------------------------------- */
-/* content-box keeps the 32px icon GIFs crisp; brand.css forces global
-   border-box, which would otherwise shrink them under padding+border. */
+/* content-box keeps the icons crisp; brand.css forces global border-box,
+   which would otherwise shrink them under padding+border. The icons are SVG
+   line art, so they stay legible small, and the palette is a tool rail rather
+   than the subject: at 32px it took a sixth of the canvas. */
 img.mxToolbarItem, img.mxToolbarMode, img.mxToolbarModeSelected {
 	box-sizing: content-box;
-	width: 32px;
-	height: 32px;
+	width: 17px;
+	height: 17px;
 	cursor: pointer;
 }
 img.mxToolbarItem {
-	margin: 0 4px 4px 0;
+	margin: 0 2px 2px 0;
 	padding: 2px;
 	border: 1px solid transparent;
 	border-radius: 0;
@@ -159,7 +161,7 @@ div.mxToolbarComboContainer {
 	padding: 2px;
 }
 img.mxToolbarMode {
-	margin: 2px 4px 4px 2px;
+	margin: 1px 2px 2px 1px;
 	padding: 2px;
 	border: 1px solid transparent;
 	border-radius: 0;
@@ -170,7 +172,7 @@ img.mxToolbarMode:hover {
 }
 /* Active tool — purple ring + fill (border + background, not color alone). */
 img.mxToolbarModeSelected {
-	margin: 2px 4px 4px 2px;
+	margin: 1px 2px 2px 1px;
 	padding: 2px;
 	border: 1px solid var(--vorpal-purple);
 	border-radius: 0;

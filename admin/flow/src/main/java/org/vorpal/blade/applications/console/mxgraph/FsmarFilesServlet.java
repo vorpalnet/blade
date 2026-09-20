@@ -88,6 +88,11 @@ public class FsmarFilesServlet extends HttpServlet {
 	protected void doPost(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
 
+		// The browser POSTs UTF-8 (encodeURIComponent). Without this,
+		// getParameter() decodes the body as ISO-8859-1 (the servlet default)
+		// and every non-ASCII character arrives mojibaked.
+		request.setCharacterEncoding("UTF-8");
+
 		String name = request.getParameter("name");
 		Path path = FlowFiles.resolve(name);
 		if (path == null) {

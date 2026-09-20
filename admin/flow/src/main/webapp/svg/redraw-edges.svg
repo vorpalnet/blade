@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Redraw arrows: the boxes stay put (drawn solid, unmoved) while the
+       transition between them is re-routed (the curved arrow). -->
+  <rect x="32" y="48" width="112" height="96" fill="currentColor"/>
+  <rect x="368" y="368" width="112" height="96" fill="currentColor"/>
+  <path d="M88 160 C88 320 232 416 352 416" fill="none" stroke="currentColor" stroke-width="28" stroke-linecap="round"/>
+  <path d="M352 416 L300 380 M352 416 L300 452" fill="none" stroke="currentColor" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

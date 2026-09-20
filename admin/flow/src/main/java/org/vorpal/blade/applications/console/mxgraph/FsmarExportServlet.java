@@ -142,7 +142,6 @@ public class FsmarExportServlet extends HttpServlet {
 
 		// Vertex positions for the diagram `states` section: state name -> {x, y}.
 		// Includes "null" (the default ingress box) and every ingress state.
-		Map<String, int[]> placements = new java.util.LinkedHashMap<>();
 
 		// Which cells have a transition pointing AT them. The palette has one cloud
 		// symbol with no direction on it, so direction is read off the arrows: a
@@ -199,7 +198,6 @@ public class FsmarExportServlet extends HttpServlet {
 									+ "but each state's id must be unique).");
 						}
 						realStates.put(stateId, wrapper);
-						addPlacement(placements, stateId, mxCell);
 					}
 					break;
 				case "Gateway":
@@ -234,7 +232,6 @@ public class FsmarExportServlet extends HttpServlet {
 						// no-silent-strip round-trip, mirrored on import.
 						mergeExtra(egDef, wrapper.getAttribute("extra"));
 						egressDefByName.put(gwLabel, egDef);
-						addPlacement(placements, gwLabel, mxCell);
 						break;
 					}
 					// An ingress box WITH a source-match is its own entry state,
@@ -254,11 +251,9 @@ public class FsmarExportServlet extends HttpServlet {
 						}
 						realStates.put(gwLabel, wrapper);
 						ingressMatch.put(gwLabel, gwMatch);
-						addPlacement(placements, gwLabel, mxCell);
 					} else {
 						stateNamesById.put(cellId, "null");
 						defaultIngressEls.add(wrapper);
-						addPlacement(placements, "null", mxCell);
 					}
 					break;
 				case "FlowModel":
@@ -553,19 +548,16 @@ public class FsmarExportServlet extends HttpServlet {
 		}
 
 		// Diagram metadata: written explicitly (never via extras — "diagram"
-		// is in FsmarImportServlet.ROOT_KNOWN), from current cell geometry and
-		// ingress topology. Shape matches the fsmar3 Diagram class:
-		// states (positions, incl "null") + ingresses (name -> {match}).
-		if (!placements.isEmpty() || !ingressMatch.isEmpty() || !egressDefByName.isEmpty()) {
+		// is in FsmarImportServlet.ROOT_KNOWN). Ingress and egress topology
+		// only: which states are entry points and where calls leave.
+		//
+		// Vertex POSITIONS are deliberately not written. The editor lays a
+		// config out on open, so a stored grid never reaches the canvas, and
+		// keeping one would mean every save rewrote coordinates nobody reads.
+		// Older files may still carry `diagram.states`; import tolerates it and
+		// the next save drops it.
+		if (!ingressMatch.isEmpty() || !egressDefByName.isEmpty()) {
 			ObjectNode diagramNode = rootNode.putObject("diagram");
-			if (!placements.isEmpty()) {
-				ObjectNode statesPos = diagramNode.putObject("states");
-				for (Map.Entry<String, int[]> p : placements.entrySet()) {
-					ObjectNode pos = statesPos.putObject(p.getKey());
-					pos.put("x", p.getValue()[0]);
-					pos.put("y", p.getValue()[1]);
-				}
-			}
 			if (!ingressMatch.isEmpty()) {
 				ObjectNode ing = diagramNode.putObject("ingresses");
 				for (Map.Entry<String, String> e : ingressMatch.entrySet()) {
@@ -573,8 +565,7 @@ public class FsmarExportServlet extends HttpServlet {
 				}
 			}
 			// Egress exit nodes: name -> {description, routes, returnState?}.
-			// Positions ride the shared `states` map above (keyed by egress
-			// name). `returnState` present = a ROUTE_BACK exit (out-edge to that
+			// `returnState` present = a ROUTE_BACK exit (out-edge to that
 			// state); absent = ROUTE_FINAL. Import recovers the node — including
 			// its route-back line — from this and matches transitions by routes.
 			if (!egressDefByName.isEmpty()) {
@@ -654,28 +645,6 @@ public class FsmarExportServlet extends HttpServlet {
 			}
 		}
 		return merged;
-	}
-
-	/// Records a vertex's mxGeometry position. Coordinates may be fractional
-	/// in mxGraph (drag snapping off) — rounded; the Placement model and the
-	/// editor's grid are integer-pixel.
-	private static void addPlacement(Map<String, int[]> placements, String key, Element mxCell) {
-		Element geom = firstChildElement(mxCell, "mxGeometry");
-		if (geom == null) {
-			return;
-		}
-		try {
-			// mxGeometry omits x/y attributes when 0 — empty means origin,
-			// not "no position".
-			placements.put(key, new int[] { parseCoord(geom.getAttribute("x")),
-					parseCoord(geom.getAttribute("y")) });
-		} catch (NumberFormatException e) {
-			// Unparseable position — leave unplaced; auto-layout on import.
-		}
-	}
-
-	private static int parseCoord(String value) {
-		return (value == null || value.isEmpty()) ? 0 : (int) Math.round(Double.parseDouble(value));
 	}
 
 	/// The states-map key for a node: its explicit `stateId` attribute, else its

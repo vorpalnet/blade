@@ -82,7 +82,7 @@ public class FsmarRoundTripSmokeTest {
 		roundTripPreservesEverything();
 		transitionOrderSurvivesRoundTrip();
 		tierDispatchSurvivesRoundTrip();
-		diagramPlacementsSurviveRoundTrip();
+		diagramPlacementsAreDropped();
 		multiIngressRoundTrip();
 		dispatchGeneratedAndAbsorbed();
 		egressRoundTrip();
@@ -110,9 +110,8 @@ public class FsmarRoundTripSmokeTest {
 		String xml = new FsmarImportServlet().buildMxGraphXml(original);
 		JsonNode exported = new FsmarExportServlet().buildFsmarJson(xml);
 
-		// Export always emits a diagram section from the vertex geometry —
-		// for a config that had none, it's the grid fallback. Semantics must
-		// be untouched besides that.
+		// Export emits a diagram section only for ingress/egress topology,
+		// never for positions. Semantics must be untouched besides that.
 		JsonNode semantic = stripDiagram(exported);
 		expect(original.equals(semantic),
 				"round trip must preserve every field", () -> diff(original, semantic));
@@ -170,10 +169,10 @@ public class FsmarRoundTripSmokeTest {
 				"dispatch family must validate clean, got errors=" + errors + " warnings=" + warnings, null);
 	}
 
-	static void diagramPlacementsSurviveRoundTrip() throws Exception {
-		// Default ingress (null) + a placed state, no named ingresses. Stored
-		// positions must override the grid and survive the full-equality check
-		// WITH the diagram section.
+	static void diagramPlacementsAreDropped() throws Exception {
+		// Positions are layout, not configuration: the editor lays a config out
+		// on open, so a stored grid never reaches the canvas. A file that
+		// carries one still opens; saving it writes the config back without it.
 		String cfg = "{\"states\":{"
 				+ "\"null\":{\"triggers\":{\"INVITE\":{\"transitions\":[{\"id\":\"IN-1\",\"next\":\"screening\"}]}}},"
 				+ "\"screening\":{\"triggers\":{\"INVITE\":{\"transitions\":[{\"id\":\"OUT-1\",\"next\":\"null\"}]}}}},"
@@ -183,8 +182,11 @@ public class FsmarRoundTripSmokeTest {
 		String xml = new FsmarImportServlet().buildMxGraphXml(original);
 		JsonNode exported = new FsmarExportServlet().buildFsmarJson(xml);
 
-		expect(original.equals(exported),
-				"diagram placements must round-trip exactly", () -> diff(original, exported));
+		expect(!exported.path("diagram").has("states"),
+				"positions must not be written back", () -> exported.toString());
+		expect(stripDiagram(original).equals(stripDiagram(exported)),
+				"dropping positions must not touch the configuration",
+				() -> diff(stripDiagram(original), stripDiagram(exported)));
 		// And the diagram must never leak into the FlowModel extra blob.
 		expect(!xml.contains("\"diagram\""),
 				"diagram must be geometry, not an extra attribute, in the XML", null);

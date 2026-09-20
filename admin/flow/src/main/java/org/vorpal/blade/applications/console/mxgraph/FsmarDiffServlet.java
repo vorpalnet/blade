@@ -36,6 +36,11 @@ public class FsmarDiffServlet extends HttpServlet {
 	protected void doPost(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
 
+		// The browser POSTs UTF-8 (encodeURIComponent). Without this,
+		// getParameter() decodes the body as ISO-8859-1 (the servlet default)
+		// and every non-ASCII character arrives mojibaked.
+		request.setCharacterEncoding("UTF-8");
+
 		String json = request.getParameter("json");
 		if (json == null || json.isEmpty()) {
 			response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Missing json parameter");
