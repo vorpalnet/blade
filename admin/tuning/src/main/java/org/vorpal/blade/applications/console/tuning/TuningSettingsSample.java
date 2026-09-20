@@ -22,7 +22,7 @@ public class TuningSettingsSample extends TuningSettings {
 				new JvmProfile("G1GC - Java 11+",
 					"OCCAS-tuned G1 baseline for a 4-vCPU / 16 GB engine node, JDK 11+ (OCCAS 8.1 and 8.3) — the safe default. "
 					+ "Heap pinned at 8 GB (Xms=Xmx, pre-touched) so there are no resize pauses and page-fault jitter is paid once at startup, "
-					+ "leaving ~8 GB for the OS, OCCAS/Coherence off-heap call state, and NIO buffers. "
+					+ "leaving ~8 GB for the OS, Metaspace, thread stacks and NIO buffers. Call state lives on this heap: each engine stores its share of the Coherence call-state cache plus a backup copy of another engine's. "
 					+ "50 ms pause goal; IHOP 35 seeds G1's adaptive marking trigger so concurrent marking starts early until the JVM learns the real allocation rate. "
 					+ "String dedup for repeated SIP headers; System.gc() runs concurrently (ExplicitGCInvokesConcurrent) so WebLogic RMI DGC cannot force a full pause. "
 					+ "On OutOfMemoryError the JVM writes a heap dump and exits so Node Manager restarts it and calls fail over. "

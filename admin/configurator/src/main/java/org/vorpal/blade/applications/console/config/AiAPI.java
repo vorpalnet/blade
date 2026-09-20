@@ -3,15 +3,9 @@ package org.vorpal.blade.applications.console.config;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import javax.management.JMX;
-import javax.management.MBeanServer;
-import javax.management.ObjectInstance;
-import javax.management.ObjectName;
-import javax.naming.InitialContext;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.POST;
 import javax.ws.rs.PathParam;
@@ -19,9 +13,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
-import org.vorpal.blade.framework.v2.config.SettingsMXBean;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -83,33 +75,10 @@ public class AiAPI {
 		}
 	}
 
-	/// The Configurator's own AI settings via its Configuration MBean (already
-	/// decrypted in memory) — same read FileManagerServlet uses.
+	/// The Configurator's own AI settings, read in process: the Configuration
+	/// MBean's JSON masks the API key.
 	private AiSettings loadAiSettings() {
-		try {
-			InitialContext ctx = new InitialContext();
-			MBeanServer mbeanServer;
-			try {
-				mbeanServer = (MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
-			} finally {
-				ctx.close();
-			}
-			ObjectName pattern = new ObjectName("vorpal.blade:Name=" + SELF_APP + ",Type=Configuration,*");
-			Set<ObjectInstance> mbeans = mbeanServer.queryMBeans(pattern, null);
-			if (!mbeans.isEmpty()) {
-				SettingsMXBean cfg = JMX.newMXBeanProxy(mbeanServer, mbeans.iterator().next().getObjectName(),
-						SettingsMXBean.class);
-				String json = cfg.getCurrentJson();
-				if (json != null) {
-					JsonNode ai = mapper.readTree(json).get("ai");
-					if (ai != null) {
-						return mapper.treeToValue(ai, AiSettings.class);
-					}
-				}
-			}
-		} catch (Exception e) {
-			logger.log(Level.WARNING, "could not read configurator AI settings", e);
-		}
-		return new AiSettings();
+		ConfiguratorSettings settings = ConfigurationMonitorStartup.currentSettings();
+		return (settings != null && settings.getAi() != null) ? settings.getAi() : new AiSettings();
 	}
 }

@@ -202,7 +202,7 @@ final class ApplyPlan {
 		if (sumMB * 100 < ramTotalMB * 85) return null;
 		return "Heap on the admin box would be " + String.join(" + ", parts) + " = " + fmtMB(sumMB) + " on a "
 				+ fmtMB(ramTotalMB) + " host" + (pretouch ? ", pre-touched at startup" : "")
-				+ ". These JVMs share one machine with the OS and Coherence off-heap; the kernel will kill one"
+				+ ". These JVMs share one machine with the OS and with each other's off-heap memory; the kernel will kill one"
 				+ " rather than let them all commit.";
 	}
 

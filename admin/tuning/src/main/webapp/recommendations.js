@@ -25,9 +25,16 @@ var TUNING_REC = {
 		minimumPool: 300
 	},
 	workManagers: {
-		// OCCAS 8.0 Debugging & Tuning doc values (re-verify against 8.3).
-		'wlss.timer': { maxThreads: 200, capacity: 150000 },
-		'wlss.transport': { capacity: 5000000 }
+		// Capacity is the queue depth at which the SIP transport stops
+		// taking messages and answers 503 (default 400 transport, 256
+		// timer). Size it to a few seconds of peak message rate: a message
+		// queued longer has already been retransmitted and only adds work.
+		// Oracle's 8.0 tuning guide says 5,000,000 / 150,000 / 200; on an
+		// 8 GB heap that disables the throttle and trades a 503 for an
+		// OutOfMemoryError. These are 10x the transport default and 2x the
+		// timer defaults (16 threads, 256).
+		'wlss.timer': { maxThreads: 32, capacity: 500 },
+		'wlss.transport': { capacity: 4000 }
 		// Plus: Min = Max wherever both constraints exist.
 	},
 	sip: {

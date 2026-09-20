@@ -64,6 +64,19 @@ public class ServerControlAPI {
 	@Context
 	private ServletContext servletContext;
 
+	@Context
+	private javax.ws.rs.core.SecurityContext security;
+
+	/// A restart runs the configured start script with the server's authority,
+	/// so it takes the Admin role, not just a way into the app.
+	private Response requireAdmin() {
+		if (security != null && security.isUserInRole("Admin")) {
+			return null;
+		}
+		return Response.status(Response.Status.FORBIDDEN).type(MediaType.TEXT_PLAIN)
+				.entity("Restarting the server requires the Admin role.").build();
+	}
+
 	/// Liveness + capability probe. Always 200 while the AdminServer is up, so
 	/// the browser can poll it to detect the server coming back after a restart.
 	/// `restartConfigured` tells the UI whether to offer the restart action.
@@ -93,6 +106,10 @@ public class ServerControlAPI {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(summary = "Restart the AdminServer (tier=admin) via a detached Node Manager helper.")
 	public Response restart(@QueryParam("tier") String tier) {
+		Response refused = requireAdmin();
+		if (refused != null) {
+			return refused;
+		}
 		String t = tier == null ? "admin" : tier.trim().toLowerCase();
 
 		if ("engine".equals(t) || "both".equals(t)) {

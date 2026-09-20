@@ -15,14 +15,10 @@
 ///
 /// ### Web Interface and Communication
 ///
-/// - [FileManagerServlet] - Dual-purpose component that serves as both an HTTP servlet
-///   (`/filemanager`) for file management operations and a WebSocket endpoint (`/websocket`)
-///   for real-time bidirectional communication with web clients. Includes nested
-///   [FileManagerServlet.Message] class for structured message exchange.
-/// - [WebSocketFileManager] - Additional HTTP servlet mapped to `/filemanager/*` for
-///   extended file management functionality
-/// - [SaveDataServlet] - Handles POST requests to `/saveData` endpoint for persisting
-///   configuration data to the filesystem
+/// - [FileManagerServlet] - The editor's WebSocket endpoint (`/websocket`). It reads and
+///   writes JSON configs only inside the config directory, and lets only Admin and
+///   Operator change anything; the handshake records the user's roles and refuses a
+///   socket opened from another site.
 ///
 /// ## Key Features
 ///
@@ -82,6 +78,4 @@
 /// @see ConfigurationMonitor
 /// @see FileManagerServlet
 /// @see ConfigurationMonitorStartup
-/// @see SaveDataServlet
-/// @see WebSocketFileManager
 package org.vorpal.blade.applications.console.config;

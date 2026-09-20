@@ -124,6 +124,13 @@ public class TokenResource {
 		String aor;
 		try {
 			aor = AddressPolicy.resolve(username, requestedAor, settings);
+			// Registering as another address takes calls meant for that person,
+			// so only an Admin may be issued one.
+			if (!aor.equals(AddressPolicy.defaultAddress(username, settings)) && !security.isUserInRole("Admin")) {
+				return error(Response.Status.FORBIDDEN,
+						"Only the Admin role may take an address other than '"
+								+ AddressPolicy.defaultAddress(username, settings) + "'.");
+			}
 		} catch (AddressPolicy.AddressRejected e) {
 			return error(Response.Status.fromStatusCode(e.getStatus()), e.getMessage());
 		}

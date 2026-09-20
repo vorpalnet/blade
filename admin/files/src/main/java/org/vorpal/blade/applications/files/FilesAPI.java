@@ -53,6 +53,20 @@ public class FilesAPI {
 	@Context
 	private ServletContext servletContext;
 
+	@Context
+	private javax.ws.rs.core.SecurityContext security;
+
+	/// Writing a file under DOMAIN_HOME, this app's own registry included, can
+	/// change what the server runs at its next start, so it takes the Admin
+	/// role, not just a way into the app.
+	private Response requireAdmin() {
+		if (security != null && security.isUserInRole("Admin")) {
+			return null;
+		}
+		return Response.status(Response.Status.FORBIDDEN).type(MediaType.TEXT_PLAIN)
+				.entity("Saving or restoring a file requires the Admin role.").build();
+	}
+
 	/// List the registry, annotated with on-disk presence/size/mtime.
 	@GET
 	@javax.ws.rs.Path("/files")
@@ -123,6 +137,10 @@ public class FilesAPI {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(summary = "Save a registered file after a type-based well-formedness check.")
 	public Response write(@QueryParam("path") String path, String content) {
+		Response refused = requireAdmin();
+		if (refused != null) {
+			return refused;
+		}
 		try {
 			EditableFile entry = requireEntry(path);
 			Path resolved = resolve(entry.getPath());
@@ -192,6 +210,10 @@ public class FilesAPI {
 	@Produces(MediaType.TEXT_PLAIN)
 	@Operation(summary = "Restore a backup of a registered file; returns the restored content.")
 	public Response restore(@QueryParam("path") String path, @QueryParam("timestamp") long timestamp) {
+		Response refused = requireAdmin();
+		if (refused != null) {
+			return refused;
+		}
 		try {
 			EditableFile entry = requireEntry(path);
 			Path resolved = resolve(entry.getPath());

@@ -544,7 +544,7 @@
 			<div class="card-header">
 				<strong>OCCAS Thread Tuning</strong>
 				<button class="btn btn-sm btn-primary float-right ml-2" onclick="saveWorkManagers()">Save All</button>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="recommendWorkManagers()" title="Pre-fill the timer Max Threads to 200, and set Min = Max for any work manager that defines both. Review, then Save All.">Recommended</button>
+				<button class="btn btn-sm btn-outline-secondary float-right" onclick="recommendWorkManagers()" title="Pre-fill the timer Max Threads to at least 32, the capacities (transport 4,000, timer 500), and set Min = Max for any work manager that defines both. Review, then Save All.">Recommended</button>
 				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="loadWorkManagers()">Refresh</button>
 			</div>
 			<div class="card-body">
@@ -2152,18 +2152,17 @@
 			if (!wmData || !wmData.length) { showStatus('warning', 'Work managers not loaded yet.'); return; }
 			$.each(wmData, function (i, wm) {
 				var id = esc(wm.name);
-				// 1) Timer pool needs headroom — 200+.
+				// 1) Timer pool headroom: at least the recommended max.
 				if (wm.name === 'wlss.timer' && wm.maxThreadsName) {
 					var cur = parseInt(v('wm-' + id + '-maxThreads')) || 0;
-					$('#wm-' + id + '-maxThreads').val(Math.max(cur, 200));
+					$('#wm-' + id + '-maxThreads').val(Math.max(cur, TUNING_REC.workManagers['wlss.timer'].maxThreads));
 				}
 				// 2) Pin Min = Max wherever BOTH constraints exist (kills thread
 				//    ramp-up). Only replica.blocking + tracing.* qualify.
 				if (wm.minThreadsName && wm.maxThreadsName) {
 					$('#wm-' + id + '-minThreads').val(v('wm-' + id + '-maxThreads'));
 				}
-				// 3) OCCAS engine capacity recs (per the 8.0 tuning doc; stable
-				//    across versions — confirm against the 8.3 guide).
+				// 3) Transport/timer capacities (see TUNING_REC for the sizing rule).
 				if (wm.name === 'wlss.transport' && wm.capacityName) {
 					$('#wm-' + id + '-capacity').val(TUNING_REC.workManagers['wlss.transport'].capacity);
 				}
@@ -2171,7 +2170,7 @@
 					$('#wm-' + id + '-capacity').val(TUNING_REC.workManagers['wlss.timer'].capacity);
 				}
 			});
-			showStatus('warning', 'Filled timer Max = 200, Min = Max where both exist, and OCCAS transport/timer capacities. Review, then Save All.');
+			showStatus('warning', 'Filled timer Max \u2265 ' + TUNING_REC.workManagers['wlss.timer'].maxThreads + ', transport capacity ' + TUNING_REC.workManagers['wlss.transport'].capacity + ', timer capacity ' + TUNING_REC.workManagers['wlss.timer'].capacity + ', and Min = Max where both exist. Review, then Save All.');
 		}
 
 		function recommendJdbc() {

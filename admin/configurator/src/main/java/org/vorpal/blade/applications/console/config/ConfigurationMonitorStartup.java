@@ -23,10 +23,21 @@ public class ConfigurationMonitorStartup implements ServletContextListener {
 
 	private ConfiguratorSettingsManager settingsManager;
 
+	/// This WAR's running settings, for in-process readers that need a
+	/// credential: the Configuration MBean's JSON masks them.
+	private static volatile ConfiguratorSettingsManager current;
+
+	/// The Configurator's settings, or null before startup or after undeploy.
+	static ConfiguratorSettings currentSettings() {
+		ConfiguratorSettingsManager manager = current;
+		return (manager != null) ? manager.getCurrent() : null;
+	}
+
 	@Override
 	public void contextInitialized(ServletContextEvent sce) {
 		try {
 			settingsManager = new ConfiguratorSettingsManager(sce);
+			current = settingsManager;
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "configurator settings manager failed to initialize", e);
 		}
@@ -34,6 +45,7 @@ public class ConfigurationMonitorStartup implements ServletContextListener {
 
 	@Override
 	public void contextDestroyed(ServletContextEvent sce) {
+		current = null;
 		if (settingsManager != null) {
 			try {
 				settingsManager.shutdown();
