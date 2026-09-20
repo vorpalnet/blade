@@ -9,6 +9,7 @@
 /// - [OptionsCallflow] - Callflow handler that builds and sends the 200 OK response with capability headers
 /// - [OptionsSettings] - Configuration class defining the response header values
 /// - [OptionsSettingsSample] - Default configuration with standard SIP capability values
+/// - [ServerReady], [DrainControl], [QueuePressure] - the signals that turn the answer into a 503
 ///
 /// ## Architecture
 ///

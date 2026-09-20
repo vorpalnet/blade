@@ -48,16 +48,6 @@ public class OptionsSipServlet extends AsyncSipServlet {
 	/// `settingsManager`: one per engine JVM, read by [OptionsCallflow].
 	public static DrainControl drainControl;
 
-	/**
-	 * This is an attempt at optimization. Instead of creating a new
-	 * SipApplicationSession for ever OPTIONS ping, reuse an existing one. We'll use
-	 * the remote IP address as the session key so as to not unnecessarily
-	 * single-thread things.
-	 * 
-	 * @param request
-	 * @return the UAC's IP address
-	 */
-
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
 		try {

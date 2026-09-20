@@ -35,9 +35,9 @@ public class OptionsCallflow extends Callflow implements Serializable {
 
 			// Administrative drain: the operator took this node out of rotation
 			// via the Drain MBean (runtime state, not config — see DrainControl).
-			// Checked BEFORE the overload signal: explicit intent outranks
+			// Checked BEFORE queue pressure: explicit intent outranks
 			// automatic protection. The "Draining" reason phrase distinguishes
-			// this 503 from the overload one in a trace; load balancers treat
+			// this 503 from the "Busy" one in a trace; load balancers treat
 			// them the same.
 			DrainControl drain = OptionsSipServlet.drainControl;
 			if (drain != null && drain.isDrained()) {
@@ -50,17 +50,13 @@ public class OptionsCallflow extends Callflow implements Serializable {
 				return;
 			}
 
-			// Drain signal: while OCCAS overload protection is rejecting traffic,
-			// answer the health check 503 so a SIP-aware load balancer stops
-			// routing new calls here. Falls through to the normal 200 OK whenever
-			// the feature is off or the engine is not overloaded.
-			if (settings.isUnavailableWhenOverloaded() && EngineOverload.isOverloaded()) {
-				SipServletResponse busy = request.createResponse(503);
-				int retryAfter = settings.getOverloadRetryAfter();
-				if (retryAfter > 0) {
-					busy.setHeader("Retry-After", Integer.toString(retryAfter));
-				}
-				sendResponse(busy);
+			// Queue pressure: a SIP work-manager queue is past the configured
+			// share of its capacity. At 100% the container answers 503 itself,
+			// to calls as well as pings; this 503 comes first. No Retry-After:
+			// the node rejoins as soon as a ping finds the queues below the line.
+			Integer pressure = settings.getQueuePressurePercent();
+			if (QueuePressure.isPressured(pressure != null ? pressure : QueuePressure.DEFAULT_PERCENT)) {
+				sendResponse(request.createResponse(503, "Busy"));
 				return;
 			}
 

@@ -18,13 +18,18 @@ It answers `503` instead of `200 OK` in three situations:
 | Signal | Trigger | Response |
 |---|---|---|
 | **Boot gate** | The server has not yet reached RUNNING — deployments still in progress (`unavailableUntilRunning: true`; see `ServerReady`) | `503 Starting` |
-| **Overload** | OCCAS overload protection is actively rejecting traffic (`unavailableWhenOverloaded: true`; see `EngineOverload`) | `503 Service Unavailable` + `Retry-After: <overloadRetryAfter>` |
 | **Administrative drain** | Operator set `Drained=true` on this node's Drain MBean | `503 Draining` + `Retry-After: <drainRetryAfter>` (omitted when 0) |
+| **Queue pressure** | The `wlss.transport` or `wlss.timer` queue is at `queuePressurePercent` (default 80) of its capacity; see `QueuePressure` | `503 Busy` |
 
 In every case, a load balancer that pings each engine individually stops offering NEW
 calls to this node; established dialogs continue (session state is cluster-replicated
-and fails over). The reason phrases (`Starting` / `Draining`) exist for the human reading
-a trace — load balancers treat all three the same.
+and fails over). The reason phrases (`Starting` / `Draining` / `Busy`) exist for the human
+reading a trace; load balancers treat them all the same.
+
+Queue pressure is the early warning. When either queue reaches 100% of its capacity,
+OCCAS answers every request `503 Server Busy` itself, calls and pings alike, and the
+options app never sees the ping. Answering `503 Busy` at 80% moves new calls elsewhere
+while the node can still finish the work it has.
 
 ## Configuration (`options.json`)
 
@@ -33,8 +38,8 @@ a trace — load balancers treat all three the same.
 - `unavailableUntilRunning` — boot gate on/off (sample: `true`; absent = off). Requires
   the WebLogic runtime MBeans on the platform MBean server (the default); set `false`
   if a node never leaves Starting.
-- `unavailableWhenOverloaded` / `overloadRetryAfter` — mirror OCCAS overload protection
-  into the health check.
+- `queuePressurePercent` — percent of work-manager queue capacity at which pings turn
+  `503 Busy`. Absent = 80; `0` turns it off.
 - `drainRetryAfter` — seconds advertised on the drain 503; `0` omits the header (the
   default — BLADE's own proxy-balancer treats a ping 503 as sticky-down until a ping
   succeeds, so a backoff hint adds nothing there).

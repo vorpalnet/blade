@@ -46,8 +46,6 @@ public class OptionsSettingsSample extends OptionsSettings implements Serializab
 		userAgent = "OCCAS";
 		allowEvents = "talk, hold";
 
-		unavailableWhenOverloaded = true;
-		overloadRetryAfter = 5;
 		// Administrative drain advertises no Retry-After by default: our own
 		// proxy-balancer treats a ping 503 as sticky-down until a ping succeeds
 		// (the ideal drain semantics), so a backoff hint adds nothing there.
@@ -56,6 +54,9 @@ public class OptionsSettingsSample extends OptionsSettings implements Serializab
 		// (server RUNNING), so the load balancer never enrolls a half-started
 		// node. Existing configs without the field default to off.
 		unavailableUntilRunning = true;
+		// Answer 503 Busy once a SIP work-manager queue passes 80% of its
+		// capacity, ahead of the container's own 503 at 100%.
+		queuePressurePercent = QueuePressure.DEFAULT_PERCENT;
 	}
 
 }

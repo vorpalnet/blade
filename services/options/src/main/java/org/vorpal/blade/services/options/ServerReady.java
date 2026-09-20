@@ -25,8 +25,8 @@ import javax.management.ObjectName;
 /// work.
 ///
 /// Read locally from the platform MBean server
-/// (`com.bea:Name=<server>,Type=ServerRuntime` → `State`), reflectively-loose
-/// like `EngineOverload`: any failure reads as "not ready", which in a
+/// (`com.bea:Name=<server>,Type=ServerRuntime` → `State`), loosely: any
+/// failure reads as "not ready", which in a
 /// container means "very early boot" (the runtime MBean isn't registered
 /// yet). Outside WebLogic there is no such MBean at all, so the gate is
 /// governed by the `unavailableUntilRunning` setting — off, and this class is

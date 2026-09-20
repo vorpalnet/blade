@@ -58,13 +58,11 @@ public class OptionsSettings extends Configuration implements Serializable {
 	@JsonPropertyDescription("Event packages supported by this server, used in the Allow-Events header of OPTIONS responses")
 	protected String allowEvents;
 
-	protected boolean unavailableWhenOverloaded;
-
-	protected int overloadRetryAfter;
-
 	protected int drainRetryAfter;
 
 	protected boolean unavailableUntilRunning;
+
+	protected Integer queuePressurePercent;
 
 	public String getAllow() {
 		return allow;
@@ -114,24 +112,6 @@ public class OptionsSettings extends Configuration implements Serializable {
 		this.allowEvents = allowEvents;
 	}
 
-	@JsonPropertyDescription("When true, OPTIONS answers 503 Service Unavailable while OCCAS overload protection is actively rejecting traffic, so a SIP-aware load balancer drains this node. When false — or when no overload thresholds are configured — OPTIONS always answers 200 OK, exactly as before.")
-	public boolean isUnavailableWhenOverloaded() {
-		return unavailableWhenOverloaded;
-	}
-
-	public void setUnavailableWhenOverloaded(boolean unavailableWhenOverloaded) {
-		this.unavailableWhenOverloaded = unavailableWhenOverloaded;
-	}
-
-	@JsonPropertyDescription("Seconds advertised in the Retry-After header of the 503 sent while overloaded, telling the peer/load balancer how long to wait before retrying. 0 omits the header.")
-	public int getOverloadRetryAfter() {
-		return overloadRetryAfter;
-	}
-
-	public void setOverloadRetryAfter(int overloadRetryAfter) {
-		this.overloadRetryAfter = overloadRetryAfter;
-	}
-
 	@JsonPropertyDescription("Seconds advertised in the Retry-After header of the 503 Draining sent while this node is administratively drained. 0 omits the header. The drain SWITCH is not configuration — it is the per-node JMX attribute vorpal.blade:Name=<app>,Type=Drain / Drained; this field only sets the wait the 503 advertises.")
 	public int getDrainRetryAfter() {
 		return drainRetryAfter;
@@ -148,6 +128,15 @@ public class OptionsSettings extends Configuration implements Serializable {
 
 	public void setUnavailableUntilRunning(boolean unavailableUntilRunning) {
 		this.unavailableUntilRunning = unavailableUntilRunning;
+	}
+
+	@JsonPropertyDescription("Percent of capacity at which OPTIONS answers 503 Busy, checked against the two SIP work-manager queues (wlss.transport and wlss.timer). When either queue is full the container stops passing messages to applications and answers every request 503 Server Busy, calls included; answering 503 at this percentage first lets a SIP-aware load balancer back off before that happens. The node answers 200 again as soon as a ping finds both queues below the line. Absent: 80. 0 turns the check off.")
+	public Integer getQueuePressurePercent() {
+		return queuePressurePercent;
+	}
+
+	public void setQueuePressurePercent(Integer queuePressurePercent) {
+		this.queuePressurePercent = queuePressurePercent;
 	}
 
 }
