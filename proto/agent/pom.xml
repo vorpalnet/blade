@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.vorpal.blade</groupId>
+		<artifactId>vorpal-blade</artifactId>
+		<version>${revision}</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>vorpal-blade-proto-agent</artifactId>
+	<packaging>war</packaging>
+	<name>BLADE Agent Console</name>
+	<description>Engine-tier converged app: a live screen-pop for the human agent (caller identity, STIR/SHAKEN, screening verdict, call history) pushed over a WebSocket as the call arrives, plus a REST report action that feeds the block list and the risk-score label store.</description>
+
+	<dependencies>
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-library-framework</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<!-- SIP app: finalName == context-root == "agent", a single flat segment,
+		     so the App Router's `next` can resolve it. Skinny WAR: only the
+		     framework jar rides inside; third-party jars come from blade-shared. -->
+		<finalName>agent</finalName>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-war-plugin</artifactId>
+				<configuration>
+					<!-- Portal master login page injected at build time (SECURITY.md:
+					     never add a per-app login page). -->
+					<webResources>
+						<resource>
+							<directory>${project.basedir}/../../admin/portal/src/main/webapp</directory>
+							<includes>
+								<include>login.jsp</include>
+							</includes>
+							<targetPath>login</targetPath>
+						</resource>
+					</webResources>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>

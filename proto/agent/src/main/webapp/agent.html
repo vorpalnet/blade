@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Console</title>
+<!--
+  The live screen-pop. A signed-in agent's browser holds one WebSocket; a pop
+  arrives on it while the call is still ringing, in time for the agent to decide
+  whether to answer or report. Everything shown is a read of what the edge apps
+  stamped on the call and what the catalog already recorded; the one write is the
+  report button, which posts to this app's own API.
+
+  Hand-rolled, served from this WAR, nothing fetched from outside it.
+
+  Redundant coding, not colour removed. Risk is shown twice at once: a colour AND
+  the word "clear/watch/suspect" with its score. The colour reads at a glance for
+  those who see it; the word and number say the same thing for anyone who can't
+  tell the colours apart (colourblindness is trouble telling colours apart, not an
+  inability to see them — so the answer is a second channel, never a grey page).
+  A caller's history is a count in words; a prior label is its own text.
+-->
+<style>
+  :root {
+    --ink: #1f1f1f; --muted: #5a5a5a; --line: #d8d8d8; --panel: #f6f6f6;
+    --brand: #602671; --brand-300: #b97cd0;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--ink); background: #fff; }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  header a { color: var(--brand); }
+  header .who { color: var(--muted); font-size: 13px; margin-left: auto; }
+  /* Connection state is words + a shape, never a bare colour dot. */
+  .conn { font-size: 12px; border: 1px solid var(--line); border-radius: 12px; padding: 2px 10px; color: var(--muted); }
+  .conn.live { border-color: var(--brand); color: var(--brand); }
+  .conn.live::before { content: "\25CF  "; }   /* filled circle: connected */
+  .conn.down::before { content: "\25CB  "; }    /* hollow circle: not connected */
+
+  main { padding: 16px 20px; max-width: 1100px; margin: 0 auto; }
+  .hint { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+  .empty { color: var(--muted); padding: 40px 0; text-align: center; font-style: italic; }
+
+  /* One call = one card. Newest on top. */
+  .pop { border: 1px solid var(--line); border-radius: 6px; margin-bottom: 14px; overflow: hidden; }
+  .pop .top { display: flex; align-items: baseline; gap: 12px; padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .pop .num { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .pop .name { color: var(--muted); font-size: 15px; }
+  .pop .dialed { color: var(--muted); font-size: 13px; margin-left: auto; }
+  .pop .body { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+  @media (max-width: 720px) { .pop .body { grid-template-columns: 1fr; } }
+  .pane { padding: 12px 16px; }
+  .pane + .pane { border-left: 1px solid var(--line); }
+  @media (max-width: 720px) { .pane + .pane { border-left: none; border-top: 1px solid var(--line); } }
+  .pane h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+  .kv { display: grid; grid-template-columns: 120px 1fr; gap: 3px 10px; font-size: 13px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; }
+
+  /* Risk band: distinguished by border weight/style AND label, not colour. */
+  /* Risk is two channels at once (redundant coding): a colour AND the word +
+     score. The colour reads at a glance for those who see it; the word and the
+     number say the same thing for anyone who cannot tell the colours apart. */
+  .band { font-weight: 700; padding: 1px 9px; border-radius: 4px; }
+  .band .score { font-weight: 400; opacity: .8; font-variant-numeric: tabular-nums; }
+  .band.clear   { color: #1b5e20; background: #e6f4ea; }
+  .band.watch   { color: #8a5300; background: #fbeecb; }
+  .band.suspect { color: #b3261e; background: #fbe1de; }
+  .band.none    { color: var(--muted); font-weight: 400; padding: 0; }
+
+  /* Attestation: A/B/C spelled out; C carries a warning glyph, not a colour. */
+  .attest { font-variant-numeric: tabular-nums; }
+  .warn::before { content: "\26A0  "; }  /* warning sign */
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+  .chip { border: 1px solid var(--ink); border-radius: 3px; padding: 1px 7px; font-size: 12px; }
+  .count { font-weight: 600; }
+
+  .topics { font-size: 12px; margin-top: 6px; }
+  .topics .tlabel { color: var(--muted); }
+  .recent { list-style: none; margin: 6px 0 0; padding: 0; font-size: 12px; color: var(--muted); }
+  .recent li { padding: 2px 0; border-top: 1px dotted var(--line); font-variant-numeric: tabular-nums; }
+
+  .report { padding: 12px 16px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .report label { font-size: 13px; color: var(--muted); }
+  .report select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; }
+  .report button { font: inherit; padding: 7px 16px; border: 1px solid var(--brand); background: var(--brand); color: #fff; border-radius: 4px; cursor: pointer; }
+  .report button[disabled] { opacity: .5; cursor: default; }
+  .report .result { font-size: 13px; }
+  .report .result.ok::before { content: "\2713  "; }  /* check mark */
+</style>
+</head>
+<body>
+<header>
+  <h1>Agent Console</h1>
+  <span id="conn" class="conn down">connecting</span>
+  <span class="who">signed in as <b id="who">&hellip;</b> &middot; <a href="oidc/logout" id="signout">sign out</a></span>
+</header>
+
+<main>
+  <p class="hint">A card appears the moment a call arrives, before it is answered.
+     The last few calls stay on screen; report a scam and the number is blocked and the call labelled.</p>
+  <div id="pops"></div>
+  <div id="empty" class="empty">Waiting for the next call&hellip;</div>
+</main>
+
+<script>
+"use strict";
+(function () {
+  var pops = document.getElementById("pops");
+  var empty = document.getElementById("empty");
+  var connEl = document.getElementById("conn");
+  var MAX_CARDS = 8;
+  var socket = null;              // the one open console socket, or null
+  var pending = {};               // callId -> {button, result} awaiting a report result
+  var mayReport = false;          // set from the server's hello; gates the report button
+  var whoEl = document.getElementById("who");
+
+  function esc(s) {
+    if (s === null || s === undefined) return "";
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+
+  // Risk in two channels: a colour band AND the word + score inside it, so it
+  // reads at a glance and still says the same thing to anyone who can't tell the
+  // colours apart. "not scored" when the call carries no band.
+  function bandClass(b) {
+    switch ((b || "").toLowerCase()) {
+      case "clear": return "clear";
+      case "watch": return "watch";
+      case "suspect": return "suspect";
+      default: return "none";
+    }
+  }
+  function riskHtml(pop) {
+    if (!pop.riskBand) {
+      return '<span class="band none">not scored</span>';
+    }
+    var score = (pop.riskScore != null) ? ' <span class="score">' + esc(pop.riskScore) + "</span>" : "";
+    return '<span class="band ' + bandClass(pop.riskBand) + '">' + esc(pop.riskBand) + score + "</span>";
+  }
+
+  // Attestation A/B/C, spelled out. C (gateway, unverified caller) is flagged.
+  function attest(pop) {
+    var a = (pop.attestation || "").toUpperCase();
+    var label = { "A": "A — full", "B": "B — partial", "C": "C — gateway" }[a] || (pop.verstat || "none");
+    var warn = (a === "C" || (pop.verstat && /fail/i.test(pop.verstat))) ? " warn" : "";
+    var age = (pop.stirAgeSeconds != null) ? " (" + pop.stirAgeSeconds + "s old)" : "";
+    return '<span class="attest' + warn + '">' + esc(label) + esc(age) + "</span>";
+  }
+
+  function fmtWhen(iso) {
+    if (!iso) return "?";
+    var d = new Date(iso);
+    return isNaN(d) ? esc(iso) : d.toLocaleString();
+  }
+  function fmtDur(ms) {
+    if (ms == null) return "";
+    var s = Math.round(ms / 1000);
+    return " · " + Math.floor(s / 60) + "m" + (s % 60) + "s";
+  }
+
+  function history(h) {
+    h = h || { callCount: 0, recent: [], priorLabels: [] };
+    var out = "";
+    if (h.callCount > 0) {
+      out += '<div class="count">Called ' + h.callCount + ' time' + (h.callCount === 1 ? "" : "s") + " before</div>";
+    } else {
+      out += '<div class="muted">First time this number has called.</div>';
+    }
+    if (h.priorLabels && h.priorLabels.length) {
+      out += '<div class="chips">';
+      h.priorLabels.forEach(function (l) { out += '<span class="chip">' + esc(l) + "</span>"; });
+      out += "</div>";
+    }
+    if (h.topics && h.topics.length) {
+      out += '<div class="topics"><span class="tlabel">Prior topics:</span> ' +
+        h.topics.map(function (t) { return esc(t); }).join("; ") + "</div>";
+    }
+    if (h.recent && h.recent.length) {
+      out += '<ul class="recent">';
+      h.recent.forEach(function (c) {
+        out += "<li>" + fmtWhen(c.whenUtc) + " → " + esc(c.dialed || "?") + fmtDur(c.durationMillis) + "</li>";
+      });
+      out += "</ul>";
+    }
+    return out;
+  }
+
+  var CATEGORIES = ["scam", "fraud", "robocall", "spam", "harassment", "abuse"];
+
+  function card(pop) {
+    var el = document.createElement("div");
+    el.className = "pop";
+    var opts = CATEGORIES.map(function (c) { return '<option value="' + c + '">' + c + "</option>"; }).join("");
+
+    el.innerHTML =
+      '<div class="top">' +
+        '<span class="num">' + esc(pop.ani || (pop.anonymous ? "Anonymous" : "unknown")) + "</span>" +
+        (pop.displayName ? '<span class="name">' + esc(pop.displayName) + "</span>" : "") +
+        '<span class="dialed">to ' + esc(pop.dialed || "?") + " · " + fmtWhen(pop.receivedUtc) + "</span>" +
+      "</div>" +
+      '<div class="body">' +
+        '<div class="pane">' +
+          "<h3>This call</h3>" +
+          '<dl class="kv">' +
+            "<dt>Risk</dt><dd>" + riskHtml(pop) + "</dd>" +
+            "<dt>Screening</dt><dd>" + esc(pop.screenVerdict || "none") +
+              (pop.screenReason ? ' <span class="muted">(' + esc(pop.screenReason) + ")</span>" : "") + "</dd>" +
+            "<dt>STIR/SHAKEN</dt><dd>" + attest(pop) + "</dd>" +
+            (pop.callRate != null ? "<dt>Call rate</dt><dd>" + esc(pop.callRate) + "/node</dd>" : "") +
+          "</dl>" +
+        "</div>" +
+        '<div class="pane">' +
+          "<h3>This caller</h3>" +
+          history(pop.history) +
+        "</div>" +
+      "</div>" +
+      '<div class="report">' +
+        '<label>Report as</label>' +
+        "<select>" + opts + "</select>" +
+        "<button type=\"button\">Report</button>" +
+        '<span class="result"></span>' +
+      "</div>";
+
+    var select = el.querySelector("select");
+    var button = el.querySelector("button");
+    var result = el.querySelector(".result");
+    if (!mayReport) {
+      // A signed-in watcher who is not in a report group: the button is inert
+      // and says why, rather than failing on click.
+      button.disabled = true;
+      select.disabled = true;
+      result.textContent = "view only";
+    }
+    button.addEventListener("click", function () {
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        result.className = "result";
+        result.textContent = "not connected";
+        return;
+      }
+      button.disabled = true;
+      result.className = "result";
+      result.textContent = "reporting…";
+      // The result comes back on the socket; match it to this card by callId.
+      pending[pop.callId] = { button: button, result: result };
+      socket.send(JSON.stringify({
+        t: "report", ani: pop.ani, conversation: pop.conversation || null,
+        callId: pop.callId, category: select.value
+      }));
+    });
+    return el;
+  }
+
+  // A report outcome arriving on the socket; find the card that asked.
+  function reportResult(m) {
+    var slot = m.callId ? pending[m.callId] : null;
+    if (!slot) return;
+    delete pending[m.callId];
+    if (m.ok) {
+      slot.result.className = "result ok";
+      slot.result.textContent = "blocked (" + m.treatment + ")" +
+        (m.labelled ? ", labelled" : "") + (m.published ? ", logged" : "");
+    } else {
+      slot.button.disabled = false;
+      slot.result.className = "result";
+      slot.result.textContent = "report failed: " + (m.error || "unknown");
+    }
+  }
+
+  // The server's greeting: who is signed in, and whether they may report.
+  function hello(m) {
+    if (m.user) { whoEl.textContent = m.user; }
+    mayReport = !!m.mayReport;
+    // Apply to any cards already on screen (hello normally arrives first).
+    var buttons = pops.querySelectorAll(".report button");
+    for (var i = 0; i < buttons.length; i++) {
+      if (!mayReport) {
+        buttons[i].disabled = true;
+        buttons[i].parentNode.querySelector("select").disabled = true;
+        var r = buttons[i].parentNode.querySelector(".result");
+        if (!r.textContent) { r.textContent = "view only"; }
+      }
+    }
+  }
+
+  function show(pop) {
+    empty.style.display = "none";
+    pops.insertBefore(card(pop), pops.firstChild);
+    while (pops.children.length > MAX_CARDS) {
+      pops.removeChild(pops.lastChild);
+    }
+  }
+
+  function connect() {
+    var scheme = location.protocol === "https:" ? "wss:" : "ws:";
+    var base = location.pathname.replace(/\/[^/]*$/, "");   // strip agent.html
+    var url = scheme + "//" + location.host + base + "/console";
+    var ws;
+    try { ws = new WebSocket(url); }
+    catch (e) { setTimeout(connect, 4000); return; }
+
+    ws.onopen = function () { socket = ws; connEl.className = "conn live"; connEl.textContent = "live"; };
+    ws.onmessage = function (ev) {
+      var m;
+      try { m = JSON.parse(ev.data); } catch (e) { return; /* ignore a malformed frame */ }
+      if (m.t === "hello") { hello(m); }
+      else if (m.t === "pop") { show(m.pop); }
+      else if (m.t === "reportResult") { reportResult(m); }
+    };
+    ws.onclose = function () {
+      socket = null;
+      connEl.className = "conn down"; connEl.textContent = "reconnecting…";
+      setTimeout(connect, 4000);
+    };
+    ws.onerror = function () { try { ws.close(); } catch (e) {} };
+  }
+
+  connect();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+	id="WebApp_Agent" version="4.0">
+
+	<!-- display-name -> JMX MBean key and the on-disk config file name. -->
+	<display-name>agent</display-name>
+
+	<welcome-file-list>
+		<welcome-file>agent.html</welcome-file>
+	</welcome-file-list>
+
+	<!--
+	  Identity is OpenID Connect, not WebLogic accounts. The people who use this
+	  console are call-center agents, thousands of them, signed in with their
+	  corporate identity provider; none of them has a WebLogic user. This is the
+	  same model as the recordings service.
+
+	  OidcLoginFilter (mapped to everything) signs a browser in against the
+	  provider named by WEB-INF/blade-oidc.properties, which deploy.sh injects
+	  from ~/.blade/<env>/oidc/agent.properties, and accepts a bearer token from
+	  a non-browser client. With no such file it falls back to the container
+	  login named below, so an unconfigured deployment still does not answer the
+	  world. The application declares no auth-constraint of its own: a constraint
+	  is checked before any filter runs and would demand the container's login of
+	  every browser, so the OpenID sign-in could never start.
+
+	  Authorization is not a container role. The console page and its WebSocket
+	  need only a signed-in identity; the one privileged action, reporting a
+	  call, is gated in the endpoint against the identity's group claims (see
+	  AgentConsoleEndpoint and AgentSettings.reportGroups), because a container
+	  role check cannot reach an individual WebSocket frame anyway.
+	-->
+	<filter>
+		<filter-name>OidcLoginFilter</filter-name>
+		<filter-class>org.vorpal.blade.framework.v3.security.OidcLoginFilter</filter-class>
+		<!-- Required: the console's WebSocket upgrade runs startAsync (Tyrus). A
+		     non-async filter anywhere in the chain disables async on the request
+		     and the upgrade throws "async-support is disabled on this request".
+		     The framework's own fragment filters already declare this; recordings
+		     never needed it because it has no socket. -->
+		<async-supported>true</async-supported>
+	</filter>
+	<filter-mapping>
+		<filter-name>OidcLoginFilter</filter-name>
+		<url-pattern>/*</url-pattern>
+	</filter-mapping>
+
+	<login-config>
+		<auth-method>CLIENT-CERT,FORM</auth-method>
+		<realm-name>default</realm-name>
+		<form-login-config>
+			<form-login-page>/login/login.jsp</form-login-page>
+			<form-error-page>/login/login.jsp</form-error-page>
+		</form-login-config>
+	</login-config>
+
+	<!-- Named for the container-login fallback (door 3), where an administrator
+	     with one of these realm roles signs in by form. Under OpenID Connect the
+	     identity comes from the provider and these are unused. -->
+	<security-role><role-name>Admin</role-name></security-role>
+	<security-role><role-name>Operator</role-name></security-role>
+	<security-role><role-name>Deployer</role-name></security-role>
+	<security-role><role-name>Monitor</role-name></security-role>
+</web-app>
