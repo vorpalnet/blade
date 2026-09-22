@@ -2,6 +2,9 @@ package org.vorpal.blade.applications.agent;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
@@ -42,6 +45,44 @@ public final class AgentConsoleRegistry {
 	/// same screen. Only targeted pops are remembered; a broadcast pop has no
 	/// one agent, and its updates broadcast too. Forgotten when the call ends.
 	private static final Map<String, String> AGENT_FOR_CALL = new ConcurrentHashMap<>();
+
+	/// A popped call's analytics identity, so a disposition sent from a console
+	/// minutes after the call ended can still be filed against the call's
+	/// session: the Vorpal-ID as the number the framework assigned, and when the
+	/// call started, the two the sink hashes a session from.
+	public static final class CallRef {
+		public final Long vorpalId;
+		public final Date startedAt;
+		public final String ani;
+
+		public CallRef(Long vorpalId, Date startedAt, String ani) {
+			this.vorpalId = vorpalId;
+			this.startedAt = startedAt;
+			this.ani = ani;
+		}
+	}
+
+	/// The last thousand popped calls by hex Vorpal-ID. Never forgotten on call
+	/// end (wrap-up happens after the hang-up); bounded instead.
+	private static final Map<String, CallRef> CALLS = Collections
+			.synchronizedMap(new LinkedHashMap<String, CallRef>(256, 0.75f, false) {
+				private static final long serialVersionUID = 1L;
+
+				@Override
+				protected boolean removeEldestEntry(Map.Entry<String, CallRef> eldest) {
+					return size() > 1000;
+				}
+			});
+
+	public static void rememberCall(String vorpalIdHex, CallRef ref) {
+		if (vorpalIdHex != null && ref != null) {
+			CALLS.put(vorpalIdHex, ref);
+		}
+	}
+
+	public static CallRef callRef(String vorpalIdHex) {
+		return (vorpalIdHex == null) ? null : CALLS.get(vorpalIdHex);
+	}
 
 	private AgentConsoleRegistry() {
 	}

@@ -27,9 +27,10 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /// a second call to the agent, holding both legs. Two things follow from that.
 /// The pop is built and pushed the moment the second leg starts, so it reaches
 /// the agent's screen while their phone is still ringing. And, because the app
-/// owns both legs, the agent can act on a live call: a report ([ReportService])
-/// blocks the number for next time, and (a later increment on this same base) a
-/// divert re-points the ringing leg at voicemail.
+/// owns both legs, the agent can act on a live call: a disposition
+/// ([DispositionService]) records what they concluded and can block the number
+/// for next time, and (a later increment on this same base) a divert re-points
+/// the ringing leg at voicemail.
 ///
 /// Nothing the pop does can fail the call. History is best-effort ([Catalog]) and
 /// the push is best-effort ([AgentConsoleRegistry]); a screen-pop that throws is
@@ -74,11 +75,12 @@ public class AgentServlet extends B2buaServlet {
 		return (s == null) ? null : new Catalog(s.getDataSource(), s.getHistoryTable(), s.getSpamTable());
 	}
 
-	/// A report service over the current catalog. Null before startup finished.
-	public static ReportService reports() {
+	/// A disposition service over the current catalog. Null before startup finished.
+	public static DispositionService dispositions() {
 		AgentSettings s = settings();
 		Catalog cat = catalog();
-		return (cat == null) ? null : new ReportService(cat, s.getDefaultReportExpiryDays());
+		return (cat == null) ? null : new DispositionService(cat, s.getDefaultReportExpiryDays(),
+				SettingsManager::getAnalytics);
 	}
 
 	// ============================================================ the B2BUA bridge
@@ -157,6 +159,13 @@ public class AgentServlet extends B2buaServlet {
 		// The card's identity: the Vorpal-ID in the same hex form every bus event
 		// carries, so a later update about this call finds its card.
 		pop.vorpalId = vorpalIdOf(request);
+		try {
+			SipApplicationSession app = request.getApplicationSession();
+			AgentConsoleRegistry.rememberCall(pop.vorpalId,
+					new AgentConsoleRegistry.CallRef(Analytics.getVorpalId(app), Analytics.getCallStartedAt(app), pop.ani));
+		} catch (Throwable t) {
+			// No analytics identity: a disposition still publishes, just not by session.
+		}
 		Catalog cat = catalog();
 		if (cat != null && pop.ani != null) {
 			pop.history = cat.history(pop.ani, RECENT_LIMIT);

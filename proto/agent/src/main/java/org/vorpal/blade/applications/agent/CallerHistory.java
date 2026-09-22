@@ -29,12 +29,22 @@ public final class CallerHistory {
 		this.topics = topics;
 	}
 
-	/// One prior call: when, how long, who was dialed, and its conversation id.
+	/// One prior call: when, how long (-1 when its end was never recorded), who
+	/// was dialed, its conversation id, and
+	/// what the agent who took it concluded (the latest `agentDisposition` event
+	/// on that call's session), each null when unknown.
 	public static final class Call {
 		public final String whenUtc;
 		public final long durationMillis;
 		public final String dialed;
 		public final String conversation;
+		public String outcome;
+		public String identity;
+		public String action;
+		public String notes;
+		public String agent;
+		/// Reason codes the agent ticked, comma-separated.
+		public String reasons;
 
 		public Call(String whenUtc, long durationMillis, String dialed, String conversation) {
 			this.whenUtc = whenUtc;

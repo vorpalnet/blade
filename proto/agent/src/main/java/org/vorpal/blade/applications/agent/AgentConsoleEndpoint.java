@@ -77,10 +77,10 @@ public class AgentConsoleEndpoint {
 		LOG.fine("agent: console open for " + principal.getName() + " (" + AgentConsoleRegistry.size() + " open)");
 	}
 
-	/// A message from the browser. The only kind is a report; anything else is
-	/// ignored. A report blocks the number, labels the conversation and puts the
-	/// report on the bus ([ReportService]), then the result goes back to this one
-	/// socket.
+	/// A message from the browser. The only kind is a disposition; anything else
+	/// is ignored. A disposition labels the conversation, blocks the number if the
+	/// action says so, and puts the record on the bus ([DispositionService]), then
+	/// the result goes back to this one socket.
 	@OnMessage
 	public void onMessage(String text, Session session) {
 		Principal principal = session.getUserPrincipal();
@@ -96,32 +96,54 @@ public class AgentConsoleEndpoint {
 		}
 
 		String type = str(in, "t");
-		if (!"report".equals(type)) {
-			return; // the page speaks only "report" upstream
+		if (!"dispose".equals(type)) {
+			return; // the page speaks only "dispose" upstream
 		}
 
-		String ani = str(in, "ani");
-		String conversation = str(in, "conversation");
+		DispositionService.Disposition d = new DispositionService.Disposition();
 		// The call's identity is its Vorpal-ID, the same key the card carries.
-		String vorpalId = str(in, "vorpalId");
-		String category = str(in, "category");
+		d.vorpalId = str(in, "vorpalId");
+		d.ani = str(in, "ani");
+		d.conversation = str(in, "conversation");
+		d.outcome = str(in, "outcome");
+		d.identity = str(in, "identity");
+		d.action = str(in, "action");
+		d.notes = str(in, "notes");
+		if (d.notes != null && d.notes.length() > 1000) {
+			d.notes = d.notes.substring(0, 1000);
+		}
+		// The gut: which tells the agent noticed, as a list of fixed codes.
+		JsonNode reasons = in.path("reasons");
+		if (reasons.isArray() && reasons.size() > 0) {
+			java.util.List<String> codes = new java.util.ArrayList<>();
+			for (JsonNode r : reasons) {
+				String code = r.asText("").trim().replaceAll("[^a-z0-9-]", "");
+				if (!code.isEmpty() && codes.size() < 12) {
+					codes.add(code);
+				}
+			}
+			d.reasons = codes.isEmpty() ? null : String.join(",", codes);
+		}
 
 		if (!mayReport(session)) {
-			sendResult(session, vorpalId, false, "your account is not permitted to report calls", null);
+			sendResult(session, d.vorpalId, false, "your account is not permitted to update calls", null);
 			return;
 		}
-		ReportService reports = AgentServlet.reports();
-		if (reports == null) {
-			sendResult(session, vorpalId, false, "settings not loaded", null);
+		DispositionService dispositions = AgentServlet.dispositions();
+		if (dispositions == null) {
+			sendResult(session, d.vorpalId, false, "settings not loaded", null);
 			return;
 		}
-		if (ani == null && conversation == null) {
-			sendResult(session, vorpalId, false, "ani or conversation is required", null);
+		if (d.ani == null && d.vorpalId == null) {
+			sendResult(session, d.vorpalId, false, "the call is not identified", null);
 			return;
 		}
 
-		ReportService.Result result = reports.record(ani, conversation, vorpalId, category, principal.getName());
-		sendResult(session, vorpalId, true, null, result);
+		DispositionService.Result result = dispositions.record(d, principal.getName());
+		AgentConsoleRegistry.log("agent: disposition vorpalId=" + d.vorpalId + " outcome=" + d.outcome + " identity="
+				+ d.identity + " action=" + d.action + " reasons=" + d.reasons + " by " + principal.getName() + " -> blocked=" + result.blocked
+				+ " labelled=" + result.labelled + " published=" + result.published);
+		sendResult(session, d.vorpalId, true, null, result);
 	}
 
 	@OnClose
@@ -192,11 +214,12 @@ public class AgentConsoleEndpoint {
 		return false;
 	}
 
-	/// Send a report outcome back to the one socket that asked. The Vorpal-ID is
-	/// echoed so the page can match the result to the card that raised it.
-	private void sendResult(Session session, String vorpalId, boolean ok, String error, ReportService.Result result) {
+	/// Send a disposition outcome back to the one socket that asked. The Vorpal-ID
+	/// is echoed so the page can match the result to the card that raised it.
+	private void sendResult(Session session, String vorpalId, boolean ok, String error,
+			DispositionService.Result result) {
 		ObjectNode msg = MAPPER.createObjectNode();
-		msg.put("t", "reportResult");
+		msg.put("t", "disposeResult");
 		msg.put("ok", ok);
 		if (vorpalId != null) {
 			msg.put("vorpalId", vorpalId);

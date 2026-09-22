@@ -43,6 +43,7 @@ public class AgentSettingsSample extends AgentSettings {
 
 		Analytics analytics = new Analytics();
 		analytics.setEnabled(true);
+		analytics.createEventSelector(DispositionService.EVENT);
 		setAnalytics(analytics);
 
 		EventBusSettings events = new EventBusSettings();

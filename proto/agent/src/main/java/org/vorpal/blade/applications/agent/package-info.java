@@ -25,19 +25,23 @@
 /// engine. This app reads what they already stamped on the INVITE (`X-Call-Screen`,
 /// `X-Call-Rate`, the `Identity` PASSporT) and what the call catalog already
 /// recorded (`BLADE_CONVERSATION`, `BLADE_LABEL`), and shows it. The one thing
-/// it writes is the agent's report.
+/// it writes is the agent's disposition.
 ///
-/// ## What a report does
+/// ## What an Update does
 ///
-/// One click fans out three ways ([ReportService]), each best-effort and
-/// independent:
+/// Every call gets one disposition: an outcome, whether the caller's identity
+/// was verified, an action, and notes. One click fans out three ways
+/// ([DispositionService]), each best-effort and independent:
 ///
-///  1. a `spam_numbers` row the edge reads next time, with a treatment chosen
-///     from the category (harassment goes to a review voicemail, robocall to a
-///     tarpit, scam is declined) and an expiry, since numbers rotate;
-///  2. a `BLADE_LABEL` row on the conversation, which is both the catalog's
-///     label store and the ground truth the fused risk score calibrates against;
-///  3. a CloudEvent on the bus for audit and any other subscriber.
+///  1. when the action is "block", a `spam_numbers` row the edge reads next
+///     time, with a treatment chosen from the outcome (harassment goes to a
+///     review voicemail, robocall to a tarpit, scam is declined) and an expiry,
+///     since numbers rotate;
+///  2. a `BLADE_LABEL` row on the conversation when there is a recorded one,
+///     which is both the catalog's label store and the ground truth the fused
+///     risk score calibrates against;
+///  3. an `agentDisposition` analytics event on the call's session, which the
+///     sink stores and the next pop for this number reads back as history.
 ///
 /// The report never sends a `607` or otherwise tells the caller they were
 /// blocked: a spammer who learns they are blocked tries harder. The treatments

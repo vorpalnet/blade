@@ -103,6 +103,17 @@ public class ConsoleUpdater implements EventSubscriber.Handler {
 			if (attributes.containsKey("startMs")) {
 				utterance.put("atMs", attributes.get("startMs"));
 			}
+			// What the probe heard in it: the content labels, if any, as words the
+			// page maps to a reason ("asked for a gift card").
+			String labels = attributes.get("labels");
+			if (labels != null && !labels.isEmpty()) {
+				com.fasterxml.jackson.databind.node.ArrayNode labelList = utterance.putArray("labels");
+				for (String label : labels.split(",")) {
+					if (!label.trim().isEmpty()) {
+						labelList.add(label.trim());
+					}
+				}
+			}
 			return new Update(vorpalId, frame.toString());
 		}
 

@@ -36,6 +36,7 @@ import javax.sql.DataSource;
 public final class Catalog {
 
 	private static final Logger LOG = Logger.getLogger(Catalog.class.getName());
+	private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
 
 	private final String dataSource;
 	private final String conversationTable;
@@ -85,12 +86,17 @@ public final class Catalog {
 		}
 	}
 
-	/// Completed calls from this number, across every app that publishes a
-	/// session key named `ani`. `destroyed IS NOT NULL` leaves out the call that
-	/// is ringing right now (its session row is open), so the count is "before".
+	/// A session counts as a prior call once it is closed, or once it has been
+	/// open this long: the call ringing right now has an open row seconds old,
+	/// so the count stays "before", while a row a redeploy or a crash left open
+	/// forever (its stop never published) still counts as the call it was.
+	private static final String PRIOR = " AND (s.destroyed IS NOT NULL OR s.created < SYSTIMESTAMP - INTERVAL '2' MINUTE)";
+
+	/// Prior calls from this number, across every app that publishes a session
+	/// key named `ani`.
 	private int sessionCount(Connection c, String ani) throws Exception {
 		String sql = "SELECT COUNT(DISTINCT s.id) FROM sessions s JOIN session_keys k ON k.session_id = s.id"
-				+ " WHERE k.name = ? AND k.value = ? AND s.destroyed IS NOT NULL";
+				+ " WHERE k.name = ? AND k.value = ?" + PRIOR;
 		try (PreparedStatement ps = c.prepareStatement(sql)) {
 			ps.setString(1, AgentSettingsSample.KEY_ANI);
 			ps.setString(2, ani);
@@ -106,7 +112,7 @@ public final class Catalog {
 		String sql = "SELECT DISTINCT s.id, s.created, s.destroyed, d.value FROM sessions s"
 				+ " JOIN session_keys k ON k.session_id = s.id AND k.name = ? AND k.value = ?"
 				+ " LEFT JOIN session_keys d ON d.session_id = s.id AND d.name = ?"
-				+ " WHERE s.destroyed IS NOT NULL ORDER BY s.created DESC FETCH FIRST " + limit + " ROWS ONLY";
+				+ " WHERE 1 = 1" + PRIOR + " ORDER BY s.created DESC FETCH FIRST " + limit + " ROWS ONLY";
 		List<CallerHistory.Call> out = new ArrayList<>();
 		try (PreparedStatement ps = c.prepareStatement(sql)) {
 			ps.setString(1, AgentSettingsSample.KEY_ANI);
@@ -116,13 +122,45 @@ public final class Catalog {
 				while (rs.next()) {
 					Timestamp created = rs.getTimestamp(2);
 					Timestamp destroyed = rs.getTimestamp(3);
-					long millis = (created != null && destroyed != null) ? destroyed.getTime() - created.getTime() : 0;
-					out.add(new CallerHistory.Call(created == null ? null : created.toInstant().toString(), millis,
-							rs.getString(4), null));
+					// A row still open is a call whose end was never recorded: no duration.
+					long millis = (created != null && destroyed != null) ? destroyed.getTime() - created.getTime() : -1;
+					CallerHistory.Call call = new CallerHistory.Call(
+							created == null ? null : created.toInstant().toString(), millis, rs.getString(4), null);
+					disposition(c, rs.getLong(1), call);
+					out.add(call);
 				}
 			}
 		}
 		return out;
+	}
+
+	/// The latest agent disposition filed on a session, if any: the sink stores
+	/// an application event's attributes as one JSON document in `events.payload`
+	/// under the event's short name. Best-effort; a call without one shows as it
+	/// did before.
+	private void disposition(Connection c, long sessionId, CallerHistory.Call call) {
+		String sql = "SELECT e.payload FROM events e WHERE e.session_id = ? AND e.type = ?"
+				+ " ORDER BY e.created DESC FETCH FIRST 1 ROWS ONLY";
+		try (PreparedStatement ps = c.prepareStatement(sql)) {
+			ps.setLong(1, sessionId);
+			ps.setString(2, DispositionService.EVENT);
+			try (ResultSet rs = ps.executeQuery()) {
+				if (rs.next()) {
+					String payload = rs.getString(1);
+					if (payload != null) {
+						com.fasterxml.jackson.databind.JsonNode d = MAPPER.readTree(payload);
+						call.outcome = d.path("outcome").asText(null);
+						call.identity = d.path("identity").asText(null);
+						call.action = d.path("action").asText(null);
+						call.notes = d.path("notes").asText(null);
+						call.agent = d.path("agent").asText(null);
+						call.reasons = d.path("reasons").asText(null);
+					}
+				}
+			}
+		} catch (Exception e) {
+			LOG.log(Level.FINE, "agent: disposition unavailable for session " + sessionId + ": " + e.getMessage());
+		}
 	}
 
 	private int count(Connection c, String ani) throws Exception {
@@ -205,28 +243,63 @@ public final class Catalog {
 
 	/// Add a number to the block list proxy-block reads, with a treatment and an
 	/// expiry (numbers rotate, so blocks expire). Columns per proxy-block's
-	/// `spam-numbers.sql`. Returns true on a committed insert, false (logged) on
-	/// any failure. A number already blocked hits the primary key and is caught.
+	/// `spam-numbers.sql`. A number already on the list is updated instead: the
+	/// newer treatment and reason win and the expiry restarts, so a second agent
+	/// blocking the same caller extends the block rather than bouncing off the
+	/// primary key. Returns true when a row was written, false (logged) on any
+	/// failure.
 	public boolean blockNumber(String tn, String treatment, String reason, String markedBy, int expiryDays) {
 		if (!enabled() || tn == null || tn.isBlank()) {
 			return false;
 		}
-		String sql = "INSERT INTO " + spamTable + " (tn, treatment, reason, marked_by, expires_at) "
+		String insert = "INSERT INTO " + spamTable + " (tn, treatment, reason, marked_by, expires_at) "
 				+ "VALUES (?, ?, ?, ?, ?)";
+		String update = "UPDATE " + spamTable + " SET treatment = ?, reason = ?, marked_by = ?, expires_at = ?"
+				+ " WHERE tn = ?";
 		try {
 			DataSource ds = (DataSource) new InitialContext().lookup(dataSource);
-			try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
-				ps.setString(1, tn);
-				ps.setString(2, treatment);
-				ps.setString(3, reason);
-				ps.setString(4, markedBy);
-				long expiry = System.currentTimeMillis() + (long) Math.max(1, expiryDays) * 86_400_000L;
-				ps.setTimestamp(5, new Timestamp(expiry));
-				ps.executeUpdate();
-				return true;
+			Timestamp expiry = new Timestamp(
+					System.currentTimeMillis() + (long) Math.max(1, expiryDays) * 86_400_000L);
+			try (Connection c = ds.getConnection()) {
+				try (PreparedStatement ps = c.prepareStatement(update)) {
+					ps.setString(1, treatment);
+					ps.setString(2, reason);
+					ps.setString(3, markedBy);
+					ps.setTimestamp(4, expiry);
+					ps.setString(5, tn);
+					if (ps.executeUpdate() > 0) {
+						return true;
+					}
+				} catch (Exception noTableYet) {
+					// No table to update: the insert below finds out and creates it.
+				}
+				try (PreparedStatement ps = c.prepareStatement(insert)) {
+					ps.setString(1, tn);
+					ps.setString(2, treatment);
+					ps.setString(3, reason);
+					ps.setString(4, markedBy);
+					ps.setTimestamp(5, expiry);
+					ps.executeUpdate();
+					return true;
+				} catch (Exception noTable) {
+					// The block list is proxy-block's table, applied by hand from its
+					// spam-numbers.sql, and a fresh schema does not have it. Create it
+					// from the same DDL and try once more; on a real failure the
+					// retry's exception is the one reported.
+					createBlockList(c);
+					try (PreparedStatement ps = c.prepareStatement(insert)) {
+						ps.setString(1, tn);
+						ps.setString(2, treatment);
+						ps.setString(3, reason);
+						ps.setString(4, markedBy);
+						ps.setTimestamp(5, expiry);
+						ps.executeUpdate();
+						return true;
+					}
+				}
 			}
 		} catch (Exception e) {
-			LOG.log(Level.WARNING, "agent: could not block " + tn + ": " + e.getMessage());
+			AgentConsoleRegistry.log("agent: could not block " + tn + ": " + e);
 			return false;
 		}
 	}
@@ -234,6 +307,28 @@ public final class Catalog {
 	/// Attach a label to a conversation: the catalog half of an agent report.
 	/// `BLADE_LABEL` is the calibration/label store; this is its first writer.
 	/// Returns true on a committed insert, false (logged) on any failure.
+	/// The block list's DDL, the same as proxy-block's `spam-numbers.sql`
+	/// (ten-digit number as the key, a treatment, who and why, and an expiry).
+	/// Best-effort: an existing table, or a schema that refuses DDL, leaves the
+	/// insert to fail on its own terms.
+	private void createBlockList(Connection c) {
+		String ddl = "CREATE TABLE " + spamTable + " (tn VARCHAR(15) NOT NULL PRIMARY KEY,"
+				+ " treatment VARCHAR(16) DEFAULT 'tarpit' NOT NULL, reason VARCHAR(64), marked_by VARCHAR(64),"
+				+ " marked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, expires_at TIMESTAMP NOT NULL)";
+		try (java.sql.Statement st = c.createStatement()) {
+			st.executeUpdate(ddl);
+			AgentConsoleRegistry.log("agent: created the block list table " + spamTable);
+		} catch (Exception e) {
+			AgentConsoleRegistry.log("agent: block list table " + spamTable + " not created: " + e);
+			return;
+		}
+		try (java.sql.Statement st = c.createStatement()) {
+			st.executeUpdate("CREATE INDEX " + spamTable + "_expires ON " + spamTable + " (expires_at)");
+		} catch (Exception ignore) {
+			// the index is a convenience for the reaper, not for the insert
+		}
+	}
+
 	public boolean label(String conversation, String label, double confidence, String source) {
 		if (!enabled() || conversation == null || conversation.isBlank() || label == null) {
 			return false;

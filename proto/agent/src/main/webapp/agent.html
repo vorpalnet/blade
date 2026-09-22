@@ -12,8 +12,8 @@
   has heard enough audio to score it, and every utterance the caller makes is
   appended to the transcript as it is decoded. Everything shown is a read of
   what the edge apps stamped on the call, what the media tier published on the
-  bus, and what the catalog already recorded; the one write is the report
-  button.
+  bus, and what the catalog already recorded; the one write is the Update
+  button: one disposition per call (outcome, caller identity, action, notes).
 
   Hand-rolled, served from this WAR, nothing fetched from outside it.
 
@@ -117,6 +117,12 @@
   .lines li:first-child { border-top: none; }
   .lines .at { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; padding-top: 2px; }
   .lines .callee { color: var(--brand); }
+  .lines .tag { display: inline-block; margin-left: 6px; font-size: 11px; border: 1px solid #b3261e; color: #b3261e; border-radius: 3px; padding: 0 5px; vertical-align: 1px; }
+  /* What the caller has asked for so far, in words: the content signal's reasons. */
+  .why { margin-top: 8px; font-size: 12.5px; }
+  .why .lbl { color: var(--muted); }
+  .why b { font-weight: 600; }
+  .why.off { display: none; }
   .lines li.new { animation: land .8s ease-out; }
   @keyframes land { from { background: #efe3f3; } to { background: transparent; } }
   .listening { color: var(--muted); font-style: italic; font-size: 13px; }
@@ -130,13 +136,27 @@
   .recent { list-style: none; margin: 6px 0 0; padding: 0; font-size: 12px; color: var(--muted); }
   .recent li { padding: 2px 0; border-top: 1px dotted var(--line); font-variant-numeric: tabular-nums; }
 
-  .report { padding: 12px 16px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .report label { font-size: 13px; color: var(--muted); }
-  .report select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; }
-  .report button { font: inherit; padding: 7px 16px; border: 1px solid var(--brand); background: var(--brand); color: #fff; border-radius: 4px; cursor: pointer; }
-  .report button[disabled] { opacity: .5; cursor: default; }
-  .report .result { font-size: 13px; }
-  .report .result.ok::before { content: "\2713  "; }  /* check mark */
+  /* The disposition: three choices, notes, one button. Every call gets one. */
+  .dispose { padding: 12px 16px; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(3, minmax(140px, 1fr)); gap: 10px 14px; align-items: end; }
+  @media (max-width: 720px) { .dispose { grid-template-columns: 1fr; } }
+  .dispose label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+  .dispose select, .dispose textarea { font: inherit; width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
+  .dispose .notes { grid-column: 1 / -1; }
+  .dispose .reasons { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+  .dispose .reasons label { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--ink); margin: 0; cursor: pointer; }
+  .dispose .reasons .cap { flex-basis: 100%; }
+  .dispose textarea { resize: vertical; min-height: 44px; }
+  .dispose .go { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; }
+  .dispose button { font: inherit; padding: 7px 18px; border: 1px solid var(--brand); background: var(--brand); color: #fff; border-radius: 4px; cursor: pointer; }
+  .dispose button[disabled] { opacity: .5; cursor: default; }
+  .dispose .result { font-size: 13px; }
+  .dispose .result.ok::before { content: "\2713  "; }  /* check mark */
+  .dispose select:disabled, .dispose textarea:disabled { background: var(--panel); color: var(--muted); }
+
+  /* A prior call's disposition, under its line in the history. */
+  .recent .disp { display: block; color: var(--ink); font-variant-numeric: normal; padding: 1px 0 2px 12px; }
+  .recent .disp .o { font-weight: 600; }
+  .recent .disp .n { color: var(--muted); font-style: italic; }
 </style>
 </head>
 <body>
@@ -149,7 +169,8 @@
 <main>
   <p class="hint">A card appears the moment a call arrives, before it is answered, and keeps
      changing while the call lasts: the risk verdict as the media tier scores the audio, and the
-     transcript as the caller speaks. Report a scam and the number is blocked and the call labelled.</p>
+     transcript as the caller speaks. Update each call with what you concluded; the next agent this
+     number reaches sees it.</p>
   <div id="pops"></div>
   <div id="empty" class="empty">Waiting for the next call&hellip;</div>
 </main>
@@ -199,7 +220,8 @@
     ["acoustic",   "Voice"],
     ["signaling",  "Signaling"],
     ["provenance", "Provenance"],
-    ["behavior",   "Behavior"]
+    ["behavior",   "Behavior"],
+    ["content",    "Content"]
   ];
   function signalsHtml(pop) {
     var s = pop.signals || {};
@@ -235,7 +257,7 @@
   }
   function redrawRisk(c) {
     c.el.querySelector("dd.risk").innerHTML = riskHtml(c.pop);
-    c.el.querySelector(".why").innerHTML = signalsHtml(c.pop) + trailHtml(c);
+    c.el.querySelector(".why-bars").innerHTML = signalsHtml(c.pop) + trailHtml(c);
     if (c.pop.riskFlagged) { c.el.classList.add("flagged"); }
   }
 
@@ -274,10 +296,28 @@
     var li = document.createElement("li");
     li.className = "new " + (u.party === "callee" ? "callee" : "caller");
     var at = (u.atMs != null && !isNaN(parseInt(u.atMs, 10))) ? fmtClock(parseInt(u.atMs, 10)) : "";
-    li.innerHTML = '<span class="at">' + esc(at) + "</span><span>" + esc(u.text) + "</span>";
+    var tags = "";
+    (u.labels || []).forEach(function (l) {
+      tags += '<span class="tag">' + esc(l) + "</span>";
+      c.content[l] = (c.content[l] || 0) + 1;
+    });
+    li.innerHTML = '<span class="at">' + esc(at) + "</span><span>" + esc(u.text) + tags + "</span>";
     list.appendChild(li);
     list.scrollTop = list.scrollHeight;
+    if (u.labels && u.labels.length) { redrawWhy(c); }
     c.el.querySelector(".listening").textContent = "listening…";
+  }
+
+  // The why line: every kind of thing the caller has asked for so far, with a
+  // count, in words. The content bar says how much; this says what.
+  function redrawWhy(c) {
+    var keys = Object.keys(c.content);
+    var el = c.el.querySelector(".why");
+    if (!keys.length) { el.className = "why off"; return; }
+    el.className = "why";
+    el.innerHTML = '<span class="lbl">Caller has: </span>' + keys.map(function (k) {
+      return "<b>" + esc(CONTENT_WORDS[k] || k) + "</b>" + (c.content[k] > 1 ? " ×" + c.content[k] : "");
+    }).join(" · ");
   }
 
   // ---------------------------------------------------------------- the rest of the card
@@ -305,7 +345,7 @@
     return isNaN(d) ? esc(iso) : d.toLocaleString();
   }
   function fmtDur(ms) {
-    if (ms == null) return "";
+    if (ms == null || ms < 0) return "";
     return " · " + fmtClock(ms);
   }
   function history(h) {
@@ -328,19 +368,53 @@
     if (h.recent && h.recent.length) {
       out += '<ul class="recent">';
       h.recent.forEach(function (c) {
-        out += "<li>" + fmtWhen(c.whenUtc) + " → " + esc(c.dialed || "?") + fmtDur(c.durationMillis) + "</li>";
+        out += "<li>" + fmtWhen(c.whenUtc) + " → " + esc(c.dialed || "?") + fmtDur(c.durationMillis);
+        if (c.outcome) {
+          out += '<span class="disp"><span class="o">' + esc(OUTCOME_WORDS[c.outcome] || c.outcome) + "</span>" +
+            (c.identity ? " · " + esc(IDENTITY_WORDS[c.identity] || c.identity) : "") +
+            (c.action && c.action !== "none" ? " · " + esc(ACTION_WORDS[c.action] || c.action) : "") +
+            (c.agent ? ' <span class="muted">by ' + esc(c.agent) + "</span>" : "") +
+            (c.reasons ? '<br><span class="muted">tells: </span>' + esc(String(c.reasons).split(",").map(function (r) { return REASON_WORDS[r] || r; }).join(", ")) : "") +
+            (c.notes ? '<br><span class="n">' + esc(c.notes) + "</span>" : "") +
+          "</span>";
+        }
+        out += "</li>";
       });
       out += "</ul>";
     }
     return out;
   }
 
-  var CATEGORIES = ["scam", "fraud", "robocall", "spam", "harassment", "abuse"];
+  // The disposition vocabulary. Values are what the server files; words are
+  // what the agent reads. A scam report is one outcome among the others.
+  var OUTCOMES = [["legitimate", "Legitimate"], ["suspected-scam", "Suspected scam"], ["confirmed-scam", "Confirmed scam"],
+                  ["robocall", "Robocall"], ["wrong-number", "Wrong number"], ["harassment", "Harassment"]];
+  var IDENTITIES = [["not-verified", "Not verified"], ["verified", "Verified"], ["refused", "Refused to verify"]];
+  var ACTIONS = [["none", "None"], ["block", "Block this number"], ["voicemail", "Divert to voicemail now"], ["fraud-queue", "Send to fraud queue"]];
+  var LIVE_ACTIONS = { voicemail: true, "fraud-queue": true };   // need the in-call SIP surgery; listed, not yet wired
+  // What tipped the agent off: fixed codes, the labeled data the signals are later
+  // thresholded against. Ticked on the form, stored on the disposition.
+  var REASONS = [["robot-voice", "Robot voice"], ["payment-ask", "Asked for payment"], ["fishing", "Fishing for our data"],
+                 ["pushing-to-agree", "Pushing me to agree"], ["story-mismatch", "Story doesn't match"],
+                 ["second-voice", "Second voice in the room"]];
+  var REASON_WORDS = words(REASONS);
+  // The content probe's labels, as the reason an agent reads.
+  var CONTENT_WORDS = { payment: "asked for payment (gift card, crypto, wire)", urgency: "pressure to act now",
+    secrecy: "asked for secrecy", authority: "claims an authority", "otp-request": "asked for a one-time code",
+    "remote-access": "wants remote access", "account-change": "account change request",
+    elicitation: "fishing for verification data", commitment: "pushing for a commitment on record" };
+  function words(list) { var m = {}; list.forEach(function (p) { m[p[0]] = p[1]; }); return m; }
+  var OUTCOME_WORDS = words(OUTCOMES), IDENTITY_WORDS = words(IDENTITIES), ACTION_WORDS = words(ACTIONS);
+  function options(list, disabledKeys) {
+    return list.map(function (p) {
+      var dis = (disabledKeys && disabledKeys[p[0]]) ? ' disabled title="not yet wired"' : "";
+      return '<option value="' + p[0] + '"' + dis + ">" + p[1] + "</option>";
+    }).join("");
+  }
 
   function card(pop) {
     var el = document.createElement("div");
     el.className = "pop";
-    var opts = CATEGORIES.map(function (c) { return '<option value="' + c + '">' + c + "</option>"; }).join("");
 
     el.innerHTML =
       '<div class="top">' +
@@ -360,7 +434,8 @@
             "<dt>STIR/SHAKEN</dt><dd>" + attest(pop) + "</dd>" +
             (pop.callRate != null ? "<dt>Call rate</dt><dd>" + esc(pop.callRate) + "/node</dd>" : "") +
           "</dl>" +
-          '<div class="why"></div>' +
+          '<div class="why off"></div>' +
+          '<div class="why-bars"></div>' +
         "</div>" +
         '<div class="pane">' +
           "<h3>Live transcript</h3>" +
@@ -372,19 +447,25 @@
           history(pop.history) +
         "</div>" +
       "</div>" +
-      '<div class="report">' +
-        '<label>Report as</label>' +
-        "<select>" + opts + "</select>" +
-        "<button type=\"button\">Report</button>" +
-        '<span class="result"></span>' +
+      '<div class="dispose">' +
+        '<div><label>Outcome</label><select class="outcome">' + options(OUTCOMES) + "</select></div>" +
+        '<div><label>Caller identity</label><select class="identity">' + options(IDENTITIES) + "</select></div>" +
+        '<div><label>Action</label><select class="action">' + options(ACTIONS, LIVE_ACTIONS) + "</select></div>" +
+        '<div class="reasons"><span class="cap"><label style="cursor:default">What tipped you off</label></span>' +
+          REASONS.map(function (r) { return '<label><input type="checkbox" value="' + r[0] + '"> ' + r[1] + "</label>"; }).join("") +
+        "</div>" +
+        '<div class="notes"><label>Notes</label><textarea rows="2" placeholder="what the caller wanted, what you did"></textarea></div>' +
+        '<div class="go"><button type="button">Update</button><span class="result"></span></div>' +
       "</div>";
 
-    var select = el.querySelector("select");
-    var button = el.querySelector("button");
-    var result = el.querySelector(".result");
+    var fields = el.querySelectorAll(".dispose select, .dispose textarea, .dispose input");
+    var button = el.querySelector(".dispose button");
+    var result = el.querySelector(".dispose .result");
+    function lock(on) { button.disabled = on; for (var i = 0; i < fields.length; i++) { fields[i].disabled = on; } }
     if (!mayReport) {
-      button.disabled = true;
-      select.disabled = true;
+      // A signed-in watcher who is not in a report group: the form is inert
+      // and says why, rather than failing on click.
+      lock(true);
       result.textContent = "view only";
     }
     button.addEventListener("click", function () {
@@ -395,40 +476,48 @@
       }
       button.disabled = true;
       result.className = "result";
-      result.textContent = "reporting…";
+      result.textContent = "updating…";
       pending[pop.vorpalId] = { button: button, result: result };
       socket.send(JSON.stringify({
-        t: "report", ani: pop.ani, conversation: pop.conversation || null,
-        vorpalId: pop.vorpalId, category: select.value
+        t: "dispose", vorpalId: pop.vorpalId, ani: pop.ani, conversation: pop.conversation || null,
+        outcome: el.querySelector(".outcome").value,
+        identity: el.querySelector(".identity").value,
+        action: el.querySelector(".action").value,
+        notes: el.querySelector(".dispose textarea").value.trim() || null,
+        reasons: Array.prototype.map.call(el.querySelectorAll(".dispose .reasons input:checked"), function (i) { return i.value; })
       }));
     });
     return el;
   }
 
-  function reportResult(m) {
+  // A disposition outcome arriving on the socket; find the card that asked.
+  // The button comes back so the agent can update again (a later thought is a
+  // new record, the latest wins on the next pop).
+  function disposeResult(m) {
     var slot = m.vorpalId ? pending[m.vorpalId] : null;
     if (!slot) return;
     delete pending[m.vorpalId];
+    slot.button.disabled = false;
     if (m.ok) {
       slot.result.className = "result ok";
-      slot.result.textContent = "blocked (" + m.treatment + ")" +
-        (m.labelled ? ", labelled" : "") + (m.published ? ", logged" : "");
+      slot.result.textContent = "updated" + (m.blocked ? ", number blocked (" + m.treatment + ")" : "") +
+        (m.labelled ? ", labelled" : "") + (m.published ? ", on record" : ", not recorded");
     } else {
-      slot.button.disabled = false;
       slot.result.className = "result";
-      slot.result.textContent = "report failed: " + (m.error || "unknown");
+      slot.result.textContent = "update failed: " + (m.error || "unknown");
     }
   }
 
   function hello(m) {
     if (m.user) { whoEl.textContent = m.user; }
     mayReport = !!m.mayReport;
-    var buttons = pops.querySelectorAll(".report button");
-    for (var i = 0; i < buttons.length; i++) {
+    // Apply to any cards already on screen (hello normally arrives first).
+    var forms = pops.querySelectorAll(".dispose");
+    for (var i = 0; i < forms.length; i++) {
       if (!mayReport) {
-        buttons[i].disabled = true;
-        buttons[i].parentNode.querySelector("select").disabled = true;
-        var r = buttons[i].parentNode.querySelector(".result");
+        var ctl = forms[i].querySelectorAll("select, textarea, button, input");
+        for (var j = 0; j < ctl.length; j++) { ctl[j].disabled = true; }
+        var r = forms[i].querySelector(".result");
         if (!r.textContent) { r.textContent = "view only"; }
       }
     }
@@ -438,7 +527,7 @@
     empty.style.display = "none";
     var el = card(pop);
     el.dataset.vorpalId = pop.vorpalId || "";
-    var c = { pop: pop, el: el, trail: [], state: "ringing", timer: null, answeredAt: null };
+    var c = { pop: pop, el: el, trail: [], state: "ringing", timer: null, answeredAt: null, content: {} };
     if (pop.vorpalId) { cards[pop.vorpalId] = c; }
     redrawRisk(c);
     setState(c, "ringing");
@@ -491,7 +580,7 @@
       if (m.t === "hello") { hello(m); }
       else if (m.t === "pop") { show(m.pop); }
       else if (m.t === "update") { update(m); }
-      else if (m.t === "reportResult") { reportResult(m); }
+      else if (m.t === "disposeResult") { disposeResult(m); }
     };
     ws.onclose = function () {
       socket = null;
@@ -500,11 +589,13 @@
       // from here (the browser hides the 401), and a redeploy kills every
       // HTTP session while this page keeps coming back from cache. So before
       // trying the socket again, ask the server for this very page with the
-      // cache bypassed: a redirect to the sign-in page, or anything but 200,
-      // means the session is gone, and a reload is what brings it back (SSO
-      // usually completes without a prompt).
+      // cache bypassed: a redirect to the sign-in page, or a 401/403, means the
+      // session is gone, and a reload is what brings it back (SSO usually
+      // completes without a prompt). A 404 or 503 is the app mid-redeploy:
+      // reloading then lands on the container's error page, which has no
+      // script to try again, so those just keep the socket retrying.
       fetch(location.href, { cache: "no-store", credentials: "same-origin" })
-        .then(function (r) { if (r.redirected || !r.ok) { location.reload(); } })
+        .then(function (r) { if (r.redirected || r.status === 401 || r.status === 403) { location.reload(); } })
         .catch(function () { /* offline: keep trying the socket */ });
       setTimeout(connect, 4000);
     };
