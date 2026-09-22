@@ -89,14 +89,23 @@
   .band.watch   { color: #8a5300; background: #fbeecb; }
   .band.suspect { color: #b3261e; background: #fbe1de; }
   .band.none    { color: var(--muted); font-weight: 400; padding: 0; }
-  dd.risk { font-size: 15px; }
+  dd.risk { font-size: 18px; }
+  .kv.headline { grid-template-columns: 60px 1fr; align-items: center; margin-bottom: 4px; }
 
   /* The why: one row per fused signal. Length carries the value; the number
      beside it says the same thing; the contribution is what it added to the
      fused log-odds (negative = argued for clear). */
-  .signals { margin: 10px 0 0; padding: 0; list-style: none; font-size: 12px; }
-  .signals li { display: grid; grid-template-columns: 78px 1fr 34px 46px; gap: 8px; align-items: center; padding: 2px 0; font-variant-numeric: tabular-nums; }
+  .signals { margin: 0; padding: 0; list-style: none; font-size: 12px; }
+  .signals li { display: grid; grid-template-columns: 78px 1fr 56px 48px; gap: 2px 8px; align-items: center; padding: 3px 0; font-variant-numeric: tabular-nums; }
+  /* Why, in words, under the bar: the evidence behind that one signal. */
+
+  .signals li > span:nth-child(3), .signals li > span:nth-child(4) { text-align: right; }
   .signals .lbl { color: var(--muted); }
+  /* The header row: what the two number columns are. */
+  .signals li.head { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding-bottom: 3px; border-bottom: 1px solid var(--line); margin-bottom: 3px; }
+  .signals li.head span { text-align: right; }
+  .signals li.head span:first-child { text-align: left; }
+  .signals li.head [title] { text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
   .signals .bar { height: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 2px; overflow: hidden; }
   .signals .bar i { display: block; height: 100%; background: var(--brand-300); width: 0; transition: width .4s; }
   .signals .bar i.hot { background: var(--brand); }
@@ -104,7 +113,12 @@
 
   /* The trail: one bar per scored window, oldest left. The latest score is
      printed beside it so the row is never only heights. */
-  .trail { display: flex; align-items: flex-end; gap: 3px; height: 44px; margin-top: 12px; border-bottom: 1px solid var(--line); padding-bottom: 1px; }
+  /* The trail and, beside it, the number the agent wants first: the fused
+     score now, as the band word plus the value in the band's colours, big. */
+  .trailrow { display: flex; align-items: flex-end; gap: 14px; margin-top: 6px; border-bottom: 1px solid var(--line); padding-bottom: 1px; }
+  .signals { margin-top: 14px; }
+  .trail { display: flex; align-items: flex-end; gap: 3px; height: 44px; flex: 1 1 auto; min-width: 0; overflow: hidden; }
+
   .trail i { display: block; width: 14px; min-height: 3px; background: var(--brand-300); border-radius: 2px 2px 0 0; }
   .trail i.watch { background: #c98a00; }
   .trail i.suspect { background: #b3261e; }
@@ -117,20 +131,16 @@
 
   /* The transcript: what the caller is saying, as it is decoded. */
   /* Fills whatever height the row has (the risk pane sets it), scrolling inside. */
-  .lines { list-style: none; margin: 0; padding: 0; flex: 1 1 auto; min-height: 160px; max-height: 640px; overflow-y: auto; font-size: 13.5px; }
-  .lines li { display: grid; grid-template-columns: 40px 1fr; gap: 8px; padding: 3px 0; border-top: 1px dotted var(--line); }
-  /* Two parties: the agent's lines carry a name, so the transcript reads as a conversation. */
-  .lines .who { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-right: 6px; }
-  .lines .agent { color: var(--brand); }
-  .lines li:first-child { border-top: none; }
-  .lines .at { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; padding-top: 2px; }
-  .lines .callee { color: var(--brand); }
+  /* The transcript reads like a messaging thread: the caller on the left, the
+     agent on the right, no balloons, just the two sides. Fills whatever height
+     the row has (the risk pane sets it), scrolling inside. */
+  .lines { list-style: none; margin: 0; padding: 0; flex: 1 1 auto; min-height: 160px; max-height: 640px; overflow-y: auto; font-size: 13.5px; display: flex; flex-direction: column; gap: 8px; }
+  .lines li { max-width: 82%; }
+  .lines li.caller { align-self: flex-start; text-align: left; }
+  .lines li.agent { align-self: flex-end; text-align: right; color: var(--brand); }
+  .lines .meta { display: block; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; margin-bottom: 1px; }
+  .lines .meta .who { text-transform: uppercase; letter-spacing: .04em; }
   .lines .tag { display: inline-block; margin-left: 6px; font-size: 11px; border: 1px solid #b3261e; color: #b3261e; border-radius: 3px; padding: 0 5px; vertical-align: 1px; }
-  /* What the caller has asked for so far, in words: the content signal's reasons. */
-  .why { margin-top: 8px; font-size: 12.5px; }
-  .why .lbl { color: var(--muted); }
-  .why b { font-weight: 600; }
-  .why.off { display: none; }
   .lines li.new { animation: land .8s ease-out; }
   @keyframes land { from { background: #efe3f3; } to { background: transparent; } }
   .listening { color: var(--muted); font-style: italic; font-size: 13px; }
@@ -199,17 +209,9 @@
   // One-line summaries, shown as tooltips on the term they explain. Written for
   // the agent, not the engineer: what the number means and what moves it.
   var HELP = {
-    risk: "The fused risk for this call: the five signals below combined in log-odds and squashed to 0 to 1. Clear below 0.35, watch to 0.75, suspect above. Updated every scored window while the call runs.",
-    screening: "What the edge decided before this call reached you (proxy-block or the router): a verdict and its reason. None means the call was not screened.",
-    stir: "Caller-ID attestation carried on the call: A is full, B partial, C a gateway that vouches for nothing. Failed means a verifier rejected it. The age is how old the signed token is; minutes or more is a replay smell.",
-    callrate: "How many calls this number has placed through this node recently, as counted at the edge. A machine dials faster than a person.",
-    acoustic: "The deepfake detector: how likely the caller's voice is synthetic, scored on the last five seconds of audio. Held as a fading peak, so a pause does not reset it. Alone it can reach watch, never suspect.",
-    signaling: "What the call's signaling gives away: an asserted number different from the one shown, a privacy header, odd media, a screening verdict. 0.5 means nothing to say.",
-    provenance: "STIR/SHAKEN as read off the call: a failed verification, gateway attestation or a stale token raise it. A pass counts only from a trusted verifier. 0.5 means nothing to say.",
-    behavior: "This number's in-network history: call velocity from the edge today; reputation and sensitive targets later. 0.5 means nothing to say.",
-    content: "What the caller is asking for, from the transcript: payment, urgency, secrecy, a claimed authority, a one-time code, remote access, an account change, fishing for your data, pushing you to agree. Two different kinds reach watch; alone it never reaches suspect.",
-    value: "The signal's own reading, 0 to 1. 0.5 is neutral, no evidence either way.",
-    contrib: "What this signal added to the fused log-odds. Positive argues for risk, negative for clear; each is capped so no single signal can decide alone.",
+    risk: "The fused risk for this call: the five kinds of evidence combined in log-odds and squashed to a percentage. Clear below 35%, watch to 75%, suspect above. Updated every scored window while the call runs.",
+    reading: "This source's own reading, 0 to 1: how much concern it has on its own. 0.5 is neutral, nothing to say either way.",
+    contrib: "What this evidence added to the fused risk, in log-odds: its reading turned into odds, capped so no single source can decide alone, times its weight. Plus pushes toward risk, minus toward clear, zero is neutral. The risk is the prior plus all of these, squashed back to a percentage.",
     trail: "One bar per scored window, oldest on the left, height is the fused score. The outlined bar is the latest.",
     notes: "Anything the next agent this number reaches should know. Shown under the call in their history pane.",
     state: "Ringing until the agent's phone answers, then talking with a clock, then how the call ended.",
@@ -234,39 +236,83 @@
       default: return "none";
     }
   }
+  function pct(x) {
+    var v = parseFloat(x);
+    return isNaN(v) ? "" : Math.round(v * 100) + "%";
+  }
   function riskHtml(pop) {
     if (!pop.riskBand) {
       return '<span class="band none">not yet scored</span>';
     }
-    var score = (pop.riskScore != null) ? ' <span class="score">' + esc(pop.riskScore) + "</span>" : "";
+    var score = (pop.riskScore != null && pct(pop.riskScore)) ? ' <span class="score">' + pct(pop.riskScore) + "</span>" : "";
     return '<span class="band ' + bandClass(pop.riskBand) + '">' + esc(pop.riskBand) + score + "</span>";
   }
 
   // The four fused signals, in the order the product names them. A signal the
   // media tier has not scored yet stays listed at zero, so the agent sees what
   // is still to come (the acoustic bar filling in is the moment to watch).
+  // The five sources of evidence, named for what each one reads, in the
+  // agent's words: the voice, how the call was set up, the caller ID's
+  // attestation, the number's behaviour, and what is being said.
   var SIGNALS = [
     ["acoustic",   "Voice"],
-    ["signaling",  "Signaling"],
-    ["provenance", "Provenance"],
+    ["signaling",  "Call setup"],
+    ["provenance", "Caller ID"],
     ["behavior",   "Behavior"],
     ["content",    "Content"]
   ];
-  function signalsHtml(pop) {
+  // The evidence behind one signal, in words, or empty when there is nothing
+  // to say. The bar says how much; this says why.
+  function plain(html) { var d = document.createElement("div"); d.innerHTML = html; return d.textContent; }
+
+  function detailFor(key, pop, c) {
+    switch (key) {
+      case "acoustic": {
+        var v = c.voice;
+        if (!v.length) return "no audio scored yet";
+        var peak = Math.max.apply(null, v);
+        var now = v[v.length - 1];
+        return "synthetic-voice detector: peak <b>" + peak.toFixed(2) + "</b> over " + v.length + " window" + (v.length === 1 ? "" : "s") +
+          (now < peak - 1e-9 ? ", now " + now.toFixed(2) + " (the held value fades while the caller is quiet)" : ", at its peak now");
+      }
+      case "signaling":
+        return pop.screenVerdict
+          ? "screened <b>" + esc(pop.screenVerdict) + "</b>" + (pop.screenReason ? " (" + esc(pop.screenReason) + ")" : "")
+          : "not screened at the edge";
+      case "provenance":
+        return (pop.attestation || pop.verstat) ? attest(pop) : "no STIR/SHAKEN on the call";
+      case "behavior":
+        return (pop.callRate != null) ? "<b>" + esc(pop.callRate) + "</b> calls/node recently" : "no history from the edge";
+      case "content": {
+        var keys = Object.keys(c.content);
+        if (!keys.length) return "nothing asked for yet";
+        return keys.map(function (k) {
+          return "<b>" + esc(CONTENT_WORDS[k] || k) + "</b>" + (c.content[k] > 1 ? " ×" + c.content[k] : "");
+        }).join(" · ");
+      }
+      default:
+        return "";
+    }
+  }
+  function signalsHtml(pop, c) {
     var s = pop.signals || {};
-    var out = '<ul class="signals">';
+    var out = '<ul class="signals">' +
+      '<li class="head"><span>Evidence</span><span></span><span' + t("reading") + '>Reading</span><span' + t("contrib") + '>Adds</span></li>';
     SIGNALS.forEach(function (d) {
       var one = s[d[0]] || {};
-      var help = t(d[0]);
+      // The row's tooltip is its evidence on this call, not a definition: what
+      // the agent would ask about this bar is "why does it look like that".
+      var detail = detailFor(d[0], pop, c);
+      var help = detail ? ' title="' + esc(plain(detail)) + '"' : "";
       var v = (one.value != null) ? parseFloat(one.value) : null;
-      var c = (one.contribution != null) ? parseFloat(one.contribution) : null;
+      var cc = (one.contribution != null) ? parseFloat(one.contribution) : null;
       var pct = (v == null || isNaN(v)) ? 0 : Math.max(0, Math.min(100, Math.round(v * 100)));
       var hot = (v != null && v >= 0.5) ? " hot" : "";
       out += "<li>" +
         '<span class="lbl"' + help + ">" + d[1] + "</span>" +
         '<span class="bar"' + help + '><i class="' + hot.trim() + '" style="width:' + pct + '%"></i></span>' +
-        "<span" + t("value") + ">" + (v == null || isNaN(v) ? "–" : v.toFixed(2)) + "</span>" +
-        '<span class="contrib"' + t("contrib") + ">" + (c == null || isNaN(c) ? "" : (c >= 0 ? "+" : "") + c.toFixed(2)) + "</span>" +
+        "<span>" + (v == null || isNaN(v) ? "–" : v.toFixed(2)) + "</span>" +
+        '<span class="contrib">' + (cc == null || isNaN(cc) ? "" : (cc >= 0 ? "+" : "") + cc.toFixed(2)) + "</span>" +
       "</li>";
     });
     out += "</ul>";
@@ -274,20 +320,19 @@
   }
   function trailHtml(c) {
     if (!c.trail.length) return "";
-    var out = '<div class="trail">';
+    var out = '<div class="trailrow"><div class="trail"' + t("trail") + ">";
     c.trail.forEach(function (p, i) {
       var h = Math.max(3, Math.round(p.score * 44));
-      out += '<i class="' + bandClass(p.band) + (i === c.trail.length - 1 ? " latest" : "") + '" style="height:' + h + 'px" title="' + esc(p.band) + " " + esc(p.score.toFixed(3)) + '"></i>';
+      out += '<i class="' + bandClass(p.band) + (i === c.trail.length - 1 ? " latest" : "") + '" style="height:' + h + 'px" title="' + esc(p.band) + " " + pct(p.score) + '"></i>';
     });
-    out += "</div>";
-    var last = c.trail[c.trail.length - 1];
-    out += '<div class="trail-cap"' + t("trail") + ">" + c.trail.length + " window" + (c.trail.length === 1 ? "" : "s") +
-      " scored · latest " + esc(last.score.toFixed(3)) + " · watch at 0.35, suspect at 0.75</div>";
+    out += "</div></div>";
+    out += '<div class="trail-cap">' + c.trail.length + " window" + (c.trail.length === 1 ? "" : "s") +
+      " scored · watch at 35%, suspect at 75%</div>";
     return out;
   }
   function redrawRisk(c) {
     c.el.querySelector("dd.risk").innerHTML = riskHtml(c.pop);
-    c.el.querySelector(".why-bars").innerHTML = signalsHtml(c.pop) + trailHtml(c);
+    c.el.querySelector(".why-bars").innerHTML = trailHtml(c) + signalsHtml(c.pop, c);
     if (c.pop.riskFlagged) { c.el.classList.add("flagged"); }
   }
 
@@ -332,23 +377,12 @@
       tags += '<span class="tag">' + esc(l) + "</span>";
       c.content[l] = (c.content[l] || 0) + 1;
     });
-    li.innerHTML = '<span class="at">' + esc(at) + "</span><span>" + (agent ? '<span class="who">agent</span>' : "") + esc(u.text) + tags + "</span>";
+    li.innerHTML = '<span class="meta"><span class="who">' + (agent ? "agent" : "caller") + "</span>" +
+      (at ? " · " + esc(at) : "") + "</span>" + esc(u.text) + tags;
     list.appendChild(li);
     list.scrollTop = list.scrollHeight;
-    if (u.labels && u.labels.length) { redrawWhy(c); }
     c.el.querySelector(".listening").textContent = "listening…";
-  }
-
-  // The why line: every kind of thing the caller has asked for so far, with a
-  // count, in words. The content bar says how much; this says what.
-  function redrawWhy(c) {
-    var keys = Object.keys(c.content);
-    var el = c.el.querySelector(".why");
-    if (!keys.length) { el.className = "why off"; return; }
-    el.className = "why";
-    el.innerHTML = '<span class="lbl">Caller has: </span>' + keys.map(function (k) {
-      return "<b>" + esc(CONTENT_WORDS[k] || k) + "</b>" + (c.content[k] > 1 ? " ×" + c.content[k] : "");
-    }).join(" · ");
+    if (u.labels && u.labels.length) { redrawRisk(c); }
   }
 
   // ---------------------------------------------------------------- the rest of the card
@@ -458,14 +492,9 @@
       '<div class="body">' +
         '<div class="pane">' +
           "<h3>This call</h3>" +
-          '<dl class="kv">' +
+          '<dl class="kv headline">' +
             "<dt" + t("risk") + ">Risk</dt><dd class=\"risk\">" + riskHtml(pop) + "</dd>" +
-            "<dt" + t("screening") + ">Screening</dt><dd>" + esc(pop.screenVerdict || "none") +
-              (pop.screenReason ? ' <span class="muted">(' + esc(pop.screenReason) + ")</span>" : "") + "</dd>" +
-            "<dt" + t("stir") + ">STIR/SHAKEN</dt><dd>" + attest(pop) + "</dd>" +
-            (pop.callRate != null ? "<dt" + t("callrate") + ">Call rate</dt><dd>" + esc(pop.callRate) + "/node</dd>" : "") +
           "</dl>" +
-          '<div class="why off"></div>' +
           '<div class="why-bars"></div>' +
         "</div>" +
         '<div class="pane">' +
@@ -482,7 +511,7 @@
         "<div><label>Outcome</label><select class=\"outcome\">" + options(OUTCOMES) + "</select></div>" +
         "<div><label>Caller identity</label><select class=\"identity\">" + options(IDENTITIES) + "</select></div>" +
         "<div><label>Action</label><select class=\"action\">" + options(ACTIONS, LIVE_ACTIONS) + "</select></div>" +
-        '<div class="reasons"><span class="cap"><label>What tipped you off</label></span>" +
+        '<div class="reasons"><span class="cap"><label>What tipped you off</label></span>' +
           REASONS.map(function (r) { return '<label><input type="checkbox" value="' + r[0] + '"> ' + r[1] + "</label>"; }).join("") +
         "</div>" +
         '<div class="notes"><label' + t("notes") + '>Notes</label><textarea rows="2" placeholder="what the caller wanted, what you did"></textarea></div>' +
@@ -558,7 +587,7 @@
     empty.style.display = "none";
     var el = card(pop);
     el.dataset.vorpalId = pop.vorpalId || "";
-    var c = { pop: pop, el: el, trail: [], state: "ringing", timer: null, answeredAt: null, content: {} };
+    var c = { pop: pop, el: el, trail: [], voice: [], state: "ringing", timer: null, answeredAt: null, content: {} };
     if (pop.vorpalId) { cards[pop.vorpalId] = c; }
     redrawRisk(c);
     setState(c, "ringing");
@@ -592,6 +621,10 @@
     if (risky) {
       var score = parseFloat(m.riskScore);
       if (!isNaN(score)) { c.trail.push({ score: score, band: m.riskBand || c.pop.riskBand }); }
+      // The detector's held value per update, for the Voice line: it only moves
+      // when audio was scored, so a repeat of the last value is not a new window.
+      var a = (m.signals && m.signals.acoustic) ? parseFloat(m.signals.acoustic.value) : NaN;
+      if (!isNaN(a) && (m.riskTrigger === "acoustic" || !c.voice.length)) { c.voice.push(a); }
       redrawRisk(c);
     }
   }
@@ -620,13 +653,21 @@
       // from here (the browser hides the 401), and a redeploy kills every
       // HTTP session while this page keeps coming back from cache. So before
       // trying the socket again, ask the server for this very page with the
-      // cache bypassed: a redirect to the sign-in page, or a 401/403, means the
-      // session is gone, and a reload is what brings it back (SSO usually
-      // completes without a prompt). A 404 or 503 is the app mid-redeploy:
-      // reloading then lands on the container's error page, which has no
-      // script to try again, so those just keep the socket retrying.
-      fetch(location.href, { cache: "no-store", credentials: "same-origin" })
-        .then(function (r) { if (r.redirected || r.status === 401 || r.status === 403) { location.reload(); } })
+      // cache bypassed and redirects left unfollowed: a redirect (to the
+      // sign-in page) or a 401/403 means the session is gone, and a fresh
+      // navigation with a cache-buster is what brings it back (SSO usually
+      // completes without a prompt). Redirects are not followed because the
+      // sign-in page is on another origin, where a followed fetch can fail
+      // for reasons that have nothing to do with the session. A 404 or 503 is
+      // the app mid-redeploy: reloading then lands on the container's error
+      // page, which has no script to try again, so those keep the socket
+      // retrying instead.
+      fetch(location.pathname, { cache: "no-store", credentials: "same-origin", redirect: "manual" })
+        .then(function (r) {
+          if (r.type === "opaqueredirect" || r.status === 401 || r.status === 403) {
+            location.replace(location.pathname + "?r=" + Date.now());
+          }
+        })
         .catch(function () { /* offline: keep trying the socket */ });
       setTimeout(connect, 4000);
     };
