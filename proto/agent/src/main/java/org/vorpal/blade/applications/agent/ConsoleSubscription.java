@@ -2,6 +2,9 @@ package org.vorpal.blade.applications.agent;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
@@ -48,16 +51,29 @@ public class ConsoleSubscription implements ServletContextListener {
 
 	private final ConsoleUpdater handler = new ConsoleUpdater();
 	private SubscriptionRegistrar registrar;
+	/// The console keep-alive ([AgentConsoleRegistry#ping]); lives and dies with
+	/// the app like the subscription, which is why it is started here.
+	private ScheduledExecutorService keepalive;
 
 	@Override
 	public void contextInitialized(ServletContextEvent event) {
 		SubscriptionRegistrar.meter(event.getServletContext(), SUBSCRIPTION);
 		registrar = SubscriptionRegistrar.start(SUBSCRIPTION, ConsoleSubscription::types, /* durable */ false, handler,
 				/* batch */ 1, EventSubscriber.DEFAULT_BATCH_MILLIS);
+		keepalive = Executors.newSingleThreadScheduledExecutor(r -> {
+			Thread t = new Thread(r, "agent-console-ping");
+			t.setDaemon(true);
+			return t;
+		});
+		keepalive.scheduleAtFixedRate(AgentConsoleRegistry::ping, AgentConsoleRegistry.PING_SECONDS,
+				AgentConsoleRegistry.PING_SECONDS, TimeUnit.SECONDS);
 	}
 
 	@Override
 	public void contextDestroyed(ServletContextEvent event) {
+		if (keepalive != null) {
+			keepalive.shutdownNow();
+		}
 		if (registrar != null) {
 			registrar.stop();
 		}

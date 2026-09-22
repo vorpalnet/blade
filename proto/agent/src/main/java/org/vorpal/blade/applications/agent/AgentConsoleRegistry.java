@@ -1,6 +1,7 @@
 package org.vorpal.blade.applications.agent;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
@@ -119,6 +120,29 @@ public final class AgentConsoleRegistry {
 			}
 		}
 		return reached;
+	}
+
+	/// Seconds between keep-alive pings. Under any proxy's idle cutoff (nginx
+	/// defaults to 60 s) and the container's own 30 s, which the endpoint
+	/// disables anyway.
+	public static final int PING_SECONDS = 25;
+
+	/// Ping every open console. A pong is traffic in both directions, so no idle
+	/// timer between the browser and this server fires while a console is merely
+	/// waiting for a call. A socket that cannot be pinged is gone: drop it.
+	public static void ping() {
+		for (Session s : CONSOLES.keySet()) {
+			try {
+				if (s.isOpen()) {
+					s.getBasicRemote().sendPing(ByteBuffer.allocate(0));
+				} else {
+					CONSOLES.remove(s);
+				}
+			} catch (Exception e) {
+				LOG.log(Level.FINE, "agent: console ping failed, dropping socket: " + e.getMessage());
+				CONSOLES.remove(s);
+			}
+		}
 	}
 
 	public static void send(Session session, String json) {

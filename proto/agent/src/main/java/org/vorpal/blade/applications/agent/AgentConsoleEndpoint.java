@@ -61,6 +61,12 @@ public class AgentConsoleEndpoint {
 			close(session, "sign-in required");
 			return;
 		}
+		// The container closes an idle WebSocket after 30 s by default, and a
+		// console is idle for as long as no call arrives: without this the page
+		// flickered to "reconnecting" every half minute. Liveness comes from the
+		// registry's ping instead (AgentConsoleRegistry.ping), which also keeps a
+		// reverse proxy's idle cutoff from doing the same thing a minute later.
+		session.setMaxIdleTimeout(0);
 		AgentConsoleRegistry.add(session, principal.getName());
 		// Tell the page who it is and whether its report button should be live.
 		ObjectNode hello = MAPPER.createObjectNode();
