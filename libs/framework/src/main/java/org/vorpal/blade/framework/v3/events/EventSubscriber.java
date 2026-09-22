@@ -400,6 +400,8 @@ public class EventSubscriber {
 		/// instead. Redelivered one at a time, the poison message fails alone
 		/// and is parked alone while its neighbours commit.
 		private int currentBatchSize = batchSize;
+		/// Consecutive failed flushes, for the rate-limited warning.
+		private int failStreak;
 
 		private Member(String memberName, String name) {
 			this.memberName = memberName;
@@ -445,12 +447,22 @@ public class EventSubscriber {
 						flush(batch);
 					}
 				} catch (JMSException e) {
-					// This member is going away — a shutdown, a migration, or a
-					// broker failure. Anything uncommitted is redelivered, and
-					// the member is re-opened if the container reports it
-					// available again.
+					// This member is going away. On a shutdown or a migration that
+					// is expected and the close path has already marked it. Any
+					// other JMS failure is the broker dropping this consumer under
+					// us: anything uncommitted is redelivered, but a member that
+					// stays registered is never re-attached, and a subscription
+					// that is alive to every observer but consuming nothing is the
+					// worst failure a sink can have (it cost the analytics sink two
+					// silent days). So say so, detach, and let the watchdog's
+					// retryUnattached() open it again.
 					if (!closed && !memberClosed) {
 						rollback();
+						LOG.log(java.util.logging.Level.WARNING, "events: consumer '" + name
+								+ "' stopped by the broker, detaching so the watchdog re-attaches it: " + e);
+						memberClosed = true;
+						closeConnection();
+						members.remove(memberName, this);
 					}
 					return;
 				} catch (InterruptedException e) {
@@ -476,6 +488,7 @@ public class EventSubscriber {
 				handler.handle(batch);
 				jmsSession.commit();
 				count(handled, size);
+				failStreak = 0;
 				if (currentBatchSize != batchSize) {
 					// A clean pass: whatever was poisoning this stream is past,
 					// so stop paying one transaction per event.
@@ -486,6 +499,14 @@ public class EventSubscriber {
 				rollback();
 				if (size > 1) {
 					currentBatchSize = 1;
+				}
+				// A handler that keeps failing is otherwise only a counter. Say
+				// it once per streak and then every hundredth time, with the
+				// cause, so an operator can find the poison from the log.
+				failStreak++;
+				if (failStreak == 1 || failStreak % 100 == 0) {
+					LOG.log(java.util.logging.Level.WARNING, "events: consumer '" + name + "' handler failed ("
+							+ failStreak + " in a row), batch of " + size + " rolled back for redelivery: " + e);
 				}
 			} finally {
 				batch.clear();

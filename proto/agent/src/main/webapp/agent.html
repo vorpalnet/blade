@@ -70,11 +70,15 @@
   .pop .body { display: grid; grid-template-columns: 1.1fr 1.3fr 1fr; gap: 0; }
   @media (max-width: 900px) { .pop .body { grid-template-columns: 1fr 1fr; } .pane.caller { grid-column: 1 / -1; border-left: none; border-top: 1px solid var(--line); } }
   @media (max-width: 600px) { .pop .body { grid-template-columns: 1fr; } .pane + .pane { border-left: none; border-top: 1px solid var(--line); } }
-  .pane { padding: 12px 16px; min-width: 0; }
+  .pane { padding: 12px 16px; min-width: 0; display: flex; flex-direction: column; }
+  .pane > * { flex: 0 0 auto; }
   .pane + .pane { border-left: 1px solid var(--line); }
   .pane h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
   .kv { display: grid; grid-template-columns: 110px 1fr; gap: 3px 10px; font-size: 13px; }
   .kv dt { color: var(--muted); }
+  /* Anything with a summary shows it on hover; the dotted underline says so. */
+  [title] { cursor: help; }
+  .kv dt[title], .signals .lbl[title], .dispose label[title] { text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
   .kv dd { margin: 0; }
 
   /* Risk is two channels at once (redundant coding): a colour AND the word +
@@ -112,8 +116,12 @@
   .warn::before { content: "\26A0  "; }  /* warning sign */
 
   /* The transcript: what the caller is saying, as it is decoded. */
-  .lines { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; font-size: 13.5px; }
+  /* Fills whatever height the row has (the risk pane sets it), scrolling inside. */
+  .lines { list-style: none; margin: 0; padding: 0; flex: 1 1 auto; min-height: 160px; max-height: 640px; overflow-y: auto; font-size: 13.5px; }
   .lines li { display: grid; grid-template-columns: 40px 1fr; gap: 8px; padding: 3px 0; border-top: 1px dotted var(--line); }
+  /* Two parties: the agent's lines carry a name, so the transcript reads as a conversation. */
+  .lines .who { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-right: 6px; }
+  .lines .agent { color: var(--brand); }
   .lines li:first-child { border-top: none; }
   .lines .at { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; padding-top: 2px; }
   .lines .callee { color: var(--brand); }
@@ -188,6 +196,27 @@
   var mayReport = false;          // set from the server's hello; gates the report button
   var whoEl = document.getElementById("who");
 
+  // One-line summaries, shown as tooltips on the term they explain. Written for
+  // the agent, not the engineer: what the number means and what moves it.
+  var HELP = {
+    risk: "The fused risk for this call: the five signals below combined in log-odds and squashed to 0 to 1. Clear below 0.35, watch to 0.75, suspect above. Updated every scored window while the call runs.",
+    screening: "What the edge decided before this call reached you (proxy-block or the router): a verdict and its reason. None means the call was not screened.",
+    stir: "Caller-ID attestation carried on the call: A is full, B partial, C a gateway that vouches for nothing. Failed means a verifier rejected it. The age is how old the signed token is; minutes or more is a replay smell.",
+    callrate: "How many calls this number has placed through this node recently, as counted at the edge. A machine dials faster than a person.",
+    acoustic: "The deepfake detector: how likely the caller's voice is synthetic, scored on the last five seconds of audio. Held as a fading peak, so a pause does not reset it. Alone it can reach watch, never suspect.",
+    signaling: "What the call's signaling gives away: an asserted number different from the one shown, a privacy header, odd media, a screening verdict. 0.5 means nothing to say.",
+    provenance: "STIR/SHAKEN as read off the call: a failed verification, gateway attestation or a stale token raise it. A pass counts only from a trusted verifier. 0.5 means nothing to say.",
+    behavior: "This number's in-network history: call velocity from the edge today; reputation and sensitive targets later. 0.5 means nothing to say.",
+    content: "What the caller is asking for, from the transcript: payment, urgency, secrecy, a claimed authority, a one-time code, remote access, an account change, fishing for your data, pushing you to agree. Two different kinds reach watch; alone it never reaches suspect.",
+    value: "The signal's own reading, 0 to 1. 0.5 is neutral, no evidence either way.",
+    contrib: "What this signal added to the fused log-odds. Positive argues for risk, negative for clear; each is capped so no single signal can decide alone.",
+    trail: "One bar per scored window, oldest on the left, height is the fused score. The outlined bar is the latest.",
+    notes: "Anything the next agent this number reaches should know. Shown under the call in their history pane.",
+    state: "Ringing until the agent's phone answers, then talking with a clock, then how the call ended.",
+    flag: "Suspect has held for three scored windows in a row. It fires once per call and stays up."
+  };
+  function t(key) { return HELP[key] ? ' title="' + esc(HELP[key]) + '"' : ""; }
+
   function esc(s) {
     if (s === null || s === undefined) return "";
     return String(s).replace(/[&<>"]/g, function (c) {
@@ -228,15 +257,16 @@
     var out = '<ul class="signals">';
     SIGNALS.forEach(function (d) {
       var one = s[d[0]] || {};
+      var help = t(d[0]);
       var v = (one.value != null) ? parseFloat(one.value) : null;
       var c = (one.contribution != null) ? parseFloat(one.contribution) : null;
       var pct = (v == null || isNaN(v)) ? 0 : Math.max(0, Math.min(100, Math.round(v * 100)));
       var hot = (v != null && v >= 0.5) ? " hot" : "";
       out += "<li>" +
-        '<span class="lbl">' + d[1] + "</span>" +
-        '<span class="bar"><i class="' + hot.trim() + '" style="width:' + pct + '%"></i></span>' +
-        "<span>" + (v == null || isNaN(v) ? "–" : v.toFixed(2)) + "</span>" +
-        '<span class="contrib">' + (c == null || isNaN(c) ? "" : (c >= 0 ? "+" : "") + c.toFixed(2)) + "</span>" +
+        '<span class="lbl"' + help + ">" + d[1] + "</span>" +
+        '<span class="bar"' + help + '><i class="' + hot.trim() + '" style="width:' + pct + '%"></i></span>' +
+        "<span" + t("value") + ">" + (v == null || isNaN(v) ? "–" : v.toFixed(2)) + "</span>" +
+        '<span class="contrib"' + t("contrib") + ">" + (c == null || isNaN(c) ? "" : (c >= 0 ? "+" : "") + c.toFixed(2)) + "</span>" +
       "</li>";
     });
     out += "</ul>";
@@ -251,7 +281,7 @@
     });
     out += "</div>";
     var last = c.trail[c.trail.length - 1];
-    out += '<div class="trail-cap">' + c.trail.length + " window" + (c.trail.length === 1 ? "" : "s") +
+    out += '<div class="trail-cap"' + t("trail") + ">" + c.trail.length + " window" + (c.trail.length === 1 ? "" : "s") +
       " scored · latest " + esc(last.score.toFixed(3)) + " · watch at 0.35, suspect at 0.75</div>";
     return out;
   }
@@ -294,14 +324,15 @@
   function addLine(c, u) {
     var list = c.el.querySelector(".lines");
     var li = document.createElement("li");
-    li.className = "new " + (u.party === "callee" ? "callee" : "caller");
+    var agent = (u.party === "agent" || u.party === "callee");
+    li.className = "new " + (agent ? "agent" : "caller");
     var at = (u.atMs != null && !isNaN(parseInt(u.atMs, 10))) ? fmtClock(parseInt(u.atMs, 10)) : "";
     var tags = "";
     (u.labels || []).forEach(function (l) {
       tags += '<span class="tag">' + esc(l) + "</span>";
       c.content[l] = (c.content[l] || 0) + 1;
     });
-    li.innerHTML = '<span class="at">' + esc(at) + "</span><span>" + esc(u.text) + tags + "</span>";
+    li.innerHTML = '<span class="at">' + esc(at) + "</span><span>" + (agent ? '<span class="who">agent</span>' : "") + esc(u.text) + tags + "</span>";
     list.appendChild(li);
     list.scrollTop = list.scrollHeight;
     if (u.labels && u.labels.length) { redrawWhy(c); }
@@ -420,19 +451,19 @@
       '<div class="top">' +
         '<span class="num">' + esc(pop.ani || (pop.anonymous ? "Anonymous" : "unknown")) + "</span>" +
         (pop.displayName ? '<span class="name">' + esc(pop.displayName) + "</span>" : "") +
-        '<span class="state ringing">ringing</span>' +
+        '<span class="state ringing"' + t("state") + '>ringing</span>' +
         '<span class="dialed">to ' + esc(pop.dialed || "?") + " · " + fmtWhen(pop.receivedUtc) + "</span>" +
       "</div>" +
-      '<div class="flag">Flagged: risk sustained across several windows. Verify the caller before acting on anything they ask.</div>' +
+      '<div class="flag"' + t("flag") + '>Flagged: risk sustained across several windows. Verify the caller before acting on anything they ask.</div>' +
       '<div class="body">' +
         '<div class="pane">' +
           "<h3>This call</h3>" +
           '<dl class="kv">' +
-            "<dt>Risk</dt><dd class=\"risk\">" + riskHtml(pop) + "</dd>" +
-            "<dt>Screening</dt><dd>" + esc(pop.screenVerdict || "none") +
+            "<dt" + t("risk") + ">Risk</dt><dd class=\"risk\">" + riskHtml(pop) + "</dd>" +
+            "<dt" + t("screening") + ">Screening</dt><dd>" + esc(pop.screenVerdict || "none") +
               (pop.screenReason ? ' <span class="muted">(' + esc(pop.screenReason) + ")</span>" : "") + "</dd>" +
-            "<dt>STIR/SHAKEN</dt><dd>" + attest(pop) + "</dd>" +
-            (pop.callRate != null ? "<dt>Call rate</dt><dd>" + esc(pop.callRate) + "/node</dd>" : "") +
+            "<dt" + t("stir") + ">STIR/SHAKEN</dt><dd>" + attest(pop) + "</dd>" +
+            (pop.callRate != null ? "<dt" + t("callrate") + ">Call rate</dt><dd>" + esc(pop.callRate) + "/node</dd>" : "") +
           "</dl>" +
           '<div class="why off"></div>' +
           '<div class="why-bars"></div>' +
@@ -448,13 +479,13 @@
         "</div>" +
       "</div>" +
       '<div class="dispose">' +
-        '<div><label>Outcome</label><select class="outcome">' + options(OUTCOMES) + "</select></div>" +
-        '<div><label>Caller identity</label><select class="identity">' + options(IDENTITIES) + "</select></div>" +
-        '<div><label>Action</label><select class="action">' + options(ACTIONS, LIVE_ACTIONS) + "</select></div>" +
-        '<div class="reasons"><span class="cap"><label style="cursor:default">What tipped you off</label></span>' +
+        "<div><label>Outcome</label><select class=\"outcome\">" + options(OUTCOMES) + "</select></div>" +
+        "<div><label>Caller identity</label><select class=\"identity\">" + options(IDENTITIES) + "</select></div>" +
+        "<div><label>Action</label><select class=\"action\">" + options(ACTIONS, LIVE_ACTIONS) + "</select></div>" +
+        '<div class="reasons"><span class="cap"><label>What tipped you off</label></span>" +
           REASONS.map(function (r) { return '<label><input type="checkbox" value="' + r[0] + '"> ' + r[1] + "</label>"; }).join("") +
         "</div>" +
-        '<div class="notes"><label>Notes</label><textarea rows="2" placeholder="what the caller wanted, what you did"></textarea></div>' +
+        '<div class="notes"><label' + t("notes") + '>Notes</label><textarea rows="2" placeholder="what the caller wanted, what you did"></textarea></div>' +
         '<div class="go"><button type="button">Update</button><span class="result"></span></div>' +
       "</div>";
 
