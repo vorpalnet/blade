@@ -62,17 +62,17 @@ public final class ReportService {
 	}
 
 	/// Record a report. Returns a small result the endpoint echoes to the console.
-	public Result record(String ani, String conversation, String callId, String category, String agent) {
+	public Result record(String ani, String conversation, String vorpalId, String category, String agent) {
 		String treatment = treatmentFor(category);
 		boolean blocked = ani != null && catalog.blockNumber(ani, treatment,
 				"agent-report:" + category, agent, expiryDays);
 		boolean labelled = conversation != null
 				&& catalog.label(conversation, category == null ? "spam" : category, 1.0, "agent:" + agent);
-		boolean published = publish(ani, conversation, callId, category, treatment, agent);
+		boolean published = publish(ani, conversation, vorpalId, category, treatment, agent);
 		return new Result(treatment, blocked, labelled, published);
 	}
 
-	private boolean publish(String ani, String conversation, String callId, String category, String treatment,
+	private boolean publish(String ani, String conversation, String vorpalId, String category, String treatment,
 			String agent) {
 		try {
 			if (!EventBus.isReady()) {
@@ -85,13 +85,15 @@ public final class ReportService {
 			if (conversation != null) {
 				data.put("conversation", conversation);
 			}
-			if (callId != null) {
-				data.put("callId", callId);
+			if (vorpalId != null) {
+				data.put("vorpalId", vorpalId);
 			}
 			data.put("category", category == null ? "spam" : category);
 			data.put("treatment", treatment);
 			data.put("agent", agent == null ? "?" : agent);
-			CloudEvent event = CloudEvent.create(REPORT_TYPE, "/agent", callId != null ? callId : ani, data);
+			// Subject = the call's Vorpal-ID, the same key every other event about
+			// this call carries, so a report and a risk verdict correlate.
+			CloudEvent event = CloudEvent.create(REPORT_TYPE, "/agent", vorpalId != null ? vorpalId : ani, data);
 			EventBus.publish(event);
 			return true;
 		} catch (Throwable t) {

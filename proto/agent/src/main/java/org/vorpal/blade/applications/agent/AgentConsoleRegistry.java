@@ -20,18 +20,68 @@ public final class AgentConsoleRegistry {
 
 	private static final Logger LOG = Logger.getLogger(AgentConsoleRegistry.class.getName());
 
+	/// One line in the APPLICATION's log (agent.<n>.log), where the SIP side already
+	/// writes, so a console opening and a pop or update reaching it read as one
+	/// story. The framework's logger is installed by the SIP servlet; a WebSocket
+	/// can open before that during deployment, so fall back to JUL rather than NPE.
+	static void log(String message) {
+		org.vorpal.blade.framework.v2.logging.Logger app = org.vorpal.blade.framework.Callflow.getSipLogger();
+		if (app != null) {
+			app.info(message);
+		} else {
+			LOG.info(message);
+		}
+	}
+
 	/// Open console sockets → the authenticated username behind each.
 	private static final Map<Session, String> CONSOLES = new ConcurrentHashMap<>();
+
+	/// Which agent's console received the pop for a call, by Vorpal-ID, so a
+	/// later update about that call (a risk verdict from the bus) lands on the
+	/// same screen. Only targeted pops are remembered; a broadcast pop has no
+	/// one agent, and its updates broadcast too. Forgotten when the call ends.
+	private static final Map<String, String> AGENT_FOR_CALL = new ConcurrentHashMap<>();
 
 	private AgentConsoleRegistry() {
 	}
 
+	public static void remember(String vorpalId, String username) {
+		if (vorpalId != null && username != null) {
+			AGENT_FOR_CALL.put(vorpalId, username);
+		}
+	}
+
+	public static void forget(String vorpalId) {
+		if (vorpalId != null) {
+			AGENT_FOR_CALL.remove(vorpalId);
+		}
+	}
+
+	/// Push an update about a call to the console holding it: the agent who got
+	/// the pop if one was recorded and is still connected, else every console
+	/// (a supervisor's floor view, and never a silently lost update). Returns a
+	/// one-line account of where it went, for the log.
+	public static String sendToCall(String vorpalId, String json) {
+		String user = (vorpalId == null) ? null : AGENT_FOR_CALL.get(vorpalId);
+		int reached = (user == null) ? 0 : sendToUser(user, json);
+		if (reached > 0) {
+			return "agent " + user + " (" + reached + ")";
+		}
+		int sent = broadcast(json);
+		return (user == null ? "broadcast" : "broadcast (agent " + user + " not connected)") + " to " + sent
+				+ " console(s)";
+	}
+
 	public static void add(Session session, String username) {
 		CONSOLES.put(session, username == null ? "?" : username);
+		log("agent: console open for " + username + " (" + CONSOLES.size() + " open)");
 	}
 
 	public static void remove(Session session) {
-		CONSOLES.remove(session);
+		String user = CONSOLES.remove(session);
+		if (user != null) {
+			log("agent: console closed for " + user + " (" + CONSOLES.size() + " open)");
+		}
 	}
 
 	public static String userOf(Session session) {
@@ -43,10 +93,14 @@ public final class AgentConsoleRegistry {
 	}
 
 	/// Push a JSON message to every open console, dropping any that have closed.
-	public static void broadcast(String json) {
+	/// Returns how many it was sent to.
+	public static int broadcast(String json) {
+		int sent = 0;
 		for (Session s : CONSOLES.keySet()) {
 			send(s, json);
+			sent++;
 		}
+		return sent;
 	}
 
 	/// Push to the console(s) of one agent, by username. Returns how many sockets

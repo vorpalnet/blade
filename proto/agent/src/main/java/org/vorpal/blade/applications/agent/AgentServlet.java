@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.logging.Level;
 
 import javax.servlet.ServletException;
+import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
@@ -12,6 +13,7 @@ import javax.servlet.sip.annotation.SipApplication;
 import javax.servlet.sip.annotation.SipListener;
 import javax.servlet.sip.annotation.SipServlet;
 
+import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v3.B2buaServlet;
 
@@ -108,6 +110,7 @@ public class AgentServlet extends B2buaServlet {
 	@Override
 	public void callAnswered(SipServletResponse outboundResponse) throws ServletException, IOException {
 		// The agent (or voicemail) answered; the framework bridges the media.
+		state(vorpalIdOf(outboundResponse.getApplicationSession()), "talking");
 	}
 
 	@Override
@@ -117,7 +120,11 @@ public class AgentServlet extends B2buaServlet {
 
 	@Override
 	public void callCompleted(SipServletRequest request) throws ServletException, IOException {
-		// A leg hung up; the framework tears the other down.
+		// A leg hung up; the framework tears the other down. No more updates
+		// will find this call, so stop remembering whose screen it was on.
+		String vorpalId = vorpalIdOf(request);
+		state(vorpalId, "ended");
+		AgentConsoleRegistry.forget(vorpalId);
 	}
 
 	@Override
@@ -127,11 +134,15 @@ public class AgentServlet extends B2buaServlet {
 		if (sipLogger.isLoggable(Level.FINE)) {
 			sipLogger.fine("agent: agent leg declined " + outboundResponse.getStatus());
 		}
+		state(vorpalIdOf(outboundResponse.getApplicationSession()), "declined");
 	}
 
 	@Override
 	public void callAbandoned(SipServletRequest outboundRequest) throws ServletException, IOException {
 		// The caller gave up before the agent answered.
+		String vorpalId = vorpalIdOf(outboundRequest);
+		state(vorpalId, "abandoned");
+		AgentConsoleRegistry.forget(vorpalId);
 	}
 
 	// ============================================================ the screen-pop
@@ -143,6 +154,9 @@ public class AgentServlet extends B2buaServlet {
 	private void pop(SipServletRequest request) {
 		String callId = request.getCallId();
 		CallPop pop = CallPopBuilder.of(request, callId, CallerHistory.EMPTY);
+		// The card's identity: the Vorpal-ID in the same hex form every bus event
+		// carries, so a later update about this call finds its card.
+		pop.vorpalId = vorpalIdOf(request);
 		Catalog cat = catalog();
 		if (cat != null && pop.ani != null) {
 			pop.history = cat.history(pop.ani, RECENT_LIMIT);
@@ -156,17 +170,51 @@ public class AgentServlet extends B2buaServlet {
 			int reached = (agentId == null) ? 0 : AgentConsoleRegistry.sendToUser(agentId, json);
 			String how;
 			if (reached > 0) {
+				// Remember who has this call, so its updates go to the same screen.
+				AgentConsoleRegistry.remember(pop.vorpalId, agentId);
 				how = "agent " + agentId + " (" + reached + ")";
 			} else {
-				AgentConsoleRegistry.broadcast(json);
-				how = (agentId == null ? "broadcast" : "broadcast (agent " + agentId + " not connected)");
+				int sent = AgentConsoleRegistry.broadcast(json);
+				how = (agentId == null ? "broadcast" : "broadcast (agent " + agentId + " not connected)") + " to "
+						+ sent + " console(s)";
 			}
-			if (sipLogger.isLoggable(Level.FINE)) {
-				sipLogger.fine("agent: pop callId=" + callId + " ani=" + pop.ani + " -> " + how);
-			}
+			// One line per pop, at INFO: it is the demo's whole point, and a pop that
+			// reached nobody is the first thing to look for.
+			sipLogger.info("agent: pop vorpalId=" + pop.vorpalId + " ani=" + pop.ani + " risk=" + pop.riskBand
+					+ " -> " + how);
 		} catch (Exception e) {
-			sipLogger.log(Level.FINE, "agent: could not serialize/broadcast pop for " + callId, e);
+			sipLogger.log(Level.FINE, "agent: could not serialize/broadcast pop for " + pop.vorpalId, e);
 		}
+	}
+
+	/// The call's Vorpal-ID as `%08X` hex — the form the bus events carry — or
+	/// null before the framework has assigned one.
+	private static String vorpalIdOf(SipServletRequest request) {
+		return vorpalIdOf(request.getApplicationSession());
+	}
+
+	private static String vorpalIdOf(SipApplicationSession app) {
+		try {
+			Long id = Analytics.getVorpalId(app);
+			return (id == null) ? null : String.format("%08X", id);
+		} catch (Throwable t) {
+			return null;
+		}
+	}
+
+	/// Tell the card what the call is doing: ringing (the pop itself), talking,
+	/// ended, declined, abandoned. Straight from this app's own callbacks to the
+	/// socket; no bus round-trip for a fact this app already holds.
+	private static void state(String vorpalId, String state) {
+		if (vorpalId == null) {
+			return;
+		}
+		ObjectNode frame = MAPPER.createObjectNode();
+		frame.put("t", "update");
+		frame.put("vorpalId", vorpalId);
+		frame.put("state", state);
+		String where = AgentConsoleRegistry.sendToCall(vorpalId, frame.toString());
+		AgentConsoleRegistry.log("agent: state vorpalId=" + vorpalId + " " + state + " -> " + where);
 	}
 
 	/// Where to ring the agent: the configured agent URI, or the request URI when

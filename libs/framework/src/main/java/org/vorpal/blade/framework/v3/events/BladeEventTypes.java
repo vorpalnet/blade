@@ -102,6 +102,36 @@ public final class BladeEventTypes {
 	/// personally refused it.
 	public static final String CALL_DECLINED = "org.vorpal.blade.call.declined";
 
+	// ------------------------------------------------------------------ the risk
+	//
+	// Defined here so the contract is blade's — the type, the payload, the
+	// catalog entry — and published by whatever implements the risk tap (today
+	// Gryphon's RiskEvents, from a media pipeline the framework never sees). A
+	// subscriber that wants the verdict depends on blade only.
+
+	/// The fused call-risk assessment changed: a signal (acoustic, signaling,
+	/// provenance, behavior) was scored and folded in. Frequent — one per scored
+	/// window while a call is analysed. Carries the band, the score and the
+	/// per-signal contributions, so a reader sees why, not just how much.
+	public static final String CALL_RISK_ASSESSED = "org.vorpal.blade.call.risk.assessed";
+
+	/// Risk sustained past the debounce: the call is flagged. At most once per
+	/// call. Whatever acts on it (a fraud queue, forced recording, a brand
+	/// warning) is the subscriber's business; the event exists so the decision
+	/// is auditable.
+	public static final String CALL_RISK_FLAGGED = "org.vorpal.blade.call.risk.flagged";
+
+	// ------------------------------------------------------------ the transcript
+
+	/// A party said something and a transcriber decoded it: one utterance, as
+	/// text. Frequent, one per endpointed utterance while the call is
+	/// transcribed. Attributes carry `text`, `party` (caller or callee) and,
+	/// when the transcriber has a media clock, `startMs` / `endMs` from when the
+	/// tap attached. Published by whatever hears the audio (Gryphon's in-server
+	/// ASR tap today); the contract is blade's so a screen or an indexer depends
+	/// on blade alone.
+	public static final String CALL_UTTERANCE = "org.vorpal.blade.call.utterance";
+
 	// -------------------------------------------------------------- the transfer
 
 	/// A REFER arrived from the transferor, before anything was done about it.
@@ -180,6 +210,12 @@ public final class BladeEventTypes {
 			return CALL_ABANDONED;
 		case "callDeclined":
 			return CALL_DECLINED;
+		case "callRiskAssessed":
+			return CALL_RISK_ASSESSED;
+		case "callRiskFlagged":
+			return CALL_RISK_FLAGGED;
+		case "callerSaid":
+			return CALL_UTTERANCE;
 		case "transferRequested":
 			return TRANSFER_REQUESTED;
 		case "transferInitiated":

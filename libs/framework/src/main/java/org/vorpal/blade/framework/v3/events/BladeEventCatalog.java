@@ -87,7 +87,48 @@ public final class BladeEventCatalog {
 		types.add(sessionKey());
 		types.add(callEvent());
 		types.addAll(callAndTransferTypes());
+		types.addAll(riskTypes());
+		types.add(callUtterance());
 		return types;
+	}
+
+	/// The call-risk pair. Defined here — the contract is blade's — and published
+	/// by whatever implements the risk tap (Gryphon's RiskEvents, from a media
+	/// pipeline the framework never sees). Call-scoped like the eleven: the
+	/// correlator is the subject, and the verdict rides in `attributes` as
+	/// riskScore, riskBand, triggerSignal, suspectStreak, and one signal.<name> /
+	/// contribution.<name> pair per fused signal.
+	public static List<EventType> riskTypes() {
+		List<EventType> types = new ArrayList<>();
+		types.add(callRiskAssessed());
+		types.add(callRiskFlagged());
+		return types;
+	}
+
+	private static EventType callRiskAssessed() {
+		EventType declaration = base(BladeEventTypes.CALL_RISK_ASSESSED, "Call Risk Assessed",
+				"The fused call-risk assessment changed: a signal was scored and folded in. One per scored window while the call is analysed. Attributes carry riskScore, riskBand (clear, watch or suspect), triggerSignal, suspectStreak, and signal.<name> / contribution.<name> for each fused signal, so a reader sees why, not just how much.",
+				"CallRiskAssessed");
+		declaration.setFields(callScopedFields());
+		return declaration;
+	}
+
+	private static EventType callRiskFlagged() {
+		EventType declaration = base(BladeEventTypes.CALL_RISK_FLAGGED, "Call Risk Flagged",
+				"Risk sustained past the debounce: the call is flagged. At most once per call. Same attributes as Call Risk Assessed. Whatever acts on it is the subscriber's business; the event exists so the decision is auditable.",
+				"CallRiskFlagged");
+		declaration.setFields(callScopedFields());
+		return declaration;
+	}
+
+	/// One transcribed utterance. Call-scoped like the risk pair; the text rides
+	/// in `attributes` so the payload shape stays the one every call event has.
+	private static EventType callUtterance() {
+		EventType declaration = base(BladeEventTypes.CALL_UTTERANCE, "Call Utterance",
+				"A party said something and a transcriber decoded it. One per endpointed utterance while the call is transcribed. Attributes carry text, party (caller or callee) and, when the transcriber has a media clock, startMs and endMs measured from when the tap attached. A screen shows it as it arrives; an indexer keeps it.",
+				"CallUtterance");
+		declaration.setFields(callScopedFields());
+		return declaration;
 	}
 
 	/// The analytics sink's subscription: everything on the bus, durably, with no

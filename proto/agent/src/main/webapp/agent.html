@@ -5,20 +5,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Agent Console</title>
 <!--
-  The live screen-pop. A signed-in agent's browser holds one WebSocket; a pop
+  The live screen-pop. A signed-in agent's browser holds one WebSocket; a card
   arrives on it while the call is still ringing, in time for the agent to decide
-  whether to answer or report. Everything shown is a read of what the edge apps
-  stamped on the call and what the catalog already recorded; the one write is the
-  report button, which posts to this app's own API.
+  whether to answer or report. Then the card keeps changing for as long as the
+  call lasts: the fused risk verdict lands a few seconds in, once the media tier
+  has heard enough audio to score it, and every utterance the caller makes is
+  appended to the transcript as it is decoded. Everything shown is a read of
+  what the edge apps stamped on the call, what the media tier published on the
+  bus, and what the catalog already recorded; the one write is the report
+  button.
 
   Hand-rolled, served from this WAR, nothing fetched from outside it.
 
-  Redundant coding, not colour removed. Risk is shown twice at once: a colour AND
-  the word "clear/watch/suspect" with its score. The colour reads at a glance for
-  those who see it; the word and number say the same thing for anyone who can't
-  tell the colours apart (colourblindness is trouble telling colours apart, not an
-  inability to see them — so the answer is a second channel, never a grey page).
-  A caller's history is a count in words; a prior label is its own text.
+  Redundant coding, not colour removed. Risk is shown twice at once: a colour
+  AND the word "clear/watch/suspect" with its score. The colour reads at a
+  glance for those who see it; the word and number say the same thing for anyone
+  who can't tell the colours apart (colourblindness is trouble telling colours
+  apart, not an inability to see them, so the answer is a second channel, never
+  a grey page). The signal bars carry order in their LENGTH and a number beside
+  them; the trail of scores is a row of heights with the latest number printed.
 -->
 <style>
   :root {
@@ -37,9 +42,10 @@
   .conn.live::before { content: "\25CF  "; }   /* filled circle: connected */
   .conn.down::before { content: "\25CB  "; }    /* hollow circle: not connected */
 
-  main { padding: 16px 20px; max-width: 1100px; margin: 0 auto; }
+  main { padding: 16px 20px; max-width: 1240px; margin: 0 auto; }
   .hint { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
   .empty { color: var(--muted); padding: 40px 0; text-align: center; font-style: italic; }
+  .muted { color: var(--muted); }
 
   /* One call = one card. Newest on top. */
   .pop { border: 1px solid var(--line); border-radius: 6px; margin-bottom: 14px; overflow: hidden; }
@@ -47,35 +53,78 @@
   .pop .num { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
   .pop .name { color: var(--muted); font-size: 15px; }
   .pop .dialed { color: var(--muted); font-size: 13px; margin-left: auto; }
-  .pop .body { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
-  @media (max-width: 720px) { .pop .body { grid-template-columns: 1fr; } }
-  .pane { padding: 12px 16px; }
+  /* Call state: a word in a pill. "talking" carries a running clock. */
+  .state { font-size: 12px; border: 1px solid var(--ink); border-radius: 12px; padding: 1px 10px; font-variant-numeric: tabular-nums; }
+  .state.ringing { border-style: dashed; }
+  .state.ringing::before { content: "\260E  "; }   /* telephone */
+  .state.talking { border-color: var(--brand); color: var(--brand); }
+  .state.talking::before { content: "\25B6  "; }   /* play */
+  .state.ended, .state.declined, .state.abandoned { color: var(--muted); border-color: var(--line); }
+  .state.ended::before { content: "\25A0  "; }     /* stop */
+
+  /* Flagged: a banner across the card, words first. */
+  .flag { display: none; padding: 8px 16px; background: #fbe1de; color: #b3261e; font-weight: 600; border-bottom: 1px solid var(--line); }
+  .flag::before { content: "\26A0  "; }
+  .pop.flagged .flag { display: block; }
+
+  .pop .body { display: grid; grid-template-columns: 1.1fr 1.3fr 1fr; gap: 0; }
+  @media (max-width: 900px) { .pop .body { grid-template-columns: 1fr 1fr; } .pane.caller { grid-column: 1 / -1; border-left: none; border-top: 1px solid var(--line); } }
+  @media (max-width: 600px) { .pop .body { grid-template-columns: 1fr; } .pane + .pane { border-left: none; border-top: 1px solid var(--line); } }
+  .pane { padding: 12px 16px; min-width: 0; }
   .pane + .pane { border-left: 1px solid var(--line); }
-  @media (max-width: 720px) { .pane + .pane { border-left: none; border-top: 1px solid var(--line); } }
   .pane h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
-  .kv { display: grid; grid-template-columns: 120px 1fr; gap: 3px 10px; font-size: 13px; }
+  .kv { display: grid; grid-template-columns: 110px 1fr; gap: 3px 10px; font-size: 13px; }
   .kv dt { color: var(--muted); }
   .kv dd { margin: 0; }
 
-  /* Risk band: distinguished by border weight/style AND label, not colour. */
   /* Risk is two channels at once (redundant coding): a colour AND the word +
-     score. The colour reads at a glance for those who see it; the word and the
-     number say the same thing for anyone who cannot tell the colours apart. */
+     score. */
   .band { font-weight: 700; padding: 1px 9px; border-radius: 4px; }
   .band .score { font-weight: 400; opacity: .8; font-variant-numeric: tabular-nums; }
   .band.clear   { color: #1b5e20; background: #e6f4ea; }
   .band.watch   { color: #8a5300; background: #fbeecb; }
   .band.suspect { color: #b3261e; background: #fbe1de; }
   .band.none    { color: var(--muted); font-weight: 400; padding: 0; }
+  dd.risk { font-size: 15px; }
+
+  /* The why: one row per fused signal. Length carries the value; the number
+     beside it says the same thing; the contribution is what it added to the
+     fused log-odds (negative = argued for clear). */
+  .signals { margin: 10px 0 0; padding: 0; list-style: none; font-size: 12px; }
+  .signals li { display: grid; grid-template-columns: 78px 1fr 34px 46px; gap: 8px; align-items: center; padding: 2px 0; font-variant-numeric: tabular-nums; }
+  .signals .lbl { color: var(--muted); }
+  .signals .bar { height: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 2px; overflow: hidden; }
+  .signals .bar i { display: block; height: 100%; background: var(--brand-300); width: 0; transition: width .4s; }
+  .signals .bar i.hot { background: var(--brand); }
+  .signals .contrib { color: var(--muted); text-align: right; }
+
+  /* The trail: one bar per scored window, oldest left. The latest score is
+     printed beside it so the row is never only heights. */
+  .trail { display: flex; align-items: flex-end; gap: 3px; height: 44px; margin-top: 12px; border-bottom: 1px solid var(--line); padding-bottom: 1px; }
+  .trail i { display: block; width: 14px; min-height: 3px; background: var(--brand-300); border-radius: 2px 2px 0 0; }
+  .trail i.watch { background: #c98a00; }
+  .trail i.suspect { background: #b3261e; }
+  .trail i.latest { outline: 1px solid var(--ink); }
+  .trail-cap { font-size: 11px; color: var(--muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
 
   /* Attestation: A/B/C spelled out; C carries a warning glyph, not a colour. */
   .attest { font-variant-numeric: tabular-nums; }
   .warn::before { content: "\26A0  "; }  /* warning sign */
 
+  /* The transcript: what the caller is saying, as it is decoded. */
+  .lines { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; font-size: 13.5px; }
+  .lines li { display: grid; grid-template-columns: 40px 1fr; gap: 8px; padding: 3px 0; border-top: 1px dotted var(--line); }
+  .lines li:first-child { border-top: none; }
+  .lines .at { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; padding-top: 2px; }
+  .lines .callee { color: var(--brand); }
+  .lines li.new { animation: land .8s ease-out; }
+  @keyframes land { from { background: #efe3f3; } to { background: transparent; } }
+  .listening { color: var(--muted); font-style: italic; font-size: 13px; }
+  .listening.off { display: none; }
+
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
   .chip { border: 1px solid var(--ink); border-radius: 3px; padding: 1px 7px; font-size: 12px; }
   .count { font-weight: 600; }
-
   .topics { font-size: 12px; margin-top: 6px; }
   .topics .tlabel { color: var(--muted); }
   .recent { list-style: none; margin: 6px 0 0; padding: 0; font-size: 12px; color: var(--muted); }
@@ -98,8 +147,9 @@
 </header>
 
 <main>
-  <p class="hint">A card appears the moment a call arrives, before it is answered.
-     The last few calls stay on screen; report a scam and the number is blocked and the call labelled.</p>
+  <p class="hint">A card appears the moment a call arrives, before it is answered, and keeps
+     changing while the call lasts: the risk verdict as the media tier scores the audio, and the
+     transcript as the caller speaks. Report a scam and the number is blocked and the call labelled.</p>
   <div id="pops"></div>
   <div id="empty" class="empty">Waiting for the next call&hellip;</div>
 </main>
@@ -110,9 +160,10 @@
   var pops = document.getElementById("pops");
   var empty = document.getElementById("empty");
   var connEl = document.getElementById("conn");
-  var MAX_CARDS = 8;
+  var MAX_CARDS = 6;
   var socket = null;              // the one open console socket, or null
-  var pending = {};               // callId -> {button, result} awaiting a report result
+  var cards = {};                 // vorpalId -> {pop, el, ...}: every call on screen, so an update can find it
+  var pending = {};               // vorpalId -> {button, result} awaiting a report result
   var mayReport = false;          // set from the server's hello; gates the report button
   var whoEl = document.getElementById("who");
 
@@ -123,9 +174,8 @@
     });
   }
 
-  // Risk in two channels: a colour band AND the word + score inside it, so it
-  // reads at a glance and still says the same thing to anyone who can't tell the
-  // colours apart. "not scored" when the call carries no band.
+  // ---------------------------------------------------------------- risk
+
   function bandClass(b) {
     switch ((b || "").toLowerCase()) {
       case "clear": return "clear";
@@ -136,21 +186,119 @@
   }
   function riskHtml(pop) {
     if (!pop.riskBand) {
-      return '<span class="band none">not scored</span>';
+      return '<span class="band none">not yet scored</span>';
     }
     var score = (pop.riskScore != null) ? ' <span class="score">' + esc(pop.riskScore) + "</span>" : "";
     return '<span class="band ' + bandClass(pop.riskBand) + '">' + esc(pop.riskBand) + score + "</span>";
   }
 
-  // Attestation A/B/C, spelled out. C (gateway, unverified caller) is flagged.
+  // The four fused signals, in the order the product names them. A signal the
+  // media tier has not scored yet stays listed at zero, so the agent sees what
+  // is still to come (the acoustic bar filling in is the moment to watch).
+  var SIGNALS = [
+    ["acoustic",   "Voice"],
+    ["signaling",  "Signaling"],
+    ["provenance", "Provenance"],
+    ["behavior",   "Behavior"]
+  ];
+  function signalsHtml(pop) {
+    var s = pop.signals || {};
+    var out = '<ul class="signals">';
+    SIGNALS.forEach(function (d) {
+      var one = s[d[0]] || {};
+      var v = (one.value != null) ? parseFloat(one.value) : null;
+      var c = (one.contribution != null) ? parseFloat(one.contribution) : null;
+      var pct = (v == null || isNaN(v)) ? 0 : Math.max(0, Math.min(100, Math.round(v * 100)));
+      var hot = (v != null && v >= 0.5) ? " hot" : "";
+      out += "<li>" +
+        '<span class="lbl">' + d[1] + "</span>" +
+        '<span class="bar"><i class="' + hot.trim() + '" style="width:' + pct + '%"></i></span>' +
+        "<span>" + (v == null || isNaN(v) ? "–" : v.toFixed(2)) + "</span>" +
+        '<span class="contrib">' + (c == null || isNaN(c) ? "" : (c >= 0 ? "+" : "") + c.toFixed(2)) + "</span>" +
+      "</li>";
+    });
+    out += "</ul>";
+    return out;
+  }
+  function trailHtml(c) {
+    if (!c.trail.length) return "";
+    var out = '<div class="trail">';
+    c.trail.forEach(function (p, i) {
+      var h = Math.max(3, Math.round(p.score * 44));
+      out += '<i class="' + bandClass(p.band) + (i === c.trail.length - 1 ? " latest" : "") + '" style="height:' + h + 'px" title="' + esc(p.band) + " " + esc(p.score.toFixed(3)) + '"></i>';
+    });
+    out += "</div>";
+    var last = c.trail[c.trail.length - 1];
+    out += '<div class="trail-cap">' + c.trail.length + " window" + (c.trail.length === 1 ? "" : "s") +
+      " scored · latest " + esc(last.score.toFixed(3)) + " · watch at 0.35, suspect at 0.75</div>";
+    return out;
+  }
+  function redrawRisk(c) {
+    c.el.querySelector("dd.risk").innerHTML = riskHtml(c.pop);
+    c.el.querySelector(".why").innerHTML = signalsHtml(c.pop) + trailHtml(c);
+    if (c.pop.riskFlagged) { c.el.classList.add("flagged"); }
+  }
+
+  // ---------------------------------------------------------------- state
+
+  function fmtClock(ms) {
+    var s = Math.max(0, Math.round(ms / 1000));
+    var m = Math.floor(s / 60);
+    return m + ":" + (s % 60 < 10 ? "0" : "") + (s % 60);
+  }
+  function setState(c, state) {
+    var el = c.el.querySelector(".state");
+    c.state = state;
+    el.className = "state " + state;
+    if (state === "talking") {
+      c.answeredAt = Date.now();
+      var tick = function () {
+        if (c.state !== "talking") return;
+        el.textContent = "talking " + fmtClock(Date.now() - c.answeredAt);
+        c.timer = setTimeout(tick, 1000);
+      };
+      tick();
+      c.el.querySelector(".listening").classList.remove("off");
+    } else {
+      if (c.timer) { clearTimeout(c.timer); c.timer = null; }
+      var took = (c.answeredAt && state === "ended") ? " · " + fmtClock(Date.now() - c.answeredAt) : "";
+      el.textContent = state + took;
+      if (state !== "ringing") { c.el.querySelector(".listening").classList.add("off"); }
+    }
+  }
+
+  // ---------------------------------------------------------------- transcript
+
+  function addLine(c, u) {
+    var list = c.el.querySelector(".lines");
+    var li = document.createElement("li");
+    li.className = "new " + (u.party === "callee" ? "callee" : "caller");
+    var at = (u.atMs != null && !isNaN(parseInt(u.atMs, 10))) ? fmtClock(parseInt(u.atMs, 10)) : "";
+    li.innerHTML = '<span class="at">' + esc(at) + "</span><span>" + esc(u.text) + "</span>";
+    list.appendChild(li);
+    list.scrollTop = list.scrollHeight;
+    c.el.querySelector(".listening").textContent = "listening…";
+  }
+
+  // ---------------------------------------------------------------- the rest of the card
+
   function attest(pop) {
     var a = (pop.attestation || "").toUpperCase();
     var label = { "A": "A — full", "B": "B — partial", "C": "C — gateway" }[a] || (pop.verstat || "none");
     var warn = (a === "C" || (pop.verstat && /fail/i.test(pop.verstat))) ? " warn" : "";
-    var age = (pop.stirAgeSeconds != null) ? " (" + pop.stirAgeSeconds + "s old)" : "";
+    var age = (pop.stirAgeSeconds != null) ? " (" + fmtAge(pop.stirAgeSeconds) + ")" : "";
     return '<span class="attest' + warn + '">' + esc(label) + esc(age) + "</span>";
   }
-
+  // How old the PASSporT is. Fresh is seconds; anything older than a minute is
+  // a replay smell, and a token from years ago is said in days, not seconds.
+  function fmtAge(sec) {
+    sec = parseInt(sec, 10);
+    if (isNaN(sec)) return "";
+    if (sec < 90) return sec + "s old";
+    if (sec < 3600) return Math.round(sec / 60) + " min old, stale";
+    if (sec < 172800) return Math.round(sec / 3600) + " h old, stale";
+    return Math.round(sec / 86400) + " days old, stale";
+  }
   function fmtWhen(iso) {
     if (!iso) return "?";
     var d = new Date(iso);
@@ -158,10 +306,8 @@
   }
   function fmtDur(ms) {
     if (ms == null) return "";
-    var s = Math.round(ms / 1000);
-    return " · " + Math.floor(s / 60) + "m" + (s % 60) + "s";
+    return " · " + fmtClock(ms);
   }
-
   function history(h) {
     h = h || { callCount: 0, recent: [], priorLabels: [] };
     var out = "";
@@ -200,20 +346,28 @@
       '<div class="top">' +
         '<span class="num">' + esc(pop.ani || (pop.anonymous ? "Anonymous" : "unknown")) + "</span>" +
         (pop.displayName ? '<span class="name">' + esc(pop.displayName) + "</span>" : "") +
+        '<span class="state ringing">ringing</span>' +
         '<span class="dialed">to ' + esc(pop.dialed || "?") + " · " + fmtWhen(pop.receivedUtc) + "</span>" +
       "</div>" +
+      '<div class="flag">Flagged: risk sustained across several windows. Verify the caller before acting on anything they ask.</div>' +
       '<div class="body">' +
         '<div class="pane">' +
           "<h3>This call</h3>" +
           '<dl class="kv">' +
-            "<dt>Risk</dt><dd>" + riskHtml(pop) + "</dd>" +
+            "<dt>Risk</dt><dd class=\"risk\">" + riskHtml(pop) + "</dd>" +
             "<dt>Screening</dt><dd>" + esc(pop.screenVerdict || "none") +
               (pop.screenReason ? ' <span class="muted">(' + esc(pop.screenReason) + ")</span>" : "") + "</dd>" +
             "<dt>STIR/SHAKEN</dt><dd>" + attest(pop) + "</dd>" +
             (pop.callRate != null ? "<dt>Call rate</dt><dd>" + esc(pop.callRate) + "/node</dd>" : "") +
           "</dl>" +
+          '<div class="why"></div>' +
         "</div>" +
         '<div class="pane">' +
+          "<h3>Live transcript</h3>" +
+          '<ul class="lines"></ul>' +
+          '<div class="listening off">waiting for the call to be answered…</div>' +
+        "</div>" +
+        '<div class="pane caller">' +
           "<h3>This caller</h3>" +
           history(pop.history) +
         "</div>" +
@@ -229,8 +383,6 @@
     var button = el.querySelector("button");
     var result = el.querySelector(".result");
     if (!mayReport) {
-      // A signed-in watcher who is not in a report group: the button is inert
-      // and says why, rather than failing on click.
       button.disabled = true;
       select.disabled = true;
       result.textContent = "view only";
@@ -244,21 +396,19 @@
       button.disabled = true;
       result.className = "result";
       result.textContent = "reporting…";
-      // The result comes back on the socket; match it to this card by callId.
-      pending[pop.callId] = { button: button, result: result };
+      pending[pop.vorpalId] = { button: button, result: result };
       socket.send(JSON.stringify({
         t: "report", ani: pop.ani, conversation: pop.conversation || null,
-        callId: pop.callId, category: select.value
+        vorpalId: pop.vorpalId, category: select.value
       }));
     });
     return el;
   }
 
-  // A report outcome arriving on the socket; find the card that asked.
   function reportResult(m) {
-    var slot = m.callId ? pending[m.callId] : null;
+    var slot = m.vorpalId ? pending[m.vorpalId] : null;
     if (!slot) return;
-    delete pending[m.callId];
+    delete pending[m.vorpalId];
     if (m.ok) {
       slot.result.className = "result ok";
       slot.result.textContent = "blocked (" + m.treatment + ")" +
@@ -270,11 +420,9 @@
     }
   }
 
-  // The server's greeting: who is signed in, and whether they may report.
   function hello(m) {
     if (m.user) { whoEl.textContent = m.user; }
     mayReport = !!m.mayReport;
-    // Apply to any cards already on screen (hello normally arrives first).
     var buttons = pops.querySelectorAll(".report button");
     for (var i = 0; i < buttons.length; i++) {
       if (!mayReport) {
@@ -288,9 +436,43 @@
 
   function show(pop) {
     empty.style.display = "none";
-    pops.insertBefore(card(pop), pops.firstChild);
+    var el = card(pop);
+    el.dataset.vorpalId = pop.vorpalId || "";
+    var c = { pop: pop, el: el, trail: [], state: "ringing", timer: null, answeredAt: null };
+    if (pop.vorpalId) { cards[pop.vorpalId] = c; }
+    redrawRisk(c);
+    setState(c, "ringing");
+    el.querySelector(".listening").classList.remove("off");
+    pops.insertBefore(el, pops.firstChild);
     while (pops.children.length > MAX_CARDS) {
-      pops.removeChild(pops.lastChild);
+      var gone = pops.lastChild;
+      if (gone.dataset && gone.dataset.vorpalId && cards[gone.dataset.vorpalId]) {
+        var g = cards[gone.dataset.vorpalId];
+        if (g.timer) clearTimeout(g.timer);
+        delete cards[gone.dataset.vorpalId];
+      }
+      pops.removeChild(gone);
+    }
+  }
+
+  // Something new about a call already on screen. General on purpose: any
+  // producer sends {t:"update", vorpalId, ...fields}. Three kinds land today:
+  // a risk verdict (band, score, signals, maybe flagged), an utterance, and the
+  // call's state. A card for a call we never popped is ignored.
+  function update(m) {
+    var c = m.vorpalId ? cards[m.vorpalId] : null;
+    if (!c) return;
+    if (m.utterance) { addLine(c, m.utterance); }
+    if (m.state) { setState(c, m.state); }
+    var risky = false;
+    for (var k in m) {
+      if (k === "t" || k === "vorpalId" || k === "utterance" || k === "state") continue;
+      if (Object.prototype.hasOwnProperty.call(m, k)) { c.pop[k] = m[k]; risky = true; }
+    }
+    if (risky) {
+      var score = parseFloat(m.riskScore);
+      if (!isNaN(score)) { c.trail.push({ score: score, band: m.riskBand || c.pop.riskBand }); }
+      redrawRisk(c);
     }
   }
 
@@ -308,11 +490,22 @@
       try { m = JSON.parse(ev.data); } catch (e) { return; /* ignore a malformed frame */ }
       if (m.t === "hello") { hello(m); }
       else if (m.t === "pop") { show(m.pop); }
+      else if (m.t === "update") { update(m); }
       else if (m.t === "reportResult") { reportResult(m); }
     };
     ws.onclose = function () {
       socket = null;
       connEl.className = "conn down"; connEl.textContent = "reconnecting…";
+      // A socket refused for a dead sign-in looks exactly like a network drop
+      // from here (the browser hides the 401), and a redeploy kills every
+      // HTTP session while this page keeps coming back from cache. So before
+      // trying the socket again, ask the server for this very page with the
+      // cache bypassed: a redirect to the sign-in page, or anything but 200,
+      // means the session is gone, and a reload is what brings it back (SSO
+      // usually completes without a prompt).
+      fetch(location.href, { cache: "no-store", credentials: "same-origin" })
+        .then(function (r) { if (r.redirected || !r.ok) { location.reload(); } })
+        .catch(function () { /* offline: keep trying the socket */ });
       setTimeout(connect, 4000);
     };
     ws.onerror = function () { try { ws.close(); } catch (e) {} };

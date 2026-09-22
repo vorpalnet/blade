@@ -8,6 +8,14 @@ package org.vorpal.blade.applications.agent;
 /// Plain public fields: Jackson serializes it as-is.
 public final class CallPop {
 
+	/// The call's identity on the console: the Vorpal-ID, BLADE's correlator that
+	/// spans every app and leg of the call (as `%08X` hex, the form every bus
+	/// event carries as its subject and `data.vorpalId`). Every later update about
+	/// this call — a risk verdict, a topic — is matched to the card by this.
+	public String vorpalId;
+
+	/// This leg's SIP Call-ID, informational only. A B2BUA gives each leg its own,
+	/// so it identifies nothing across apps; the Vorpal-ID does.
 	public String callId;
 	public String ani;
 	public String displayName;

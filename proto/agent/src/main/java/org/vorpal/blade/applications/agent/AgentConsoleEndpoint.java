@@ -96,25 +96,26 @@ public class AgentConsoleEndpoint {
 
 		String ani = str(in, "ani");
 		String conversation = str(in, "conversation");
-		String callId = str(in, "callId");
+		// The call's identity is its Vorpal-ID, the same key the card carries.
+		String vorpalId = str(in, "vorpalId");
 		String category = str(in, "category");
 
 		if (!mayReport(session)) {
-			sendResult(session, callId, false, "your account is not permitted to report calls", null);
+			sendResult(session, vorpalId, false, "your account is not permitted to report calls", null);
 			return;
 		}
 		ReportService reports = AgentServlet.reports();
 		if (reports == null) {
-			sendResult(session, callId, false, "settings not loaded", null);
+			sendResult(session, vorpalId, false, "settings not loaded", null);
 			return;
 		}
 		if (ani == null && conversation == null) {
-			sendResult(session, callId, false, "ani or conversation is required", null);
+			sendResult(session, vorpalId, false, "ani or conversation is required", null);
 			return;
 		}
 
-		ReportService.Result result = reports.record(ani, conversation, callId, category, principal.getName());
-		sendResult(session, callId, true, null, result);
+		ReportService.Result result = reports.record(ani, conversation, vorpalId, category, principal.getName());
+		sendResult(session, vorpalId, true, null, result);
 	}
 
 	@OnClose
@@ -185,14 +186,14 @@ public class AgentConsoleEndpoint {
 		return false;
 	}
 
-	/// Send a report outcome back to the one socket that asked. The `callId` is
+	/// Send a report outcome back to the one socket that asked. The Vorpal-ID is
 	/// echoed so the page can match the result to the card that raised it.
-	private void sendResult(Session session, String callId, boolean ok, String error, ReportService.Result result) {
+	private void sendResult(Session session, String vorpalId, boolean ok, String error, ReportService.Result result) {
 		ObjectNode msg = MAPPER.createObjectNode();
 		msg.put("t", "reportResult");
 		msg.put("ok", ok);
-		if (callId != null) {
-			msg.put("callId", callId);
+		if (vorpalId != null) {
+			msg.put("vorpalId", vorpalId);
 		}
 		if (error != null) {
 			msg.put("error", error);

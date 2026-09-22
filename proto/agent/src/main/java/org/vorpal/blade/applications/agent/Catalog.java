@@ -20,10 +20,19 @@ import javax.sql.DataSource;
 /// never a failed call or a broken pop. All caller values are bound as
 /// parameters, never concatenated.
 ///
-/// The schema is proxy-block/catalog's: `BLADE_CONVERSATION(FROM_NUMBER,
-/// TO_NUMBER, EPOCH_UTC, DURATION_MS, CONVERSATION, ...)` and `BLADE_LABEL(
-/// CONVERSATION, LABEL, CONFIDENCE, SOURCE, ...)`. `BLADE_LABEL` is the catalog's
-/// label store, which nothing wrote until agent reports.
+/// Two schemas, side by side in the one data source:
+///
+/// - the analytics sink's `sessions` / `session_keys` (see
+///   `services/analytics/sql`): one session per call from every BLADE app with
+///   analytics on, keyed by whatever session selectors the app configured. The
+///   agent app's sample configures `ani` and `dnis`, so this is where "called
+///   N times before" and the recent list come from: every call, recorded or not;
+/// - the call catalog's `BLADE_CONVERSATION(FROM_NUMBER, TO_NUMBER, EPOCH_UTC,
+///   DURATION_MS, CONVERSATION, ...)`, `BLADE_LABEL` and `BLADE_CONVERSATION_ATTR`:
+///   recorded conversations only, but the ones that carry labels and topics.
+///
+/// History is counted from the sessions when that schema is present, else from
+/// the catalog table; labels and topics always come from the catalog.
 public final class Catalog {
 
 	private static final Logger LOG = Logger.getLogger(Catalog.class.getName());
@@ -54,16 +63,66 @@ public final class Catalog {
 		try {
 			DataSource ds = (DataSource) new InitialContext().lookup(dataSource);
 			try (Connection c = ds.getConnection()) {
-				int count = count(c, ani);
-				List<CallerHistory.Call> recent = recent(c, ani, Math.max(1, limit));
+				int count;
+				List<CallerHistory.Call> recent;
+				try {
+					count = sessionCount(c, ani);
+					recent = sessionRecent(c, ani, Math.max(1, limit));
+				} catch (Exception noAnalytics) {
+					// No analytics schema in this data source: count recorded
+					// conversations instead.
+					AgentConsoleRegistry.log("agent: analytics sessions unavailable, using the catalog: " + noAnalytics);
+					count = count(c, ani);
+					recent = recent(c, ani, Math.max(1, limit));
+				}
 				List<String> labels = priorLabels(c, ani);
 				List<String> topics = topics(c, ani, Math.max(1, limit));
 				return new CallerHistory(count, recent, labels, topics);
 			}
 		} catch (Exception e) {
-			LOG.log(Level.FINE, "agent: caller history unavailable for " + ani + ": " + e.getMessage(), e);
+			AgentConsoleRegistry.log("agent: caller history unavailable for " + ani + ": " + e);
 			return CallerHistory.EMPTY;
 		}
+	}
+
+	/// Completed calls from this number, across every app that publishes a
+	/// session key named `ani`. `destroyed IS NOT NULL` leaves out the call that
+	/// is ringing right now (its session row is open), so the count is "before".
+	private int sessionCount(Connection c, String ani) throws Exception {
+		String sql = "SELECT COUNT(DISTINCT s.id) FROM sessions s JOIN session_keys k ON k.session_id = s.id"
+				+ " WHERE k.name = ? AND k.value = ? AND s.destroyed IS NOT NULL";
+		try (PreparedStatement ps = c.prepareStatement(sql)) {
+			ps.setString(1, AgentSettingsSample.KEY_ANI);
+			ps.setString(2, ani);
+			try (ResultSet rs = ps.executeQuery()) {
+				return rs.next() ? rs.getInt(1) : 0;
+			}
+		}
+	}
+
+	/// The most recent completed calls from this number: when, how long (created
+	/// to destroyed), and what was dialled if the app also keyed `dnis`.
+	private List<CallerHistory.Call> sessionRecent(Connection c, String ani, int limit) throws Exception {
+		String sql = "SELECT DISTINCT s.id, s.created, s.destroyed, d.value FROM sessions s"
+				+ " JOIN session_keys k ON k.session_id = s.id AND k.name = ? AND k.value = ?"
+				+ " LEFT JOIN session_keys d ON d.session_id = s.id AND d.name = ?"
+				+ " WHERE s.destroyed IS NOT NULL ORDER BY s.created DESC FETCH FIRST " + limit + " ROWS ONLY";
+		List<CallerHistory.Call> out = new ArrayList<>();
+		try (PreparedStatement ps = c.prepareStatement(sql)) {
+			ps.setString(1, AgentSettingsSample.KEY_ANI);
+			ps.setString(2, ani);
+			ps.setString(3, AgentSettingsSample.KEY_DNIS);
+			try (ResultSet rs = ps.executeQuery()) {
+				while (rs.next()) {
+					Timestamp created = rs.getTimestamp(2);
+					Timestamp destroyed = rs.getTimestamp(3);
+					long millis = (created != null && destroyed != null) ? destroyed.getTime() - created.getTime() : 0;
+					out.add(new CallerHistory.Call(created == null ? null : created.toInstant().toString(), millis,
+							rs.getString(4), null));
+				}
+			}
+		}
+		return out;
 	}
 
 	private int count(Connection c, String ani) throws Exception {

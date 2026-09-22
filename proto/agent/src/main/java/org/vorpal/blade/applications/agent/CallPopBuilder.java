@@ -17,6 +17,7 @@ public final class CallPopBuilder {
 
 	/// Ten-digit NANP number from a sip:/sips:/tel: URI, with or without +1.
 	private static final Pattern NANP = Pattern.compile(".*?(?:sips?|tel):\\+?1?(\\d{10}).*", Pattern.DOTALL);
+	private static final Pattern USER = Pattern.compile("sips?:([^@:;>]+)@");
 	private static final Pattern DISPLAY = Pattern.compile("^\\s*\"?([^\"<]*?)\"?\\s*<");
 	private static final Pattern VERSTAT = Pattern.compile(".*;verstat=([A-Za-z-]+).*", Pattern.DOTALL);
 
@@ -35,7 +36,13 @@ public final class CallPopBuilder {
 		// Network-asserted identity beats From for the number the caller presents.
 		pop.ani = firstNanp(pai, from);
 		pop.displayName = display(from);
-		pop.dialed = firstNanp(header(invite, "To"), requestUri(invite));
+		// The dialled number when there is one; otherwise the To user as it stands
+		// (a queue name, an extension), which still tells the agent what was called.
+		String to = header(invite, "To");
+		pop.dialed = firstNanp(to, requestUri(invite));
+		if (pop.dialed == null) {
+			pop.dialed = userPart(to, requestUri(invite));
+		}
 		pop.anonymous = from != null && from.toLowerCase().contains("anonymous");
 
 		pop.verstat = firstMatch(VERSTAT, pai, from);
@@ -76,6 +83,20 @@ public final class CallPopBuilder {
 			}
 		}
 		return pop;
+	}
+
+	/// The user part of the first address that has one: `sip:agent@host` → `agent`.
+	private static String userPart(String... addresses) {
+		for (String a : addresses) {
+			if (a == null) {
+				continue;
+			}
+			Matcher m = USER.matcher(a);
+			if (m.find()) {
+				return m.group(1);
+			}
+		}
+		return null;
 	}
 
 	private static String firstNanp(String... headers) {
