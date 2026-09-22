@@ -212,7 +212,7 @@
     risk: "The fused risk for this call: the five kinds of evidence combined in log-odds and squashed to a percentage. Clear below 35%, watch to 75%, suspect above. Updated every scored window while the call runs.",
     reading: "This source's own reading, 0 to 1: how much concern it has on its own. 0.5 is neutral, nothing to say either way.",
     contrib: "What this evidence added to the fused risk, in log-odds: its reading turned into odds, capped so no single source can decide alone, times its weight. Plus pushes toward risk, minus toward clear, zero is neutral. The risk is the prior plus all of these, squashed back to a percentage.",
-    trail: "One bar per scored window, oldest on the left, height is the fused score. The outlined bar is the latest.",
+    trail: "One bar per scored window, oldest on the left, height is the risk at that moment. The outlined bar is the latest. A bar is clear below 35%, watch to 75%, suspect above.",
     notes: "Anything the next agent this number reaches should know. Shown under the call in their history pane.",
     state: "Ringing until the agent's phone answers, then talking with a clock, then how the call ended.",
     flag: "Suspect has held for three scored windows in a row. It fires once per call and stays up."
@@ -327,7 +327,7 @@
     });
     out += "</div></div>";
     out += '<div class="trail-cap">' + c.trail.length + " window" + (c.trail.length === 1 ? "" : "s") +
-      " scored · watch at 35%, suspect at 75%</div>";
+      " scored</div>";
     return out;
   }
   function redrawRisk(c) {
