@@ -175,6 +175,8 @@
   .recent .disp { display: block; color: var(--ink); font-variant-numeric: normal; padding: 1px 0 2px 12px; }
   .recent .disp .o { font-weight: 600; }
   .recent .disp .n { color: var(--muted); font-style: italic; }
+  /* What the caller said last time: their first lines, quoted. */
+  .recent .said { display: block; color: var(--ink); font-variant-numeric: normal; padding: 1px 0 2px 12px; font-style: italic; }
 </style>
 </head>
 <body>
@@ -442,6 +444,9 @@
             (c.reasons ? '<br><span class="muted">tells: </span>' + esc(String(c.reasons).split(",").map(function (r) { return REASON_WORDS[r] || r; }).join(", ")) : "") +
             (c.notes ? '<br><span class="n">' + esc(c.notes) + "</span>" : "") +
           "</span>";
+        }
+        if (c.said && c.said.length) {
+          out += '<span class="said">' + c.said.map(function (l) { return "“" + esc(l) + "”"; }).join(" ") + "</span>";
         }
         out += "</li>";
       });

@@ -45,6 +45,9 @@ public final class CallerHistory {
 		public String agent;
 		/// Reason codes the agent ticked, comma-separated.
 		public String reasons;
+		/// The caller's first few lines on that call, from the stored transcript,
+		/// so the next agent sees what this number said last time.
+		public java.util.List<String> said = new ArrayList<>();
 
 		public Call(String whenUtc, long durationMillis, String dialed, String conversation) {
 			this.whenUtc = whenUtc;

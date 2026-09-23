@@ -127,11 +127,41 @@ public final class Catalog {
 					CallerHistory.Call call = new CallerHistory.Call(
 							created == null ? null : created.toInstant().toString(), millis, rs.getString(4), null);
 					disposition(c, rs.getLong(1), call);
+					said(c, rs.getLong(1), call);
 					out.add(call);
 				}
 			}
 		}
 		return out;
+	}
+
+	/// The caller's first lines on a session, from the `callerSaid` events the
+	/// sink stored (attributes as JSON: text, party, labels). Two lines is enough
+	/// to recognise a story; the transcript pane shows the rest on request later.
+	private void said(Connection c, long sessionId, CallerHistory.Call call) {
+		String sql = "SELECT e.payload FROM events e WHERE e.session_id = ? AND e.type = 'callerSaid'"
+				+ " ORDER BY e.created FETCH FIRST 6 ROWS ONLY";
+		try (PreparedStatement ps = c.prepareStatement(sql)) {
+			ps.setLong(1, sessionId);
+			try (ResultSet rs = ps.executeQuery()) {
+				while (rs.next() && call.said.size() < 2) {
+					String payload = rs.getString(1);
+					if (payload == null) {
+						continue;
+					}
+					com.fasterxml.jackson.databind.JsonNode d = MAPPER.readTree(payload);
+					if (!"caller".equals(d.path("party").asText("caller"))) {
+						continue;
+					}
+					String text = d.path("text").asText(null);
+					if (text != null && !text.isBlank()) {
+						call.said.add(text.length() > 140 ? text.substring(0, 137) + "…" : text);
+					}
+				}
+			}
+		} catch (Exception e) {
+			LOG.log(Level.FINE, "agent: prior lines unavailable for session " + sessionId + ": " + e.getMessage());
+		}
 	}
 
 	/// The latest agent disposition filed on a session, if any: the sink stores
