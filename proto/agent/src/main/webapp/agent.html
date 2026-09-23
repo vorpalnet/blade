@@ -29,6 +29,11 @@
   :root {
     --ink: #1f1f1f; --muted: #5a5a5a; --line: #d8d8d8; --panel: #f6f6f6;
     --brand: #602671; --brand-300: #b97cd0;
+    /* The threat scale, five steps from calm to alarm (Kelly's palette). Every
+       bar and every trail column is coloured by where its value falls; the
+       number beside it says the same thing for anyone who reads order from
+       numbers rather than hue. */
+    --t1: #44ce1b; --t2: #bbdb44; --t3: #f7e379; --t4: #f2a134; --t5: #e51f1f;
   }
   * { box-sizing: border-box; }
   body { margin: 0; font: 14px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--ink); background: #fff; }
@@ -86,12 +91,18 @@
      score. */
   .band { font-weight: 700; padding: 1px 9px; border-radius: 4px; }
   .band .score { font-weight: 400; opacity: .8; font-variant-numeric: tabular-nums; }
-  .band.clear   { color: #1b5e20; background: #e6f4ea; }
-  .band.watch   { color: #8a5300; background: #fbeecb; }
-  .band.suspect { color: #b3261e; background: #fbe1de; }
+  .band.clear   { color: #1f6a0b; background: #e2f6d8; }
+  .band.watch   { color: #8a4b00; background: #fde6c6; }
+  .band.suspect { color: #b31414; background: #fbd9d9; }
   .band.none    { color: var(--muted); font-weight: 400; padding: 0; }
   dd.risk { font-size: 18px; }
   .kv.headline { grid-template-columns: 60px 1fr; align-items: center; margin-bottom: 4px; }
+  /* The post-call review, when it has something: under the evidence table. */
+  .review { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12.5px; }
+  .review .lbl { color: var(--muted); }
+  .review b { font-weight: 600; }
+  .review q { font-style: italic; color: var(--muted); }
+  .review.off { display: none; }
 
   /* The why: one row per fused signal. Length carries the value; the number
      beside it says the same thing; the contribution is what it added to the
@@ -108,8 +119,8 @@
   .signals li.head span:first-child { text-align: left; }
   .signals li.head [title] { text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
   .signals .bar { height: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 2px; overflow: hidden; }
-  .signals .bar i { display: block; height: 100%; background: var(--brand-300); width: 0; transition: width .4s; }
-  .signals .bar i.hot { background: var(--brand); }
+  .signals .bar i { display: block; height: 100%; width: 0; transition: width .4s, background .4s; }
+  .t1 { background: var(--t1); } .t2 { background: var(--t2); } .t3 { background: var(--t3); } .t4 { background: var(--t4); } .t5 { background: var(--t5); }
   .signals .contrib { color: var(--muted); text-align: right; }
 
   /* The trail: one bar per scored window, oldest left. The latest score is
@@ -120,9 +131,7 @@
   .signals { margin-top: 14px; }
   .trail { display: flex; align-items: flex-end; gap: 3px; height: 44px; flex: 1 1 auto; min-width: 0; overflow: hidden; }
 
-  .trail i { display: block; width: 14px; min-height: 3px; background: var(--brand-300); border-radius: 2px 2px 0 0; }
-  .trail i.watch { background: #c98a00; }
-  .trail i.suspect { background: #b3261e; }
+  .trail i { display: block; width: 14px; min-height: 3px; border-radius: 2px 2px 0 0; }
   .trail i.latest { outline: 1px solid var(--ink); }
   .trail-cap { font-size: 11px; color: var(--muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
 
@@ -217,7 +226,7 @@
     risk: "The fused risk for this call: the five kinds of evidence combined in log-odds and squashed to a percentage. Clear below 35%, watch to 75%, suspect above. Updated every scored window while the call runs.",
     reading: "This source's own reading, 0 to 1: how much concern it has on its own. 0.5 is neutral, nothing to say either way.",
     contrib: "What this evidence added to the fused risk, in log-odds: its reading turned into odds, capped so no single source can decide alone, times its weight. Plus pushes toward risk, minus toward clear, zero is neutral. The risk is the prior plus all of these, squashed back to a percentage.",
-    trail: "One bar per scored window, oldest on the left, height is the risk at that moment. The outlined bar is the latest. A bar is clear below 35%, watch to 75%, suspect above.",
+    trail: "One bar per scored window, oldest on the left, height and colour are the risk at that moment, green through red. The outlined bar is the latest. Clear below 35%, watch to 75%, suspect above.",
     notes: "Anything the next agent this number reaches should know. Shown under the call in their history pane.",
     state: "Ringing until the agent's phone answers, then talking with a clock, then how the call ended.",
     flag: "Suspect has held for three scored windows in a row. It fires once per call and stays up."
@@ -240,6 +249,12 @@
       case "suspect": return "suspect";
       default: return "none";
     }
+  }
+  // Which of the five threat steps a 0-to-1 value falls in.
+  function step(v) {
+    v = parseFloat(v);
+    if (isNaN(v)) return "t1";
+    return v < 0.2 ? "t1" : v < 0.4 ? "t2" : v < 0.6 ? "t3" : v < 0.8 ? "t4" : "t5";
   }
   function pct(x) {
     var v = parseFloat(x);
@@ -319,10 +334,10 @@
       var v = (one.value != null) ? parseFloat(one.value) : null;
       var cc = (one.contribution != null) ? parseFloat(one.contribution) : null;
       var pct = (v == null || isNaN(v)) ? 0 : Math.max(0, Math.min(100, Math.round(v * 100)));
-      var hot = (v != null && v >= 0.5) ? " hot" : "";
+      var hot = (v == null || isNaN(v)) ? "t1" : step(v);
       out += "<li>" +
         '<span class="lbl"' + help + ">" + d[1] + "</span>" +
-        '<span class="bar"' + help + '><i class="' + hot.trim() + '" style="width:' + pct + '%"></i></span>' +
+        '<span class="bar"' + help + '><i class="' + hot + '" style="width:' + pct + '%"></i></span>' +
         "<span>" + (v == null || isNaN(v) ? "–" : v.toFixed(2)) + "</span>" +
         '<span class="contrib">' + (cc == null || isNaN(cc) ? "" : (cc >= 0 ? "+" : "") + cc.toFixed(2)) + "</span>" +
       "</li>";
@@ -335,7 +350,7 @@
     var out = '<div class="trailrow"><div class="trail"' + t("trail") + ">";
     c.trail.forEach(function (p, i) {
       var h = Math.max(3, Math.round(p.score * 44));
-      out += '<i class="' + bandClass(p.band) + (i === c.trail.length - 1 ? " latest" : "") + '" style="height:' + h + 'px" title="' + esc(p.band) + " " + pct(p.score) + '"></i>';
+      out += '<i class="' + step(p.score) + (i === c.trail.length - 1 ? " latest" : "") + '" style="height:' + h + 'px" title="' + esc(p.band) + " " + pct(p.score) + '"></i>';
     });
     out += "</div></div>";
     out += '<div class="trail-cap">' + c.trail.length + " window" + (c.trail.length === 1 ? "" : "s") +
@@ -458,6 +473,11 @@
             (c.notes ? '<br><span class="n">' + esc(c.notes) + "</span>" : "") +
           "</span>";
         }
+        if (c.reviewLabels) {
+          out += '<span class="disp"><span class="muted">review: </span>' +
+            esc(String(c.reviewLabels).split(",").map(function (l) { return REVIEW_WORDS[l] || l; }).join(", ")) +
+            (c.reviewText ? ' <span class="n">“' + esc(c.reviewText) + '”</span>' : "") + "</span>";
+        }
         if (c.said && c.said.length) {
           out += '<span class="said">' + c.said.map(function (l) { return "“" + esc(l) + "”"; }).join(" ") + "</span>";
         }
@@ -482,6 +502,8 @@
                  ["second-voice", "Second voice in the room"]];
   var REASON_WORDS = words(REASONS);
   // The content probe's labels, as the reason an agent reads.
+  var REVIEW_WORDS = { elicitation: "fished for the data on file", commitment: "worked you for a commitment on record",
+    "account-change": "pushed to change account details" };
   var CONTENT_WORDS = { payment: "asked for payment (gift card, crypto, wire)", urgency: "pressure to act now",
     secrecy: "asked for secrecy", authority: "claims an authority", "otp-request": "asked for a one-time code",
     "remote-access": "wants remote access", "account-change": "account change request",
@@ -514,6 +536,7 @@
             "<dt" + t("risk") + ">Risk</dt><dd class=\"risk\">" + riskHtml(pop) + "</dd>" +
           "</dl>" +
           '<div class="why-bars"></div>' +
+          '<div class="review off"></div>' +
         "</div>" +
         '<div class="pane">' +
           "<h3>Live transcript</h3>" +
@@ -680,10 +703,17 @@
     }
     if (m.utterance) { addLine(c, m.utterance); }
     if (m.labelled) { labelLine(c, m.labelled); }
+    if (m.review) {
+      var rv = c.el.querySelector(".review");
+      rv.className = "review";
+      rv.innerHTML = '<span class="lbl">After the call, the review found the caller </span>' +
+        (m.review.labels || []).map(function (l) { return "<b>" + esc(REVIEW_WORDS[l] || l) + "</b>"; }).join(" · ") +
+        (m.review.text ? ": <q>" + esc(m.review.text) + "</q>" : "");
+    }
     if (m.state) { setState(c, m.state, m.durationMs); }
     var risky = false;
     for (var k in m) {
-      if (k === "t" || k === "vorpalId" || k === "utterance" || k === "labelled" || k === "state") continue;
+      if (k === "t" || k === "vorpalId" || k === "utterance" || k === "labelled" || k === "review" || k === "state") continue;
       if (Object.prototype.hasOwnProperty.call(m, k)) { c.pop[k] = m[k]; risky = true; }
     }
     if (risky) {
@@ -741,6 +771,24 @@
     };
     ws.onerror = function () { try { ws.close(); } catch (e) {} };
   }
+
+  // Keep the sign-in alive for a shift. A console makes no HTTP requests while
+  // its socket is open, so the server's session would time out from inactivity
+  // underneath it and the next reconnect would be refused. Every few minutes
+  // the page fetches itself with the cache bypassed and redirects unfollowed:
+  // a 200 refreshes the session's last-access time, a redirect means the
+  // sign-in is gone and a fresh entry now, while the identity provider's own
+  // session is still alive, completes silently instead of prompting later in
+  // the middle of a call.
+  setInterval(function () {
+    fetch(location.pathname, { cache: "no-store", credentials: "same-origin", redirect: "manual" })
+      .then(function (r) {
+        if (r.type === "opaqueredirect" || r.status === 401 || r.status === 403) {
+          location.replace(location.pathname + "?r=" + Date.now());
+        }
+      })
+      .catch(function () { /* offline: the socket's own reconnect will notice */ });
+  }, 5 * 60 * 1000);
 
   connect();
 })();

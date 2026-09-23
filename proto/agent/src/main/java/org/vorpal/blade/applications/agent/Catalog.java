@@ -128,6 +128,7 @@ public final class Catalog {
 							created == null ? null : created.toInstant().toString(), millis, rs.getString(4), null);
 					disposition(c, rs.getLong(1), call);
 					said(c, rs.getLong(1), call);
+					reviewed(c, rs.getLong(1), call);
 					out.add(call);
 				}
 			}
@@ -161,6 +162,25 @@ public final class Catalog {
 			}
 		} catch (Exception e) {
 			LOG.log(Level.FINE, "agent: prior lines unavailable for session " + sessionId + ": " + e.getMessage());
+		}
+	}
+
+	/// The post-call review filed on a session, if any (`callReviewed`: labels,
+	/// the caller line that shows them).
+	private void reviewed(Connection c, long sessionId, CallerHistory.Call call) {
+		String sql = "SELECT e.payload FROM events e WHERE e.session_id = ? AND e.type = 'callReviewed'"
+				+ " ORDER BY e.created DESC FETCH FIRST 1 ROWS ONLY";
+		try (PreparedStatement ps = c.prepareStatement(sql)) {
+			ps.setLong(1, sessionId);
+			try (ResultSet rs = ps.executeQuery()) {
+				if (rs.next() && rs.getString(1) != null) {
+					com.fasterxml.jackson.databind.JsonNode d = MAPPER.readTree(rs.getString(1));
+					call.reviewLabels = d.path("labels").asText(null);
+					call.reviewText = d.path("text").asText(null);
+				}
+			}
+		} catch (Exception e) {
+			LOG.log(Level.FINE, "agent: review unavailable for session " + sessionId + ": " + e.getMessage());
 		}
 	}
 

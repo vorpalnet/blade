@@ -23,7 +23,8 @@ import org.vorpal.blade.framework.v3.events.SubscriptionRegistrar;
 /// [ConsoleUpdater] turns each into an update pushed to the console holding
 /// that call, over the WebSocket it already has open.
 ///
-/// Subscribes to three types, by their first-class names (a precise broker
+/// Subscribes to four types, by their first-class names (the generic call
+/// event carries the post-call review under its own name, `callReviewed`) (a precise broker
 /// selector; the contract is blade's, see [BladeEventTypes#CALL_RISK_ASSESSED]
 /// and [BladeEventTypes#CALL_UTTERANCE]). Whoever hears the audio publishes
 /// them — the agent app depends on blade alone.
@@ -46,7 +47,7 @@ public class ConsoleSubscription implements ServletContextListener {
 
 	static List<String> types() {
 		return Arrays.asList(BladeEventTypes.CALL_RISK_ASSESSED, BladeEventTypes.CALL_RISK_FLAGGED,
-				BladeEventTypes.CALL_UTTERANCE);
+				BladeEventTypes.CALL_UTTERANCE, BladeEventTypes.CALL_EVENT);
 	}
 
 	private final ConsoleUpdater handler = new ConsoleUpdater();

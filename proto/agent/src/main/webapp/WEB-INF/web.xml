@@ -63,4 +63,11 @@
 	<security-role><role-name>Operator</role-name></security-role>
 	<security-role><role-name>Deployer</role-name></security-role>
 	<security-role><role-name>Monitor</role-name></security-role>
+
+	<!-- A console is open for a shift and keeps its sign-in alive with a page
+	     fetch every few minutes (agent.html), so the session must not expire in the
+	     gaps between calls on a quiet floor. -->
+	<session-config>
+		<session-timeout>720</session-timeout>
+	</session-config>
 </web-app>

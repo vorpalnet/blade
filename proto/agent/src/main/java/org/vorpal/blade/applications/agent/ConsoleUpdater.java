@@ -137,6 +137,29 @@ public class ConsoleUpdater implements EventSubscriber.Handler {
 			return new Update(vorpalId, frame.toString());
 		}
 
+		if (BladeEventTypes.CALL_EVENT.equals(event.getType())) {
+			// An application-named event: the only one the console shows is the
+			// post-call review, which lands on the card still on the agent's screen.
+			if (data == null || !"callReviewed".equals(data.path("eventName").asText(""))) {
+				return null;
+			}
+			String labels = attributes.get("labels");
+			if (labels == null || labels.isEmpty()) {
+				return null;
+			}
+			ObjectNode review = frame.putObject("review");
+			com.fasterxml.jackson.databind.node.ArrayNode reviewLabels = review.putArray("labels");
+			for (String label : labels.split(",")) {
+				if (!label.trim().isEmpty()) {
+					reviewLabels.add(label.trim());
+				}
+			}
+			if (attributes.containsKey("text")) {
+				review.put("text", attributes.get("text"));
+			}
+			return new Update(vorpalId, frame.toString());
+		}
+
 		String band = attributes.get("riskBand");
 		String score = attributes.get("riskScore");
 		if (band == null && score == null) {
