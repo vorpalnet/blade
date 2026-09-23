@@ -97,6 +97,26 @@ public class ConsoleUpdater implements EventSubscriber.Handler {
 			if (text == null || text.isEmpty()) {
 				return null;
 			}
+			if ("model".equals(attributes.get("source"))) {
+				// A later pass labelled a line already on the card: the page finds
+				// the line by its start time and adds the labels; not a new line.
+				String labels = attributes.get("labels");
+				if (labels == null || labels.isEmpty()) {
+					return null;
+				}
+				ObjectNode labelled = frame.putObject("labelled");
+				if (attributes.containsKey("startMs")) {
+					labelled.put("atMs", attributes.get("startMs"));
+				}
+				labelled.put("text", text);
+				com.fasterxml.jackson.databind.node.ArrayNode modelLabels = labelled.putArray("labels");
+				for (String label : labels.split(",")) {
+					if (!label.trim().isEmpty()) {
+						modelLabels.add(label.trim());
+					}
+				}
+				return new Update(vorpalId, frame.toString());
+			}
 			ObjectNode utterance = frame.putObject("utterance");
 			utterance.put("party", attributes.getOrDefault("party", "caller"));
 			utterance.put("text", text);

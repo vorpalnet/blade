@@ -142,6 +142,8 @@
   .lines .meta { display: block; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; margin-bottom: 1px; }
   .lines .meta .who { text-transform: uppercase; letter-spacing: .04em; }
   .lines .tag { display: inline-block; margin-left: 6px; font-size: 11px; border: 1px solid #b3261e; color: #b3261e; border-radius: 3px; padding: 0 5px; vertical-align: 1px; }
+  /* A label the model added, as opposed to a phrase match: dashed edge, same words. */
+  .lines .tag.model { border-style: dashed; }
   .lines li.new { animation: land .8s ease-out; }
   @keyframes land { from { background: #efe3f3; } to { background: transparent; } }
   .listening { color: var(--muted); font-style: italic; font-size: 13px; }
@@ -390,6 +392,8 @@
     });
     li.innerHTML = '<span class="meta"><span class="who">' + (agent ? "agent" : "caller") + "</span>" +
       (at ? " · " + esc(at) : "") + "</span>" + esc(u.text) + tags;
+    li.dataset.atMs = (u.atMs != null) ? String(u.atMs) : "";
+    li.dataset.text = u.text || "";
     list.appendChild(li);
     list.scrollTop = list.scrollHeight;
     c.el.querySelector(".listening").textContent = "listening…";
@@ -620,6 +624,32 @@
     }
   }
 
+  // The model's labels for a line already on the card: find the line (by its
+  // start time, else by its text), add the chips the phrase patterns did not,
+  // count them, and redraw the risk pane so the Content evidence says so.
+  function labelLine(c, m) {
+    var lines = c.el.querySelectorAll(".lines li.caller");
+    var li = null;
+    for (var i = 0; i < lines.length; i++) {
+      if ((m.atMs != null && lines[i].dataset.atMs === String(m.atMs)) || lines[i].dataset.text === m.text) { li = lines[i]; }
+    }
+    if (!li) return;
+    var have = {};
+    li.querySelectorAll(".tag").forEach(function (t) { have[t.textContent] = true; });
+    var added = false;
+    (m.labels || []).forEach(function (l) {
+      if (have[l]) return;
+      var tag = document.createElement("span");
+      tag.className = "tag model";
+      tag.title = "added by the model, not the phrase patterns";
+      tag.textContent = l;
+      li.appendChild(tag);
+      c.content[l] = (c.content[l] || 0) + 1;
+      added = true;
+    });
+    if (added) { redrawRisk(c); }
+  }
+
   // A card leaves the queue: fade it, drop it, and show the empty state when
   // nothing is left.
   function clearCard(vorpalId) {
@@ -649,10 +679,11 @@
       return;
     }
     if (m.utterance) { addLine(c, m.utterance); }
+    if (m.labelled) { labelLine(c, m.labelled); }
     if (m.state) { setState(c, m.state, m.durationMs); }
     var risky = false;
     for (var k in m) {
-      if (k === "t" || k === "vorpalId" || k === "utterance" || k === "state") continue;
+      if (k === "t" || k === "vorpalId" || k === "utterance" || k === "labelled" || k === "state") continue;
       if (Object.prototype.hasOwnProperty.call(m, k)) { c.pop[k] = m[k]; risky = true; }
     }
     if (risky) {
