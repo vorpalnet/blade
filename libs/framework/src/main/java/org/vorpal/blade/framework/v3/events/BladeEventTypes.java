@@ -132,6 +132,14 @@ public final class BladeEventTypes {
 	/// on blade alone.
 	public static final String CALL_UTTERANCE = "org.vorpal.blade.call.utterance";
 
+	/// A party's voice was scored for being synthetic: one window of audio, as
+	/// a probability. Periodic, one per scored window while the call is heard.
+	/// Attributes carry `score` (0 genuine to 1 synthetic), `party` (caller or
+	/// callee), `model` when the scorer names one, and `offsetMs` from when the
+	/// assessment attached. A raw measurement, not a verdict: a risk engine
+	/// fuses it with the other signals and publishes [#CALL_RISK_ASSESSED].
+	public static final String CALL_VOICE_ASSESSED = "org.vorpal.blade.call.voice.assessed";
+
 	// -------------------------------------------------------------- the transfer
 
 	/// A REFER arrived from the transferor, before anything was done about it.
@@ -216,6 +224,8 @@ public final class BladeEventTypes {
 			return CALL_RISK_FLAGGED;
 		case "callerSaid":
 			return CALL_UTTERANCE;
+		case "voiceAssessed":
+			return CALL_VOICE_ASSESSED;
 		case "transferRequested":
 			return TRANSFER_REQUESTED;
 		case "transferInitiated":

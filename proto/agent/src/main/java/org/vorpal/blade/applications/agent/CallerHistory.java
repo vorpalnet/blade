@@ -17,6 +17,9 @@ public final class CallerHistory {
 
 	public final int callCount;
 	public final List<Call> recent;
+	/// The face the last agent recorded for this caller, 1 to 7, or null:
+	/// shown before the number, before the agent picks up.
+	public Integer lastFace;
 	public final List<String> priorLabels;
 	/// Topics of this caller's earlier conversations, newest first (catalog
 	/// `BLADE_CONVERSATION_ATTR` name=topic). Empty until a summarizer writes them.
@@ -45,6 +48,8 @@ public final class CallerHistory {
 		public String agent;
 		/// Reason codes the agent ticked, comma-separated.
 		public String reasons;
+		/// The face that agent recorded, 1 to 7, or null.
+		public Integer face;
 		/// The post-call review's labels and evidence line, when one was filed.
 		public String reviewLabels;
 		public String reviewText;

@@ -97,6 +97,11 @@ public final class DispositionService {
 		/// data every signal is later thresholded against, so it is kept as
 		/// fixed codes, not prose.
 		public String reasons;
+		/// The one-glyph disposition, shown to the next agent this number reaches
+		/// before they pick up: 1 happy, 2 bemused, 3 meh, 4 irritated, 5 angry
+		/// (the doctor's-office pain scale), 6 robot (a synthetic voice), 7 hacker
+		/// (a human scammer).
+		public Integer face;
 	}
 
 	/// Record a disposition. Returns a small result the endpoint echoes to the
@@ -122,6 +127,9 @@ public final class DispositionService {
 				put(event, "action", d.action);
 				put(event, "notes", d.notes);
 				put(event, "reasons", d.reasons);
+				if (d.face != null) {
+					put(event, "face", String.valueOf(d.face));
+				}
 				put(event, "treatment", treatment);
 				put(event, "blocked", String.valueOf(blocked));
 				put(event, "agent", agent);
@@ -145,6 +153,9 @@ public final class DispositionService {
 			}
 			if (d.reasons != null) {
 				data.put("reasons", d.reasons);
+			}
+			if (d.face != null) {
+				data.put("face", d.face);
 			}
 			if (d.ani != null) {
 				data.put("ani", d.ani);

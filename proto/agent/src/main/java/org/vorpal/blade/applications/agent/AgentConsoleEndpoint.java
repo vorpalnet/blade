@@ -118,6 +118,14 @@ public class AgentConsoleEndpoint {
 		if (d.notes != null && d.notes.length() > 1000) {
 			d.notes = d.notes.substring(0, 1000);
 		}
+		// The face, 1 to 7; anything else is "not said".
+		JsonNode face = in.path("face");
+		if (face.isNumber() || (face.isTextual() && face.asText().matches("[1-7]"))) {
+			int f = face.asInt();
+			if (f >= 1 && f <= 7) {
+				d.face = f;
+			}
+		}
 		// The gut: which tells the agent noticed, as a list of fixed codes.
 		JsonNode reasons = in.path("reasons");
 		if (reasons.isArray() && reasons.size() > 0) {

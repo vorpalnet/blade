@@ -98,10 +98,10 @@ class BladeEventCatalogTest {
 
 		assertEquals(constants, declared.size(),
 				"BladeEventCatalog declares a type that BladeEventTypes does not name");
-		// 23 = application start/stop, session start/stop/key, the eleven call and
-		// transfer types + CALL_EVENT, the risk pair, the utterance, the access
-		// pair, and CONVERSATION_CLOSED.
-		assertEquals(23, constants, "a type was added or removed without updating the taxonomy");
+		// 24 = application start/stop, session start/stop/key, the eleven call and
+		// transfer types + CALL_EVENT, the risk pair, the utterance, the voice
+		// assessment, the access pair, and CONVERSATION_CLOSED.
+		assertEquals(24, constants, "a type was added or removed without updating the taxonomy");
 	}
 
 	/// Every framework event name resolves to a type the catalog declares.
@@ -114,7 +114,7 @@ class BladeEventCatalogTest {
 	void everyEventNameMapsToADeclaredType() {
 		Set<String> declared = declaredTypes();
 		String[] names = { "callStarted", "callAnswered", "callConnected", "callCompleted", "callAbandoned",
-				"callDeclined", "callRiskAssessed", "callRiskFlagged", "callerSaid", "transferRequested", "transferInitiated",
+				"callDeclined", "callRiskAssessed", "callRiskFlagged", "callerSaid", "voiceAssessed", "transferRequested", "transferInitiated",
 				"transferCompleted", "transferDeclined", "transferAbandoned" };
 
 		Set<String> mapped = new HashSet<>();

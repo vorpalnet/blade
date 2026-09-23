@@ -78,7 +78,15 @@ public final class Catalog {
 				}
 				List<String> labels = priorLabels(c, ani);
 				List<String> topics = topics(c, ani, Math.max(1, limit));
-				return new CallerHistory(count, recent, labels, topics);
+				CallerHistory h = new CallerHistory(count, recent, labels, topics);
+				// The newest recorded face, so the next agent sees it before answering.
+				for (CallerHistory.Call call : recent) {
+					if (call.face != null) {
+						h.lastFace = call.face;
+						break;
+					}
+				}
+				return h;
 			}
 		} catch (Exception e) {
 			AgentConsoleRegistry.log("agent: caller history unavailable for " + ani + ": " + e);
@@ -205,6 +213,10 @@ public final class Catalog {
 						call.notes = d.path("notes").asText(null);
 						call.agent = d.path("agent").asText(null);
 						call.reasons = d.path("reasons").asText(null);
+						String face = d.path("face").asText(d.path("mood").asText(""));
+						if (face.matches("[1-7]")) {
+							call.face = Integer.parseInt(face);
+						}
 					}
 				}
 			}

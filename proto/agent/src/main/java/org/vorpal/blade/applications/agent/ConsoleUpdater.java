@@ -97,9 +97,10 @@ public class ConsoleUpdater implements EventSubscriber.Handler {
 			if (text == null || text.isEmpty()) {
 				return null;
 			}
-			if ("model".equals(attributes.get("source"))) {
-				// A later pass labelled a line already on the card: the page finds
-				// the line by its start time and adds the labels; not a new line.
+			if (attributes.containsKey("source")) {
+				// A pass labelled a line already on the card, the phrase patterns
+				// or the model: the page finds the line by its start time and adds
+				// the labels; not a new line.
 				String labels = attributes.get("labels");
 				if (labels == null || labels.isEmpty()) {
 					return null;
@@ -109,6 +110,7 @@ public class ConsoleUpdater implements EventSubscriber.Handler {
 					labelled.put("atMs", attributes.get("startMs"));
 				}
 				labelled.put("text", text);
+				labelled.put("source", attributes.get("source"));
 				com.fasterxml.jackson.databind.node.ArrayNode modelLabels = labelled.putArray("labels");
 				for (String label : labels.split(",")) {
 					if (!label.trim().isEmpty()) {
@@ -118,7 +120,10 @@ public class ConsoleUpdater implements EventSubscriber.Handler {
 				return new Update(vorpalId, frame.toString());
 			}
 			ObjectNode utterance = frame.putObject("utterance");
-			utterance.put("party", attributes.getOrDefault("party", "caller"));
+			// The listener names the parties caller and callee; on this screen
+			// the callee is the agent reading it.
+			String party = attributes.getOrDefault("party", "caller");
+			utterance.put("party", "callee".equals(party) ? "agent" : party);
 			utterance.put("text", text);
 			if (attributes.containsKey("startMs")) {
 				utterance.put("atMs", attributes.get("startMs"));

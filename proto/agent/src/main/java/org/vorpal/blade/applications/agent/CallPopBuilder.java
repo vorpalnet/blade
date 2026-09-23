@@ -34,7 +34,12 @@ public final class CallPopBuilder {
 		String from = header(invite, "From");
 		String pai = header(invite, "P-Asserted-Identity");
 		// Network-asserted identity beats From for the number the caller presents.
+		// A North American number is its ten digits; any other is every digit of
+		// the user part, country code first, so the console can name the country.
 		pop.ani = firstNanp(pai, from);
+		if (pop.ani == null) {
+			pop.ani = firstDigits(pai, from);
+		}
 		pop.displayName = display(from);
 		// The dialled number when there is one; otherwise the To user as it stands
 		// (a queue name, an extension), which still tells the agent what was called.
@@ -83,6 +88,25 @@ public final class CallPopBuilder {
 			}
 		}
 		return pop;
+	}
+
+	/// The digits of the first address whose user part is a phone number (six
+	/// or more digits, a leading + or 00 stripped), or null.
+	private static String firstDigits(String... addresses) {
+		for (String a : addresses) {
+			String user = userPart(a);
+			if (user == null) {
+				continue;
+			}
+			String digits = user.replaceAll("[^0-9]", "");
+			if (user.startsWith("00")) {
+				digits = digits.substring(2);
+			}
+			if (digits.length() >= 6) {
+				return digits;
+			}
+		}
+		return null;
 	}
 
 	/// The user part of the first address that has one: `sip:agent@host` → `agent`.

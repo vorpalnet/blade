@@ -474,6 +474,9 @@ public abstract class MediaCallflow extends Callflow {
 	/// - Each utterance comes back as a `SIGNAL_DETECTED` [SpeechRecognitionEvent] whose
 	///   [SpeechRecognitionEvent#getUserInput] is the utterance as JSON, in the shape of [Utterance],
 	///   with `party` naming by URI the leg whose audio it was.
+	/// - A driver with a fast first decode also sends it, the same way, with `"pass":"live"` in the
+	///   JSON. It becomes a [TranscriberEvent.Type#LIVE_UTTERANCE]; everything else is a
+	///   [TranscriberEvent.Type#UTTERANCE].
 	/// - A pause is [SignalDetector#STOP], and a resume is the same arming again; the driver keeps
 	///   the transcription's clock across it. The end is [SignalDetector#CANCEL].
 	///
@@ -626,13 +629,20 @@ public abstract class MediaCallflow extends Callflow {
 				return;
 			}
 			Utterance utterance;
+			boolean live;
 			try {
-				utterance = JSON.readValue(((SpeechRecognitionEvent) event).getUserInput(), Utterance.class);
+				com.fasterxml.jackson.databind.JsonNode tree = JSON.readTree(((SpeechRecognitionEvent) event).getUserInput());
+				live = "live".equals(tree.path("pass").asText(""));
+				if (tree instanceof com.fasterxml.jackson.databind.node.ObjectNode) {
+					((com.fasterxml.jackson.databind.node.ObjectNode) tree).remove("pass");
+				}
+				utterance = JSON.treeToValue(tree, Utterance.class);
 			} catch (Exception e) {
 				sipLogger.warning("an utterance from the JSR-309 driver could not be read and was dropped: " + e);
 				return;
 			}
-			listener.onEvent(new Heard(event.getSource(), utterance));
+			listener.onEvent(new Heard(event.getSource(), utterance,
+					live ? TranscriberEvent.Type.LIVE_UTTERANCE : TranscriberEvent.Type.UTTERANCE));
 		}
 	}
 
@@ -640,10 +650,12 @@ public abstract class MediaCallflow extends Callflow {
 	private static final class Heard implements TranscriberEvent {
 		private final SignalDetector source;
 		private final Utterance utterance;
+		private final TranscriberEvent.Type type;
 
-		Heard(SignalDetector source, Utterance utterance) {
+		Heard(SignalDetector source, Utterance utterance, TranscriberEvent.Type type) {
 			this.source = source;
 			this.utterance = utterance;
+			this.type = type;
 		}
 
 		@Override
@@ -658,7 +670,180 @@ public abstract class MediaCallflow extends Callflow {
 
 		@Override
 		public javax.media.mscontrol.EventType getEventType() {
-			return TranscriberEvent.Type.UTTERANCE;
+			return type;
+		}
+
+		@Override
+		public boolean isSuccessful() {
+			return true;
+		}
+
+		@Override
+		public javax.media.mscontrol.MediaErr getError() {
+			return MediaEvent.NO_ERROR;
+		}
+
+		@Override
+		public String getErrorText() {
+			return null;
+		}
+	}
+
+	/// The pattern that arms a [SignalDetector] to score voices rather than collect DTMF.
+	///
+	/// The same door as [#TRANSCRIPTION_PATTERN], and on the same detector, so a driver needs nothing
+	/// but the standard interfaces:
+	///
+	/// - [#assessVoice] arms the detector with this value as `SignalDetector.PATTERN[0]` and the URIs
+	///   of the legs to score, one per line, as `PATTERN[1]`; none means every party.
+	/// - Each scored window comes back as a `SIGNAL_DETECTED` [SignalDetectorEvent] that is not a
+	///   [SpeechRecognitionEvent], whose [SignalDetectorEvent#getSignalString] is JSON:
+	///   `{"party":"<leg URI>","score":0.93,"model":"<name>","offsetMillis":41000}`.
+	/// - The assessment runs until the group is released. It is not paused with the recording,
+	///   because nothing it hears is kept.
+	///
+	/// A driver that cannot score voices refuses the pattern, and [#assessVoice] returns false.
+	public static final String VOICE_ASSESSMENT_PATTERN = "builtin:voice-assessment";
+
+	/// Score the voices of `parties` on the source `mediaGroup` is joined to, delivering each
+	/// scored window to `listener`. An empty `parties` scores everyone.
+	///
+	/// The listener is node-local and runs on a driver thread, like a transcription's; see
+	/// [#transcribe]. It can run beside a transcription on the same group.
+	///
+	/// @return true if the assessment started. False means no voice is being scored, because the
+	///         installed driver refused, and it is logged at warning.
+	public static boolean assessVoice(MediaGroup mediaGroup, Collection<URI> parties,
+			MediaEventListener<VoiceAssessmentEvent> listener) {
+		if (mediaGroup == null || listener == null) {
+			return false;
+		}
+		stopAssessingVoice(mediaGroup);
+		String key = mediaGroup.getURI().toString();
+		Assessment assessment = null;
+		try {
+			assessment = new Assessment(mediaGroup, listener);
+			assessment.detector.addListener(assessment);
+			ASSESSMENTS.put(key, assessment);
+			Parameters p = mediaGroup.createParameters();
+			p.put(SignalDetector.PATTERN[0], VOICE_ASSESSMENT_PATTERN);
+			if (parties != null && !parties.isEmpty()) {
+				StringBuilder lines = new StringBuilder();
+				for (URI party : parties) {
+					if (party != null) {
+						lines.append(party).append('\n');
+					}
+				}
+				p.put(SignalDetector.PATTERN[1], lines.toString().trim());
+			}
+			p.put(SignalDetector.ENABLED_EVENTS,
+					new javax.media.mscontrol.EventType[] { SignalDetectorEvent.SIGNAL_DETECTED });
+			assessment.detector.receiveSignals(-1, new javax.media.mscontrol.Parameter[] { SignalDetector.PATTERN[0] },
+					null, p);
+			return true;
+		} catch (Exception e) {
+			if (assessment != null) {
+				ASSESSMENTS.remove(key, assessment);
+				assessment.detector.removeListener(assessment);
+			}
+			sipLogger.warning("this JSR-309 driver would not score voices: " + e);
+			return false;
+		}
+	}
+
+	/// Stop delivering scored windows from `mediaGroup`. Safe when nothing was being assessed. The
+	/// driver's scoring itself ends when the group is released.
+	public static void stopAssessingVoice(MediaGroup mediaGroup) {
+		Assessment assessment = (mediaGroup == null) ? null : ASSESSMENTS.remove(mediaGroup.getURI().toString());
+		if (assessment != null) {
+			assessment.detector.removeListener(assessment);
+		}
+	}
+
+	/// Assessments running on this node, by media group URI. Node-local, like [#TRANSCRIPTIONS].
+	private static final java.util.concurrent.ConcurrentHashMap<String, Assessment> ASSESSMENTS =
+			new java.util.concurrent.ConcurrentHashMap<>();
+
+	/// One assessment: the listener that turns each scored window into a [VoiceAssessmentEvent].
+	private static final class Assessment implements MediaEventListener<SignalDetectorEvent> {
+		private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
+
+		final SignalDetector detector;
+		private final MediaEventListener<VoiceAssessmentEvent> listener;
+
+		Assessment(MediaGroup group, MediaEventListener<VoiceAssessmentEvent> listener) throws MsControlException {
+			this.detector = group.getSignalDetector();
+			this.listener = listener;
+		}
+
+		@Override
+		public void onEvent(SignalDetectorEvent event) {
+			if (event instanceof SpeechRecognitionEvent
+					|| !SignalDetectorEvent.SIGNAL_DETECTED.equals(event.getEventType())) {
+				return;
+			}
+			String json = event.getSignalString();
+			if (json == null || !json.trim().startsWith("{")) {
+				return;
+			}
+			try {
+				com.fasterxml.jackson.databind.JsonNode tree = JSON.readTree(json);
+				if (!tree.has("score")) {
+					return;
+				}
+				listener.onEvent(new Scored(event.getSource(), tree.path("party").asText(null),
+						tree.path("score").asDouble(), tree.path("model").asText(null),
+						tree.path("offsetMillis").asLong(0)));
+			} catch (Exception e) {
+				sipLogger.warning("a voice score from the JSR-309 driver could not be read and was dropped: " + e);
+			}
+		}
+	}
+
+	/// A scored window as the application's listener receives it.
+	private static final class Scored implements VoiceAssessmentEvent {
+		private final SignalDetector source;
+		private final String party;
+		private final double score;
+		private final String model;
+		private final long offsetMillis;
+
+		Scored(SignalDetector source, String party, double score, String model, long offsetMillis) {
+			this.source = source;
+			this.party = party;
+			this.score = score;
+			this.model = model;
+			this.offsetMillis = offsetMillis;
+		}
+
+		@Override
+		public String getParty() {
+			return party;
+		}
+
+		@Override
+		public double getScore() {
+			return score;
+		}
+
+		@Override
+		public String getModel() {
+			return model;
+		}
+
+		@Override
+		public long getOffsetMillis() {
+			return offsetMillis;
+		}
+
+		@Override
+		public SignalDetector getSource() {
+			return source;
+		}
+
+		@Override
+		public javax.media.mscontrol.EventType getEventType() {
+			return VoiceAssessmentEvent.Type.ASSESSED;
 		}
 
 		@Override

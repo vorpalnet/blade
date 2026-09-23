@@ -36,7 +36,11 @@
     --t1: #44ce1b; --t2: #bbdb44; --t3: #f7e379; --t4: #f2a134; --t5: #e51f1f;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; font: 14px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--ink); background: #fff; }
+  /* The whole console fits the window: the header, then the queue. A card
+     takes the height that is left and its three panes scroll inside it, so
+     nothing on the page itself ever scrolls. */
+  html, body { height: 100%; }
+  body { margin: 0; font: 14px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--ink); background: #fff; display: flex; flex-direction: column; overflow: hidden; }
   header { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
   header h1 { font-size: 18px; margin: 0; font-weight: 600; }
   header a { color: var(--brand); }
@@ -47,18 +51,32 @@
   .conn.live::before { content: "\25CF  "; }   /* filled circle: connected */
   .conn.down::before { content: "\25CB  "; }    /* hollow circle: not connected */
 
-  main { padding: 16px 20px; max-width: 1240px; margin: 0 auto; }
+  main { padding: 12px 20px; width: 100%; max-width: 1400px; margin: 0 auto; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; box-sizing: border-box; }
+  /* The queue scrolls; a maximized card takes the full height of it (the
+     current call fits the screen), a minimized one is its header line. */
+  #pops { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
   .hint { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
-  .empty { color: var(--muted); padding: 40px 0; text-align: center; font-style: italic; }
+  .empty { color: var(--muted); padding: 40px 0; text-align: center; font-style: italic; margin: auto; }
   .muted { color: var(--muted); }
 
   /* One call = one card. Newest on top. */
-  .pop { border: 1px solid var(--line); border-radius: 6px; margin-bottom: 14px; overflow: hidden; transition: opacity .5s, max-height .5s; max-height: 4000px; }
-  .pop.leaving { opacity: 0; max-height: 0; margin-bottom: 0; }
+  .pop { border: 1px solid var(--line); border-radius: 6px; margin-bottom: 10px; overflow: hidden; transition: opacity .5s; display: flex; flex-direction: column; flex: 0 0 auto; }
+  .pop.max { height: calc(100% - 10px); }
+  .pop.min .body, .pop.min .dispose, .pop.min.flagged .flag { display: none; }
+  /* The toggle: a triangle pointing down when open, right when closed. */
+  .pop .tog { font: inherit; font-size: 13px; line-height: 1; width: 22px; height: 22px; border: 1px solid var(--line); border-radius: 4px; background: #fff; color: var(--muted); cursor: pointer; padding: 0; }
+  .pop .tog:hover { color: var(--ink); border-color: var(--ink); }
+  /* When minimized the header also says how the call rated. */
+  .pop .mini { display: none; }
+  .pop.min .mini { display: inline; }
+  .pop.leaving { opacity: 0; }
   .pop .top { display: flex; align-items: baseline; gap: 12px; padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
   .pop .num { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
   .pop .name { color: var(--muted); font-size: 15px; }
+  .pop .from { color: var(--ink); font-size: 14px; }
   .pop .dialed { color: var(--muted); font-size: 13px; margin-left: auto; }
+  /* How the caller was last time: the mood the previous agent recorded, as a face. */
+  .pop .mood { font-size: 22px; line-height: 1; cursor: help; }
   /* Call state: a word in a pill. "talking" carries a running clock. */
   .state { font-size: 12px; border: 1px solid var(--ink); border-radius: 12px; padding: 1px 10px; font-variant-numeric: tabular-nums; }
   .state.ringing { border-style: dashed; }
@@ -73,10 +91,10 @@
   .flag::before { content: "\26A0  "; }
   .pop.flagged .flag { display: block; }
 
-  .pop .body { display: grid; grid-template-columns: 1.1fr 1.3fr 1fr; gap: 0; }
+  .pop .body { display: grid; grid-template-columns: 1.1fr 1.3fr 1fr; gap: 0; flex: 1 1 auto; min-height: 0; }
   @media (max-width: 900px) { .pop .body { grid-template-columns: 1fr 1fr; } .pane.caller { grid-column: 1 / -1; border-left: none; border-top: 1px solid var(--line); } }
   @media (max-width: 600px) { .pop .body { grid-template-columns: 1fr; } .pane + .pane { border-left: none; border-top: 1px solid var(--line); } }
-  .pane { padding: 12px 16px; min-width: 0; display: flex; flex-direction: column; }
+  .pane { padding: 10px 16px; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
   .pane > * { flex: 0 0 auto; }
   .pane + .pane { border-left: 1px solid var(--line); }
   .pane h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
@@ -144,7 +162,7 @@
   /* The transcript reads like a messaging thread: the caller on the left, the
      agent on the right, no balloons, just the two sides. Fills whatever height
      the row has (the risk pane sets it), scrolling inside. */
-  .lines { list-style: none; margin: 0; padding: 0; flex: 1 1 auto; min-height: 160px; max-height: 640px; overflow-y: auto; font-size: 13.5px; display: flex; flex-direction: column; gap: 8px; }
+  .lines { list-style: none; margin: 0; padding: 0; flex: 1 1 auto; min-height: 0; overflow-y: auto; font-size: 13.5px; display: flex; flex-direction: column; gap: 8px; }
   .lines li { max-width: 82%; }
   .lines li.caller { align-self: flex-start; text-align: left; }
   .lines li.agent { align-self: flex-end; text-align: right; color: var(--brand); }
@@ -167,16 +185,18 @@
   .recent li { padding: 2px 0; border-top: 1px dotted var(--line); font-variant-numeric: tabular-nums; }
 
   /* The disposition: three choices, notes, one button. Every call gets one. */
-  .dispose { padding: 12px 16px; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(3, minmax(140px, 1fr)); gap: 10px 14px; align-items: end; }
+  .dispose { padding: 8px 16px 10px; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 6px 14px; align-items: end; flex: 0 0 auto; }
+  .dispose .reasons.off { display: none; }
+  .dispose .notes { grid-column: 1 / 4; }
+  .dispose .go { grid-column: 4 / 5; justify-content: flex-end; align-items: end; }
   @media (max-width: 720px) { .dispose { grid-template-columns: 1fr; } }
   .dispose label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
   .dispose select, .dispose textarea { font: inherit; width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
-  .dispose .notes { grid-column: 1 / -1; }
   .dispose .reasons { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 14px; }
   .dispose .reasons label { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--ink); margin: 0; cursor: pointer; }
   .dispose .reasons .cap { flex-basis: 100%; }
-  .dispose textarea { resize: vertical; min-height: 44px; }
-  .dispose .go { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; }
+  .dispose textarea { resize: none; height: 34px; }
+  .dispose .go { display: flex; align-items: center; gap: 12px; }
   .dispose button { font: inherit; padding: 7px 18px; border: 1px solid var(--brand); background: var(--brand); color: #fff; border-radius: 4px; cursor: pointer; }
   .dispose button[disabled] { opacity: .5; cursor: default; }
   .dispose .result { font-size: 13px; }
@@ -199,14 +219,11 @@
 </header>
 
 <main>
-  <p class="hint">A card appears the moment a call arrives, before it is answered, and keeps
-     changing while the call lasts: the risk verdict as the media tier scores the audio, and the
-     transcript as the caller speaks. Update each call with what you concluded and it leaves your
-     queue; the next agent this number reaches sees what you wrote.</p>
   <div id="pops"></div>
   <div id="empty" class="empty">Queue is clear. Waiting for the next call&hellip;</div>
 </main>
 
+<script src="geo.js"></script>
 <script>
 "use strict";
 (function () {
@@ -232,6 +249,36 @@
     flag: "Suspect has held for three scored windows in a row. It fires once per call and stays up."
   };
   function t(key) { return HELP[key] ? ' title="' + esc(HELP[key]) + '"' : ""; }
+
+  // The number as the agent reads it: "1 (305) 555-0123" for North America,
+  // "44 2079460958" for the rest: country code, a space, the digits, no plus.
+  function fmtNumber(digits) {
+    if (!digits) return "";
+    var d = String(digits).replace(/[^0-9]/g, "");
+    if (d.length === 11 && d.charAt(0) === "1") d = d.slice(1);
+    if (d.length === 10) return "1 (" + d.slice(0, 3) + ") " + d.slice(3, 6) + "-" + d.slice(6);
+    var cc = countryCode(d);
+    return cc ? cc + " " + d.slice(cc.length) : d;
+  }
+  function countryCode(d) {
+    var geo = window.GEO || { country: {} };
+    for (var n = 3; n >= 1; n--) { var p = d.slice(0, n); if (geo.country[p]) return p; }
+    return "";
+  }
+  // Where the number is from: "Miami, FL · US" for a North American area code,
+  // the country for the rest, nothing when the tables do not know.
+  function whereFrom(digits) {
+    if (!digits) return "";
+    var geo = window.GEO || { area: {}, country: {} };
+    var d = String(digits).replace(/[^0-9]/g, "");
+    if (d.length === 11 && d.charAt(0) === "1") d = d.slice(1);
+    if (d.length === 10) {
+      var city = geo.area[d.slice(0, 3)];
+      return city ? city : "";
+    }
+    var cc = countryCode(d);
+    return cc ? geo.country[cc] : "";
+  }
 
   function esc(s) {
     if (s === null || s === undefined) return "";
@@ -359,8 +406,14 @@
   }
   function redrawRisk(c) {
     c.el.querySelector("dd.risk").innerHTML = riskHtml(c.pop);
+    var mini = c.el.querySelector(".top .mini");
+    if (mini && c.pop.riskBand) {
+      mini.className = "mini band " + bandClass(c.pop.riskBand);
+      mini.textContent = c.pop.riskBand + " " + pct(c.pop.riskScore);
+    }
     c.el.querySelector(".why-bars").innerHTML = trailHtml(c) + signalsHtml(c.pop, c);
     if (c.pop.riskFlagged) { c.el.classList.add("flagged"); }
+    applyGuess(c);
   }
 
   // ---------------------------------------------------------------- state
@@ -463,7 +516,8 @@
     if (h.recent && h.recent.length) {
       out += '<ul class="recent">';
       h.recent.forEach(function (c) {
-        out += "<li>" + fmtWhen(c.whenUtc) + " → " + esc(c.dialed || "?") + fmtDur(c.durationMillis);
+        out += "<li>" + (c.face ? '<span title="' + esc(faceWord(c.face)) + '">' + faceGlyph(c.face) + "</span> " : "") +
+          fmtWhen(c.whenUtc) + " → " + esc(c.dialed || "?") + fmtDur(c.durationMillis);
         if (c.outcome) {
           out += '<span class="disp"><span class="o">' + esc(OUTCOME_WORDS[c.outcome] || c.outcome) + "</span>" +
             (c.identity ? " · " + esc(IDENTITY_WORDS[c.identity] || c.identity) : "") +
@@ -501,6 +555,38 @@
                  ["pushing-to-agree", "Pushing me to agree"], ["story-mismatch", "Story doesn't match"],
                  ["second-voice", "Second voice in the room"]];
   var REASON_WORDS = words(REASONS);
+  // Which outcomes the tells apply to: the checkboxes are about a bad actor.
+  var TELL_OUTCOMES = { "suspected-scam": true, "confirmed-scam": true, robocall: true, harassment: true };
+  // The one-glyph disposition: the caller's mood, one to five (the pain scale
+  // at the doctor's office), or what they were: a robot (synthetic voice) or a
+  // hacker (a human scammer). Yolanda's rule: the most information in the
+  // quickest read, so it goes leftmost, before the number and before the date.
+  var FACES = [[1, "😊", "happy"], [2, "🤨", "bemused"], [3, "😐", "meh"], [4, "😠", "irritated"], [5, "😡", "angry"],
+               [6, "🤖", "a robot (synthetic voice)"], [7, "🕵️", "a hacker (human scammer)"]];
+  function faceGlyph(f) { var x = FACES[parseInt(f, 10) - 1]; return x ? x[1] : ""; }
+  function faceWord(f) { var x = FACES[parseInt(f, 10) - 1]; return x ? x[2] : ""; }
+  // A default from the evidence already on the card: a synthetic voice is a
+  // robot; scam-shaped words or a post-call finding without one is a hacker.
+  // Only a default: the agent's own choice, once made, is never overwritten.
+  function guessFace(c) {
+    var voice = (c.pop.signals && c.pop.signals.acoustic) ? parseFloat(c.pop.signals.acoustic.value) : NaN;
+    var kinds = Object.keys(c.content).length;
+    if (!isNaN(voice) && voice >= 0.8) return 6;
+    if (kinds >= 2 || c.reviewed || c.pop.riskFlagged) return 7;
+    return 0;
+  }
+  function applyGuess(c) {
+    if (c.faceTouched) return;
+    var g = guessFace(c);
+    var sel = c.el.querySelector(".face-pick");
+    if (!sel) return;
+    sel.value = g ? String(g) : "";
+    var o = c.el.querySelector(".outcome");
+    if (g && !c.outcomeTouched) {
+      o.value = "suspected-scam";
+      o.dispatchEvent(new Event("change"));
+    }
+  }
   // The content probe's labels, as the reason an agent reads.
   var REVIEW_WORDS = { elicitation: "fished for the data on file", commitment: "worked you for a commitment on record",
     "account-change": "pushed to change account details" };
@@ -523,9 +609,13 @@
 
     el.innerHTML =
       '<div class="top">' +
-        '<span class="num">' + esc(pop.ani || (pop.anonymous ? "Anonymous" : "unknown")) + "</span>" +
+        '<button type="button" class="tog" title="minimize">\u25BE</button>' +
+        (pop.history && pop.history.lastFace ? '<span class="mood" title="last time this caller was ' + esc(faceWord(pop.history.lastFace)) + '">' + faceGlyph(pop.history.lastFace) + "</span>" : "") +
+        '<span class="num">' + esc(pop.ani ? fmtNumber(pop.ani) : (pop.anonymous ? "Anonymous" : "unknown")) + "</span>" +
+        (whereFrom(pop.ani) ? '<span class="from" title="from the area code">' + esc(whereFrom(pop.ani)) + "</span>" : "") +
         (pop.displayName ? '<span class="name">' + esc(pop.displayName) + "</span>" : "") +
         '<span class="state ringing"' + t("state") + '>ringing</span>' +
+        '<span class="mini band none"></span>' +
         '<span class="dialed">to ' + esc(pop.dialed || "?") + " · " + fmtWhen(pop.receivedUtc) + "</span>" +
       "</div>" +
       '<div class="flag"' + t("flag") + '>Flagged: risk sustained across several windows. Verify the caller before acting on anything they ask.</div>' +
@@ -552,14 +642,31 @@
         "<div><label>Outcome</label><select class=\"outcome\">" + options(OUTCOMES) + "</select></div>" +
         "<div><label>Caller identity</label><select class=\"identity\">" + options(IDENTITIES) + "</select></div>" +
         "<div><label>Action</label><select class=\"action\">" + options(ACTIONS, LIVE_ACTIONS) + "</select></div>" +
-        '<div class="reasons"><span class="cap"><label>What tipped you off</label></span>' +
+        '<div><label>Mood</label><select class="face-pick"><option value="">not said</option>' +
+          FACES.map(function (m) { return '<option value="' + m[0] + '">' + m[1] + " " + m[2] + "</option>"; }).join("") + "</select></div>" +
+        '<div class="reasons off"><span class="cap"><label>What tipped you off</label></span>' +
           REASONS.map(function (r) { return '<label><input type="checkbox" value="' + r[0] + '"> ' + r[1] + "</label>"; }).join("") +
         "</div>" +
         '<div class="notes"><label' + t("notes") + '>Notes</label><textarea rows="2" placeholder="what the caller wanted, what you did"></textarea></div>' +
         '<div class="go"><button type="button">Update</button><span class="result"></span></div>' +
       "</div>";
 
+    var tog = el.querySelector(".tog");
+    tog.addEventListener("click", function () { setSize(pop.vorpalId, el.classList.contains("min")); });
+
     var fields = el.querySelectorAll(".dispose select, .dispose textarea, .dispose input");
+    // The tells only make sense for a bad actor: show them when the outcome is one.
+    var outcomeSel = el.querySelector(".outcome");
+    var reasonsBox = el.querySelector(".dispose .reasons");
+    outcomeSel.addEventListener("change", function () {
+      reasonsBox.className = "reasons" + (TELL_OUTCOMES[outcomeSel.value] ? "" : " off");
+    });
+    // The agent's own choices stop the guessing.
+    outcomeSel.addEventListener("input", function () { var cc = cards[pop.vorpalId]; if (cc) { cc.outcomeTouched = true; } });
+    el.querySelector(".face-pick").addEventListener("input", function () {
+      var cc = cards[pop.vorpalId];
+      if (cc) { cc.faceTouched = true; }
+    });
     var button = el.querySelector(".dispose button");
     var result = el.querySelector(".dispose .result");
     function lock(on) { button.disabled = on; for (var i = 0; i < fields.length; i++) { fields[i].disabled = on; } }
@@ -585,7 +692,10 @@
         identity: el.querySelector(".identity").value,
         action: el.querySelector(".action").value,
         notes: el.querySelector(".dispose textarea").value.trim() || null,
-        reasons: Array.prototype.map.call(el.querySelectorAll(".dispose .reasons input:checked"), function (i) { return i.value; })
+        face: el.querySelector(".face-pick").value || null,
+        reasons: TELL_OUTCOMES[outcomeSel.value]
+          ? Array.prototype.map.call(el.querySelectorAll(".dispose .reasons input:checked"), function (i) { return i.value; })
+          : []
       }));
     });
     return el;
@@ -626,6 +736,19 @@
     }
   }
 
+  // Maximized: the card fills the queue's height, the current call on one
+  // screen. Minimized: its header line, with the rating. A new call arrives
+  // maximized and minimizes whatever was open.
+  function setSize(vorpalId, max) {
+    var c = cards[vorpalId];
+    if (!c) return;
+    c.el.classList.toggle("max", max);
+    c.el.classList.toggle("min", !max);
+    var tog = c.el.querySelector(".tog");
+    tog.textContent = max ? "\u25BE" : "\u25B8";
+    tog.title = max ? "minimize" : "maximize";
+  }
+
   function show(pop) {
     empty.style.display = "none";
     var el = card(pop);
@@ -635,7 +758,10 @@
     redrawRisk(c);
     setState(c, "ringing");
     el.querySelector(".listening").classList.remove("off");
+    for (var id in cards) { if (id !== pop.vorpalId) { setSize(id, false); } }
     pops.insertBefore(el, pops.firstChild);
+    setSize(pop.vorpalId, true);
+    pops.scrollTop = 0;
     while (pops.children.length > MAX_CARDS) {
       var gone = pops.lastChild;
       if (gone.dataset && gone.dataset.vorpalId && cards[gone.dataset.vorpalId]) {
@@ -647,24 +773,30 @@
     }
   }
 
-  // The model's labels for a line already on the card: find the line (by its
-  // start time, else by its text), add the chips the phrase patterns did not,
-  // count them, and redraw the risk pane so the Content evidence says so.
-  function labelLine(c, m) {
+  // Labels for a line already on the card, from the phrase patterns (solid
+  // chips) or the model (dashed): find the line by its start time, else by
+  // its text, add the chips it does not have, count them, and redraw the risk
+  // pane so the Content evidence says so. The labels can overtake their line
+  // on the bus, so a line not yet shown is looked for once more.
+  function labelLine(c, m, retried) {
     var lines = c.el.querySelectorAll(".lines li.caller");
     var li = null;
     for (var i = 0; i < lines.length; i++) {
       if ((m.atMs != null && lines[i].dataset.atMs === String(m.atMs)) || lines[i].dataset.text === m.text) { li = lines[i]; }
     }
-    if (!li) return;
+    if (!li) {
+      if (!retried) { setTimeout(function () { labelLine(c, m, true); }, 700); }
+      return;
+    }
+    var model = m.source !== "patterns";
     var have = {};
     li.querySelectorAll(".tag").forEach(function (t) { have[t.textContent] = true; });
     var added = false;
     (m.labels || []).forEach(function (l) {
       if (have[l]) return;
       var tag = document.createElement("span");
-      tag.className = "tag model";
-      tag.title = "added by the model, not the phrase patterns";
+      tag.className = model ? "tag model" : "tag";
+      if (model) { tag.title = "added by the model, not the phrase patterns"; }
       tag.textContent = l;
       li.appendChild(tag);
       c.content[l] = (c.content[l] || 0) + 1;
@@ -704,11 +836,13 @@
     if (m.utterance) { addLine(c, m.utterance); }
     if (m.labelled) { labelLine(c, m.labelled); }
     if (m.review) {
+      c.reviewed = true;
       var rv = c.el.querySelector(".review");
       rv.className = "review";
       rv.innerHTML = '<span class="lbl">After the call, the review found the caller </span>' +
         (m.review.labels || []).map(function (l) { return "<b>" + esc(REVIEW_WORDS[l] || l) + "</b>"; }).join(" · ") +
         (m.review.text ? ": <q>" + esc(m.review.text) + "</q>" : "");
+      applyGuess(c);
     }
     if (m.state) { setState(c, m.state, m.durationMs); }
     var risky = false;

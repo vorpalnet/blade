@@ -8,6 +8,13 @@ import org.vorpal.blade.framework.v3.media.manifest.Utterance;
 
 /// One thing a party said, as a transcription heard it. See [MediaCallflow#transcribe].
 ///
+/// An utterance can arrive twice. [Type#LIVE_UTTERANCE] is the first decode, delivered as soon as
+/// the party stops speaking, for a screen or a rule that must act while the call is live.
+/// [Type#UTTERANCE] is the decode for the record, which may come seconds later from a larger model
+/// and is the one to store. A live utterance's bounds can be approximate, because a first decode
+/// may carry no media clock, so a reader pairs the two by party and order rather than by bounds.
+/// A driver with a single decode delivers only [Type#UTTERANCE].
+///
 /// The words, their bounds and what produced them travel in the [Utterance], which is the stored
 /// form. Its `party` is the URI of the leg whose audio it was, because the driver knows the endpoint
 /// and not the person: an application that knows which connection is the caller labels the utterance
@@ -17,8 +24,11 @@ public interface TranscriberEvent extends MediaEvent<SignalDetector> {
 	/// The event types a transcription fires. JSR-309's `EventType` is a marker interface, and the
 	/// specification's own constants are an enum behind it, so this follows the same shape.
 	enum Type implements EventType {
-		/// One utterance finished. [#getUtterance] carries it.
-		UTTERANCE
+		/// One utterance finished, decoded for the record. [#getUtterance] carries it.
+		UTTERANCE,
+		/// One utterance finished, as first decoded. Never stored: the same words arrive again as
+		/// [#UTTERANCE], possibly corrected.
+		LIVE_UTTERANCE
 	}
 
 	/// What was said, with its bounds, its provenance, and the URI of the party who said it.

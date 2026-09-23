@@ -89,6 +89,7 @@ public final class BladeEventCatalog {
 		types.addAll(callAndTransferTypes());
 		types.addAll(riskTypes());
 		types.add(callUtterance());
+		types.add(callVoiceAssessed());
 		return types;
 	}
 
@@ -127,6 +128,16 @@ public final class BladeEventCatalog {
 		EventType declaration = base(BladeEventTypes.CALL_UTTERANCE, "Call Utterance",
 				"A party said something and a transcriber decoded it. One per endpointed utterance while the call is transcribed. Attributes carry text, party (caller or callee) and, when the transcriber has a media clock, startMs and endMs measured from when the tap attached. A screen shows it as it arrives; an indexer keeps it.",
 				"CallUtterance");
+		declaration.setFields(callScopedFields());
+		return declaration;
+	}
+
+	/// One scored window of a party's voice. Call-scoped like the utterance; the
+	/// score rides in `attributes`.
+	private static EventType callVoiceAssessed() {
+		EventType declaration = base(BladeEventTypes.CALL_VOICE_ASSESSED, "Call Voice Assessed",
+				"A party's voice was scored for being synthetic. One per scored window while the call is heard. Attributes carry score (0 genuine to 1 synthetic), party (caller or callee), model when the scorer names one, and offsetMs measured from when the assessment attached. A measurement, not a verdict: a risk engine fuses it and publishes Call Risk Assessed.",
+				"CallVoiceAssessed");
 		declaration.setFields(callScopedFields());
 		return declaration;
 	}
