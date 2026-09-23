@@ -151,6 +151,13 @@ public class ConsoleUpdater implements EventSubscriber.Handler {
 		if (attributes.containsKey("triggerSignal")) {
 			frame.put("riskTrigger", attributes.get("triggerSignal").toLowerCase(Locale.ROOT));
 		}
+		// The campaign check's facts, when the behaviour signal fired on them.
+		if (attributes.containsKey("campaignMatches")) {
+			frame.put("campaignMatches", attributes.get("campaignMatches"));
+			if (attributes.containsKey("campaignText")) {
+				frame.put("campaignText", attributes.get("campaignText"));
+			}
+		}
 		return new Update(vorpalId, frame.toString());
 	}
 

@@ -74,6 +74,12 @@ public class AgentConsoleEndpoint {
 		hello.put("user", principal.getName());
 		hello.put("mayReport", mayReport(session));
 		AgentConsoleRegistry.send(session, hello.toString());
+		// Then what this screen would already be showing had it been open: the
+		// last few calls, each as its pop followed by every update, oldest first.
+		int replayed = AgentConsoleRegistry.replayTo(session, principal.getName());
+		if (replayed > 0) {
+			AgentConsoleRegistry.log("agent: replayed " + replayed + " recent call(s) to " + principal.getName());
+		}
 		LOG.fine("agent: console open for " + principal.getName() + " (" + AgentConsoleRegistry.size() + " open)");
 	}
 
@@ -144,6 +150,10 @@ public class AgentConsoleEndpoint {
 				+ d.identity + " action=" + d.action + " reasons=" + d.reasons + " by " + principal.getName() + " -> blocked=" + result.blocked
 				+ " labelled=" + result.labelled + " published=" + result.published);
 		sendResult(session, d.vorpalId, true, null, result);
+		// The card is a work item and Update is how it leaves the queue: every
+		// console holding this call takes it down, and a reload will not bring it
+		// back. The agent's own console gets the result first, then the clear.
+		AgentConsoleRegistry.cleared(d.vorpalId, principal.getName());
 	}
 
 	@OnClose

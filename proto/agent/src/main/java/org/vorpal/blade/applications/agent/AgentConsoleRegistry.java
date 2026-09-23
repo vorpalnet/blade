@@ -54,6 +54,8 @@ public final class AgentConsoleRegistry {
 		public final Long vorpalId;
 		public final Date startedAt;
 		public final String ani;
+		/// When the agent answered, on this server's clock; 0 until then.
+		public volatile long answeredAt;
 
 		public CallRef(Long vorpalId, Date startedAt, String ani) {
 			this.vorpalId = vorpalId;
@@ -73,6 +75,94 @@ public final class AgentConsoleRegistry {
 					return size() > 1000;
 				}
 			});
+
+	/// Everything a card was told, in order, for the last few calls: the pop and
+	/// every update frame after it. A console that (re)opens gets them replayed,
+	/// so a reload, a redeploy or a fresh sign-in mid-shift does not blank the
+	/// screen. Node-local and bounded; a call's frames go when the call ages out.
+	static final class Replay {
+		final String agent;      // the agent the pop was targeted at, or null for a broadcast
+		final java.util.List<String> frames = new java.util.ArrayList<>();
+
+		Replay(String agent) {
+			this.agent = agent;
+		}
+	}
+
+	static final int REPLAY_CALLS = 12;
+	private static final Map<String, Replay> REPLAYS = Collections
+			.synchronizedMap(new LinkedHashMap<String, Replay>(32, 0.75f, false) {
+				private static final long serialVersionUID = 1L;
+
+				@Override
+				protected boolean removeEldestEntry(Map.Entry<String, Replay> eldest) {
+					return size() > REPLAY_CALLS;
+				}
+			});
+
+	/// Start a call's replay with its pop.
+	public static void recordPop(String vorpalId, String agent, String popJson) {
+		if (vorpalId != null) {
+			Replay r = new Replay(agent);
+			r.frames.add(popJson);
+			REPLAYS.put(vorpalId, r);
+		}
+	}
+
+	/// Append an update frame to a call's replay, if the call is still kept.
+	public static void recordFrame(String vorpalId, String json) {
+		if (vorpalId == null) {
+			return;
+		}
+		Replay r = REPLAYS.get(vorpalId);
+		if (r != null) {
+			synchronized (r.frames) {
+				r.frames.add(json);
+			}
+		}
+	}
+
+	/// A call was dispositioned: it leaves the queue. Forgotten for replay, so a
+	/// reload does not bring it back, and every console holding it is told to
+	/// take it down.
+	public static void cleared(String vorpalId, String by) {
+		if (vorpalId == null) {
+			return;
+		}
+		REPLAYS.remove(vorpalId);
+		String json = "{\"t\":\"update\",\"vorpalId\":\"" + vorpalId + "\",\"cleared\":true,\"by\":\""
+				+ (by == null ? "" : by.replace("\"", "")) + "\"}";
+		String user = AGENT_FOR_CALL.get(vorpalId);
+		int reached = (user == null) ? 0 : sendToUser(user, json);
+		if (reached == 0) {
+			broadcast(json);
+		}
+	}
+
+	/// Replay every kept call this user would have seen, oldest first, onto one
+	/// socket: their own targeted calls and every broadcast one.
+	public static int replayTo(Session session, String username) {
+		java.util.List<Replay> mine = new java.util.ArrayList<>();
+		synchronized (REPLAYS) {
+			for (Replay r : REPLAYS.values()) {
+				if (r.agent == null || (username != null && username.equalsIgnoreCase(r.agent))) {
+					mine.add(r);
+				}
+			}
+		}
+		int calls = 0;
+		for (Replay r : mine) {
+			java.util.List<String> frames;
+			synchronized (r.frames) {
+				frames = new java.util.ArrayList<>(r.frames);
+			}
+			for (String f : frames) {
+				send(session, f);
+			}
+			calls++;
+		}
+		return calls;
+	}
 
 	public static void rememberCall(String vorpalIdHex, CallRef ref) {
 		if (vorpalIdHex != null && ref != null) {
@@ -104,6 +194,7 @@ public final class AgentConsoleRegistry {
 	/// (a supervisor's floor view, and never a silently lost update). Returns a
 	/// one-line account of where it went, for the log.
 	public static String sendToCall(String vorpalId, String json) {
+		recordFrame(vorpalId, json);
 		String user = (vorpalId == null) ? null : AGENT_FOR_CALL.get(vorpalId);
 		int reached = (user == null) ? 0 : sendToUser(user, json);
 		if (reached > 0) {

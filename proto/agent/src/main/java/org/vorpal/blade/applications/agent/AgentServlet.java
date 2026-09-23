@@ -112,7 +112,12 @@ public class AgentServlet extends B2buaServlet {
 	@Override
 	public void callAnswered(SipServletResponse outboundResponse) throws ServletException, IOException {
 		// The agent (or voicemail) answered; the framework bridges the media.
-		state(vorpalIdOf(outboundResponse.getApplicationSession()), "talking");
+		String answered = vorpalIdOf(outboundResponse.getApplicationSession());
+		AgentConsoleRegistry.CallRef ref = AgentConsoleRegistry.callRef(answered);
+		if (ref != null) {
+			ref.answeredAt = System.currentTimeMillis();
+		}
+		state(answered, "talking");
 	}
 
 	@Override
@@ -176,6 +181,7 @@ public class AgentServlet extends B2buaServlet {
 			msg.put("t", "pop");
 			msg.set("pop", MAPPER.valueToTree(pop));
 			String json = msg.toString();
+			AgentConsoleRegistry.recordPop(pop.vorpalId, agentId, json);
 			int reached = (agentId == null) ? 0 : AgentConsoleRegistry.sendToUser(agentId, json);
 			String how;
 			if (reached > 0) {
@@ -222,6 +228,12 @@ public class AgentServlet extends B2buaServlet {
 		frame.put("t", "update");
 		frame.put("vorpalId", vorpalId);
 		frame.put("state", state);
+		// How long the call lasted, from the server's clock: a replayed card
+		// cannot compute it from its own.
+		AgentConsoleRegistry.CallRef ref = AgentConsoleRegistry.callRef(vorpalId);
+		if ("ended".equals(state) && ref != null && ref.answeredAt > 0) {
+			frame.put("durationMs", System.currentTimeMillis() - ref.answeredAt);
+		}
 		String where = AgentConsoleRegistry.sendToCall(vorpalId, frame.toString());
 		AgentConsoleRegistry.log("agent: state vorpalId=" + vorpalId + " " + state + " -> " + where);
 	}

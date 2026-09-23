@@ -48,7 +48,8 @@
   .muted { color: var(--muted); }
 
   /* One call = one card. Newest on top. */
-  .pop { border: 1px solid var(--line); border-radius: 6px; margin-bottom: 14px; overflow: hidden; }
+  .pop { border: 1px solid var(--line); border-radius: 6px; margin-bottom: 14px; overflow: hidden; transition: opacity .5s, max-height .5s; max-height: 4000px; }
+  .pop.leaving { opacity: 0; max-height: 0; margin-bottom: 0; }
   .pop .top { display: flex; align-items: baseline; gap: 12px; padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
   .pop .num { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
   .pop .name { color: var(--muted); font-size: 15px; }
@@ -189,10 +190,10 @@
 <main>
   <p class="hint">A card appears the moment a call arrives, before it is answered, and keeps
      changing while the call lasts: the risk verdict as the media tier scores the audio, and the
-     transcript as the caller speaks. Update each call with what you concluded; the next agent this
-     number reaches sees it.</p>
+     transcript as the caller speaks. Update each call with what you concluded and it leaves your
+     queue; the next agent this number reaches sees what you wrote.</p>
   <div id="pops"></div>
-  <div id="empty" class="empty">Waiting for the next call&hellip;</div>
+  <div id="empty" class="empty">Queue is clear. Waiting for the next call&hellip;</div>
 </main>
 
 <script>
@@ -283,8 +284,15 @@
           : "not screened at the edge";
       case "provenance":
         return (pop.attestation || pop.verstat) ? attest(pop) : "no STIR/SHAKEN on the call";
-      case "behavior":
-        return (pop.callRate != null) ? "<b>" + esc(pop.callRate) + "</b> calls/node recently" : "no history from the edge";
+      case "behavior": {
+        var parts = [];
+        if (pop.campaignMatches != null) {
+          parts.push("same opening line as <b>" + esc(pop.campaignMatches) + "</b> other call" + (pop.campaignMatches == 1 ? "" : "s") + " in the last day" +
+            (pop.campaignText ? ": “" + esc(pop.campaignText) + "”" : ""));
+        }
+        if (pop.callRate != null) { parts.push("<b>" + esc(pop.callRate) + "</b> calls/node recently"); }
+        return parts.length ? parts.join(" · ") : "no history from the edge";
+      }
       case "content": {
         var keys = Object.keys(c.content);
         if (!keys.length) return "nothing asked for yet";
@@ -345,7 +353,7 @@
     var m = Math.floor(s / 60);
     return m + ":" + (s % 60 < 10 ? "0" : "") + (s % 60);
   }
-  function setState(c, state) {
+  function setState(c, state, durationMs) {
     var el = c.el.querySelector(".state");
     c.state = state;
     el.className = "state " + state;
@@ -360,7 +368,8 @@
       c.el.querySelector(".listening").classList.remove("off");
     } else {
       if (c.timer) { clearTimeout(c.timer); c.timer = null; }
-      var took = (c.answeredAt && state === "ended") ? " · " + fmtClock(Date.now() - c.answeredAt) : "";
+      var took = (state === "ended" && durationMs != null) ? " · " + fmtClock(durationMs)
+        : (c.answeredAt && state === "ended") ? " · " + fmtClock(Date.now() - c.answeredAt) : "";
       el.textContent = state + took;
       if (state !== "ringing") { c.el.querySelector(".listening").classList.add("off"); }
     }
@@ -567,6 +576,8 @@
       slot.result.className = "result ok";
       slot.result.textContent = "updated" + (m.blocked ? ", number blocked (" + m.treatment + ")" : "") +
         (m.labelled ? ", labelled" : "") + (m.published ? ", on record" : ", not recorded");
+      var c = cards[m.vorpalId];
+      if (c) { c.justUpdated = true; }
     } else {
       slot.result.className = "result";
       slot.result.textContent = "update failed: " + (m.error || "unknown");
@@ -609,6 +620,21 @@
     }
   }
 
+  // A card leaves the queue: fade it, drop it, and show the empty state when
+  // nothing is left.
+  function clearCard(vorpalId) {
+    var c = cards[vorpalId];
+    if (!c) return;
+    delete cards[vorpalId];
+    delete pending[vorpalId];
+    if (c.timer) { clearTimeout(c.timer); c.timer = null; }
+    c.el.classList.add("leaving");
+    setTimeout(function () {
+      if (c.el.parentNode) { c.el.parentNode.removeChild(c.el); }
+      if (!pops.children.length) { empty.style.display = ""; }
+    }, 550);
+  }
+
   // Something new about a call already on screen. General on purpose: any
   // producer sends {t:"update", vorpalId, ...fields}. Three kinds land today:
   // a risk verdict (band, score, signals, maybe flagged), an utterance, and the
@@ -616,8 +642,14 @@
   function update(m) {
     var c = m.vorpalId ? cards[m.vorpalId] : null;
     if (!c) return;
+    if (m.cleared) {
+      // Dispositioned, by this console or another: give the result line a
+      // moment to be read, then take the card down.
+      setTimeout(function () { clearCard(m.vorpalId); }, pending[m.vorpalId] || c.justUpdated ? 1400 : 200);
+      return;
+    }
     if (m.utterance) { addLine(c, m.utterance); }
-    if (m.state) { setState(c, m.state); }
+    if (m.state) { setState(c, m.state, m.durationMs); }
     var risky = false;
     for (var k in m) {
       if (k === "t" || k === "vorpalId" || k === "utterance" || k === "state") continue;
