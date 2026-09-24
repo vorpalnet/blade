@@ -27,6 +27,8 @@ package org.vorpal.blade.framework;
 import java.io.IOException;
 import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -902,7 +904,25 @@ public abstract class Callflow implements Serializable {
 
 				// For GLARE
 				switch (request.getMethod()) {
+				case UPDATE:
 				case INVITE:
+					// One transaction at a time per dialog, the rule doRequest applies to what arrives,
+					// applied to what we send. For INVITEs it is RFC 3261 section 14.1: a UAC "MUST NOT
+					// initiate a new INVITE transaction within a dialog while another INVITE transaction
+					// is in progress in either direction". An UPDATE carries an offer the same way, and
+					// RFC 3311 section 5.2 has the far end refuse one that crosses ours, so it is guarded
+					// and protected alike. Sending anyway would let the next ACK or final response clear
+					// protection while this request is still open. The callback gets the 491 the peer
+					// would owe it and handles it as a peer's: a B2BUA relays it, a refresh waits.
+					if (getGlareState(sipSession) != GlareState.ALLOW) {
+						sipLogger.warning(request,
+								"Callflow.sendRequest - transaction in progress on this dialog, "
+										+ request.getMethod() + " not sent, 491 returned");
+						if (lambdaFunction != null) {
+							lambdaFunction.accept(requestPending(request));
+						}
+						return;
+					}
 					if (request.isInitial()) {
 						stampVorpalIdHeaders(request, appSession, sipSession);
 					}
@@ -911,11 +931,25 @@ public abstract class Callflow implements Serializable {
 
 				case REFER:
 					setGlareState(sipSession, GlareState.PROTECT);
+					// the transfer lasts until its final NOTIFY, past this transaction; see isReferPending
+					setReferPending(sipSession, true);
+					break;
+
+				case NOTIFY:
+					// our final NOTIFY ends the transfer we accepted
+					if (endsRefer(request)) {
+						setReferPending(sipSession, false);
+					}
 					break;
 
 				case ACK:
 				case CANCEL:
 					setGlareState(sipSession, GlareState.ALLOW);
+					break;
+
+				case BYE:
+					// our BYE ends the dialog: answer what is parked rather than replay it later
+					rejectGlareQueue(sipSession);
 					break;
 
 				default:
@@ -1482,7 +1516,18 @@ public abstract class Callflow implements Serializable {
 			// Glare logic
 			switch (method) {
 			case REFER:
-				// leave in PROTECT
+				// A 2xx leaves PROTECT: the dialog clears when the transferor answers our first NOTIFY.
+				// A refusal ends the transfer outright, since no subscription exists. A 491 refuses a
+				// second REFER and leaves the first one's state alone.
+				if (failure(response) && status != 491) {
+					setGlareState(sipSession, GlareState.ALLOW);
+					setReferPending(sipSession, false);
+				}
+				break;
+			case PRACK:
+				// A PRACK and its response live inside the INVITE transaction they acknowledge a
+				// reliable provisional for (RFC 3262). They neither open nor close glare protection:
+				// answering one while the INVITE is still open must not release the INVITE's guard.
 				break;
 			case INVITE:
 				// Keep the Vorpal tracking headers on responses too — useful for
@@ -1547,6 +1592,9 @@ public abstract class Callflow implements Serializable {
 
 			}
 		}
+
+		// A final response releases the dialog: what was parked behind the request goes next.
+		replayParked(sipSession);
 
 	}
 
@@ -2263,6 +2311,126 @@ public abstract class Callflow implements Serializable {
 		GlareState state = (GlareState) sipSession.getAttribute(GLARE_STATE);
 		state = (state != null) ? state : GlareState.ALLOW;
 		return state;
+	}
+
+	/// The `491 Request Pending` an application's callback receives in place of an INVITE or UPDATE
+	/// that [#sendRequest] refused to send because another transaction is open on the dialog.
+	///
+	/// It is created locally and never sent. It carries only the headers a peer's 491 echoes (From,
+	/// To, Call-ID, CSeq, Via), so a B2BUA relaying it upstream copies nothing of the refused request.
+	protected static SipServletResponse requestPending(SipServletRequest request) {
+		DetachedResponse pending = new DetachedResponse(request, 491);
+		for (String name : new ArrayList<>(pending.getHeaderNameList())) {
+			switch (name.toLowerCase()) {
+			case "from":
+			case "to":
+			case "call-id":
+			case "cseq":
+			case "via":
+				break;
+			default:
+				pending.removeHeader(name);
+			}
+		}
+		return pending;
+	}
+
+	/// Once a final response has released the dialog, replay the requests parked behind the one it
+	/// answered. Called at the end of `sendResponse`, after the response is on its way.
+	protected static void replayParked(SipSession sipSession) throws ServletException, IOException {
+		if (sipSession != null && sipSession.isValid() && getGlareState(sipSession) == GlareState.ALLOW) {
+			AsyncSipServlet.replayParked(sipSession);
+		}
+	}
+
+	/// Answer `487 Request Terminated` to every request parked by glare on this dialog, and empty
+	/// the queue. Called when a BYE ends the dialog, in either direction.
+	///
+	/// A request parked while our 2xx waited for its ACK is still pending when the BYE arrives or
+	/// leaves. Replaying it would hand the application an INFO or re-INVITE for a call it has just
+	/// torn down; RFC 3261 section 15.1.2 says instead: "The UAS MUST still respond to any pending
+	/// requests received for that dialog. It is RECOMMENDED that a 487 (Request Terminated) response
+	/// be generated to those pending requests."
+	@SuppressWarnings("unchecked")
+	public static void rejectGlareQueue(SipSession sipSession) {
+		if (sipSession == null || !sipSession.isValid()) {
+			return;
+		}
+		List<SipServletRequest> glareQueue = (List<SipServletRequest>) sipSession
+				.getAttribute(AsyncSipServlet.GLARE_QUEUE);
+		if (glareQueue == null || glareQueue.isEmpty()) {
+			return;
+		}
+		sipSession.removeAttribute(AsyncSipServlet.GLARE_QUEUE);
+		for (SipServletRequest parked : glareQueue) {
+			try {
+				SipServletResponse response = parked.createResponse(487);
+				sipLogger.warning(parked, "Callflow.rejectGlareQueue - dialog ended, answering parked request 487");
+				sipLogger.superArrow(Direction.SEND, null, response, "Callflow");
+				response.send();
+			} catch (Exception e) {
+				sipLogger.warning(parked, "Callflow.rejectGlareQueue - unable to answer parked request: " + e.getMessage());
+			}
+		}
+	}
+
+	/// Session attribute marking a transfer in progress on this dialog: a REFER accepted and its
+	/// implicit subscription (RFC 3515) not yet finished.
+	private static final String REFER_PENDING = "REFER_PENDING";
+
+	/// Whether a transfer is in progress on this dialog, in either direction.
+	///
+	/// This is separate from the glare state on purpose. Glare protection covers one transaction and
+	/// ends with its final response, so a REFER's ends at its 202. A transfer lasts until the final
+	/// NOTIFY, which can be the whole time the target rings. Holding PROTECT that long would answer 491
+	/// to everything else on the dialog, a session refresh included; this flag refuses only a second
+	/// REFER.
+	public static boolean isReferPending(SipSession sipSession) {
+		return sipSession != null && Boolean.TRUE.equals(sipSession.getAttribute(REFER_PENDING));
+	}
+
+	/// Mark a transfer in progress on this dialog, or finished.
+	public static void setReferPending(SipSession sipSession, boolean pending) {
+		if (pending) {
+			sipSession.setAttribute(REFER_PENDING, Boolean.TRUE);
+		} else {
+			sipSession.removeAttribute(REFER_PENDING);
+		}
+	}
+
+	/// Whether this NOTIFY ends a REFER's subscription: `Subscription-State: terminated`, or a
+	/// `message/sipfrag` body whose status line is final (200 or above). Only a NOTIFY for the
+	/// `refer` event counts; a NOTIFY for any other event on the dialog never ends a transfer.
+	public static boolean endsRefer(SipServletRequest notify) {
+		String event = notify.getHeader("Event");
+		if (event == null || !event.trim().toLowerCase().startsWith("refer")) {
+			return false;
+		}
+		String subscriptionState = notify.getHeader("Subscription-State");
+		if (subscriptionState != null && subscriptionState.trim().toLowerCase().startsWith("terminated")) {
+			return true;
+		}
+		return sipfragStatus(notify) >= 200;
+	}
+
+	/// The status code of a `message/sipfrag` body's status line (`SIP/2.0 200 OK`), or 0 if the
+	/// message carries no such body.
+	private static int sipfragStatus(SipServletMessage message) {
+		try {
+			if (!MESSAGE_SIPFRAG.equalsIgnoreCase(message.getContentType())) {
+				return 0;
+			}
+			Object content = message.getContent();
+			String body = (content instanceof byte[]) ? new String((byte[]) content, StandardCharsets.UTF_8)
+					: String.valueOf(content);
+			String[] statusLine = body.trim().split("\\s+", 3);
+			if (statusLine.length >= 2 && statusLine[0].startsWith("SIP/")) {
+				return Integer.parseInt(statusLine[1]);
+			}
+		} catch (Exception e) {
+			// not a status line: no final status
+		}
+		return 0;
 	}
 
 }

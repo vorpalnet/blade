@@ -132,6 +132,26 @@ public class WebrtcServlet extends AsyncSipServlet {
 		return (current == null || current.getMediaMode() == null) ? MediaMode.AUTO : current.getMediaMode();
 	}
 
+	/// Whether calls to `targetAor` always pass their media straight through
+	/// ([WebrtcSettings#getRelayTargets]).
+	public static boolean relaysTo(String targetAor) {
+		SettingsManager<WebrtcSettings> sm = settings;
+		WebrtcSettings current = (sm == null) ? null : sm.getCurrent();
+		if (current == null || targetAor == null) {
+			return false;
+		}
+		for (String pattern : current.getRelayTargets()) {
+			try {
+				if (pattern != null && targetAor.matches(pattern)) {
+					return true;
+				}
+			} catch (java.util.regex.PatternSyntaxException e) {
+				// a bad pattern matches nothing
+			}
+		}
+		return false;
+	}
+
 	/// Expires for the REGISTER sent on a browser's behalf. The setter clamps,
 	/// so the only case handled here is settings not being loaded at all.
 	public static int registerExpiresSeconds() {

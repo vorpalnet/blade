@@ -54,6 +54,10 @@ public class AgentServlet extends B2buaServlet {
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
 		settingsManager = new SettingsManager<>(event, AgentSettings.class, new AgentSettingsSample());
+		int back = ReplayStore.load();
+		if (back > 0) {
+			AgentConsoleRegistry.log("agent: " + back + " call(s) back in the queue from " + ReplayStore.file());
+		}
 	}
 
 	@Override

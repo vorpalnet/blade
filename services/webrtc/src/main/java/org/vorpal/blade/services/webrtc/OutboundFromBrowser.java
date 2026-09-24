@@ -100,8 +100,9 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 		assertIdentity(invite, aor, SignalProtocol.field(offerEvent, "displayName"));
 		advertiseEvents(invite);
 
-		MediaMode mode = WebrtcServlet.mediaMode()
-				.resolve(BrowserRegistry.isLocal(targetAor(target, aor)), getMsControlFactory() != null);
+		String dialled = targetAor(target, aor);
+		MediaMode mode = WebrtcServlet.relaysTo(dialled) ? MediaMode.RELAY
+				: WebrtcServlet.mediaMode().resolve(BrowserRegistry.isLocal(dialled), getMsControlFactory() != null);
 
 		if (mode == MediaMode.RELAY) {
 			passThrough(invite, app, aor, callId, browserOffer);

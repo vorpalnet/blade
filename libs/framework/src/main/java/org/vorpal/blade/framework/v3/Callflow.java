@@ -260,7 +260,25 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 
 				// For GLARE
 				switch (request.getMethod()) {
+				case UPDATE:
 				case INVITE:
+					// One transaction at a time per dialog, the rule doRequest applies to what arrives,
+					// applied to what we send. For INVITEs it is RFC 3261 section 14.1: a UAC "MUST NOT
+					// initiate a new INVITE transaction within a dialog while another INVITE transaction
+					// is in progress in either direction". An UPDATE carries an offer the same way, and
+					// RFC 3311 section 5.2 has the far end refuse one that crosses ours, so it is guarded
+					// and protected alike. Sending anyway would let the next ACK or final response clear
+					// protection while this request is still open. The callback gets the 491 the peer
+					// would owe it and handles it as a peer's: a B2BUA relays it, a refresh waits.
+					if (getGlareState(sipSession) != GlareState.ALLOW) {
+						sipLogger.warning(request,
+								"Callflow.sendRequest - transaction in progress on this dialog, "
+										+ request.getMethod() + " not sent, 491 returned");
+						if (lambdaFunction != null) {
+							lambdaFunction.accept(requestPending(request));
+						}
+						return;
+					}
 					if (request.isInitial()) {
 						stampVorpalIdHeaders(request, appSession, sipSession);
 					}
@@ -269,11 +287,25 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 
 				case REFER:
 					setGlareState(sipSession, GlareState.PROTECT);
+					// the transfer lasts until its final NOTIFY, past this transaction; see isReferPending
+					setReferPending(sipSession, true);
+					break;
+
+				case NOTIFY:
+					// our final NOTIFY ends the transfer we accepted
+					if (endsRefer(request)) {
+						setReferPending(sipSession, false);
+					}
 					break;
 
 				case ACK:
 				case CANCEL:
 					setGlareState(sipSession, GlareState.ALLOW);
+					break;
+
+				case BYE:
+					// our BYE ends the dialog: answer what is parked rather than replay it later
+					rejectGlareQueue(sipSession);
 					break;
 
 				default:
@@ -358,7 +390,18 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 			// Glare logic
 			switch (method) {
 			case REFER:
-				// leave in PROTECT
+				// A 2xx leaves PROTECT: the dialog clears when the transferor answers our first NOTIFY.
+				// A refusal ends the transfer outright, since no subscription exists. A 491 refuses a
+				// second REFER and leaves the first one's state alone.
+				if (failure(response) && status != 491) {
+					setGlareState(sipSession, GlareState.ALLOW);
+					setReferPending(sipSession, false);
+				}
+				break;
+			case PRACK:
+				// A PRACK and its response live inside the INVITE transaction they acknowledge a
+				// reliable provisional for (RFC 3262). They neither open nor close glare protection:
+				// answering one while the INVITE is still open must not release the INVITE's guard.
 				break;
 			case INVITE:
 				// Keep the Vorpal tracking headers on responses too — useful for
@@ -423,6 +466,9 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 
 			}
 		}
+
+		// A final response releases the dialog: what was parked behind the request goes next.
+		replayParked(sipSession);
 
 		if (dropOut) {
 			passthruInvalidate(response); // must happen AFTER the 2xx is sent

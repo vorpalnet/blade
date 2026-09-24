@@ -46,6 +46,7 @@ public class WebrtcSettings extends Configuration implements Serializable {
 	private JwtAuthConfig jwt = defaultJwt();
 	private Integer registerExpiresSeconds = 3600;
 	private MediaMode mediaMode = MediaMode.AUTO;
+	private java.util.List<String> relayTargets = new java.util.ArrayList<>();
 	private String driverName;
 	private Map<String, String> driverProperties = new LinkedHashMap<>();
 
@@ -83,6 +84,18 @@ public class WebrtcSettings extends Configuration implements Serializable {
 
 	public void setMediaMode(MediaMode mediaMode) {
 		this.mediaMode = (mediaMode == null) ? MediaMode.AUTO : mediaMode;
+	}
+
+	@JsonPropertyDescription("Destinations whose media always passes straight through, whatever mediaMode says, as "
+			+ "regular expressions on the dialled address (user@host, lower case). For an application that takes a "
+			+ "browser's own WebRTC offer and anchors it itself, such as a meeting: anchoring here as well would put two "
+			+ "media servers in the call and turn the browser's video into audio-only RTP. Example: room.*@.*")
+	public java.util.List<String> getRelayTargets() {
+		return relayTargets;
+	}
+
+	public void setRelayTargets(java.util.List<String> relayTargets) {
+		this.relayTargets = (relayTargets == null) ? new java.util.ArrayList<>() : relayTargets;
 	}
 
 	@JsonPropertyDescription("Which JSR-309 driver supplies the media server, by its driver name. Leave blank to use the single registered driver, which is the usual case. Naming a driver that is not installed is reported at startup and leaves the gateway with no media plane — browser-to-browser calls still work, calls to phones do not.")

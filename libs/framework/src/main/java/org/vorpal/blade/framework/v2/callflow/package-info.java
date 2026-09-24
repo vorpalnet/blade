@@ -258,8 +258,8 @@
 ///   </tr>
 ///   <tr>
 ///     <td>{@code PROTECT}</td>
-///     <td>Reject incoming INVITE/REFER with 491</td>
-///     <td>Outgoing INVITE or REFER sent</td>
+///     <td>Reject incoming requests with 491, except BYE, CANCEL, ACK, PRACK and NOTIFY</td>
+///     <td>Outgoing INVITE or REFER sent; incoming request accepted</td>
 ///   </tr>
 ///   <tr>
 ///     <td>{@code QUEUE}</td>
@@ -273,6 +273,12 @@
 /// {@code doRequest()} method. Queued requests are processed automatically after
 /// the current exchange completes. Developers rarely need to interact with glare
 /// handling directly.
+///
+/// Transfers are guarded separately: one at a time per dialog. A REFER, sent or
+/// received, marks a transfer in progress until its final NOTIFY, and a second
+/// REFER meanwhile is refused with 491. The glare state clears once the REFER itself is answered,
+/// so the rest of the dialog (a session refresh, say) carries on while the
+/// transfer target rings.
 ///
 ///
 /// ## Timer Management

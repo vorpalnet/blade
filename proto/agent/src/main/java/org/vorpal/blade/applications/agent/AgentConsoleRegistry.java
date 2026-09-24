@@ -80,6 +80,8 @@ public final class AgentConsoleRegistry {
 	/// every update frame after it. A console that (re)opens gets them replayed,
 	/// so a reload, a redeploy or a fresh sign-in mid-shift does not blank the
 	/// screen. Node-local and bounded; a call's frames go when the call ages out.
+	/// Kept on disk as well ([ReplayStore]), so a redeploy or a restart brings
+	/// the queue back.
 	static final class Replay {
 		final String agent;      // the agent the pop was targeted at, or null for a broadcast
 		final java.util.List<String> frames = new java.util.ArrayList<>();
@@ -106,6 +108,52 @@ public final class AgentConsoleRegistry {
 			Replay r = new Replay(agent);
 			r.frames.add(popJson);
 			REPLAYS.put(vorpalId, r);
+			ReplayStore.changed();
+		}
+	}
+
+	/// One kept call, as [ReplayStore] saves and restores it.
+	static final class Kept {
+		final String vorpalId;
+		final String agent;
+		final java.util.List<String> frames;
+		final CallRef ref;
+
+		Kept(String vorpalId, String agent, java.util.List<String> frames, CallRef ref) {
+			this.vorpalId = vorpalId;
+			this.agent = agent;
+			this.frames = frames;
+			this.ref = ref;
+		}
+	}
+
+	/// The kept calls, oldest first, copied so a save does not hold the ring.
+	static java.util.List<Kept> kept() {
+		java.util.List<Kept> out = new java.util.ArrayList<>();
+		synchronized (REPLAYS) {
+			for (Map.Entry<String, Replay> e : REPLAYS.entrySet()) {
+				java.util.List<String> frames;
+				synchronized (e.getValue().frames) {
+					frames = new java.util.ArrayList<>(e.getValue().frames);
+				}
+				out.add(new Kept(e.getKey(), e.getValue().agent, frames, CALLS.get(e.getKey())));
+			}
+		}
+		return out;
+	}
+
+	/// Put saved calls back in the ring, and their references with them, when the application starts.
+	static void restore(java.util.List<Kept> calls) {
+		for (Kept k : calls) {
+			Replay r = new Replay(k.agent);
+			r.frames.addAll(k.frames);
+			REPLAYS.put(k.vorpalId, r);
+			if (k.ref != null) {
+				CALLS.putIfAbsent(k.vorpalId, k.ref);
+			}
+			if (k.agent != null) {
+				AGENT_FOR_CALL.putIfAbsent(k.vorpalId, k.agent);
+			}
 		}
 	}
 
@@ -119,6 +167,7 @@ public final class AgentConsoleRegistry {
 			synchronized (r.frames) {
 				r.frames.add(json);
 			}
+			ReplayStore.changed();
 		}
 	}
 
@@ -130,6 +179,7 @@ public final class AgentConsoleRegistry {
 			return;
 		}
 		REPLAYS.remove(vorpalId);
+		ReplayStore.changed();
 		String json = "{\"t\":\"update\",\"vorpalId\":\"" + vorpalId + "\",\"cleared\":true,\"by\":\""
 				+ (by == null ? "" : by.replace("\"", "")) + "\"}";
 		String user = AGENT_FOR_CALL.get(vorpalId);

@@ -23,6 +23,8 @@ import javax.servlet.sip.ServletTimer;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipApplicationSessionEvent;
 import javax.servlet.sip.SipApplicationSessionListener;
+import javax.servlet.sip.SipErrorEvent;
+import javax.servlet.sip.SipErrorListener;
 import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipServlet;
 import javax.servlet.sip.SipServletContextEvent;
@@ -98,7 +100,8 @@ import org.vorpal.blade.framework.v2.logging.Logger.Direction;
 /// 
 /// @author Jeff McDonald
 public abstract class AsyncSipServlet extends SipServlet
-		implements SipServletListener, ServletContextListener, TimerListener, SipApplicationSessionListener {
+		implements SipServletListener, ServletContextListener, TimerListener, SipApplicationSessionListener,
+		SipErrorListener {
 
 	private static final long serialVersionUID = 1L;
 
@@ -151,6 +154,15 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// answered 491.
 	static final int MAX_GLARE_QUEUE = 4;
 
+	/// Request attribute marking a request replayed from the glare queue, so it is handled rather
+	/// than parked again behind the requests still waiting.
+	private static final String GLARE_REPLAY = "GLARE_REPLAY";
+
+	/// This application's servlet, which replays parked requests through [#doRequest] when a
+	/// [Callflow] answer releases a dialog. Set once the servlet is initialized, per application,
+	/// like the logger and factory [Callflow] holds.
+	static AsyncSipServlet replayer;
+
 	/// Session attribute key for linked session references
 	private static final String LINKED_SESSION = "LINKED_SESSION";
 
@@ -182,6 +194,12 @@ public abstract class AsyncSipServlet extends SipServlet
 
 	/// SIP REFER method constant
 	private static final String REFER = "REFER";
+
+	/// SIP method name constant for PRACK (RFC 3262), which acknowledges a reliable provisional.
+	private static final String PRACK = "PRACK";
+
+	/// SIP NOTIFY method constant
+	private static final String NOTIFY = "NOTIFY";
 
 	/// Configuration for session attribute extraction and indexing
 	protected static SessionParameters sessionParameters;
@@ -237,6 +255,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	@Override
 	public void servletInitialized(SipServletContextEvent event) {
 		initialSipServletContextEvent = event;
+		replayer = this;
 		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
 		timerService = (TimerService) event.getServletContext().getAttribute("javax.servlet.sip.TimerService");
@@ -619,6 +638,24 @@ public abstract class AsyncSipServlet extends SipServlet
 		}
 	}
 
+	/// Called beside every sequence-diagram arrow in [#doRequest], [#doResponse] and [#sendResponse]:
+	/// the places where the message, its direction and the code handling it are all in scope, under
+	/// the application-session lock. Does nothing here. The v3 servlet overrides it to record the call
+	/// trace; an application that never arms tracing pays one call to an empty method per arrow.
+	///
+	/// This hook is why there is one copy of the request and response handling. The v3 servlet used
+	/// to copy all three methods only to add these calls, and the copies drifted: a hardening fix to
+	/// the glare queue landed here and never reached v3.
+	///
+	/// @param direction  whether the message was received or sent
+	/// @param request    the request, or null for a response
+	/// @param response   the response, or null for a request
+	/// @param handler    what handles it: a callflow, a callback, or a class name as a String
+	/// @param methodHint the handler's method, when the handler does not name one
+	protected void traced(Direction direction, SipServletRequest request, SipServletResponse response,
+			Object handler, String methodHint) {
+	}
+
 	/// Processes incoming SIP requests with glare detection and callback handling
 	///
 	/// This method handles initial INVITE session setup, glare detection and
@@ -678,13 +715,42 @@ public abstract class AsyncSipServlet extends SipServlet
 			// Check for GLARE
 			switch (method) {
 			case BYE:
+				// The BYE ends the dialog, so a request parked ahead of the ACK is answered 487 now
+				// rather than replayed to the application after the call is gone (Callflow.rejectGlareQueue).
+				Callflow.rejectGlareQueue(sipSession);
+				Callflow.setGlareState(sipSession, GlareState.ALLOW);
+				break;
 			case CANCEL:
 			case ACK:
 				Callflow.setGlareState(sipSession, GlareState.ALLOW);
 				break;
 			case REFER:
-				// do not allow more refers until we get a 200 OK (NOTIFY)
+				// One transfer at a time per dialog. A second REFER is refused while the first is
+				// still open (PROTECT) or its transfer has not finished (see Callflow.isReferPending).
+				// Back-to-back REFERs without waiting are what this guard exists for.
+				if (Callflow.getGlareState(sipSession) == GlareState.PROTECT || Callflow.isReferPending(sipSession)) {
+					sipLogger.warning(request, "AsyncSipServlet.doRequest - transfer in progress, sending 491 response");
+					sendResponse(request.createResponse(491));
+					return; // -- RETURN, STOP PROCESSING
+				}
 				Callflow.setGlareState(sipSession, GlareState.PROTECT);
+				Callflow.setReferPending(sipSession, true);
+				break;
+			case NOTIFY:
+				// A NOTIFY reports on a subscription, a usage of the dialog separate from its INVITEs,
+				// and the first one after a REFER can overtake the 202 (RFC 3515 section 2.4.4: the
+				// agent that issued the REFER "MUST be prepared to receive a NOTIFY before the REFER
+				// transaction completes"). So it is never refused, and it leaves the glare state as it
+				// is. The final one ends the transfer.
+				if (Callflow.endsRefer(request)) {
+					Callflow.setReferPending(sipSession, false);
+				}
+				break;
+			case PRACK:
+				// A PRACK acknowledges a reliable provisional response inside an INVITE transaction
+				// that is still open (RFC 3262), so it always arrives while this dialog is protected.
+				// Answering it 491 would leave the provisional unacknowledged and stall the call.
+				// It neither opens nor closes protection: the state is left as it is.
 				break;
 			default:
 				switch (Callflow.getGlareState(sipSession)) {
@@ -708,6 +774,20 @@ public abstract class AsyncSipServlet extends SipServlet
 					sipSession.setAttribute(GLARE_QUEUE, glareQueue);
 					return; // -- RETURN, STOP PROCESSING
 				default:
+					// Requests parked earlier go first: one that arrives while they wait is parked
+					// behind them, and the oldest is replayed now.
+					if (!glareQueue.isEmpty() && !Boolean.TRUE.equals(request.getAttribute(GLARE_REPLAY))) {
+						if (glareQueue.size() >= MAX_GLARE_QUEUE) {
+							sipLogger.warning(request, "AsyncSipServlet.doRequest - glare queue full ("
+									+ MAX_GLARE_QUEUE + "), sending 491 response");
+							sendResponse(request.createResponse(491));
+							return; // -- RETURN, STOP PROCESSING
+						}
+						glareQueue.add(request);
+						sipSession.setAttribute(GLARE_QUEUE, glareQueue);
+						drainGlareQueue(sipSession);
+						return; // -- RETURN, STOP PROCESSING
+					}
 					Callflow.setGlareState(sipSession, GlareState.PROTECT);
 				}
 			}
@@ -725,6 +805,7 @@ public abstract class AsyncSipServlet extends SipServlet
 
 						Callflow.getLogger().superArrow(Direction.RECEIVE, request, null,
 								requestLambda.getClass().getSimpleName());
+						traced(Direction.RECEIVE, request, null, requestLambda, "received");
 
 						requestLambda.accept(request);
 
@@ -735,9 +816,11 @@ public abstract class AsyncSipServlet extends SipServlet
 						if (callflow == null) {
 
 							Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, "null");
+							traced(Direction.RECEIVE, request, null, this.getClass().getName(), "received");
 							if (!method.equals(ACK)) {
 								SipServletResponse response = request.createResponse(501);
 								Callflow.getLogger().superArrow(Direction.SEND, null, response, "null");
+								traced(Direction.SEND, null, response, this.getClass().getName(), "doRequest");
 								Callflow.getLogger().warning(
 										"AsyncSipServlet.doRequest - No registered callflow for request method "
 												+ method
@@ -747,6 +830,7 @@ public abstract class AsyncSipServlet extends SipServlet
 
 						} else {
 							sipLogger.superArrow(Direction.RECEIVE, request, null, callflow.getClass().getSimpleName());
+							traced(Direction.RECEIVE, request, null, callflow, "process");
 
 							// Apply session.expiration (default 60 min) on inbound initial
 							// requests too. Callflow.sendRequest covers B2BUA/UAC dialogs
@@ -785,7 +869,9 @@ public abstract class AsyncSipServlet extends SipServlet
 			} else { // isProxy, for logging purposes only
 				boolean diagramLeft = true;
 				Callflow.getLogger().superArrow(Direction.RECEIVE, diagramLeft, request, null, "proxy", null);
+				traced(Direction.RECEIVE, request, null, "proxy", "received");
 				Callflow.getLogger().superArrow(Direction.SEND, !diagramLeft, request, null, "proxy", null);
+				traced(Direction.SEND, request, null, "proxy", "send");
 			}
 
 			// Replay a request parked during glare — but only now that the dialog is clear
@@ -808,14 +894,24 @@ public abstract class AsyncSipServlet extends SipServlet
 
 	}
 
+	/// Replay what is parked on a dialog that a [Callflow] answer has just released. A B2BUA answers
+	/// a relayed request from the far leg's callback, after [#doRequest] has returned, so neither of
+	/// the servlet's own drain points sees that release.
+	static void replayParked(SipSession sipSession) throws ServletException, IOException {
+		if (replayer != null) {
+			replayer.drainGlareQueue(sipSession);
+		}
+	}
+
 	/// Replay the oldest request parked by glare, but only while the dialog is clear (ALLOW).
 	///
 	/// Called at every point the glare state returns to ALLOW: the tail of [#doRequest] (after an
-	/// inbound ACK/BYE/CANCEL or an answered in-dialog request) and after a final response clears
+	/// inbound ACK or CANCEL, or an answered in-dialog request) and after a final response clears
 	/// glare in [#doResponse]. It removes one request and re-enters [#doRequest]; if that request is
 	/// an INVITE it flips the dialog back to PROTECT, which ends the drain until that transaction
 	/// finishes and clears glare again. So parked requests replay in FIFO order, one transaction at a
-	/// time, and never into a PROTECT dialog (which would 491 them).
+	/// time, and never into a PROTECT dialog (which would 491 them). A BYE empties the queue first
+	/// (see [Callflow#rejectGlareQueue]), so nothing replays after the dialog ends.
 	@SuppressWarnings("unchecked")
 	private void drainGlareQueue(SipSession sipSession) throws ServletException, IOException {
 		if (sipSession == null || !sipSession.isValid()) {
@@ -832,6 +928,7 @@ public abstract class AsyncSipServlet extends SipServlet
 		SipServletRequest glareRequest = glareQueue.removeFirst();
 		sipSession.setAttribute(GLARE_QUEUE, glareQueue);
 		sipLogger.warning(glareRequest, "AsyncSipServlet.drainGlareQueue - replaying request parked during glare");
+		glareRequest.setAttribute(GLARE_REPLAY, Boolean.TRUE);
 		doRequest(glareRequest);
 	}
 
@@ -1283,9 +1380,17 @@ public abstract class AsyncSipServlet extends SipServlet
 			// 491 every later re-INVITE. Releasing on the final response here makes the release
 			// independent of how the ACK is sent. A provisional (1xx) leaves the transaction
 			// open, so glare protection stays until the final arrives.
-			if (false == Callflow.provisional(response)) {
+			// A final response to a PRACK closes only the PRACK: the INVITE it belongs to is still
+			// open, so its protection stays.
+			if (false == Callflow.provisional(response) && !PRACK.equals(response.getMethod())) {
 				Callflow.setGlareState(sipSession, GlareState.ALLOW);
 				drainGlareQueue(sipSession);
+			}
+
+			// A refused REFER ends the transfer before it starts; a 2xx leaves it in progress until
+			// the final NOTIFY.
+			if (REFER.equals(method) && Callflow.failure(response)) {
+				Callflow.setReferPending(sipSession, false);
 			}
 
 			// Check for the possibility that an INVITE response comes back *after* the call
@@ -1295,6 +1400,7 @@ public abstract class AsyncSipServlet extends SipServlet
 				sipLogger.warning(response,
 						"AsyncSipServlet.doResponse - Linked session terminated (CANCEL?), but an INVITE response came through anyway. Killing the session with CallflowAckBye");
 				CallflowAckBye ackAndBye = new CallflowAckBye();
+				traced(Direction.RECEIVE, null, response, CallflowAckBye.class.getName(), "process");
 				try {
 					ackAndBye.process(response);
 				} catch (Exception ex2) {
@@ -1328,6 +1434,7 @@ public abstract class AsyncSipServlet extends SipServlet
 								// in between — removed.)
 								Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
 										this.getClass().getSimpleName());
+								traced(Direction.RECEIVE, null, response, this.getClass().getName(), "received");
 							}
 						}
 
@@ -1358,6 +1465,7 @@ public abstract class AsyncSipServlet extends SipServlet
 
 							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
 									callback.getClass().getSimpleName());
+							traced(Direction.RECEIVE, null, response, callback, "received");
 							callback.accept(response);
 						}
 
@@ -1378,7 +1486,9 @@ public abstract class AsyncSipServlet extends SipServlet
 				// For logging purposes
 				boolean diagramLeft = false;
 				Callflow.getLogger().superArrow(Direction.RECEIVE, diagramLeft, null, response, "proxy", null);
+				traced(Direction.RECEIVE, null, response, "proxy", "received");
 				Callflow.getLogger().superArrow(Direction.SEND, !diagramLeft, null, response, "proxy", null);
+				traced(Direction.SEND, null, response, "proxy", "send");
 
 				// For 'loose' routing, since no BYE is received, we must manually invalidate
 				// the session
@@ -1582,6 +1692,96 @@ public abstract class AsyncSipServlet extends SipServlet
 			// Failed to terminate downstream call - nothing more we can do
 			sipLogger.severe(response, "AsyncSipServlet.doResponse - Logging #ex5");
 			sipLogger.severe(response, ex5);
+		}
+	}
+
+	/// The far end never acknowledged our 2xx to its INVITE: the container retransmitted it for 64*T1
+	/// and gave up. RFC 3261 section 13.3.1.4: "the dialog is confirmed, but the session SHOULD be
+	/// terminated. This is accomplished with a BYE". Until then the dialog sits in `QUEUE`, parking or
+	/// refusing everything that arrives and refusing our own INVITEs and UPDATEs, for the life of the
+	/// call. So hang up this dialog and the one linked to it; our BYE answers the parked requests 487.
+	///
+	/// Override for another policy.
+	@Override
+	public void noAckReceived(SipErrorEvent event) {
+		SipServletRequest invite = event.getRequest();
+		SipSession sipSession = invite.getSession();
+		sipLogger.warning(invite, "AsyncSipServlet.noAckReceived - no ACK for our 2xx, ending the call");
+		Unconfirmed ender = new Unconfirmed();
+		SipSession linkedSession = Callflow.getLinkedSession(sipSession);
+		ender.end(sipSession);
+		if (sipSession.isValid()) {
+			Callflow.setGlareState(sipSession, GlareState.ALLOW);
+		}
+		ender.end(linkedSession);
+	}
+
+	/// The far end never acknowledged a reliable provisional response: the container retransmitted it
+	/// for 64*T1 and gave up. RFC 3262 section 3: "the UAS SHOULD reject the original request with a
+	/// 5xx response". The INVITE is answered 500 and the linked leg, if any, is ended.
+	///
+	/// Override for another policy.
+	@Override
+	public void noPrackReceived(SipErrorEvent event) {
+		SipServletRequest invite = event.getRequest();
+		sipLogger.warning(invite, "AsyncSipServlet.noPrackReceived - no PRACK for our reliable provisional, rejecting the INVITE 500");
+		try {
+			if (!invite.isCommitted()) {
+				sendResponse(invite.createResponse(500));
+			}
+		} catch (Exception e) {
+			sipLogger.warning(invite, "AsyncSipServlet.noPrackReceived - unable to reject the INVITE: " + e.getMessage());
+		}
+		new Unconfirmed().end(Callflow.getLinkedSession(invite.getSession()));
+	}
+
+	/// No NOTIFY arrived for a subscription we started. Logged only: the application that sent the
+	/// SUBSCRIBE or REFER owns what happens next.
+	@Override
+	public void noNotifyReceived(SipErrorEvent event) {
+		sipLogger.warning(event.getRequest(), "AsyncSipServlet.noNotifyReceived - no NOTIFY for our "
+				+ event.getRequest().getMethod());
+	}
+
+	/// Ends a leg of a call the far end never confirmed, through the framework's own send path so
+	/// the glare bookkeeping applies (a BYE answers the parked requests 487, see
+	/// [Callflow#rejectGlareQueue]). A confirmed dialog gets a BYE; one still ringing gets a CANCEL.
+	private static class Unconfirmed extends Callflow {
+		private static final long serialVersionUID = 1L;
+
+		@Override
+		public void process(SipServletRequest request) throws ServletException, IOException {
+		}
+
+		void end(SipSession sipSession) {
+			if (sipSession == null || !sipSession.isValid()) {
+				// diagnostic: remove once the no-ACK teardown is proven on both legs
+				sipLogger.warning("AsyncSipServlet.Unconfirmed.end - no dialog to end: "
+						+ (sipSession == null ? "null" : "invalid"));
+				return;
+			}
+			try {
+				// diagnostic: remove once the no-ACK teardown is proven on both legs
+				SipServletRequest active = sipSession.getActiveInvite(UAMode.UAC);
+				sipLogger.warning(sipSession, "AsyncSipServlet.Unconfirmed.end - state=" + sipSession.getState()
+						+ ", activeUacInvite=" + (active == null ? "null" : "committed=" + active.isCommitted()));
+				switch (sipSession.getState()) {
+				case CONFIRMED:
+					sendRequest(sipSession.createRequest(BYE));
+					break;
+				case INITIAL:
+				case EARLY:
+					SipServletRequest invite = sipSession.getActiveInvite(UAMode.UAC);
+					if (invite != null && invite.isCommitted()) {
+						sendRequest(invite.createCancel());
+					}
+					break;
+				default:
+					break;
+				}
+			} catch (Exception e) {
+				sipLogger.warning(sipSession, "AsyncSipServlet.Unconfirmed - unable to end the dialog: " + e.getMessage());
+			}
 		}
 	}
 
@@ -1839,6 +2039,7 @@ public abstract class AsyncSipServlet extends SipServlet
 			return;
 		}
 		Callflow.getLogger().superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
+		traced(Direction.SEND, null, response, this.getClass().getName(), "sendResponse");
 		try {
 			response.send();
 		} catch (Exception ex1) {

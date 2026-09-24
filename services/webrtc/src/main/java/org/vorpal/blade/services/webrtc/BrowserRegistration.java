@@ -116,7 +116,7 @@ public class BrowserRegistration extends Callflow {
 	private void send(String aor, int expires) throws Exception {
 		// By key, so registration, refresh, deregistration and every inbound
 		// targeted INVITE for this browser meet on one session.
-		SipApplicationSession sas = getSipFactory().createApplicationSessionByKey(aor);
+		SipApplicationSession sas = registrationSession(aor);
 		sas.setAttribute(BrowserSignals.BROWSER_AOR, aor);
 		// This session IS the registration: it must outlive the REGISTER
 		// transaction, because it is what the encodeURI contact targets. Left
@@ -169,12 +169,23 @@ public class BrowserRegistration extends Callflow {
 		});
 	}
 
+	/// The session keyed on `aor`: the one a previous connection registered on, or a new one.
+	///
+	/// Found, never re-created. `SipFactory.createApplicationSessionByKey` throws on this container
+	/// when a session with the key still exists ("The application session with the specified key
+	/// already exists!"), which is exactly the case of a browser that reloads, or reconnects after
+	/// a network change, while its first registration is still alive: its REGISTER was never sent,
+	/// and the binding was left to lapse unrefreshed.
+	private static SipApplicationSession registrationSession(String aor) {
+		return getSipUtil().getApplicationSessionByKey(aor, true);
+	}
+
 	// ---- refresh ------------------------------------------------------------------------------
 
 	/// Start refreshing this binding, once. A page reload re-registers on the same by-key session,
 	/// so without the guard every reload would leave another timer running against it.
 	private void armRefresh(String aor, int expires) {
-		SipApplicationSession sas = getSipFactory().createApplicationSessionByKey(aor);
+		SipApplicationSession sas = registrationSession(aor);
 		if (sas.getAttribute(REFRESH_TIMER) != null) {
 			return;
 		}
