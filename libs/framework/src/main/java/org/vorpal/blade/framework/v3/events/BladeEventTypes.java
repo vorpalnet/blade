@@ -140,6 +140,14 @@ public final class BladeEventTypes {
 	/// fuses it with the other signals and publishes [#CALL_RISK_ASSESSED].
 	public static final String CALL_VOICE_ASSESSED = "org.vorpal.blade.call.voice.assessed";
 
+	/// Someone asked for another party to be brought into a live call: a
+	/// supervisor, a specialist, an interpreter. A request, not a result: the
+	/// application that holds the call's media dials the party onto the call's
+	/// mix if its own rules allow the destination, and ignores it otherwise.
+	/// Attributes carry `target` (the SIP address to dial), `label` (the name
+	/// the transcript gives the new voice) and `requestedBy`.
+	public static final String CALL_PARTY_REQUESTED = "org.vorpal.blade.call.party.requested";
+
 	// -------------------------------------------------------------- the transfer
 
 	/// A REFER arrived from the transferor, before anything was done about it.
@@ -226,6 +234,8 @@ public final class BladeEventTypes {
 			return CALL_UTTERANCE;
 		case "voiceAssessed":
 			return CALL_VOICE_ASSESSED;
+		case "partyRequested":
+			return CALL_PARTY_REQUESTED;
 		case "transferRequested":
 			return TRANSFER_REQUESTED;
 		case "transferInitiated":

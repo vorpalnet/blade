@@ -73,6 +73,13 @@ public class AgentConsoleEndpoint {
 		hello.put("t", "hello");
 		hello.put("user", principal.getName());
 		hello.put("mayReport", mayReport(session));
+		AgentSettings settings = AgentServlet.settings();
+		com.fasterxml.jackson.databind.node.ArrayNode people = hello.putArray("people");
+		if (settings != null && mayReport(session)) {
+			for (String name : settings.getPeople().keySet()) {
+				people.add(name);
+			}
+		}
 		AgentConsoleRegistry.send(session, hello.toString());
 		// Then what this screen would already be showing had it been open: the
 		// last few calls, each as its pop followed by every update, oldest first.
@@ -102,8 +109,12 @@ public class AgentConsoleEndpoint {
 		}
 
 		String type = str(in, "t");
+		if ("addParty".equals(type)) {
+			addParty(session, principal.getName(), str(in, "vorpalId"), str(in, "label"));
+			return;
+		}
 		if (!"dispose".equals(type)) {
-			return; // the page speaks only "dispose" upstream
+			return; // the page speaks only "dispose" and "addParty" upstream
 		}
 
 		DispositionService.Disposition d = new DispositionService.Disposition();
@@ -162,6 +173,24 @@ public class AgentConsoleEndpoint {
 		// console holding this call takes it down, and a reload will not bring it
 		// back. The agent's own console gets the result first, then the clear.
 		AgentConsoleRegistry.cleared(d.vorpalId, principal.getName());
+	}
+
+	/// Bring someone into the call, by name. Gated like an update: an account that
+	/// may not update calls may not add to them.
+	private static void addParty(Session session, String agent, String vorpalId, String label) {
+		ObjectNode reply = MAPPER.createObjectNode();
+		reply.put("t", "addPartyResult");
+		reply.put("vorpalId", vorpalId);
+		reply.put("label", label);
+		String why = !mayReport(session) ? "your account is not permitted to bring anyone in"
+				: PartyService.request(vorpalId, label, agent);
+		reply.put("ok", why == null);
+		if (why != null) {
+			reply.put("error", why);
+		}
+		AgentConsoleRegistry.log("agent: bring " + label + " into " + vorpalId + " by " + agent + " -> "
+				+ (why == null ? "requested" : why));
+		AgentConsoleRegistry.send(session, reply.toString());
 	}
 
 	@OnClose

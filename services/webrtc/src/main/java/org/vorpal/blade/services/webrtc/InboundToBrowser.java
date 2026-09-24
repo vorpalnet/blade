@@ -183,8 +183,10 @@ public class InboundToBrowser extends WebrtcCallflow {
 		BrowserSignals.expect(app, SignalProtocol.CALL_HANGUP, hangup -> onBrowserHungUp(invite, app));
 		expectDtmf(app, invite.getSession());
 		expectReoffer(app, invite.getSession(), aor, callId, null);
+		expectFarSideEvents(invite.getSession(), aor, callId);
 
 		SipServletResponse ok = invite.createResponse(200);
+		advertiseEvents(ok);
 		ok.setContent(browserAnswer.getBytes(StandardCharsets.UTF_8), SDP_TYPE);
 		established(ok, aor, callId);
 		// Nothing is owed to the ACK here: the browser's answer went out in the 200 OK and the two
@@ -263,9 +265,11 @@ public class InboundToBrowser extends WebrtcCallflow {
 			BrowserSignals.expect(app, SignalProtocol.CALL_HANGUP, hangup -> onBrowserHungUp(invite, app));
 			expectDtmf(app, invite.getSession());
 			expectReoffer(app, invite.getSession(), aor, callId, networkLeg);
+			expectFarSideEvents(invite.getSession(), aor, callId);
 
 			if (networkAnswer != null) {
 				SipServletResponse ok = invite.createResponse(200);
+				advertiseEvents(ok);
 				ok.setContent(networkAnswer, SDP_TYPE);
 				established(ok, aor, callId);
 				sendResponse(ok, ack -> connected(ack, aor, callId, true));

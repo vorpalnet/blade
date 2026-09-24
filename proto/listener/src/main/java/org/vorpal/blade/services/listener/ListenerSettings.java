@@ -19,6 +19,7 @@ public class ListenerSettings extends Configuration implements Serializable {
 	private boolean transcribe = true;
 	private boolean publishUtterances = true;
 	private LinkedList<String> scoreVoices = new LinkedList<>();
+	private LinkedList<String> partyTargets = new LinkedList<>();
 	private LinkedList<String> recordAttributes = new LinkedList<>();
 	private LinkedList<String> transcribeHints = new LinkedList<>();
 	private LinkedList<String> transcribeHintAttributes = new LinkedList<>();
@@ -90,6 +91,17 @@ public class ListenerSettings extends Configuration implements Serializable {
 
 	public void setScoreVoices(LinkedList<String> scoreVoices) {
 		this.scoreVoices = scoreVoices;
+	}
+
+	@JsonPropertyDescription("Where a party may be brought into a live call from, as regular expressions on the SIP "
+			+ "address to dial, such as sip:supervisor@pbx\\.example\\.com. A request for any other address is "
+			+ "refused, so an agent screen cannot dial the world. Empty refuses every request.")
+	public LinkedList<String> getPartyTargets() {
+		return partyTargets;
+	}
+
+	public void setPartyTargets(LinkedList<String> partyTargets) {
+		this.partyTargets = partyTargets;
 	}
 
 	/// Whether anything configured here needs the call's audio: when not, the

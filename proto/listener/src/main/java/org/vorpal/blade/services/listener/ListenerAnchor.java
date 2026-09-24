@@ -2,14 +2,12 @@ package org.vorpal.blade.services.listener;
 
 import java.io.IOException;
 import java.net.URI;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import javax.media.mscontrol.MediaEventListener;
 import javax.media.mscontrol.MediaSession;
 import javax.media.mscontrol.MsControlException;
 import javax.media.mscontrol.join.Joinable;
@@ -22,20 +20,13 @@ import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.Callback;
 import org.vorpal.blade.framework.v3.media.CallAnalyzer;
+import org.vorpal.blade.framework.v3.media.ConversationRecording;
+import org.vorpal.blade.framework.v3.media.Hearing;
 import org.vorpal.blade.framework.v3.media.MediaCallflow;
-import org.vorpal.blade.framework.v3.media.RecordingArchive;
-import org.vorpal.blade.framework.v3.media.TranscriberEvent;
 import org.vorpal.blade.framework.v3.media.manifest.ContextBias;
 import org.vorpal.blade.framework.v3.media.manifest.MediaGap;
 import org.vorpal.blade.framework.v3.media.manifest.Redactor;
 import org.vorpal.blade.framework.v3.media.manifest.ConversationManifest;
-import org.vorpal.blade.framework.v3.media.manifest.Conversations;
-import org.vorpal.blade.framework.v3.media.manifest.ManifestStore;
-import org.vorpal.blade.framework.v3.media.manifest.MediaSegment;
-import org.vorpal.blade.framework.v3.media.manifest.RecordingTrack;
-import org.vorpal.blade.framework.v3.media.manifest.TranscriptArchive;
-import org.vorpal.blade.framework.v3.media.manifest.TranscriptRef;
-import org.vorpal.blade.framework.v3.media.manifest.Utterance;
 
 /// Puts the media server in the middle of a call that would otherwise pass
 /// through, and records what crosses it.
@@ -92,27 +83,10 @@ public class ListenerAnchor extends MediaCallflow {
 		/// was even called and handed back when the callee answers.
 		public volatile byte[] answerForCaller;
 
-		/// The logical destination the current conversation records to, so a
-		/// boundary and teardown can release it. Null when nothing is recording.
-		public volatile URI recording;
-
-		/// What this conversation's recording is, as it will be stored. Held
-		/// while the call is up and committed when it ends. Node-local like the
-		/// rest of this object: the scratchpad copy is what survives a failover,
-		/// and a sweep finalises it if this node does not come back.
-		public volatile ConversationManifest manifest;
-
-		/// When recording started, for the conversation's own duration.
-		public volatile long startedAtMillis;
-
-		/// The transcript being written for the current conversation, or null
-		/// when none is. Its utterance count is finalised when the manifest
-		/// closes; until then the archive's listing is the count.
-		public volatile TranscriptRef transcript;
-
-		/// Next utterance sequence, assigned on arrival so the stored name is
-		/// stable whatever order the writes complete in.
-		public final AtomicInteger utterances = new AtomicInteger();
+		/// The conversation recording now, or null when nothing is: its
+		/// manifest, its stored transcript and its destination. Replaced at each
+		/// conversation boundary; the one it replaces closes on its own.
+		public volatile ConversationRecording record;
 
 		/// The direction the caller asked for in a re-INVITE still being
 		/// answered, so the response can carry its mirror. Null between
@@ -130,10 +104,30 @@ public class ListenerAnchor extends MediaCallflow {
 		/// Whether the re-INVITE being answered came from the caller.
 		public volatile boolean reinviteFromCaller = true;
 
+		/// The call's Vorpal-ID as the event bus writes it (eight hex digits), so a
+		/// request that names the call can find this anchor.
+		public volatile String vorpalId;
+
+		/// Parties brought into the call after it began, by the URI of their leg:
+		/// the name the transcript gives each, and the SIP dialog that reaches them.
+		public final Map<String, Party> parties = new ConcurrentHashMap<>();
+
 		/// The media server's answer for a leg being rebuilt because its party
 		/// moved, completed when the fresh endpoint has negotiated. Null when no
 		/// move is in progress.
 		public volatile java.util.concurrent.CompletableFuture<byte[]> moveAnswer;
+	}
+
+	/// A party brought into a live call ([ListenerAnchor#addParty]).
+	public static final class Party {
+		public final String label;
+		public final NetworkConnection leg;
+		public volatile String dialogId;
+
+		Party(String label, NetworkConnection leg) {
+			this.label = label;
+			this.leg = leg;
+		}
 	}
 
 	/// Follow a party that moved its media: build it a fresh leg on the media
@@ -204,11 +198,13 @@ public class ListenerAnchor extends MediaCallflow {
 	/// Milliseconds since this conversation's recording started, or 0 before
 	/// it has.
 	private static long conversationMillis(Anchor anchor) {
-		return (anchor.startedAtMillis <= 0) ? 0L : Math.max(0L, System.currentTimeMillis() - anchor.startedAtMillis);
+		ConversationRecording record = anchor.record;
+		return (record == null) ? 0L : record.millis();
 	}
 
 	private static void noteMove(Anchor anchor, String party, long fromMillis, long toMillis, String address) {
-		ConversationManifest manifest = anchor.manifest;
+		ConversationRecording record = anchor.record;
+		ConversationManifest manifest = (record == null) ? null : record.manifest();
 		if (manifest == null || manifest.getTracks().isEmpty()) {
 			return;
 		}
@@ -234,10 +230,6 @@ public class ListenerAnchor extends MediaCallflow {
 		}
 	}
 
-	/// The one transcript each conversation gets while it runs. A later re-run
-	/// with a better model appends another id; this one is what was heard live.
-	static final String LIVE_TRANSCRIPT = "live";
-
 	/// Never dispatched. This callflow is driven directly by the servlet; the
 	/// media verbs it inherits stash their continuations on the application
 	/// session, so they do not need this instance to survive.
@@ -260,6 +252,12 @@ public class ListenerAnchor extends MediaCallflow {
 		anchor.caller = ms.createNetworkConnection(NetworkConnection.BASIC);
 		anchor.callee = ms.createNetworkConnection(NetworkConnection.BASIC);
 		LIVE.put(app.getId(), anchor);
+		try {
+			Long id = org.vorpal.blade.framework.v2.analytics.Analytics.getVorpalId(app);
+			anchor.vorpalId = (id == null) ? null : String.format("%08X", id);
+		} catch (Throwable ignore) {
+			// no correlator: the call cannot be found by a bus request, and nothing else needs it
+		}
 
 		// The two legs meet through a mixer so that one recorder captures both
 		// parties. A recorder tapping a single leg receives only that party.
@@ -344,7 +342,6 @@ public class ListenerAnchor extends MediaCallflow {
 			}
 			if (cfg.isRecord()) {
 				URI destination = MediaCallflow.conversationUri(app);
-				anchor.recording = destination;
 				Map<String, String> attributes = MediaCallflow.recordingAttributes(app, cfg.getRecordAttributes());
 				for (String party : new String[] { "from", "to" }) {
 					Object number = app.getAttribute("listener." + party);
@@ -355,7 +352,7 @@ public class ListenerAnchor extends MediaCallflow {
 				record(anchor.mg, destination, attributes, done -> {
 					// The recording runs until a boundary or teardown stops it.
 				});
-				openManifest(anchor, destination, attributes);
+				anchor.record = ConversationRecording.open(destination, attributes);
 				sipLogger.info("ListenerAnchor: recording " + destination.getScheme() + ":...");
 			}
 			boolean archive = cfg.isRecord() && cfg.isTranscribe();
@@ -392,20 +389,7 @@ public class ListenerAnchor extends MediaCallflow {
 				}
 			}
 		}
-		if (legs.isEmpty()) {
-			return;
-		}
-		MediaCallflow.assessVoice(anchor.mg, legs, event -> {
-			String party = partyLabel(anchor, event.getParty());
-			Heard.voice(app, party, event.getScore(), event.getModel(), event.getOffsetMillis());
-			for (CallAnalyzer analyzer : CallAnalyzer.installed()) {
-				try {
-					analyzer.voiceAssessed(app, party, event.getScore(), event.getModel());
-				} catch (Throwable t) {
-					sipLogger.warning("ListenerAnchor: an analyzer failed on a voice score: " + t);
-				}
-			}
-		});
+		Hearing.scoreVoices(app, anchor.mg, legs, uri -> partyLabel(anchor, uri), true, true, null);
 	}
 
 	/// Stop the current conversation's recording and release its destination.
@@ -418,7 +402,8 @@ public class ListenerAnchor extends MediaCallflow {
 		if (anchor == null) {
 			return;
 		}
-		final Closing closing = beginClose(anchor);
+		ConversationRecording record = anchor.record;
+		anchor.record = null;
 		stopTranscribing(anchor);
 		try {
 			if (anchor.mg != null) {
@@ -427,22 +412,13 @@ public class ListenerAnchor extends MediaCallflow {
 		} catch (Exception ignore) {
 			// best effort
 		}
-		final URI destination = anchor.recording;
-		anchor.recording = null;
 		// The conversation that just ended becomes a record now, not at the end
-		// of the call. Its manifest was taken off the anchor above, so the next
-		// conversation cannot touch it; the commit and the release are round
-		// trips and run off the signalling thread, in the same order teardown
-		// uses: the recorder's closing flush rode the stop, so the archive can
-		// be read back, and only then is the capability released.
-		TEARDOWN.execute(() -> {
-			try {
-				close(closing);
-				MediaCallflow.releaseRecording(destination);
-			} catch (Throwable t) {
-				sipLogger.severe("ListenerAnchor: closing the previous conversation of " + appId + " failed: " + t);
-			}
-		});
+		// of the call. It was taken off the anchor above, so the next
+		// conversation cannot touch it; the commit and the release run off the
+		// signalling thread, in the order ConversationRecording keeps.
+		if (record != null) {
+			record.close(null);
+		}
 	}
 
 	/// Release the whole anchor at the end of the call, **off the signalling
@@ -475,80 +451,31 @@ public class ListenerAnchor extends MediaCallflow {
 		if (anchor == null) {
 			return;
 		}
-		final Closing closing = beginClose(anchor);
-		TEARDOWN.execute(() -> {
-			// Catch Throwable, not Exception. An executor drops whatever a task
-			// throws, so a NoSuchMethodError or any other Error here vanishes
-			// without a line anywhere: the recording simply never gets committed
-			// and nothing says why. That has already cost an afternoon once.
+		hangUpParties(appId, anchor);
+		ConversationRecording record = anchor.record;
+		anchor.record = null;
+		Runnable stopMedia = () -> {
+			stopTranscribing(anchor);
 			try {
-				stopTranscribing(anchor);
-				try {
-					if (anchor.mg != null) {
-						anchor.mg.stop();
-					}
-				} catch (Exception ignore) {
-					// best effort
+				if (anchor.mg != null) {
+					anchor.mg.stop();
 				}
-				try {
-					anchor.ms.release();
-				} catch (Exception ignore) {
-					// best effort
-				}
-				close(closing);
-				// After the media session is gone, so whatever the media server
-				// still had to write has been written.
-				MediaCallflow.releaseRecording(anchor.recording);
-			} catch (Throwable t) {
-				sipLogger.severe("ListenerAnchor: teardown failed for " + appId + ": " + t);
-				for (StackTraceElement frame : t.getStackTrace()) {
-					sipLogger.severe("    at " + frame);
-				}
+			} catch (Exception ignore) {
+				// best effort
 			}
-		});
+			try {
+				anchor.ms.release();
+			} catch (Exception ignore) {
+				// best effort
+			}
+		};
+		if (record != null) {
+			record.close(stopMedia);
+		} else {
+			ConversationRecording.teardown(stopMedia);
+		}
 	}
 
-	/// Where media teardown runs.
-	///
-	/// A small pool of its own rather than the common pool: this work is a
-	/// sequence of blocking network round trips, and the common pool is sized for
-	/// computation, so enough simultaneous hangups would starve everything else
-	/// sharing it. Daemon threads, so a redeploy is not held open by one.
-	private static final java.util.concurrent.ExecutorService TEARDOWN =
-			java.util.concurrent.Executors.newFixedThreadPool(4, runnable -> {
-				Thread thread = new Thread(runnable, "listener-teardown");
-				thread.setDaemon(true);
-				return thread;
-			});
-
-	/// Begin the conversation's live transcript.
-	///
-	/// ## Each party is heard on its own
-	///
-	/// The recorder taps the mix, and a transcript drawn from a mix has to guess
-	/// who spoke. The transcriber does not transcribe the mix: it hears each leg
-	/// separately and says which one an utterance came from, so the transcript
-	/// is attributed per party even though the audio is stored as one track.
-	/// This method turns the driver's name for a leg into `caller` or `callee`,
-	/// which is the only thing the driver cannot know.
-	///
-	/// ## Written as it is heard
-	///
-	/// Every utterance goes to the [TranscriptArchive] as its own object the
-	/// moment it arrives, with a sequence assigned here. The archive is
-	/// write-once, so a transcript cannot be one object that grows; and because
-	/// the pieces are durable as they land, a node that dies mid-call loses
-	/// nothing it already heard. The write leaves the driver's thread first: the
-	/// event arrives on the media client's socket thread, which must not block on
-	/// object storage.
-	///
-	/// ## What can be missing, and how it shows
-	///
-	/// Without a transcriber in the driver or an archive on the classpath the
-	/// conversation is recorded without a transcript and the log says so at
-	/// warning. An utterance the media server's record pass shed under load
-	/// never arrives here at all, by design, and is a gap in the sequence rather
-	/// than a line of lesser text.
 	/// What this call is likely to contain: the deployment's standing phrases
 	/// plus whatever the named session attributes hold for this call, such as
 	/// a caller's name a Selector looked up from the number.
@@ -587,95 +514,27 @@ public class ListenerAnchor extends MediaCallflow {
 		return phrases;
 	}
 
+	/// Begin the conversation's transcript.
+	///
+	/// The transcriber does not transcribe the mix: it hears each leg
+	/// separately and says which one an utterance came from, so the transcript
+	/// is attributed per party even though the audio is stored as one track.
+	/// This application's only part is turning the driver's name for a leg into
+	/// `caller` or `callee`, which the driver cannot know; hearing, publishing
+	/// and the analyzers are [Hearing]'s, and storing each utterance as it lands
+	/// is [ConversationRecording#transcript]'s. Without a transcriber in the
+	/// driver or an archive on the classpath the conversation is recorded
+	/// without a transcript and the log says so at warning.
 	private void startTranscribing(SipApplicationSession app, Anchor anchor, boolean archiving, boolean publish,
 			List<String> expected, Redactor redactor) {
 		final ContextBias bias = ContextBias.of(expected);
-		ConversationManifest manifest = anchor.manifest;
-		TranscriptArchive archive = archiving ? TranscriptArchive.installed() : null;
-		if (archiving && (manifest == null || archive == null)) {
-			if (manifest != null) {
-				sipLogger.warning("ListenerAnchor: no TranscriptArchive is installed, so " + manifest.getConversation()
-						+ " is recorded without a transcript");
-			}
-			archive = null;
-		}
-		final TranscriptArchive store = archive;
-		final String conversation = (manifest == null) ? null : manifest.getConversation();
-		TranscriptRef ref = null;
-		if (store != null) {
-			ref = new TranscriptRef(LIVE_TRANSCRIPT, "en-US", TranscriptRef.Attribution.PER_TRACK);
-			ref.getSource().add("mix");
-			// REDACTED says a reader is shown the redacted rendition unless they
-			// hold phi:unredact; the verbatim text is stored either way.
-			ref.setRedaction(redactor.isEmpty() ? TranscriptRef.Redaction.VERBATIM : TranscriptRef.Redaction.REDACTED);
-			ref.setObject("transcript/" + LIVE_TRANSCRIPT + "/");
-			ref.setCreatedUtc(Instant.now().toString());
-			ref.setComplete(false);
-		}
-		anchor.transcript = ref;
-		anchor.utterances.set(0);
-
-		MediaEventListener<TranscriberEvent> hearing = event -> {
-			Utterance utterance = event.getUtterance();
-			String party = partyLabel(anchor, utterance.getParty());
-			utterance.setParty(party);
-			// The correction keeps what was heard on the utterance; the
-			// recognizer's own biasing, if the driver has any, already ran.
-			bias.apply(utterance);
-			// After the correction, so a member id the bias restored is found
-			// as one and a protected span never survives in the text a
-			// reviewer without phi:unredact is shown, or in what the bus carries.
-			redactor.apply(utterance);
-			boolean live = TranscriberEvent.Type.LIVE_UTTERANCE.equals(event.getEventType());
-			if (live) {
-				if (publish) {
-					Heard.utterance(app, utterance);
-				}
-			} else if (store != null) {
-				utterance.setSequence(anchor.utterances.incrementAndGet());
-				TranscriptRef current = anchor.transcript;
-				if (current != null && current.getEngine() == null) {
-					current.setEngine(utterance.getEngine());
-					current.setModel(utterance.getModel());
-				}
-				STORE.execute(() -> {
-					try {
-						store.append(conversation, LIVE_TRANSCRIPT, utterance);
-					} catch (Exception e) {
-						sipLogger.severe("ListenerAnchor: utterance " + utterance.getSequence() + " of " + conversation
-								+ " was not stored: " + e);
-					}
-				});
-			}
-			// Analyzers are in process and store nothing, so they are given the
-			// verbatim words: a rule about what a caller asks for must not be
-			// blinded by the mask that protects the caller's own details.
-			for (CallAnalyzer analyzer : CallAnalyzer.installed()) {
-				try {
-					analyzer.heard(app, party, utterance, live);
-				} catch (Throwable t) {
-					sipLogger.warning("ListenerAnchor: an analyzer failed on an utterance: " + t);
-				}
-			}
-		};
-		if (!transcribe(anchor.mg, hearing)) {
-			anchor.transcript = null;
+		ConversationRecording record = anchor.record;
+		Hearing.Ear toArchive = (archiving && record != null) ? record.transcript(!redactor.isEmpty()) : null;
+		if (!Hearing.start(app, anchor.mg, uri -> partyLabel(anchor, uri), bias, redactor, publish, true, toArchive)) {
 			return;
 		}
 		if (!bias.isEmpty()) {
 			expectInTranscript(anchor.mg, expected);
-		}
-		if (ref != null) {
-			manifest.addTranscript(ref);
-			try {
-				ManifestStore manifests = ManifestStore.installed();
-				if (manifests != null) {
-					manifests.put(manifest);
-				}
-			} catch (Exception e) {
-				sipLogger.warning("ListenerAnchor: the manifest for " + conversation
-						+ " does not yet mention its transcript: " + e);
-			}
 		}
 	}
 
@@ -688,6 +547,10 @@ public class ListenerAnchor extends MediaCallflow {
 		}
 		if (isLeg(anchor.callee, party)) {
 			return "callee";
+		}
+		Party added = (party == null) ? null : anchor.parties.get(party);
+		if (added != null) {
+			return added.label;
 		}
 		return (party != null) ? party : "unknown";
 	}
@@ -706,178 +569,133 @@ public class ListenerAnchor extends MediaCallflow {
 			return;
 		}
 		try {
-			MediaCallflow.stopTranscribing(anchor.mg);
+			Hearing.stop(anchor.mg);
 		} catch (Exception e) {
 			sipLogger.warning("ListenerAnchor: the transcription would not stop: " + e);
 		}
 	}
 
-	/// Where utterances are written.
+	/// The SIP session attribute that marks a dialog to a party brought into the
+	/// call, holding the party's leg URI, so the servlet routes its requests here
+	/// rather than to the two-party B2BUA.
+	static final String PARTY = "org.vorpal.blade.listener.party";
+
+	/// Bring another party into the call: a fresh leg on the call's mixer, an
+	/// INVITE to `target` carrying the media server's offer, and the answer
+	/// applied when they pick up. The recording, the transcriber and the voice
+	/// scoring follow the mix, so the new voice is recorded, transcribed under
+	/// `label` and heard by every analyzer with nothing else to arm.
 	///
-	/// A pool of its own, like [#TEARDOWN] and for the same reason: each write is
-	/// a blocking round trip to object storage, and the thread that delivers an
-	/// utterance is the media client's socket thread, which every other media
-	/// event on this node shares. Ordering does not matter here, because the
-	/// sequence was assigned on arrival and names the object.
-	private static final java.util.concurrent.ExecutorService STORE =
-			java.util.concurrent.Executors.newFixedThreadPool(4, runnable -> {
-				Thread thread = new Thread(runnable, "listener-transcript");
-				thread.setDaemon(true);
-				return thread;
-			});
-
-	/// Open this conversation's manifest and put it in the scratchpad.
-	///
-	/// One track, because this topology records the mix: a hub port that
-	/// contributes nothing receives every other participant, so one recorder
-	/// captures the whole conversation however many parties join. Per-leg
-	/// recording would add a track each and is the same format.
-	///
-	/// No clock anchor is written. Anchoring a track to absolute time needs the
-	/// RTP-to-NTP correspondence from an RTCP sender report, which this
-	/// application does not see. The epoch and the track's own offsets place a
-	/// lone track correctly; what is missing is drift correction between several
-	/// senders, and inventing an anchor that was never observed would be worse
-	/// than recording that there is not one.
-	///
-	/// No level either, for now. The media server measures the audio and nothing
-	/// carries the number back yet, so every manifest currently reports
-	/// `no-level` and a silent recording would still be invisible. That is the
-	/// next thing worth closing.
-	private static void openManifest(Anchor anchor, URI destination, Map<String, String> attributes) {
-		try {
-			String conversation = destination.getSchemeSpecificPart();
-			ConversationManifest manifest = new ConversationManifest(conversation,
-					attributes.get("call"), Instant.now());
-			manifest.getAttributes().putAll(attributes);
-
-			RecordingTrack mix = new RecordingTrack("mix", RecordingTrack.Role.MIX);
-			mix.setOffsetMillis(0L);
-			manifest.addTrack(mix);
-
-			anchor.manifest = manifest;
-			anchor.startedAtMillis = System.currentTimeMillis();
-
-			ManifestStore store = ManifestStore.installed();
-			if (store != null) {
-				store.put(manifest);
-			}
-		} catch (Exception e) {
-			// A conversation that cannot be described is still a conversation.
-			// The audio is already being written, and losing the call to protect
-			// its manifest would be the wrong trade.
-			sipLogger.severe("ListenerAnchor: could not open the manifest: " + e);
-		}
-	}
-
-	/// What a conversation leaves behind to be committed once its media has
-	/// stopped: the manifest, its transcript, and how many utterances were
-	/// stored. Taken off the anchor synchronously, so the next conversation on
-	/// the same call starts from a clean anchor while this one is still being
-	/// written down.
-	static final class Closing {
-		final ConversationManifest manifest;
-		final TranscriptRef transcript;
-		final int utterances;
-		final long startedAtMillis;
-
-		Closing(ConversationManifest manifest, TranscriptRef transcript, int utterances, long startedAtMillis) {
-			this.manifest = manifest;
-			this.transcript = transcript;
-			this.utterances = utterances;
-			this.startedAtMillis = startedAtMillis;
-		}
-	}
-
-	/// Detach the current conversation's record from the anchor. Returns a
-	/// closing with a null manifest when nothing was recording.
-	private static Closing beginClose(Anchor anchor) {
-		ConversationManifest manifest = anchor.manifest;
-		anchor.manifest = null;
-		TranscriptRef transcript = anchor.transcript;
-		anchor.transcript = null;
-		return new Closing(manifest, transcript, anchor.utterances.get(), anchor.startedAtMillis);
-	}
-
-	/// Close the manifest and commit it, which is the moment this conversation
-	/// becomes a record.
-	///
-	/// Runs on the teardown pool after the media has stopped, never on the
-	/// signalling thread. If it fails the scratchpad entry stays behind and a
-	/// sweep finalises it, which is the whole reason the scratchpad exists.
-	private static void close(Closing closing) {
-		ConversationManifest manifest = closing.manifest;
-		if (manifest == null) {
-			return;
-		}
-		try {
-			long duration = Math.max(System.currentTimeMillis() - closing.startedAtMillis, 0);
-			manifest.setDurationMillis(duration);
-			RecordingTrack mix = manifest.track("mix");
-			if (mix != null) {
-				mix.setDurationMillis(duration);
-			}
-			describeStoredAudio(manifest, mix, duration);
-			describeTranscript(closing);
-			manifest.setComplete(true);
-			Conversations.commit(manifest, System.getProperty("weblogic.Name", "unknown"));
-		} catch (Exception e) {
-			sipLogger.severe("ListenerAnchor: could not commit the manifest for "
-					+ manifest.getConversation() + "; a sweep will finalise it: " + e);
-		}
-	}
-
-	/// Fold in what the transcript came to.
-	///
-	/// The count is what a reader checks the archive against, the way segment
-	/// counts let it check a track. Complete means the transcriber ran for the
-	/// whole conversation; a sweep finalising an abandoned conversation leaves
-	/// the scratchpad's `false`, which is the truth for a node that died.
-	private static void describeTranscript(Closing closing) {
-		TranscriptRef ref = closing.transcript;
-		if (ref == null) {
-			return;
-		}
-		ref.setUtterances(closing.utterances);
-		ref.setComplete(true);
-	}
-
-	/// Fold in what the recorder wrote about itself.
-	///
-	/// The application cannot see how many segments landed or whether any were
-	/// dropped; the sink is the only party that was there, and it says so in its
-	/// own manifest as it closes. Without this the conversation manifest would
-	/// describe a track it never verified, which is the failure this whole format
-	/// exists to make impossible: [ManifestCheck] would rightly refuse it.
-	///
-	/// The segments are recorded as one span rather than enumerated. The sink
-	/// reports a count and a total, not per-segment durations, so listing each one
-	/// with an invented length would be manufactured detail. One span carries what
-	/// is actually known and stays honest about the rest.
-	private static void describeStoredAudio(ConversationManifest manifest, RecordingTrack track, long duration) {
-		if (track == null) {
-			return;
-		}
-		RecordingArchive archive = RecordingArchive.installed();
-		if (archive == null) {
-			return;
-		}
-		try {
-			RecordingArchive.RecordingSummary stored = archive.summary(manifest.getConversation());
-			if (stored == null) {
-				track.setState(RecordingTrack.State.FAILED);
-				track.setStateReason("the recorder never closed, so nothing describes this track");
+	/// Runs under the application session's lock. The continuations capture only
+	/// the application session id and the leg's URI, never the live media
+	/// objects, which do not serialize into replicated call state.
+	void addParty(SipApplicationSession app, Anchor anchor, String target, String label) throws Exception {
+		final NetworkConnection leg = anchor.ms.createNetworkConnection(NetworkConnection.BASIC);
+		join(leg, Joinable.Direction.DUPLEX, anchor.mixer);
+		final String legUri = leg.getURI().toString();
+		anchor.parties.put(legUri, new Party(label, leg));
+		final String appId = app.getId();
+		final Object from = app.getAttribute("listener.to");
+		generateOffer(leg, offered -> {
+			SipApplicationSession call = getSipUtil().getApplicationSessionById(appId);
+			if (call == null || !call.isValid()) {
 				return;
 			}
-			MediaSegment span = new MediaSegment(0, 0L, duration, "recording");
-			span.setBytes(stored.bytes());
-			track.addSegment(span);
-			if (!stored.complete()) {
-				manifest.setComplete(false);
-				manifest.setIncompleteReason("the recorder dropped segments");
-			}
-		} catch (Exception e) {
-			sipLogger.warning("ListenerAnchor: could not read back what the recorder stored: " + e);
+			javax.servlet.sip.Address to = getSipFactory().createAddress(target);
+			// From: the number the caller dialled, on the party's own domain, so the
+			// party's phone shows which line is calling them in.
+			String host = (to.getURI() instanceof javax.servlet.sip.SipURI)
+					? ((javax.servlet.sip.SipURI) to.getURI()).getHost() : "localhost";
+			javax.servlet.sip.Address fromAddress = getSipFactory().createAddress(
+					getSipFactory().createSipURI(from == null ? "listener" : String.valueOf(from), host));
+			SipServletRequest invite = getSipFactory().createRequest(call, "INVITE", fromAddress, to);
+			invite.setContent(offered.getMediaServerSdp(), "application/sdp");
+			invite.getSession().setAttribute(PARTY, legUri);
+			sendRequest(invite, response -> partyAnswered(appId, legUri, response));
+		});
+		sipLogger.info("ListenerAnchor: bringing " + label + " (" + target + ") into " + anchor.vorpalId);
+	}
+
+	private void partyAnswered(String appId, String legUri, javax.servlet.sip.SipServletResponse response)
+			throws Exception {
+		Anchor anchor = LIVE.get(appId);
+		Party party = (anchor == null) ? null : anchor.parties.get(legUri);
+		if (party == null) {
+			return;
 		}
+		if (response.getStatus() < 200) {
+			return;
+		}
+		if (response.getStatus() >= 300) {
+			sipLogger.info("ListenerAnchor: " + party.label + " did not join " + anchor.vorpalId + ": "
+					+ response.getStatus() + " " + response.getReasonPhrase());
+			dropParty(anchor, legUri);
+			return;
+		}
+		party.dialogId = response.getSession().getId();
+		response.createAck().send();
+		processAnswer(party.leg, ListenerServlet.bodyOf(response), applied -> {
+			// the party is on the mix; everything that follows the mix follows them
+		});
+		sipLogger.info("ListenerAnchor: " + party.label + " joined " + anchor.vorpalId);
+	}
+
+	/// A party left, or never answered: take their leg off the mix.
+	static void dropParty(Anchor anchor, String legUri) {
+		Party party = (anchor == null || legUri == null) ? null : anchor.parties.remove(legUri);
+		if (party == null) {
+			return;
+		}
+		try {
+			anchor.mixer.unjoin(party.leg);
+		} catch (Exception ignore) {
+			// the leg may already be gone with the session
+		}
+		try {
+			party.leg.release();
+		} catch (Exception ignore) {
+			// best effort
+		}
+	}
+
+	/// The call is ending: hang up every party still on it. The framework's
+	/// teardown ends only the two legs it linked, and a party's dialog is not one
+	/// of them.
+	private static void hangUpParties(String appId, Anchor anchor) {
+		if (anchor.parties.isEmpty()) {
+			return;
+		}
+		SipApplicationSession app = getSipUtil().getApplicationSessionById(appId);
+		java.util.Iterator<?> sessions = (app == null || !app.isValid()) ? null : app.getSessions("SIP");
+		while (sessions != null && sessions.hasNext()) {
+			Object s = sessions.next();
+			if (!(s instanceof javax.servlet.sip.SipSession)) {
+				continue;
+			}
+			javax.servlet.sip.SipSession dialog = (javax.servlet.sip.SipSession) s;
+			if (dialog.isValid() && dialog.getAttribute(PARTY) != null
+					&& dialog.getState() == javax.servlet.sip.SipSession.State.CONFIRMED) {
+				try {
+					dialog.createRequest("BYE").send();
+				} catch (Exception e) {
+					sipLogger.warning("ListenerAnchor: could not hang up a party: " + e);
+				}
+			}
+		}
+		anchor.parties.clear();
+	}
+
+	/// The anchor for the call the event bus names by its Vorpal-ID, on this
+	/// node; null when another node, or no node, holds it.
+	static Map.Entry<String, Anchor> byVorpalId(String vorpalId) {
+		if (vorpalId == null) {
+			return null;
+		}
+		for (Map.Entry<String, Anchor> e : LIVE.entrySet()) {
+			if (vorpalId.equalsIgnoreCase(e.getValue().vorpalId)) {
+				return e;
+			}
+		}
+		return null;
 	}
 }

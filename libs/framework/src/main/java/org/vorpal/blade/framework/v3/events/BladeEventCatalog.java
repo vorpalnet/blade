@@ -90,6 +90,7 @@ public final class BladeEventCatalog {
 		types.addAll(riskTypes());
 		types.add(callUtterance());
 		types.add(callVoiceAssessed());
+		types.add(callPartyRequested());
 		return types;
 	}
 
@@ -138,6 +139,16 @@ public final class BladeEventCatalog {
 		EventType declaration = base(BladeEventTypes.CALL_VOICE_ASSESSED, "Call Voice Assessed",
 				"A party's voice was scored for being synthetic. One per scored window while the call is heard. Attributes carry score (0 genuine to 1 synthetic), party (caller or callee), model when the scorer names one, and offsetMs measured from when the assessment attached. A measurement, not a verdict: a risk engine fuses it and publishes Call Risk Assessed.",
 				"CallVoiceAssessed");
+		declaration.setFields(callScopedFields());
+		return declaration;
+	}
+
+	/// A request to bring another party into a live call. Call-scoped; the
+	/// destination rides in `attributes`.
+	private static EventType callPartyRequested() {
+		EventType declaration = base(BladeEventTypes.CALL_PARTY_REQUESTED, "Call Party Requested",
+				"Someone asked for another party to be brought into a live call. A request, not a result: the application holding the call's media dials the party onto the call's mix if its rules allow the destination. Attributes carry target (the SIP address to dial), label (the name the transcript gives the new voice) and requestedBy.",
+				"CallPartyRequested");
 		declaration.setFields(callScopedFields());
 		return declaration;
 	}

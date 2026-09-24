@@ -2,11 +2,8 @@ package org.vorpal.blade.services.listener;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Properties;
-import java.util.ServiceLoader;
 
 import javax.media.mscontrol.MsControlFactory;
-import javax.media.mscontrol.spi.Driver;
 
 import javax.media.mscontrol.networkconnection.NetworkConnection;
 import javax.servlet.ServletException;
@@ -195,37 +192,24 @@ public class ListenerServlet extends B2buaServlet implements B2buaListener {
 		callflow.processContinue();
 	}
 
-	/// Resolve the 309 factory from the configured driver, or the sole registered
-	/// one. Discovery goes through ServiceLoader rather than
-	/// `javax.media.mscontrol.spi.DriverManager`, which finds drivers through a
-	/// mechanism Java 9 removed: touching it throws, and from a loadOnStartup
-	/// servlet that fails the whole deployment.
-	private static MsControlFactory obtainFactory(ListenerSettings cfg) throws ServletException {
-		Properties props = new Properties();
-		if (cfg != null && cfg.getDriverProperties() != null) {
-			props.putAll(cfg.getDriverProperties());
+	/// A request on a party's dialog goes to [PartyDialog]; the B2BUA's own
+	/// callflows know only the two legs they linked.
+	@Override
+	protected org.vorpal.blade.framework.Callflow chooseCallflow(SipServletRequest request)
+			throws ServletException, IOException {
+		if (!request.isInitial() && request.getSession() != null
+				&& request.getSession().getAttribute(ListenerAnchor.PARTY) != null) {
+			return new PartyDialog();
 		}
+		return super.chooseCallflow(request);
+	}
+
+	/// Resolve the 309 factory from the configured driver, or the sole registered
+	/// one. See [MediaCallflow#obtainFactory].
+	private static MsControlFactory obtainFactory(ListenerSettings cfg) throws ServletException {
 		try {
-			String name = (cfg == null) ? null : cfg.getDriverName();
-			Driver fallback = null;
-			for (Driver driver : ServiceLoader.load(Driver.class, ListenerServlet.class.getClassLoader())) {
-				if (name != null && !name.isEmpty()) {
-					if (name.equals(driver.getName())) {
-						return driver.getFactory(props);
-					}
-				} else if (fallback == null) {
-					fallback = driver;
-				}
-			}
-			if (name != null && !name.isEmpty()) {
-				throw new ServletException("no JSR-309 driver named '" + name + "' is registered");
-			}
-			if (fallback == null) {
-				throw new ServletException("no JSR-309 driver is registered");
-			}
-			return fallback.getFactory(props);
-		} catch (ServletException e) {
-			throw e;
+			return MediaCallflow.obtainFactory(cfg == null ? null : cfg.getDriverName(),
+					cfg == null ? null : cfg.getDriverProperties(), ListenerServlet.class.getClassLoader());
 		} catch (Exception e) {
 			throw new ServletException("getFactory failed", e);
 		}
@@ -477,7 +461,7 @@ public class ListenerServlet extends B2buaServlet implements B2buaListener {
 	/// the recording, which is why it is logged at warning.
 	private void pauseRecorder(SipApplicationSession app, boolean pause, SipServletRequest request) {
 		ListenerAnchor.Anchor anchor = ListenerAnchor.LIVE.get(app.getId());
-		if (anchor == null || anchor.mg == null || anchor.recording == null) {
+		if (anchor == null || anchor.mg == null || anchor.record == null) {
 			return;
 		}
 		try {

@@ -187,7 +187,12 @@
   /* The disposition: three choices, notes, one button. Every call gets one. */
   .dispose { padding: 8px 16px 10px; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 6px 14px; align-items: end; flex: 0 0 auto; }
   .dispose .reasons.off { display: none; }
-  .dispose .notes { grid-column: 1 / 4; }
+  .dispose .notes { grid-column: 1 / 3; }
+  .dispose .bring { grid-column: 3 / 4; display: grid; gap: 2px; }
+  .dispose .bring.off { display: none; }
+  .dispose .bring .row { display: flex; gap: 6px; }
+  .dispose .bring .row select { flex: 1; min-width: 0; }
+  .dispose .bring-result { font-size: 12px; color: var(--muted); min-height: 1em; }
   .dispose .go { grid-column: 4 / 5; justify-content: flex-end; align-items: end; }
   @media (max-width: 720px) { .dispose { grid-template-columns: 1fr; } }
   .dispose label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
@@ -235,6 +240,7 @@
   var cards = {};                 // vorpalId -> {pop, el, ...}: every call on screen, so an update can find it
   var pending = {};               // vorpalId -> {button, result} awaiting a report result
   var mayReport = false;          // set from the server's hello; gates the report button
+  var people = [];                // who may be brought into a call, by name, from the hello
   var whoEl = document.getElementById("who");
 
   // One-line summaries, shown as tooltips on the term they explain. Written for
@@ -426,6 +432,8 @@
   function setState(c, state, durationMs) {
     var el = c.el.querySelector(".state");
     c.state = state;
+    var bring = c.el.querySelector(".bring-go");
+    if (bring) { bring.disabled = !(state === "talking" && mayReport); }
     el.className = "state " + state;
     if (state === "talking") {
       c.answeredAt = Date.now();
@@ -450,7 +458,9 @@
   function addLine(c, u) {
     var list = c.el.querySelector(".lines");
     var li = document.createElement("li");
-    var agent = (u.party === "agent" || u.party === "callee");
+    // The caller on the left; the agent, and anyone brought in, on the right under their own name.
+    var agent = u.party !== "caller";
+    var who = (u.party === "agent" || u.party === "callee") ? "agent" : (agent ? u.party : "caller");
     li.className = "new " + (agent ? "agent" : "caller");
     var at = (u.atMs != null && !isNaN(parseInt(u.atMs, 10))) ? fmtClock(parseInt(u.atMs, 10)) : "";
     var tags = "";
@@ -458,7 +468,7 @@
       tags += '<span class="tag">' + esc(l) + "</span>";
       c.content[l] = (c.content[l] || 0) + 1;
     });
-    li.innerHTML = '<span class="meta"><span class="who">' + (agent ? "agent" : "caller") + "</span>" +
+    li.innerHTML = '<span class="meta"><span class="who">' + esc(who) + "</span>" +
       (at ? " · " + esc(at) : "") + "</span>" + esc(u.text) + tags;
     li.dataset.atMs = (u.atMs != null) ? String(u.atMs) : "";
     li.dataset.text = u.text || "";
@@ -648,6 +658,9 @@
           REASONS.map(function (r) { return '<label><input type="checkbox" value="' + r[0] + '"> ' + r[1] + "</label>"; }).join("") +
         "</div>" +
         '<div class="notes"><label' + t("notes") + '>Notes</label><textarea rows="2" placeholder="what the caller wanted, what you did"></textarea></div>' +
+        '<div class="bring' + (people.length ? "" : " off") + '"><label>Bring in</label><span class="row"><select class="who">' +
+          people.map(function (n) { return '<option>' + esc(n) + "</option>"; }).join("") +
+          '</select><button type="button" class="bring-go" disabled>Bring in</button></span><span class="bring-result"></span></div>' +
         '<div class="go"><button type="button">Update</button><span class="result"></span></div>' +
       "</div>";
 
@@ -667,9 +680,17 @@
       var cc = cards[pop.vorpalId];
       if (cc) { cc.faceTouched = true; }
     });
-    var button = el.querySelector(".dispose button");
+    // Bring someone into the call: a name from the settings' list, never an address.
+    el.querySelector(".bring-go").addEventListener("click", function () {
+      var said = el.querySelector(".bring-result");
+      if (!socket || socket.readyState !== WebSocket.OPEN) { said.textContent = "not connected"; return; }
+      var who = el.querySelector(".bring .who").value;
+      said.textContent = "calling " + who + "…";
+      socket.send(JSON.stringify({ t: "addParty", vorpalId: pop.vorpalId, label: who }));
+    });
+    var button = el.querySelector(".dispose .go button");
     var result = el.querySelector(".dispose .result");
-    function lock(on) { button.disabled = on; for (var i = 0; i < fields.length; i++) { fields[i].disabled = on; } }
+    function lock(on) { button.disabled = on; for (var i = 0; i < fields.length; i++) { if (!fields[i].closest(".bring")) { fields[i].disabled = on; } } }
     if (!mayReport) {
       // A signed-in watcher who is not in a report group: the form is inert
       // and says why, rather than failing on click.
@@ -721,9 +742,16 @@
     }
   }
 
+  function addPartyResult(m) {
+    var c = m.vorpalId ? cards[m.vorpalId] : null;
+    if (!c) return;
+    c.el.querySelector(".bring-result").textContent = m.ok ? "asked for " + (m.label || "them") : (m.error || "could not bring them in");
+  }
+
   function hello(m) {
     if (m.user) { whoEl.textContent = m.user; }
     mayReport = !!m.mayReport;
+    people = Array.isArray(m.people) ? m.people : [];
     // Apply to any cards already on screen (hello normally arrives first).
     var forms = pops.querySelectorAll(".dispose");
     for (var i = 0; i < forms.length; i++) {
@@ -877,6 +905,7 @@
       else if (m.t === "pop") { show(m.pop); }
       else if (m.t === "update") { update(m); }
       else if (m.t === "disposeResult") { disposeResult(m); }
+      else if (m.t === "addPartyResult") { addPartyResult(m); }
     };
     ws.onclose = function () {
       socket = null;

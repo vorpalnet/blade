@@ -30,6 +30,7 @@ public class AgentSettings extends Configuration implements Serializable {
 	private int defaultReportExpiryDays = 7;
 	private String reportGroups;
 	private int ringSeconds = 20;
+	private java.util.LinkedHashMap<String, String> people = new java.util.LinkedHashMap<>();
 
 	public AgentSettings() {
 	}
@@ -104,5 +105,16 @@ public class AgentSettings extends Configuration implements Serializable {
 
 	public void setRingSeconds(int ringSeconds) {
 		this.ringSeconds = ringSeconds;
+	}
+
+	@JsonPropertyDescription("Who an agent may bring into a live call, by the name the card shows (Supervisor, Billing, "
+			+ "Interpreter) and the SIP address dialled for it. The console sends only the name, so an agent can dial "
+			+ "no one else; the listener's partyTargets must allow each address too. Empty hides the control.")
+	public java.util.LinkedHashMap<String, String> getPeople() {
+		return people;
+	}
+
+	public void setPeople(java.util.LinkedHashMap<String, String> people) {
+		this.people = people;
 	}
 }

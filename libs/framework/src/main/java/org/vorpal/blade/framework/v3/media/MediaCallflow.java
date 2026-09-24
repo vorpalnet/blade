@@ -191,6 +191,41 @@ public abstract class MediaCallflow extends Callflow {
 	/// Installs the JSR-309 factory the media verbs create sessions from. Called
 	/// once from the SIP servlet's init (from the registered driver's
 	/// `getFactory(props)`), before any media verb runs.
+	/// The JSR-309 factory from the driver named `driverName`, or from the only registered driver
+	/// when the name is blank, configured with `properties` verbatim.
+	///
+	/// Drivers are found through [java.util.ServiceLoader] on `loader`, never through the
+	/// specification's `DriverManager`, which finds drivers by a mechanism Java 9 removed: touching it
+	/// throws, and from a servlet that loads on startup that fails the whole deployment. The loader is
+	/// the application's own, because the driver ships in the application's WAR.
+	///
+	/// @throws MsControlException when no such driver is registered, or it refuses the properties
+	public static MsControlFactory obtainFactory(String driverName, Map<String, String> properties,
+			ClassLoader loader) throws MsControlException {
+		java.util.Properties props = new java.util.Properties();
+		if (properties != null) {
+			props.putAll(properties);
+		}
+		javax.media.mscontrol.spi.Driver fallback = null;
+		for (javax.media.mscontrol.spi.Driver driver : java.util.ServiceLoader
+				.load(javax.media.mscontrol.spi.Driver.class, loader)) {
+			if (driverName != null && !driverName.isEmpty()) {
+				if (driverName.equals(driver.getName())) {
+					return driver.getFactory(props);
+				}
+			} else if (fallback == null) {
+				fallback = driver;
+			}
+		}
+		if (driverName != null && !driverName.isEmpty()) {
+			throw new MsControlException("no JSR-309 driver named '" + driverName + "' is registered");
+		}
+		if (fallback == null) {
+			throw new MsControlException("no JSR-309 driver is registered");
+		}
+		return fallback.getFactory(props);
+	}
+
 	public static void setMsControlFactory(MsControlFactory factory) {
 		msControlFactory = factory;
 	}

@@ -24,6 +24,7 @@ public class AgentSettingsSample extends AgentSettings {
 
 	public AgentSettingsSample() {
 		setAgentUri("sip:agents@pbx.example.com");
+		getPeople().put("Supervisor", "sip:supervisor@pbx.example.com");
 		setVoicemailUri("sip:voicemail@pbx.example.com");
 		setDataSource("jdbc/BladeCatalog");
 		setSpamTable("spam_numbers");
@@ -44,6 +45,7 @@ public class AgentSettingsSample extends AgentSettings {
 		Analytics analytics = new Analytics();
 		analytics.setEnabled(true);
 		analytics.createEventSelector(DispositionService.EVENT);
+		analytics.createEventSelector(PartyService.EVENT);
 		setAnalytics(analytics);
 
 		EventBusSettings events = new EventBusSettings();

@@ -98,6 +98,7 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 		// Strip CR/LF and quotes from the name: it is client-supplied and rides a header, so it must not
 		// be able to inject a second header line.
 		assertIdentity(invite, aor, SignalProtocol.field(offerEvent, "displayName"));
+		advertiseEvents(invite);
 
 		MediaMode mode = WebrtcServlet.mediaMode()
 				.resolve(BrowserRegistry.isLocal(targetAor(target, aor)), getMsControlFactory() != null);
@@ -218,6 +219,7 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 		expectRequest(response.getSession(), "BYE", bye -> onFarEndHungUp(bye, app, aor, callId));
 		expectDtmf(app, response.getSession());
 		expectReoffer(app, response.getSession(), aor, callId, null);
+		expectFarSideEvents(response.getSession(), aor, callId);
 
 		ObjectNode data = SignalProtocol.data();
 		String answer = firstAnswer(response, app);
@@ -337,6 +339,7 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 		expectRequest(response.getSession(), "BYE", bye -> onFarEndHungUp(bye, app, aor, callId));
 		expectDtmf(app, response.getSession());
 		expectReoffer(app, response.getSession(), aor, callId, networkLeg);
+		expectFarSideEvents(response.getSession(), aor, callId);
 
 		BrowserRegistry.deliver(aor, SignalProtocol.event(SignalProtocol.CALL_CONNECTED, callId,
 				SignalProtocol.data().put("negotiated", negotiated)));
