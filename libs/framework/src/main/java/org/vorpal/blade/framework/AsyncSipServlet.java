@@ -1755,16 +1755,9 @@ public abstract class AsyncSipServlet extends SipServlet
 
 		void end(SipSession sipSession) {
 			if (sipSession == null || !sipSession.isValid()) {
-				// diagnostic: remove once the no-ACK teardown is proven on both legs
-				sipLogger.warning("AsyncSipServlet.Unconfirmed.end - no dialog to end: "
-						+ (sipSession == null ? "null" : "invalid"));
 				return;
 			}
 			try {
-				// diagnostic: remove once the no-ACK teardown is proven on both legs
-				SipServletRequest active = sipSession.getActiveInvite(UAMode.UAC);
-				sipLogger.warning(sipSession, "AsyncSipServlet.Unconfirmed.end - state=" + sipSession.getState()
-						+ ", activeUacInvite=" + (active == null ? "null" : "committed=" + active.isCommitted()));
 				switch (sipSession.getState()) {
 				case CONFIRMED:
 					sendRequest(sipSession.createRequest(BYE));
