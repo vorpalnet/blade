@@ -136,13 +136,10 @@ public abstract class Callflow implements Serializable {
 	/// mid-call, after setup and bypassing BLADE, is not seen and cannot be cached.
 	static final String VORPAL_APPSESSION_EXPIRES = "VORPAL_APPSESSION_EXPIRES";
 
-	/// SipSession attribute: the SDP body (application/sdp) this session's
-	/// endpoint most recently advertised as its own media. Cached passively by
-	/// AsyncSipServlet as messages arrive (see AsyncSipServlet#captureRemoteSdp).
-	/// The keep-alive refresh re-offers a leg's *peer* copy of this so it can
-	/// refresh each dialog on its own transaction, with no live round-trip to the
-	/// peer (see org.vorpal.blade.framework.v2.keepalive.KeepAlive).
-	public static final String LAST_SDP = "LAST_SDP";
+	/// Request and SipApplicationSession attribute: this application anchors the
+	/// call's media itself, so the framework's keep-alive neither claims the call's
+	/// refresh nor probes it on expiry. Set with [#declineKeepAlive].
+	public static final String NO_KEEP_ALIVE = "noKeepAlive";
 
 	/// The SDP content type, `application/sdp`.
 	public static final String APPLICATION_SDP = "application/sdp";
@@ -1091,6 +1088,20 @@ public abstract class Callflow implements Serializable {
 		}
 	}
 
+	/// Leave this call's keep-alive to someone else. For an application that
+	/// anchors the call's media (a media server between the legs): the keep-alive
+	/// refresh relays one endpoint's offer to the other, which would carry media
+	/// around the anchor. Declining leaves `Session-Expires` unclaimed, so the next
+	/// BLADE application downstream claims the refresh and its re-INVITE passes
+	/// through this one to be re-anchored; and the expiration probe leaves the call
+	/// alone. Call before the outbound initial INVITE is sent.
+	///
+	/// @param outbound the outbound initial INVITE
+	public static void declineKeepAlive(SipServletRequest outbound) {
+		outbound.setAttribute(NO_KEEP_ALIVE, Boolean.TRUE);
+		outbound.getApplicationSession().setAttribute(NO_KEEP_ALIVE, Boolean.TRUE);
+	}
+
 	/// Arm the session keep-alive on an initial outbound INVITE, per the
 	/// configured [KeepAliveParameters]. Does nothing when keep-alive is
 	/// disabled in config, the request is not an initial INVITE, the request
@@ -1110,7 +1121,7 @@ public abstract class Callflow implements Serializable {
 				&& !KeepAlive.DISABLED.equals(kap.getStyle()));
 
 		if (!keepAliveEnabled || !request.isInitial() || !request.getMethod().equals(INVITE)
-				|| request.getAttribute("noKeepAlive") != null) {
+				|| request.getAttribute(NO_KEEP_ALIVE) != null) {
 			return;
 		}
 

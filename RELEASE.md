@@ -17,6 +17,37 @@ that still carry the two fields load unchanged; the fields are ignored.
 
 ## 3.0.6 (2026-09-14)
 
+### Framework SIP: keep-alive keeps no SDP
+
+The keep-alive refreshes a call with one offerless re-INVITE, chained through
+it: the armed dialog's endpoint offers its own SDP in the 2xx, the offer goes to
+the other leg, and the answer returns in the first leg's ACK. The SDP cache
+(`Callflow.LAST_SDP`) and `AsyncSipServlet.captureRemoteSdp` are removed.
+
+- A 491 on the relay leg is retried after 2.1 to 4 s (RFC 3261 14.1) while the
+  first leg's 2xx waits for its ACK. Any other failure there is acknowledged
+  with every stream rejected and the call ended (RFC 3261 13.2.2.4).
+- Only responses that end the dialog or its usage (RFC 5057), or a timeout,
+  count as a lost call. Any other refusal is tried once from the other leg.
+- A leg the container already ended after a 481 or 408 is not sent a BYE.
+- The expiration probe runs the same chain once, from the called party's
+  dialog; a call whose endpoints are alive keeps its lifetime.
+- `Callflow.declineKeepAlive` leaves a call's refresh to the next application
+  downstream and skips the probe. The listener declines when it anchors media.
+
+### Framework SIP: glare
+
+- A PRACK passes the guard and leaves the state alone (RFC 3262).
+- NOTIFY is never refused. A REFER marks a transfer in progress until its final
+  NOTIFY; a second REFER meanwhile is answered 491, over SIP or the REST API.
+- A BYE answers every parked request 487 instead of replaying it (RFC 3261 15.1.2).
+- Our own INVITE or UPDATE on a dialog with a transaction open is not sent; its
+  callback gets a local 491 (RFC 3261 14.1, RFC 3311 5.2).
+- `AsyncSipServlet` implements `SipErrorListener`: no ACK ends the call (RFC 3261
+  13.3.1.4), no PRACK answers the INVITE 500 (RFC 3262).
+- An answer sent later, from a callback, replays the next parked request, and a
+  new request waits behind parked ones.
+
 ### Upgrade notes
 
 - **v3 `SettingsManager` is abstract.** Subclasses must implement `sample()`
@@ -160,11 +191,11 @@ Supporting framework:
 
 ### Framework SIP
 
-- Keep-alive: each dialog is refreshed on its own by re-offering the peer's
-  cached SDP. Only `refresher=uac` makes a hop stand down, Min-SE has a floor
+- Keep-alive: only `refresher=uac` makes a hop stand down, Min-SE has a floor
   of 90, and expirations are staggered along a B2BUA chain. A session that
-  expires is probed with a re-INVITE (`session.expirationProbe`, default on),
-  up to `session.maxSessionMinutes` (default 720).
+  expires is probed (`session.expirationProbe`, default on), up to
+  `session.maxSessionMinutes` (default 720). The refresh itself is described
+  under "keep-alive keeps no SDP" above.
 - Glare: any final response releases glare. Parked requests replay in order,
   one transaction at a time, once the dialog is clear.
 - A response to a CANCEL is dropped with a warning.

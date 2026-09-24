@@ -6,11 +6,10 @@
 ///
 /// SIP sessions can time out if no signaling activity occurs for an extended period.
 /// NAT bindings expire, firewalls close pinholes, and some endpoints disconnect idle
-/// sessions. The keep-alive mechanism periodically re-INVITEs both call dialogs,
-/// re-offering each endpoint the media it already advertised. Nothing in the SDP
-/// changes, so the endpoint keeps its media as-is; the round trip refreshes the
-/// RFC 4028 session timer and repaints the signaling path through any NAT or
-/// firewall in between.
+/// sessions. The keep-alive refreshes both dialogs of a call with one re-INVITE
+/// exchange: nothing in either endpoint's session changes, and the round trip
+/// refreshes the RFC 4028 session timer and repaints the signaling path through any
+/// NAT or firewall in between.
 ///
 ///
 /// ## Configuration
@@ -38,7 +37,7 @@
 ///   </tr>
 ///   <tr>
 ///     <td>{@code REINVITE}</td>
-///     <td>Refresh each dialog with a re-INVITE re-offering its negotiated media</td>
+///     <td>Refresh the call with one offerless re-INVITE, chained through both dialogs</td>
 ///   </tr>
 /// </table>
 ///
@@ -52,29 +51,35 @@
 /// {@code Callflow.applyKeepAlive}.
 ///
 ///
-/// ## Independent per-leg refresh
+/// ## One offerless re-INVITE, chained through the call
 ///
-/// When the keep-alive timer fires, {@link KeepAlive} refreshes each dialog on its
-/// own transaction, offering the media the *peer* leg already advertised (cached
-/// per session in {@code Callflow.LAST_SDP} as messages flow):
+/// When the keep-alive timer fires, {@link KeepAlive} sends the dialog an INVITE
+/// with no SDP. The endpoint offers its current session in the 2xx; the offer goes
+/// to the other leg as a re-INVITE, and that endpoint's answer returns to the first
+/// leg in its ACK:
 ///
 /// <pre>
-///   Alice                     BLADE                      Bob
-///     |&lt;---INVITE (Bob SDP)-----|                         |
-///     |----200 OK (Alice SDP)--&gt;|                         |
-///     |&lt;---ACK-----------------&gt;|                         |
-///     |                         |---INVITE (Alice SDP)---&gt;|   (independent)
-///     |                         |&lt;----200 OK (Bob SDP)----|
-///     |                         |--------ACK-------------&gt;|
+///   Bob                       BLADE                     Alice
+///     |&lt;---INVITE (no SDP)------|                         |
+///     |----200 OK (Bob SDP)----&gt;|                         |
+///     |                         |----INVITE (Bob SDP)----&gt;|
+///     |                         |&lt;---200 OK (Alice SDP)---|
+///     |&lt;---ACK (Alice SDP)------|                         |
+///     |                         |----------ACK-----------&gt;|
 /// </pre>
 ///
-/// The two legs do not depend on each other. An earlier design chained one
-/// offerless re-INVITE through both dialogs, so a non-2xx from the second leg left
-/// the first leg's {@code 200 OK} unacknowledged and the endpoint tore the dialog
-/// down (RFC 3261) — killing the call keep-alive exists to preserve. Refreshing
-/// each leg with its peer's cached SDP removes that coupling: a failure on one leg
-/// cannot orphan the other. A leg with no cached peer SDP is skipped for that
-/// cycle rather than sent an offerless re-INVITE it could not answer.
+/// Each endpoint supplies its own SDP, so BLADE keeps no copy of it. The re-INVITE
+/// crosses the rest of a chain of BLADE applications as an ordinary relayed
+/// re-INVITE, refreshing every dialog in it. An application that anchors media
+/// declines the refresh ({@code Callflow.declineKeepAlive}) and lets the next one
+/// downstream claim it, so the re-INVITE reaches it from outside and is re-anchored.
+///
+/// The first leg retransmits its 2xx for 64*T1 (32 s) waiting for the ACK. A 491
+/// on the second leg is retried inside that window (RFC 3261 section 14.1). Any other
+/// failure there is acknowledged with every stream rejected, and the call is ended
+/// (RFC 3261 section 13.2.2.4). A response that ends the dialog or its invite usage
+/// (RFC 5057), or a timeout, ends the call; any other refusal is tried once from
+/// the other leg.
 ///
 ///
 /// ## Session Expiry
@@ -87,7 +92,7 @@
 ///
 /// ## Core Classes
 ///
-/// - {@link KeepAlive} - Session refresh: independent per-leg re-INVITE re-offering cached media
+/// - {@link KeepAlive} - Session refresh: one offerless re-INVITE chained through both dialogs
 /// - {@link KeepAliveExpiry} - Session termination: BYE to both dialogs on timeout
 ///
 /// Both classes extend

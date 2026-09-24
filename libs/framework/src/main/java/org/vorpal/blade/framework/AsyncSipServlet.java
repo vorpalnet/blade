@@ -690,9 +690,6 @@ public abstract class AsyncSipServlet extends SipServlet
 			String method = request.getMethod();
 			SipSession linkedSession = Callflow.getLinkedSession(request.getSession());
 
-			// passively cache the endpoint's advertised SDP for the keep-alive refresh
-			captureRemoteSdp(request, sipSession);
-
 			// get the Vorpal ID first thing (skip short-lived, fire-and-forget methods)
 			if (request.isInitial()) {
 				switch (method) {
@@ -932,38 +929,6 @@ public abstract class AsyncSipServlet extends SipServlet
 		doRequest(glareRequest);
 	}
 
-	/// Passively cache the SDP an endpoint most recently advertised as its own
-	/// media, for the keep-alive refresh (see
-	/// [org.vorpal.blade.framework.v2.keepalive.KeepAlive]). If the message
-	/// carries an application/sdp body, record it in the session's
-	/// `Callflow.LAST_SDP` attribute; a message with no SDP leaves any previously
-	/// cached value in place. The keep-alive re-offers a leg's *peer* copy of
-	/// this so it can refresh each dialog on its own transaction, with no live
-	/// round-trip to the peer.
-	protected static void captureRemoteSdp(SipServletMessage message, SipSession sipSession) {
-		if (sipSession == null || !sipSession.isValid()) {
-			return;
-		}
-
-		String contentType = message.getContentType();
-		if (contentType == null || !contentType.equalsIgnoreCase(Callflow.APPLICATION_SDP)) {
-			return;
-		}
-
-		try {
-			Object sdp = message.getContent();
-			if (sdp != null) {
-				sipSession.setAttribute(Callflow.LAST_SDP, sdp);
-			}
-		} catch (IOException e) {
-			// couldn't read the body; leave any previously cached value in place
-		} catch (IllegalStateException e) {
-			// isValid() can flip during the BYE/2xx cleanup window (same race
-			// documented in Callflow.getVorpalDialogId) — a missed capture on
-			// a dying session doesn't matter.
-		}
-	}
-
 	/// Container callback when a SipApplicationSession expires. Final: it runs the
 	/// framework's last-chance keep-alive probe (which cannot be suppressed), then
 	/// delegates to the overridable [#onSessionExpired] hook. Applications override
@@ -1021,14 +986,15 @@ public abstract class AsyncSipServlet extends SipServlet
 		// no-op
 	}
 
-	/// Last-chance keep-alive probe when a SipApplicationSession expires: re-INVITE
-	/// both call dialogs and keep the session alive only if both endpoints answer.
-	/// A call an external element is still holding up (BLADE keep-alive off) is
-	/// saved; a dead one still expires. The probe re-INVITE responses arrive after
-	/// this returns, so the session is first extended by a short grace window (the
-	/// container clamps it up to its floor, ~3 minutes) to survive the round-trip;
-	/// the probe then restores the lifetime BLADE applied at setup on success, or
-	/// reaps on failure. See
+	/// Last-chance keep-alive probe when a SipApplicationSession expires: run the
+	/// keep-alive's re-INVITE chain through the call once, and keep the session only
+	/// if its endpoints still have the call. A call an external element is still
+	/// holding up (BLADE keep-alive off) is saved; a dead one is hung up. The chain's
+	/// responses arrive after this returns, so the session is first extended by a
+	/// short grace window (the container clamps it up to its floor, ~3 minutes) to
+	/// survive the round-trip; the probe then restores the lifetime BLADE applied at
+	/// setup. A call whose application anchors its media is left to expire
+	/// ([Callflow#declineKeepAlive]). See
 	/// [KeepAlive#probeAndConfirm][org.vorpal.blade.framework.v2.keepalive.KeepAlive#probeAndConfirm].
 	private void runExpirationProbe(SipApplicationSession appSession) {
 		if (appSession == null || !appSession.isValid()) {
@@ -1044,9 +1010,22 @@ public abstract class AsyncSipServlet extends SipServlet
 				return; // let the container invalidate
 			}
 
+			if (Boolean.TRUE.equals(appSession.getAttribute(Callflow.NO_KEEP_ALIVE))) {
+				return; // the application anchors this call's media; see Callflow.declineKeepAlive
+			}
+
 			SipSession first = firstLinkedDialog(appSession);
 			if (first == null) {
 				return; // not a live two-party call; let it expire normally
+			}
+			// Start from the called party's dialog, as the refresh does (it fires on
+			// the dialog BLADE sent the INVITE on), so the offerless re-INVITE goes the
+			// same way either time.
+			if ("caller".equals(first.getAttribute("userAgent"))) {
+				SipSession called = Callflow.getLinkedSession(first);
+				if (called != null && called.isValid()) {
+					first = called;
+				}
 			}
 
 			// Restore the lifetime BLADE actually applied at setup (which already
@@ -1365,9 +1344,6 @@ public abstract class AsyncSipServlet extends SipServlet
 			SipApplicationSession appSession = response.getApplicationSession();
 			String method = response.getMethod();
 			SipSession linkedSession = Callflow.getLinkedSession(response.getSession());
-
-			// passively cache the endpoint's advertised SDP for the keep-alive refresh
-			captureRemoteSdp(response, sipSession);
 
 			logResponseDiagnostics(response, isProxy, sipSession, linkedSession);
 

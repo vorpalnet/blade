@@ -1,256 +1,341 @@
 package org.vorpal.blade.framework.v2.keepalive;
 
-import java.io.IOException;
-import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
 
-import javax.servlet.ServletException;
+import javax.servlet.sip.ServletTimer;
 import javax.servlet.sip.SessionKeepAlive;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
+import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 
+import org.vorpal.blade.framework.v2.callflow.Callback;
 import org.vorpal.blade.framework.v2.callflow.ClientCallflow;
 
 /* Visit https://plantuml.com/sequence-diagram for notes on how to draw.
 @startuml doc-files/keepalive_reinvite.png
-title Keep-Alive: each dialog is refreshed on its own transaction
+title Keep-Alive: one offerless re-INVITE, chained through the call
 hide footbox
-participant Alice as alice
-participant KeepAlive as blade
 participant Bob as bob
+participant KeepAlive as blade
+participant Alice as alice
 
-alice <-> bob : RTP
-
-== refresh Alice (offer = Bob's cached SDP) ==
-alice <-  blade : INVITE (Bob SDP)
-alice --> blade : 200 OK (Alice SDP)
-alice <-  blade : ACK
-
-== refresh Bob (offer = Alice's cached SDP), independently ==
-          blade ->  bob : INVITE (Alice SDP)
-          blade <-- bob : 200 OK (Bob SDP)
-          blade ->  bob : ACK
+bob   <-  blade          : INVITE (no SDP)
+bob   --> blade          : 200 OK (Bob's SDP, offer)
+          blade ->  alice : INVITE (Bob's SDP)
+          blade <-- alice : 200 OK (Alice's SDP, answer)
+bob   <-  blade          : ACK (Alice's SDP)
+          blade ->  alice : ACK
 
 @enduml
 */
 
-/// Implements SIP session keep-alive by refreshing both call dialogs.
+/// Session keep-alive: refreshes both dialogs of a call with one offerless
+/// re-INVITE, chained through the call.
 ///
-/// Each dialog is refreshed on its own re-INVITE transaction, independently of
-/// the other. The offer is the media the peer leg already advertised, cached
-/// per session under
-/// [Callflow#LAST_SDP][org.vorpal.blade.framework.v2.callflow.Callflow#LAST_SDP]
-/// by AsyncSipServlet as messages flow. Re-offering the already-negotiated SDP
-/// is a no-op at the endpoint (nothing changed), so it refreshes the RFC 4028
-/// session timer and any intermediate NAT/firewall state without disturbing
-/// media.
+/// The re-INVITE goes to one leg with no SDP. That endpoint offers its current
+/// session description in the 2xx; the offer is relayed to the other leg as a
+/// re-INVITE; the answer comes back and is carried to the first leg in its ACK.
+/// Each endpoint supplies its own SDP, and nothing changed, so each sees an
+/// unchanged session (RFC 3264 section 8: an unchanged version "is effectively
+/// a no-op"). BLADE keeps no copy of anyone's SDP: the endpoints hold the only
+/// authoritative one. Downstream BLADE applications relay the re-INVITE like any
+/// other, so one chain refreshes every dialog in a chain of applications, and an
+/// application that anchors media re-anchors it on the way through.
 ///
-/// Independence is the point. The earlier design chained one offerless
-/// re-INVITE through both dialogs (offerless INVITE to Alice, forward her fresh
-/// offer to Bob, ACK Alice only once Bob answered). A non-2xx from Bob then left
-/// Alice's `200 OK` unacknowledged, and per RFC 3261 Alice tears the dialog down
-/// after retransmitting the 2xx, killing the very call keep-alive exists to
-/// preserve. Refreshing each leg with its peer's cached SDP removes the cross-leg
-/// dependency: a failure on one leg cannot orphan the other.
+/// **The first leg's 2xx must be acknowledged within 64*T1 (32 s)**, when the
+/// endpoint stops retransmitting it and ends the dialog. So the relay leg is
+/// retried after a 491 only while there is time, and any other failure there is
+/// answered the way RFC 3261 section 13.2.2.4 prescribes for an offer the UAC
+/// cannot use: "the UAC core MUST generate a valid answer in the ACK and then send
+/// a BYE immediately". The answer rejects every stream (port 0, RFC 3264 section
+/// 6), which is built from the offer alone.
 ///
-/// **Signaling-relay assumption.** The cached SDP is what each endpoint
-/// advertised as its own media, so re-offering the peer's copy is a no-op only
-/// when BLADE relays media end to end (each endpoint's remote *is* the peer). A
-/// media-anchoring deployment (a media server between the legs) points each
-/// endpoint at the anchor, not the peer, and must drive keep-alive from its own
-/// media state instead of this generic relay refresh.
+/// Outcomes are read by the RFC 5057 table: only responses that destroy the
+/// dialog or its invite usage, and a timeout, mean an endpoint has lost the call.
+/// A 491 means a transaction was in progress and is retried; any other refusal
+/// means the endpoint is alive and would not refresh this way, and the chain is
+/// tried once from the other leg.
+///
+/// The same chain is the expiration probe ([#probeAndConfirm]): a call that
+/// completes it is alive and keeps its lifetime; one whose endpoint has lost the
+/// call is hung up.
 ///
 /// @see SessionKeepAlive.Callback
 public class KeepAlive extends ClientCallflow implements SessionKeepAlive.Callback {
 
 	private static final long serialVersionUID = 1L;
 
-	/// Handles the keep-alive callback by refreshing both call dialogs, each on
-	/// its own transaction.
+	/// Retries after a 491, per leg. Three fit inside the 32 s the first leg's 2xx
+	/// waits for its ACK.
+	static final int MAX_RETRIES = 3;
+
+	/// How long after the first leg's 2xx its ACK may still be sent: 64*T1 (32 s)
+	/// less a margin, since the endpoint ends the dialog once it stops
+	/// retransmitting.
+	static final long ACK_WINDOW_MS = 30_000;
+
+	/// The retry delay after a 491 (RFC 3261 section 14.1): a random value between
+	/// 2.1 and 4 seconds, in units of 10 ms. The RFC gives this range to the owner of
+	/// the Call-ID and 0 to 2 seconds to the other side; BLADE cannot tell which it
+	/// is on every leg, and the longer range never collides with a peer using the
+	/// shorter one.
+	static final long RETRY_MIN_MS = 2_100;
+	static final long RETRY_MAX_MS = 4_000;
+
+	/// For the expiration probe, the appSession lifetime to restore when the chain
+	/// completes; null for a periodic refresh.
+	private final Integer confirmMinutes;
+
+	/// A periodic refresh, as the session keep-alive callback.
+	public KeepAlive() {
+		this.confirmMinutes = null;
+	}
+
+	private KeepAlive(int confirmMinutes) {
+		this.confirmMinutes = confirmMinutes;
+	}
+
+	/// The container's refresh callback: refresh this dialog and the one linked
+	/// to it.
 	///
-	/// @param sipSession the SIP session that triggered the keep-alive
+	/// @param sipSession the dialog whose keep-alive timer fired
 	@Override
 	public void handle(SipSession sipSession) {
-		if (sipSession == null) {
+		if (sipSession == null || !sipSession.isValid()) {
 			return;
 		}
-
 		SipSession linkedSession = getLinkedSession(sipSession);
-		if (linkedSession == null) {
+		if (linkedSession == null || !linkedSession.isValid()) {
 			return;
 		}
-
-		refreshLeg(sipSession, linkedSession);
-		refreshLeg(linkedSession, sipSession);
+		offer(sipSession, linkedSession, 0, false, null);
 	}
 
-	/// Refresh one dialog by re-offering the media its peer already advertised.
-	/// The re-INVITE carries the peer's cached SDP (from
-	/// [Callflow#LAST_SDP][org.vorpal.blade.framework.v2.callflow.Callflow#LAST_SDP]);
-	/// the endpoint answers in its 2xx and BLADE ACKs. Nothing changed, so the
-	/// endpoint keeps its media as-is. A non-2xx is auto-ACKed by the container
-	/// and leaves the dialog untouched (media was never renegotiated), so there
-	/// is nothing to unwind and the peer leg is unaffected.
-	///
-	/// When no cached peer SDP is available, the leg is skipped for this cycle
-	/// rather than fall back to an offerless re-INVITE, which would solicit an
-	/// offer BLADE has no answer for and reintroduce the orphaned-ACK failure.
-	///
-	/// @param target the dialog to refresh
-	/// @param peer   the linked dialog whose advertised SDP is re-offered
-	private void refreshLeg(SipSession target, SipSession peer) {
-		try {
-			if (target == null || !target.isValid()) {
-				return;
-			}
-
-			Object offer = (peer != null && peer.isValid()) ? peer.getAttribute(LAST_SDP) : null;
-			if (offer == null) {
-				if (sipLogger.isLoggable(Level.FINER)) {
-					sipLogger.finer(target, "KeepAlive.refreshLeg - no cached peer SDP; skipping this leg this cycle");
-				}
-				return;
-			}
-
-			sendRefresh(target, offer, null);
-		} catch (Exception ex) {
-			sipLogger.logStackTrace(target, ex);
-		}
-	}
-
-	/// Send one refresh re-INVITE on `target` offering `offer`, and ACK on 2xx.
-	///
-	/// On 422 Session Interval Too Small (RFC 4028) the refresh retries once with
-	/// Session-Expires raised to the Min-SE the 422 carried. A 422 is only
-	/// reachable if the far end's Min-SE now exceeds the interval it already
-	/// accepted at call setup; the single-retry guard (`forceMinSE == null` marks
-	/// the first attempt) stops a misbehaving peer from looping. Any other non-2xx
-	/// is auto-ACKed by the container and leaves the dialog untouched.
-	///
-	/// @param target     the dialog to refresh
-	/// @param offer       the SDP body to re-offer (application/sdp)
-	/// @param forceMinSE the Min-SE / Session-Expires to force on this attempt,
-	///        or null on the first attempt (let the negotiated interval stand)
-	private void sendRefresh(SipSession target, Object offer, String forceMinSE)
-			throws ServletException, IOException {
-
-		SipServletRequest invite = target.createRequest(INVITE);
-		invite.setContent(offer, APPLICATION_SDP);
-		if (forceMinSE != null) {
-			invite.setHeader(SESSION_EXPIRES, forceMinSE);
-			invite.setHeader(MIN_SE, forceMinSE);
-		}
-
-		boolean firstAttempt = (forceMinSE == null);
-
-		sendRequest(invite, (response) -> {
-			if (provisional(response)) {
-				return;
-			}
-			if (successful(response)) {
-				// Answer arrived in the 2xx; the ACK carries no body.
-				sendRequest(response.createAck());
-				return;
-			}
-			if (firstAttempt && response.getStatus() == 422) {
-				String peerMinSE = response.getHeader(MIN_SE);
-				if (peerMinSE != null) {
-					sendRefresh(target, offer, peerMinSE);
-				}
-			}
-		});
-	}
-
-	/// Last-chance liveness probe, driven by the SipApplicationSession expiry
-	/// listener (`AsyncSipServlet.sessionExpired`). Re-INVITEs both dialogs and
-	/// keeps the session alive — extends it to `fullMinutes` — only if BOTH
-	/// endpoints answer 2xx. If either leg is dead (non-2xx, or no answer before
-	/// the grace window lapses) the call is torn down and allowed to expire.
-	///
-	/// This lets a call that is actually still up survive a BLADE bookkeeping
-	/// timeout — the case where an external element keeps the media alive and the
-	/// operator has turned BLADE keep-alive off — while a genuinely dead call
-	/// still dies. The caller must already have extended the appSession by a grace
-	/// window so it survives the probe round-trip.
+	/// Last-chance liveness probe, run when the SipApplicationSession expires
+	/// (`AsyncSipServlet.sessionExpired`): the refresh chain, once. A call that
+	/// completes it, or whose endpoints are alive but decline to refresh, gets
+	/// `fullMinutes` back; a call an endpoint has lost is hung up. The caller has
+	/// already extended the appSession by a grace window so it survives the round
+	/// trip; a leg that never answers lets that window lapse.
 	///
 	/// @param first       one dialog of the call; its peer is found via getLinkedSession
-	/// @param fullMinutes the expiration to set if the probe confirms both legs alive
+	/// @param fullMinutes the expiration to restore if the call is alive
 	public void probeAndConfirm(SipSession first, int fullMinutes) {
 		if (first == null || !first.isValid()) {
 			return;
 		}
 		SipSession second = getLinkedSession(first);
-		if (second == null) {
+		if (second == null || !second.isValid()) {
 			return;
 		}
+		new KeepAlive(fullMinutes).offer(first, second, 0, false, null);
+	}
 
-		// Offer each endpoint the media its peer already advertised (see refreshLeg).
-		Object offerToFirst = validSdp(second);
-		Object offerToSecond = validSdp(first);
-		if (offerToFirst == null || offerToSecond == null) {
-			// No negotiated media to re-offer: cannot confirm the call safely, so
-			// reap and let it expire rather than guess it is alive.
-			new KeepAliveExpiry().handle(first);
-			return;
-		}
-
-		Tally tally = new Tally();
+	/// Send `from` an offerless re-INVITE; its 2xx carries the offer relayed to `to`.
+	///
+	/// @param reversed true when this is the second attempt, from the other leg
+	/// @param minSE    the Session-Expires and Min-SE to force after a 422, or null
+	void offer(SipSession from, SipSession to, int retries, boolean reversed, String minSE) {
 		try {
-			probeLeg(first, offerToFirst, tally, fullMinutes);
-			probeLeg(second, offerToSecond, tally, fullMinutes);
+			if (from == null || to == null || !from.isValid() || !to.isValid()) {
+				return; // the call ended while a retry waited
+			}
+			SipServletRequest invite = from.createRequest(INVITE);
+			forceInterval(invite, minSE);
+
+			String fromId = from.getId();
+			String toId = to.getId();
+			sendRequest(invite, (fromAnswer) -> {
+				if (provisional(fromAnswer)) {
+					return;
+				}
+				int status = fromAnswer.getStatus();
+				if (successful(fromAnswer)) {
+					relay(fromAnswer, to, System.currentTimeMillis(), 0, reversed, null);
+				} else if (status == 491 && retries < MAX_RETRIES) {
+					later(from, (timer) -> {
+						SipApplicationSession app = timer.getApplicationSession();
+						offer(app.getSipSession(fromId), app.getSipSession(toId), retries + 1, reversed, minSE);
+					});
+				} else if (status == 422 && minSE == null && fromAnswer.getHeader(MIN_SE) != null) {
+					offer(from, to, retries, reversed, fromAnswer.getHeader(MIN_SE));
+				} else if (callLost(status)) {
+					lost(from, status);
+				} else if (!reversed) {
+					offer(to, from, 0, true, null);
+				} else {
+					declined(from, status);
+				}
+			});
 		} catch (Exception ex) {
-			sipLogger.logStackTrace(first, ex);
+			sipLogger.logStackTrace(from, ex);
 		}
 	}
 
-	private static Object validSdp(SipSession session) {
-		return (session != null && session.isValid()) ? session.getAttribute(LAST_SDP) : null;
-	}
-
-	/// Probe one leg. ACK a 2xx immediately (never orphan it), then record the
-	/// outcome. When both legs have reported: both alive extends the appSession to
-	/// `fullMinutes`; any dead leg reaps the call (BYE both) and leaves the grace
-	/// window to collect it. A leg that never answers leaves the tally short of
-	/// both, so the grace window lapses and the session expires on its own.
-	private void probeLeg(SipSession target, Object offer, Tally tally, int fullMinutes)
-			throws ServletException, IOException {
-
-		SipServletRequest invite = target.createRequest(INVITE);
-		invite.setContent(offer, APPLICATION_SDP);
-
-		sendRequest(invite, (response) -> {
-			if (provisional(response)) {
+	/// Relay the first leg's offer to `to`, and carry the answer back in the first
+	/// leg's ACK.
+	///
+	/// @param answeredAt when the first leg's 2xx arrived; its ACK is due within
+	///        [#ACK_WINDOW_MS]
+	void relay(SipServletResponse fromAnswer, SipSession to, long answeredAt, int retries, boolean reversed,
+			String minSE) {
+		SipSession from = fromAnswer.getSession();
+		try {
+			if (to == null || !to.isValid()) {
+				answerAndEnd(fromAnswer, 481); // the other leg ended while a retry waited
+				return;
+			}
+			if (fromAnswer.getContentType() == null) {
+				// No offer in the 2xx, against RFC 3261 section 13.2.1; nothing to relay and
+				// nothing to answer. The first leg is refreshed; refresh the other on its own.
+				sendRequest(fromAnswer.createAck());
+				if (!reversed) {
+					offer(to, from, 0, true, null);
+				} else {
+					succeeded(from);
+				}
 				return;
 			}
 
-			boolean alive = successful(response);
-			if (alive) {
-				sendRequest(response.createAck());
-			} else {
-				tally.failed = true;
-			}
+			SipServletRequest invite = to.createRequest(INVITE);
+			copyContent(fromAnswer, invite);
+			forceInterval(invite, minSE);
 
-			// Container serializes response callbacks per appSession, so this
-			// countdown needs no synchronization.
-			if (--tally.pending == 0) {
-				if (tally.failed) {
-					new KeepAliveExpiry().handle(response.getSession());
+			sendRequest(invite, (toAnswer) -> {
+				if (provisional(toAnswer)) {
+					return;
+				}
+				int status = toAnswer.getStatus();
+				if (successful(toAnswer)) {
+					sendRequest(copyContent(toAnswer, fromAnswer.createAck()));
+					sendRequest(toAnswer.createAck());
+					succeeded(from);
+				} else if (status == 491 && retries < MAX_RETRIES
+						&& System.currentTimeMillis() - answeredAt + RETRY_MAX_MS < ACK_WINDOW_MS) {
+					String toId = to.getId();
+					later(to, (timer) -> relay(fromAnswer, timer.getApplicationSession().getSipSession(toId),
+							answeredAt, retries + 1, reversed, minSE));
+				} else if (status == 422 && minSE == null && toAnswer.getHeader(MIN_SE) != null) {
+					relay(fromAnswer, to, answeredAt, retries, reversed, toAnswer.getHeader(MIN_SE));
 				} else {
-					SipApplicationSession appSession = response.getApplicationSession();
-					if (appSession != null && appSession.isValid()) {
-						appSession.setExpires(fullMinutes);
-					}
+					answerAndEnd(fromAnswer, status);
+				}
+			});
+		} catch (Exception ex) {
+			sipLogger.logStackTrace(to, ex);
+			answerAndEnd(fromAnswer, 500);
+		}
+	}
+
+	/// The first leg's offer cannot be answered from the other leg: acknowledge it
+	/// with a valid answer that rejects every stream, then hang up (RFC 3261
+	/// section 13.2.2.4).
+	private void answerAndEnd(SipServletResponse fromAnswer, int status) {
+		sipLogger.warning(fromAnswer, "KeepAlive - the other leg answered " + status
+				+ " to the relayed offer; acknowledging with every stream rejected and ending the call");
+		try {
+			SipServletRequest ack = fromAnswer.createAck();
+			String contentType = fromAnswer.getContentType();
+			if (contentType != null && contentType.toLowerCase().startsWith(APPLICATION_SDP)) {
+				ack.setContent(rejectAll(fromAnswer.getContent()), APPLICATION_SDP);
+			}
+			sendRequest(ack);
+		} catch (Exception ex) {
+			sipLogger.logStackTrace(fromAnswer, ex);
+		}
+		new KeepAliveExpiry().handle(fromAnswer.getSession());
+	}
+
+	/// An endpoint answered with a response that ends its dialog or invite usage
+	/// (RFC 5057), or the request timed out: it has lost the call. Hang up both legs.
+	private void lost(SipSession from, int status) {
+		sipLogger.warning(from, "KeepAlive - re-INVITE answered " + status + "; the endpoint has lost the call, ending it");
+		new KeepAliveExpiry().handle(from);
+	}
+
+	/// Both legs answered, but neither would take an offerless re-INVITE. The
+	/// endpoints are alive; a probe keeps the call, and a refresh leaves it to the
+	/// session timer.
+	private void declined(SipSession from, int status) {
+		sipLogger.warning(from, "KeepAlive - both legs declined an offerless re-INVITE (last " + status + ")");
+		succeeded(from);
+	}
+
+	/// The chain completed. A probe restores the appSession lifetime.
+	private void succeeded(SipSession session) {
+		if (confirmMinutes == null) {
+			return;
+		}
+		SipApplicationSession appSession = session.getApplicationSession();
+		if (appSession != null && appSession.isValid()) {
+			appSession.setExpires(confirmMinutes);
+			if (sipLogger.isLoggable(Level.FINE)) {
+				sipLogger.fine(appSession, "KeepAlive - probe confirmed the call; expires in " + confirmMinutes + " minutes");
+			}
+		}
+	}
+
+	/// After a 422 (RFC 4028), retry once with the Session-Expires raised to the
+	/// peer's Min-SE.
+	private static void forceInterval(SipServletRequest invite, String minSE) {
+		if (minSE != null) {
+			invite.setHeader(SESSION_EXPIRES, minSE);
+			invite.setHeader(MIN_SE, minSE);
+		}
+	}
+
+	/// Run `callback` after the RFC 3261 section 14.1 retry delay.
+	private static void later(SipSession session, Callback<ServletTimer> callback) {
+		long delay = RETRY_MIN_MS + 10 * ThreadLocalRandom.current().nextLong((RETRY_MAX_MS - RETRY_MIN_MS) / 10 + 1);
+		startTimer(session.getApplicationSession(), delay, false, callback);
+	}
+
+	/// Whether a final response to a re-INVITE means the endpoint no longer has the
+	/// call: a response that destroys the dialog or its usage (RFC 5057 section 5.1:
+	/// 404, 405, 410, 416, 480, 481, 482, 483, 484, 485, 489, 501, 502, 604), or a
+	/// timeout (408; RFC 3261 section 14.1 ends the dialog on a 481, a 408 or no
+	/// response).
+	static boolean callLost(int status) {
+		switch (status) {
+		case 404:
+		case 405:
+		case 408:
+		case 410:
+		case 416:
+		case 480:
+		case 481:
+		case 482:
+		case 483:
+		case 484:
+		case 485:
+		case 489:
+		case 501:
+		case 502:
+		case 604:
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	/// An answer to `offer` that rejects every stream: the offer with each media
+	/// line's port set to zero (RFC 3264 section 6).
+	static String rejectAll(Object offer) {
+		String sdp = (offer instanceof byte[]) ? new String((byte[]) offer, StandardCharsets.UTF_8) : String.valueOf(offer);
+		StringBuilder answer = new StringBuilder();
+		for (String line : sdp.split("\r?\n")) {
+			if (line.startsWith("m=")) {
+				String[] media = line.split(" ", 3);
+				if (media.length == 3) {
+					line = media[0] + " 0 " + media[2];
 				}
 			}
-		});
+			answer.append(line).append("\r\n");
+		}
+		return answer.toString();
 	}
 
-	/// Two-leg join state for [#probeAndConfirm]. Serializable so it may be
-	/// captured by the serializable response callbacks that ride the appSession.
-	private static final class Tally implements Serializable {
-		private static final long serialVersionUID = 1L;
-		int pending = 2;
-		boolean failed = false;
-	}
 }

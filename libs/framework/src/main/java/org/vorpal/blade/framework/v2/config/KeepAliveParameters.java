@@ -20,7 +20,7 @@ public class KeepAliveParameters implements Serializable {
 
 	protected Integer minSE = null;
 
-	@JsonPropertyDescription("Sets keep alive style: DISABLED or REINVITE. REINVITE refreshes each dialog with a re-INVITE re-offering its already-negotiated media.")
+	@JsonPropertyDescription("Sets keep alive style: DISABLED or REINVITE. REINVITE refreshes the call with one offerless re-INVITE, chained through both dialogs.")
 	public KeepAlive getStyle() {
 		return style;
 	}

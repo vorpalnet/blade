@@ -6,61 +6,54 @@ import javax.servlet.sip.SipSession;
 import org.vorpal.blade.framework.v2.callflow.ClientCallflow;
 
 /* Visit https://plantuml.com/sequence-diagram for notes on how to draw.
-@startuml doc-files/keepalive_reinvite.png
-title Keep Alive ReINVITE: Container refreshes RTP streams
+@startuml doc-files/keepalive_expiry.png
+title Keep-Alive expiry: no refresh within the session interval
 hide footbox
 participant Alice as alice
-participant KeepAlive as blade
+participant KeepAliveExpiry as blade
 participant Bob as bob
 
-alice     <-->      bob : RTP
-alice <-  blade         : INVITE
-alice --> blade         : 200 OK (SDP)
-          blade ->  bob : INVITE (SDP)            
-          blade <-- bob : 200 OK (SDP) 
-alice <-  blade         : ACK (SDP)
+alice <-  blade          : BYE
+alice --> blade          : 200 OK
+          blade ->  bob  : BYE
+          blade <-- bob  : 200 OK
 
 @enduml
 */
 
-/**
- * Handles session expiry by terminating both call dialogs with BYE requests.
- * Used when a keep-alive timeout occurs and the call should be terminated.
- *
- * @see SessionKeepAlive.Callback
- */
+/// Ends a call by hanging up both of its dialogs: the container's expiry callback
+/// when no refresh arrived within the session interval, and the keep-alive's own
+/// teardown when an endpoint has lost the call.
+///
+/// @see SessionKeepAlive.Callback
 public class KeepAliveExpiry extends ClientCallflow implements SessionKeepAlive.Callback {
 
 	private static final long serialVersionUID = 1L;
 
-	/**
-	 * Handles session expiry by sending BYE to both call dialogs.
-	 *
-	 * @param sipSession the SIP session that expired
-	 */
+	/// Hang up this dialog and the one linked to it.
+	///
+	/// @param sipSession the dialog whose session expired, or that lost the call
 	@Override
 	public void handle(SipSession sipSession) {
-		// Defensive null check for sipSession parameter
 		if (sipSession == null) {
 			return;
 		}
+		SipSession linkedSession = sipSession.isValid() ? getLinkedSession(sipSession) : null;
+		bye(sipSession);
+		bye(linkedSession);
+	}
 
+	/// Hang up one dialog, unless the container has already ended it. A request
+	/// inside a dialog answered 481 or 408 ends that dialog on the spot (RFC 3261
+	/// section 12.2.1.2: "the UAC SHOULD terminate the dialog"), and a TERMINATED
+	/// dialog cannot create a request; there is nothing left to hang up.
+	private void bye(SipSession session) {
 		try {
-			if (sipSession.isValid()) {
-				sendRequest(sipSession.createRequest(BYE));
+			if (session != null && session.isValid() && session.getState() != SipSession.State.TERMINATED) {
+				sendRequest(session.createRequest(BYE));
 			}
 		} catch (Exception ex) {
-			sipLogger.logStackTrace(sipSession, ex);
-		}
-
-		SipSession linkedSession = getLinkedSession(sipSession);
-
-		try {
-			if (linkedSession != null && linkedSession.isValid()) {
-				sendRequest(linkedSession.createRequest(BYE));
-			}
-		} catch (Exception ex) {
-			sipLogger.logStackTrace(linkedSession, ex);
+			sipLogger.logStackTrace(session, ex);
 		}
 	}
 }

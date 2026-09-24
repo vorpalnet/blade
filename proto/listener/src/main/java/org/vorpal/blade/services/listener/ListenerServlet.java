@@ -151,6 +151,10 @@ public class ListenerServlet extends B2buaServlet implements B2buaListener {
 
 		try {
 			byte[] callerOffer = bodyOf(outboundRequest);
+			// The keep-alive relays one endpoint's offer to the other, around the
+			// media server; the next application downstream refreshes instead, and its
+			// re-INVITE is re-anchored on the way through.
+			org.vorpal.blade.framework.Callflow.declineKeepAlive(outboundRequest);
 			doNotProcess(outboundRequest);
 			HALTED.put(app.getId(), callflow);
 			new ListenerAnchor().begin(app, callerOffer, calleeOffer -> {
