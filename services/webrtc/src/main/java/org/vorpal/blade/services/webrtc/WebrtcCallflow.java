@@ -57,6 +57,12 @@ public abstract class WebrtcCallflow extends MediaCallflow {
 
 	/// The RFC 6086 Info Package these events travel as. The gateway advertises it with `Recv-Info`
 	/// on each call it establishes, and a sender names it in `Info-Package` on each `INFO`.
+	///
+	/// A sender keeps one `INFO` in this package outstanding per dialog, and sends none while an
+	/// INVITE transaction of its own is open on the dialog: the next event waits for the previous
+	/// one's final response. RFC 6086 section 10.8 leaves overlapping `INFO`s to each package to
+	/// allow or forbid, and this one forbids them. The gateway answers `491` to an `INFO` that arrives
+	/// while a transaction of its own is open on the dialog, and the sender retries it.
 	public static final String INFO_PACKAGE = "blade-event";
 
 	/// Say this dialog accepts [#INFO_PACKAGE] events (RFC 6086 `Recv-Info`), on the INVITE or the
