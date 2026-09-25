@@ -130,7 +130,7 @@ public class BrowserAuthenticatorTest {
 		BrowserAuthenticator.Decision d = authenticator.authorize(enabledConfig(), token, "intern@vorpal.net");
 
 		assertFalse(d.isAllowed());
-		assertTrue(d.getReason().contains("no BLADE role"));
+		assertTrue(d.getReason().contains("no role this gateway admits"));
 	}
 
 	// ---- not authenticated ---------------------------------------------------------------------
@@ -211,5 +211,51 @@ public class BrowserAuthenticatorTest {
 
 		assertFalse(authenticator.authorize(off, null, null).isAllowed());
 		assertFalse(authenticator.authorize(off, null, "   ").isAllowed());
+	}
+
+	// ---- participants who are not administrators ------------------------------------------------
+
+	@Test
+	public void refusesAParticipantRoleTheGatewayWasNotToldToAdmit() throws Exception {
+		String token = tokenFor("pat", "pat@vorpal.net", "Participant");
+
+		BrowserAuthenticator.Decision d = authenticator.authorize(enabledConfig(), token, "pat@vorpal.net");
+
+		assertFalse(d.isAllowed());
+		assertTrue(d.getReason().contains("no role this gateway admits"));
+	}
+
+	@Test
+	public void admitsAParticipantRoleTheGatewayNames() throws Exception {
+		String token = tokenFor("pat", "pat@vorpal.net", "Participant");
+
+		BrowserAuthenticator.Decision d = authenticator.authorize(enabledConfig(),
+				Collections.singletonList("Participant"), token, "pat@vorpal.net");
+
+		assertTrue(d.isAllowed());
+		assertEquals("pat@vorpal.net", d.getAor());
+		assertTrue(d.getRoles().contains("Participant"));
+	}
+
+	@Test
+	public void stillAdmitsAnAdministratorWhenParticipantRolesAreNamed() throws Exception {
+		String token = tokenFor("alice", "alice@vorpal.net", "Admin");
+
+		BrowserAuthenticator.Decision d = authenticator.authorize(enabledConfig(),
+				Collections.singletonList("Participant"), token, "alice@vorpal.net");
+
+		assertTrue(d.isAllowed());
+		assertTrue(d.getRoles().contains("Admin"));
+	}
+
+	@Test
+	public void anUnauthenticatedBrowserCarriesNoRoles() {
+		JwtAuthConfig open = enabledConfig();
+		open.setEnabled(false);
+
+		BrowserAuthenticator.Decision d = authenticator.authorize(open, null, "alice@vorpal.net");
+
+		assertTrue(d.isAllowed());
+		assertTrue(d.getRoles().isEmpty());
 	}
 }

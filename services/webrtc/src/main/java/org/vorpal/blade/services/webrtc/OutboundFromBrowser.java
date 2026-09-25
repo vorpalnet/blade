@@ -61,11 +61,12 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 		// Nothing originates this callflow from the network; see start().
 	}
 
-	/// Place a call for `aor` to the target named in `offerEvent`.
+	/// Place a call for `aor` to the target named in `offerEvent`, asserting the browser's verified
+	/// `roles` on it ([#ASSERTED_ROLES]; null when the browser was not authenticated).
 	///
 	/// @return the call id the browser should quote in later events, or null if the request was
 	///         rejected (the browser has already been told why)
-	public String start(String aor, CloudEvent offerEvent) throws Exception {
+	public String start(String aor, java.util.List<String> roles, CloudEvent offerEvent) throws Exception {
 		String target = SignalProtocol.field(offerEvent, "target");
 		String browserOffer = SignalProtocol.field(offerEvent, "sdp");
 		if (target == null || browserOffer == null) {
@@ -98,6 +99,7 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 		// Strip CR/LF and quotes from the name: it is client-supplied and rides a header, so it must not
 		// be able to inject a second header line.
 		assertIdentity(invite, aor, SignalProtocol.field(offerEvent, "displayName"));
+		assertRoles(invite, roles);
 		advertiseEvents(invite);
 
 		String dialled = targetAor(target, aor);
@@ -144,6 +146,30 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 		String uri = "<sip:" + aor + ">";
 		String name = (displayName == null) ? "" : displayName.replaceAll("[\\r\\n\"]", "").trim();
 		invite.setHeader("P-Asserted-Identity", name.isEmpty() ? uri : "\"" + name + "\" " + uri);
+	}
+
+	/// Header naming the roles the browser's verified token carried, comma-separated. Set only here,
+	/// from [BrowserAuthenticator.Decision#getRoles], so like `P-Asserted-Identity` it is the network's
+	/// assertion and not the browser's; an application trusts it only from a trusted peer
+	/// (`blade.trustedPeers`). Absent when the browser was not authenticated.
+	public static final String ASSERTED_ROLES = "X-Asserted-Roles";
+
+	/// Set [#ASSERTED_ROLES] on the outbound INVITE. A role name is sanitized the same way as a
+	/// display name: it came from a token, but it is carried in a header.
+	static void assertRoles(SipServletRequest invite, java.util.List<String> roles) {
+		if (roles == null || roles.isEmpty()) {
+			return;
+		}
+		StringBuilder value = new StringBuilder();
+		for (String role : roles) {
+			String clean = (role == null) ? "" : role.replaceAll("[\\r\\n,]", "").trim();
+			if (!clean.isEmpty()) {
+				value.append(value.length() == 0 ? "" : ", ").append(clean);
+			}
+		}
+		if (value.length() > 0) {
+			invite.setHeader(ASSERTED_ROLES, value.toString());
+		}
 	}
 
 	// ---- pass-through -------------------------------------------------------------------------

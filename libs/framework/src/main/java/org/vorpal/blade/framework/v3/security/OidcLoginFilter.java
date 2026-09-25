@@ -40,6 +40,7 @@ import com.nimbusds.oauth2.sdk.pkce.CodeVerifier;
 ///
 /// ## Which door a request comes through
 ///
+/// 0. A path named in the [#PUBLIC_PATHS] init parameter passes untouched.
 /// 1. `Authorization: Bearer <token>`: the token is verified and the request
 ///    proceeds as that identity, with no session. This is the API client's
 ///    path, and it needs no browser.
@@ -160,6 +161,44 @@ public class OidcLoginFilter implements Filter {
 	@Override
 	public void init(FilterConfig filterConfig) {
 		this.filterConfig = filterConfig;
+		setPublicPaths(filterConfig.getInitParameter(PUBLIC_PATHS));
+	}
+
+	/// Init parameter: paths under the context root the filter leaves alone,
+	/// comma-separated. An entry ending in `/*` covers everything beneath it;
+	/// any other entry names one path exactly. For what must answer without a
+	/// sign-in, such as a published key set another tier fetches or the
+	/// container's own login page.
+	public static final String PUBLIC_PATHS = "publicPaths";
+
+	private volatile java.util.List<String> publicPaths = java.util.Collections.emptyList();
+
+	/// Set the paths that pass without a sign-in; see [#PUBLIC_PATHS].
+	void setPublicPaths(String paths) {
+		java.util.List<String> list = new java.util.ArrayList<>();
+		if (paths != null) {
+			for (String path : paths.split(",")) {
+				if (!path.trim().isEmpty()) {
+					list.add(path.trim());
+				}
+			}
+		}
+		this.publicPaths = list;
+	}
+
+	/// Whether `path`, relative to the context root, is one of the public paths.
+	boolean isPublic(String path) {
+		for (String entry : publicPaths) {
+			if (entry.endsWith("/*")) {
+				String prefix = entry.substring(0, entry.length() - 1);
+				if (path.startsWith(prefix) || path.equals(prefix.substring(0, prefix.length() - 1))) {
+					return true;
+				}
+			} else if (path.equals(entry)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	@Override
@@ -175,6 +214,13 @@ public class OidcLoginFilter implements Filter {
 		}
 		HttpServletRequest req = (HttpServletRequest) request;
 		HttpServletResponse res = (HttpServletResponse) response;
+
+		// 0. a path the application publishes to everyone
+		if (!publicPaths.isEmpty() && isPublic(req.getRequestURI().substring(req.getContextPath().length()))) {
+			chain.doFilter(req, res);
+			return;
+		}
+
 		OidcLoginConfig cfg = currentConfig();
 
 		// 1. an API client with a token

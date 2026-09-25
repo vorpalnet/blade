@@ -22,13 +22,18 @@ So the app mints a short-lived signed token instead:
 
 | Endpoint | Auth | Purpose |
 |---|---|---|
-| `GET api/v1/session` | FORM | Who you are and what this deployment allows |
-| `POST api/v1/token[?aor=]` | FORM, four roles | Mint a token for the signed-in user |
+| `GET api/v1/session` | signed in | Who you are and what this deployment allows |
+| `POST api/v1/token[?aor=]` | signed in, an admin or participant role | Mint a token for the signed-in user |
 | `GET api/v1/jwks.json` | **none** | Public signing keys, fetched by the engine tier |
 
-The JWKS is deliberately open — the gateway fetches it from a host where it has no admin
-session, exactly as it would fetch an IdP's. Its `web.xml` carve-out is an *exact* path
-pattern, not a prefix, so `api/v1/token` stays behind the login.
+Signing in goes through the deployment's OpenID Connect provider when the WAR carries
+`WEB-INF/blade-oidc.properties` (deploy.sh adds it from `~/.blade/<env>/oidc/blade-phone.properties`),
+so a person with a directory account and no WebLogic account can get a token. Without the
+file it is the WebLogic login, as before.
+
+The JWKS is deliberately open. The gateway fetches it from a host where it has no admin
+session, exactly as it would fetch an IdP's. It is named exactly in the sign-in filter's public
+paths, not as a prefix, so `api/v1/token` stays behind the sign-in.
 
 **The token names the address, and the gateway honors nothing else.** Whatever address is
 registered, the browser cannot claim one it was not issued — that is fixed regardless of the
@@ -39,7 +44,7 @@ answers it. It defaults to **on**, because a browser-to-browser call needs two a
 most deployments have exactly one operator account: with it off, the app cannot be tested or
 demonstrated without creating realm users. With it on, an authenticated administrator can be
 issued a token for any `user@host`. What survives either way is that the caller must be signed
-in and hold a BLADE role, and that the token's subject is always the real username — so
+in and hold a BLADE role or one of the `participantRoles`, and that the token's subject is always the real username — so
 `webrtc` logs who actually registered even when the address they took is someone else's name.
 
 Turn it off to bind each person to exactly one address, `<username>@<aorDomain>`; the page's

@@ -122,6 +122,9 @@ public class SignalEndpoint {
 
 	// ---- handlers -----------------------------------------------------------------------------
 
+	/// WebSocket session property: the roles the browser's token carried ([BrowserAuthenticator.Decision#getRoles]).
+	static final String ROLES = "roles";
+
 	/// Claim an address so calls can be routed to this browser.
 	///
 	/// This is the gate. Everything else the browser can ask for — placing a
@@ -134,7 +137,7 @@ public class SignalEndpoint {
 		String token = SignalProtocol.field(event, "token");
 
 		BrowserAuthenticator.Decision decision =
-				AUTHENTICATOR.authorize(WebrtcServlet.jwtConfig(), token, requestedAor);
+				AUTHENTICATOR.authorize(WebrtcServlet.jwtConfig(), WebrtcServlet.browserRoles(), token, requestedAor);
 
 		Logger logger = log();
 		if (!decision.isAllowed()) {
@@ -157,6 +160,7 @@ public class SignalEndpoint {
 		// once here is what keeps the two stores naming the same browser.
 		String aor = decision.getAor().toLowerCase();
 		BrowserRegistry.register(aor, session);
+		session.getUserProperties().put(ROLES, decision.getRoles());
 		if (logger != null) {
 			logger.info("webrtc: " + aor + " registered on this node"
 					+ (decision.isAuthenticated()
@@ -217,7 +221,9 @@ public class SignalEndpoint {
 					"session.connect required first"));
 			return;
 		}
-		String callId = new OutboundFromBrowser().start(aor, event);
+		@SuppressWarnings("unchecked")
+		java.util.List<String> roles = (java.util.List<String>) session.getUserProperties().get(ROLES);
+		String callId = new OutboundFromBrowser().start(aor, roles, event);
 		if (callId != null) {
 			fine("webrtc: " + aor + " placed call " + callId);
 		}

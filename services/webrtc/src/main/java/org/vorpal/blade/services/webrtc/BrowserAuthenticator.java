@@ -31,26 +31,29 @@ public class BrowserAuthenticator {
 		private final String aor;
 		private final String user;
 		private final String reason;
+		private final java.util.List<String> roles;
 
-		private Decision(boolean allowed, boolean authenticated, String aor, String user, String reason) {
+		private Decision(boolean allowed, boolean authenticated, String aor, String user, String reason,
+				java.util.List<String> roles) {
 			this.allowed = allowed;
 			this.authenticated = authenticated;
 			this.aor = aor;
 			this.user = user;
 			this.reason = reason;
+			this.roles = roles;
 		}
 
-		static Decision allow(String aor, String user) {
-			return new Decision(true, true, aor, user, null);
+		static Decision allow(String aor, String user, java.util.List<String> roles) {
+			return new Decision(true, true, aor, user, null, roles);
 		}
 
 		/// Allowed, but nothing was proved — authentication is switched off.
 		static Decision unauthenticated(String aor) {
-			return new Decision(true, false, aor, null, null);
+			return new Decision(true, false, aor, null, null, java.util.Collections.emptyList());
 		}
 
 		static Decision deny(String reason) {
-			return new Decision(false, false, null, null, reason);
+			return new Decision(false, false, null, null, reason, java.util.Collections.emptyList());
 		}
 
 		public boolean isAllowed() {
@@ -80,6 +83,13 @@ public class BrowserAuthenticator {
 		public String getReason() {
 			return reason;
 		}
+
+		/// Every role and group the token's roles claim carried, mapped or as written. Empty when
+		/// unauthenticated. The gateway asserts them on the calls this browser places, so the
+		/// application behind it can decide by role (who hosts a meeting) without a login of its own.
+		public java.util.List<String> getRoles() {
+			return roles;
+		}
 	}
 
 	private volatile JwtAuthConfig boundConfig;
@@ -92,6 +102,15 @@ public class BrowserAuthenticator {
 	/// @param requestedAor the address the browser asked for, or null to accept
 	///                     whatever the token grants
 	public Decision authorize(JwtAuthConfig config, String token, String requestedAor) {
+		return authorize(config, java.util.Collections.emptyList(), token, requestedAor);
+	}
+
+	/// Decide whether `requestedAor` may be claimed with `token`, admitting holders of
+	/// `browserRoles` as well as of the admin roles.
+	///
+	/// @param browserRoles roles or groups, beyond the four admin roles, whose members may connect
+	public Decision authorize(JwtAuthConfig config, java.util.List<String> browserRoles, String token,
+			String requestedAor) {
 		if (config == null) {
 			// No configuration at all — the settings failed to load, or the
 			// endpoint started before the SIP servlet that owns them. Refuse.
@@ -130,8 +149,20 @@ public class BrowserAuthenticator {
 			return Decision.deny("token rejected: " + e.getMessage());
 		}
 
-		if (!identity.hasAnyAdminRole()) {
-			return Decision.deny("'" + identity.getName() + "' carries no BLADE role");
+		java.util.List<String> held = new java.util.ArrayList<>(identity.roles());
+		for (String group : identity.groups()) {
+			if (!held.contains(group)) {
+				held.add(group);
+			}
+		}
+		boolean admitted = identity.hasAnyAdminRole();
+		if (!admitted && browserRoles != null) {
+			for (String role : browserRoles) {
+				admitted |= held.contains(role);
+			}
+		}
+		if (!admitted) {
+			return Decision.deny("'" + identity.getName() + "' carries no role this gateway admits");
 		}
 
 		String granted = identity.claim("aor");
@@ -146,7 +177,7 @@ public class BrowserAuthenticator {
 					+ ", not " + requestedAor.trim());
 		}
 
-		return Decision.allow(granted, identity.getName());
+		return Decision.allow(granted, identity.getName(), held);
 	}
 
 	/// The validator for `config`, cached until the config object changes — the

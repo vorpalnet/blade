@@ -125,6 +125,15 @@ public class WebrtcServlet extends AsyncSipServlet {
 		return (current == null) ? null : current.getJwt();
 	}
 
+	/// The roles, beyond the admin roles, whose tokens may connect a browser; empty when settings are
+	/// not loaded.
+	public static java.util.List<String> browserRoles() {
+		SettingsManager<WebrtcSettings> sm = settings;
+		WebrtcSettings current = (sm == null) ? null : sm.getCurrent();
+		return (current == null || current.getBrowserRoles() == null) ? java.util.Collections.emptyList()
+				: current.getBrowserRoles();
+	}
+
 	/// The configured media policy, AUTO when settings are not loaded.
 	public static MediaMode mediaMode() {
 		SettingsManager<WebrtcSettings> sm = settings;

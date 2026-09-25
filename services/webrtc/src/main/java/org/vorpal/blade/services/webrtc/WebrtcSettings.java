@@ -47,6 +47,7 @@ public class WebrtcSettings extends Configuration implements Serializable {
 	private Integer registerExpiresSeconds = 3600;
 	private MediaMode mediaMode = MediaMode.AUTO;
 	private java.util.List<String> relayTargets = new java.util.ArrayList<>();
+	private java.util.List<String> browserRoles = new java.util.ArrayList<>();
 	private String driverName;
 	private Map<String, String> driverProperties = new LinkedHashMap<>();
 
@@ -65,6 +66,15 @@ public class WebrtcSettings extends Configuration implements Serializable {
 
 	public void setJwt(JwtAuthConfig jwt) {
 		this.jwt = (jwt == null) ? defaultJwt() : jwt;
+	}
+
+	@JsonPropertyDescription("Roles or directory groups, beyond the four admin roles, whose members may connect a browser: a token must carry one of them, or an admin role, in its roles claim. Empty admits admin roles only. A meeting participant who is not an administrator needs a role here, such as 'Participant'.")
+	public java.util.List<String> getBrowserRoles() {
+		return browserRoles;
+	}
+
+	public void setBrowserRoles(java.util.List<String> browserRoles) {
+		this.browserRoles = (browserRoles == null) ? new java.util.ArrayList<>() : browserRoles;
 	}
 
 	@JsonPropertyDescription("Expires value, in seconds, on the SIP REGISTER this gateway sends the location service on a browser's behalf. A browser re-registers on every reconnect; a tab left open longer than this without reconnecting ages out of the location service (its socket stays up and browser-to-browser still works). Default 3600.")

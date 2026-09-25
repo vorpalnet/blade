@@ -109,18 +109,24 @@ public class TokenResource {
 			return error(Response.Status.UNAUTHORIZED, "Not signed in.");
 		}
 
+		PhoneSettings settings = PhoneStartupListener.current();
+
 		List<String> roles = new ArrayList<>();
 		for (AdminRole role : AdminRole.values()) {
 			if (security.isUserInRole(role.roleName())) {
 				roles.add(role.roleName());
 			}
 		}
+		for (String role : settings.getParticipantRoles()) {
+			if (role != null && !roles.contains(role) && security.isUserInRole(role)) {
+				roles.add(role);
+			}
+		}
 		if (roles.isEmpty()) {
-			return error(Response.Status.FORBIDDEN,
-					"'" + username + "' holds no BLADE admin role, so there is nothing to put in a token.");
+			return error(Response.Status.FORBIDDEN, "'" + username
+					+ "' holds no BLADE admin role and none of this deployment's participant roles, so there is nothing to put in a token.");
 		}
 
-		PhoneSettings settings = PhoneStartupListener.current();
 		String aor;
 		try {
 			aor = AddressPolicy.resolve(username, requestedAor, settings);

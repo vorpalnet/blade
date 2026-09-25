@@ -33,6 +33,12 @@
 #    role.<group>=<Role> lines in the settings file instead.
 # 5. A test user in the Reviewer group, so the path can be proven end to end.
 #
+# BLADE_GROUPS and BLADE_TEST_GROUP change the groups and the test user's group
+# for another app, e.g. the phone's meeting participants:
+#   BLADE_GROUPS="Admin Participant" BLADE_TEST_GROUP=Participant \
+#       misc/oci-identity-domain.sh <env> <domain-url> blade-phone \
+#       https://<admin-host>:443/blade/phone/oidc/callback participant1
+#
 # Re-runnable: each step looks before it creates.
 set -euo pipefail
 
@@ -75,7 +81,7 @@ if [ -z "$APP_ID" ] || [ "$APP_ID" = "null" ]; then
       --allow-offline true --bypass-consent true --active true)
   APP_ID=$(printf '%s' "$CREATED" | python3 -c 'import sys,json; d=json.load(sys.stdin)["data"]; print(d["id"])')
   CLIENT_ID=$(printf '%s' "$CREATED" | python3 -c 'import sys,json; d=json.load(sys.stdin)["data"]; print(d["name"])')
-  CLIENT_SECRET=$(printf '%s' "$CREATED" | python3 -c 'import sys,json; d=json.load(sys.stdin)["data"]; print(d.get("clientSecret",""))')
+  CLIENT_SECRET=$(printf '%s' "$CREATED" | python3 -c 'import sys,json; d=json.load(sys.stdin)["data"]; print(d.get("client-secret") or d.get("clientSecret") or "")')
 else
   say "application ${APP} exists (${APP_ID})"
   CLIENT_ID=$("${OCI[@]}" app get --endpoint "$DOMAIN" --app-id "$APP_ID" --query 'data.name' --raw-output)
@@ -155,7 +161,9 @@ group_id() {
   "${OCI[@]}" groups list --endpoint "$DOMAIN" --filter "displayName eq \"$1\"" \
       --query 'data.resources[0].id' --raw-output 2>/dev/null | grep -v '^null$' || true
 }
-for g in Admin Reviewer; do
+# BLADE_GROUPS names them, space-separated; Admin and Reviewer by default, for the
+# recordings app. The phone's meeting participants want Participant instead.
+for g in ${BLADE_GROUPS:-Admin Reviewer}; do
   if [ -z "$(group_id "$g")" ]; then
     say "creating group ${g}"
     "${OCI[@]}" group create --endpoint "$DOMAIN" \
@@ -165,13 +173,14 @@ for g in Admin Reviewer; do
   fi
 done
 
-# --- 4. a test reviewer ------------------------------------------------------
+# --- 4. a test user, in BLADE_TEST_GROUP (Reviewer by default) --------------
+TEST_GROUP="${BLADE_TEST_GROUP:-Reviewer}"
 if [ -n "$TEST_USER" ]; then
   USER_ID=$("${OCI[@]}" users list --endpoint "$DOMAIN" --filter "userName eq \"${TEST_USER}\"" \
       --query 'data.resources[0].id' --raw-output 2>/dev/null | grep -v '^null$' || true)
   if [ -z "$USER_ID" ]; then
     if [ -z "$TEST_PASSWORD" ] && [ -t 0 ]; then
-      read -r -s -p "password for ${TEST_USER}: " TEST_PASSWORD; echo
+      read -r -s -p "password for the new test user ${TEST_USER} (12+ characters, upper and lower case, a digit; blank skips the user): " TEST_PASSWORD; echo
     fi
     if [ -z "$TEST_PASSWORD" ]; then
       say "no password for ${TEST_USER} (set BLADE_TEST_PASSWORD); user not created"
@@ -179,7 +188,7 @@ if [ -n "$TEST_USER" ]; then
       say "creating user ${TEST_USER}"
       USER_ID=$("${OCI[@]}" user create --endpoint "$DOMAIN" \
           --schemas '["urn:ietf:params:scim:schemas:core:2.0:User"]' \
-          --user-name "$TEST_USER" --name '{"givenName":"Rita","familyName":"Reviewer"}' \
+          --user-name "$TEST_USER" --name "{\"givenName\":\"Test\",\"familyName\":\"${TEST_GROUP}\"}" \
           --emails "[{\"value\":\"${TEST_USER}@example.com\",\"type\":\"work\",\"primary\":true}]" \
           --password "$TEST_PASSWORD" --query 'data.id' --raw-output)
     fi
@@ -187,12 +196,12 @@ if [ -n "$TEST_USER" ]; then
     say "user ${TEST_USER} exists"
   fi
   if [ -n "$USER_ID" ]; then
-    RID=$(group_id Reviewer)
-    say "adding ${TEST_USER} to Reviewer"
+    RID=$(group_id "$TEST_GROUP")
+    say "adding ${TEST_USER} to ${TEST_GROUP}"
     "${OCI[@]}" group patch --endpoint "$DOMAIN" --group-id "$RID" \
         --schemas '["urn:ietf:params:scim:api:messages:2.0:PatchOp"]' \
         --operations "[{\"op\":\"add\",\"path\":\"members\",\"value\":[{\"value\":\"${USER_ID}\",\"type\":\"User\"}]}]" >/dev/null \
-        || say "could not add ${TEST_USER} to Reviewer; add the membership in the console"
+        || say "could not add ${TEST_USER} to ${TEST_GROUP}; add the membership in the console"
   fi
 fi
 

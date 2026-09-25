@@ -269,6 +269,52 @@ class OidcLoginFilterTest {
 	}
 
 	@Nested
+	@DisplayName("public paths")
+	class PublicPaths {
+
+		private OidcLoginFilter filter() {
+			OidcLoginFilter f = new OidcLoginFilter(null, c -> PROVIDER, null, null);
+			f.setPublicPaths("/api/v1/jwks.json, /login/*");
+			return f;
+		}
+
+		private Request at(String path) {
+			Request req = new Request();
+			req.uri = CONTEXT + path;
+			return req;
+		}
+
+		@Test
+		void aPublishedKeySetAnswersWithoutASignIn() throws Exception {
+			Request req = at("/api/v1/jwks.json");
+			HttpServletRequest proxy = req.proxy();
+			Chain chain = new Chain();
+			filter().doFilter(proxy, new Response().proxy(), chain);
+			assertSame(proxy, chain.passed);
+			assertEquals(0, req.authenticateCalls);
+		}
+
+		@Test
+		void aPrefixCoversEverythingBeneathIt() throws Exception {
+			Request req = at("/login/login.jsp");
+			Chain chain = new Chain();
+			filter().doFilter(req.proxy(), new Response().proxy(), chain);
+			assertEquals(0, req.authenticateCalls);
+		}
+
+		@Test
+		void everythingElseStillSignsIn() throws Exception {
+			for (String path : new String[] { "/api/v1/token", "/api/v1/jwks.json.bak", "/loginx", "/" }) {
+				Request req = at(path);
+				Chain chain = new Chain();
+				filter().doFilter(req.proxy(), new Response().proxy(), chain);
+				assertEquals(1, req.authenticateCalls, path);
+				assertNull(chain.passed, path);
+			}
+		}
+	}
+
+	@Nested
 	@DisplayName("starting a login")
 	class Login {
 

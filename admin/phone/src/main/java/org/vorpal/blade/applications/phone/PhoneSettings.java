@@ -33,6 +33,7 @@ public class PhoneSettings extends Configuration implements Serializable {
 	private boolean allowChosenAddress = true;
 	private String stunServer = "stun:stun.l.google.com:19302";
 	private JwtIssuerConfig jwt = defaultIssuer();
+	private java.util.List<String> participantRoles = new java.util.ArrayList<>();
 
 	private static JwtIssuerConfig defaultIssuer() {
 		JwtIssuerConfig cfg = new JwtIssuerConfig();
@@ -75,6 +76,15 @@ public class PhoneSettings extends Configuration implements Serializable {
 
 	public void setStunServer(String stunServer) {
 		this.stunServer = stunServer;
+	}
+
+	@JsonPropertyDescription("Roles or directory groups, beyond the four admin roles, whose members may be issued a token: a meeting participant who is not an administrator, such as 'Participant'. A holder gets their own address only. List the same names in the webrtc service's browserRoles, or the gateway refuses them.")
+	public java.util.List<String> getParticipantRoles() {
+		return participantRoles;
+	}
+
+	public void setParticipantRoles(java.util.List<String> participantRoles) {
+		this.participantRoles = (participantRoles == null) ? new java.util.ArrayList<>() : participantRoles;
 	}
 
 	@JsonPropertyDescription("How this app mints the short-lived token a browser presents to the gateway. The issuer and audience values must match the corresponding settings on the webrtc service, or the gateway will reject every browser.")

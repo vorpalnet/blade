@@ -9,42 +9,34 @@
 		<welcome-file>index.html</welcome-file>
 	</welcome-file-list>
 
-	<!-- no security required: the login form and its assets -->
-	<security-constraint>
-		<web-resource-collection>
-			<web-resource-name>login</web-resource-name>
-			<url-pattern>/login/*</url-pattern>
-		</web-resource-collection>
-	</security-constraint>
-
-	<!-- The public signing keys, deliberately open. The webrtc service fetches
-	     this from the engine tier, where it has no admin session and could not
-	     get one; an IdP's JWKS is public for the same reason. Nothing secret is
-	     served here — the private key never leaves this JVM.
-
-	     An EXACT pattern, not a prefix: /api/v1/token must stay behind the FORM
-	     constraint below, and it does, because /api/v1/* is never declared. A
-	     prefix carve-out here would mint tokens for anyone who asked. -->
-	<security-constraint>
-		<web-resource-collection>
-			<web-resource-name>jwks</web-resource-name>
-			<url-pattern>/api/v1/jwks.json</url-pattern>
-		</web-resource-collection>
-	</security-constraint>
-
-	<security-constraint>
-		<web-resource-collection>
-			<web-resource-name>phone</web-resource-name>
-			<url-pattern>/</url-pattern>
-		</web-resource-collection>
-		<auth-constraint>
-			<role-name>Admin</role-name>
-			<role-name>Operator</role-name>
-			<role-name>Deployer</role-name>
-			<role-name>Monitor</role-name>
-		</auth-constraint>
-	</security-constraint>
-
+	<!--
+	  Who is asking: OidcLoginFilter signs the browser in with the deployment's
+	  OpenID Connect provider when WEB-INF/blade-oidc.properties is present
+	  (deploy.sh adds it), so a meeting participant needs no WebLogic account; a
+	  WAR deployed without the file falls back to the container's login named
+	  below. What they may have: the token endpoint mints only for a BLADE admin
+	  role or a configured participant role, and only their own address unless
+	  they are an Admin (TokenResource).
+	  There is deliberately no auth-constraint. The container checks one before
+	  any filter runs, so a constraint would demand the container's own login of
+	  every browser and the OpenID sign-in could never start.
+	  Two paths stay public. The key set: the webrtc service fetches it from the
+	  engine tier, where it has no session; an IdP's JWKS is public for the same
+	  reason, and the private key never leaves this JVM. And the container's login
+	  form, which must answer before anyone is signed in.
+	-->
+	<filter>
+		<filter-name>OidcLoginFilter</filter-name>
+		<filter-class>org.vorpal.blade.framework.v3.security.OidcLoginFilter</filter-class>
+		<init-param>
+			<param-name>publicPaths</param-name>
+			<param-value>/api/v1/jwks.json,/login/*</param-value>
+		</init-param>
+	</filter>
+	<filter-mapping>
+		<filter-name>OidcLoginFilter</filter-name>
+		<url-pattern>/*</url-pattern>
+	</filter-mapping>
 	<login-config>
 		<auth-method>CLIENT-CERT,FORM</auth-method>
 		<realm-name>default</realm-name>

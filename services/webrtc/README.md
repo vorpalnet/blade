@@ -192,8 +192,16 @@ So `session.connect` carries a signed token alongside the address it wants to cl
 `WebrtcSettings.jwt` (in `webrtc.json`) and is an ordinary `JwtAuthConfig` — the same fields
 that would describe Okta or Entra. Pointing the gateway at a corporate identity provider
 instead of the bundled phone app is a configuration change with no code behind it. Today the
-token issuer is [admin/phone](../../admin/phone/README.md), which authenticates the user
-against the WebLogic realm before minting one.
+token issuer is [admin/phone](../../admin/phone/README.md), which signs the user in with the
+deployment's OpenID Connect provider, or the WebLogic realm when none is configured, before
+minting one.
+
+**A token must carry a role the gateway admits:** one of the four admin roles, or one of
+`browserRoles`, for a meeting participant who is no administrator. The gateway asserts the
+token's roles on every call the browser places, in `X-Asserted-Roles` beside
+`P-Asserted-Identity`, so the application behind it can decide by role, for instance who hosts
+a meeting. Like the identity, an application believes the header only from a trusted hop
+(`blade.trustedPeers`).
 
 **The address comes from the token, not from the request.** The token names the single
 address its holder is allowed to bind; a browser asking for any other address is refused, not
