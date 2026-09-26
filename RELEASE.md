@@ -22,6 +22,14 @@ topic, as it already did for a durable one. The topic is partitioned, so a messa
 member it was published to, and one consumer on the logical topic heard only its own engine's
 share. The agent console had this gap on any cluster of more than one engine.
 
+### Framework media: when a party starts speaking
+
+- A transcription can report the moment a party starts speaking, well before their words are
+  decoded: `TranscriberEvent.Type.SPEECH_STARTED`, and `Hearing.Ear.speaking(party)`. A driver
+  sends it as `"pass":"onset"`. `MediaCallflow.transcribe(group, listener, true)` asks for it; the
+  two-argument form never delivers it, so a listener that stores every event it receives is
+  unchanged. `Hearing` asks for it when it has an `Ear`, whose new method defaults to doing nothing.
+
 ### WebRTC: mid-call events on the bus; browsers sign in with a directory account
 
 - An application sends a browser events mid-call on the event bus, addressed to the call's

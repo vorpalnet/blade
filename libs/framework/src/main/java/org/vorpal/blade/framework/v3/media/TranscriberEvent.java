@@ -28,7 +28,13 @@ public interface TranscriberEvent extends MediaEvent<SignalDetector> {
 		UTTERANCE,
 		/// One utterance finished, as first decoded. Never stored: the same words arrive again as
 		/// [#UTTERANCE], possibly corrected.
-		LIVE_UTTERANCE
+		LIVE_UTTERANCE,
+		/// A party started speaking, a fraction of a second in, long before any words are decoded.
+		/// [#getUtterance] carries only its party; there is no text. Delivered only to a listener that
+		/// asks for it ([MediaCallflow#transcribe(javax.media.mscontrol.mediagroup.MediaGroup,
+		/// javax.media.mscontrol.MediaEventListener, boolean)]), so a listener that stores every event
+		/// it receives never stores an empty utterance.
+		SPEECH_STARTED
 	}
 
 	/// What was said, with its bounds, its provenance, and the URI of the party who said it.

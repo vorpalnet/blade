@@ -57,6 +57,11 @@ public final class Hearing {
 		/// One window of a party's voice was scored.
 		default void voice(String party, VoiceAssessmentEvent event) {
 		}
+
+		/// A party started speaking, a fraction of a second in, before any of their words are
+		/// decoded: the moment to show who is talking. Only when the driver can tell.
+		default void speaking(String party) {
+		}
 	}
 
 	private Hearing() {
@@ -79,6 +84,17 @@ public final class Hearing {
 		MediaEventListener<TranscriberEvent> hearing = event -> {
 			Utterance utterance = event.getUtterance();
 			String who = party.apply(utterance.getParty());
+			if (TranscriberEvent.Type.SPEECH_STARTED.equals(event.getEventType())) {
+				// No words: nothing to correct, redact, publish or analyze.
+				if (ear != null) {
+					try {
+						ear.speaking(who);
+					} catch (Throwable t) {
+						warn("an ear failed on a speech start: " + t);
+					}
+				}
+				return;
+			}
 			utterance.setParty(who);
 			corrections.apply(utterance);
 			redactor.apply(utterance);
@@ -103,7 +119,7 @@ public final class Hearing {
 				}
 			}
 		};
-		return MediaCallflow.transcribe(group, hearing);
+		return MediaCallflow.transcribe(group, hearing, ear != null);
 	}
 
 	/// Score the voices on `legs`, by their connection URIs, publishing and analyzing as [#start]

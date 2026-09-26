@@ -510,8 +510,10 @@ public abstract class MediaCallflow extends Callflow {
 	///   [SpeechRecognitionEvent#getUserInput] is the utterance as JSON, in the shape of [Utterance],
 	///   with `party` naming by URI the leg whose audio it was.
 	/// - A driver with a fast first decode also sends it, the same way, with `"pass":"live"` in the
-	///   JSON. It becomes a [TranscriberEvent.Type#LIVE_UTTERANCE]; everything else is a
-	///   [TranscriberEvent.Type#UTTERANCE].
+	///   JSON. It becomes a [TranscriberEvent.Type#LIVE_UTTERANCE].
+	/// - A driver that knows when a party starts speaking sends that too, with `"pass":"onset"`, the
+	///   party, and no text. It becomes a [TranscriberEvent.Type#SPEECH_STARTED].
+	/// - Everything else is a [TranscriberEvent.Type#UTTERANCE].
 	/// - A pause is [SignalDetector#STOP], and a resume is the same arming again; the driver keeps
 	///   the transcription's clock across it. The end is [SignalDetector#CANCEL].
 	///
@@ -537,6 +539,14 @@ public abstract class MediaCallflow extends Callflow {
 	///         the installed driver refused, and it is logged at warning so an operator who configured
 	///         transcription learns the driver they installed cannot do it.
 	public static boolean transcribe(MediaGroup mediaGroup, MediaEventListener<TranscriberEvent> listener) {
+		return transcribe(mediaGroup, listener, false);
+	}
+
+	/// [#transcribe(MediaGroup, MediaEventListener)], and with `speechStarts` also each moment a party
+	/// starts speaking ([TranscriberEvent.Type#SPEECH_STARTED]), for a listener that acts on who is
+	/// talking before their words are decoded. A driver that cannot tell sends none.
+	public static boolean transcribe(MediaGroup mediaGroup, MediaEventListener<TranscriberEvent> listener,
+			boolean speechStarts) {
 		if (mediaGroup == null || listener == null) {
 			return false;
 		}
@@ -544,7 +554,7 @@ public abstract class MediaCallflow extends Callflow {
 		String key = mediaGroup.getURI().toString();
 		Transcription transcription = null;
 		try {
-			transcription = new Transcription(mediaGroup, listener);
+			transcription = new Transcription(mediaGroup, listener, speechStarts);
 			transcription.detector.addListener(transcription);
 			TRANSCRIPTIONS.put(key, transcription);
 			transcription.arm();
@@ -610,13 +620,16 @@ public abstract class MediaCallflow extends Callflow {
 		final MediaGroup group;
 		final SignalDetector detector;
 		private final MediaEventListener<TranscriberEvent> listener;
+		private final boolean speechStarts;
 		private volatile java.util.List<String> phrases = java.util.Collections.emptyList();
 		private volatile boolean paused;
 
-		Transcription(MediaGroup group, MediaEventListener<TranscriberEvent> listener) throws MsControlException {
+		Transcription(MediaGroup group, MediaEventListener<TranscriberEvent> listener, boolean speechStarts)
+				throws MsControlException {
 			this.group = group;
 			this.detector = group.getSignalDetector();
 			this.listener = listener;
+			this.speechStarts = speechStarts;
 		}
 
 		void arm() throws MsControlException {
@@ -664,10 +677,23 @@ public abstract class MediaCallflow extends Callflow {
 				return;
 			}
 			Utterance utterance;
-			boolean live;
+			TranscriberEvent.Type type;
 			try {
 				com.fasterxml.jackson.databind.JsonNode tree = JSON.readTree(((SpeechRecognitionEvent) event).getUserInput());
-				live = "live".equals(tree.path("pass").asText(""));
+				switch (tree.path("pass").asText("")) {
+				case "live":
+					type = TranscriberEvent.Type.LIVE_UTTERANCE;
+					break;
+				case "onset":
+					if (!speechStarts) {
+						return;
+					}
+					type = TranscriberEvent.Type.SPEECH_STARTED;
+					break;
+				default:
+					type = TranscriberEvent.Type.UTTERANCE;
+					break;
+				}
 				if (tree instanceof com.fasterxml.jackson.databind.node.ObjectNode) {
 					((com.fasterxml.jackson.databind.node.ObjectNode) tree).remove("pass");
 				}
@@ -676,8 +702,7 @@ public abstract class MediaCallflow extends Callflow {
 				sipLogger.warning("an utterance from the JSR-309 driver could not be read and was dropped: " + e);
 				return;
 			}
-			listener.onEvent(new Heard(event.getSource(), utterance,
-					live ? TranscriberEvent.Type.LIVE_UTTERANCE : TranscriberEvent.Type.UTTERANCE));
+			listener.onEvent(new Heard(event.getSource(), utterance, type));
 		}
 	}
 
