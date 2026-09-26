@@ -22,10 +22,9 @@ import org.junit.Test;
 import org.vorpal.blade.framework.v3.events.CloudEvent;
 
 /// [BrowserRegistry] is the only piece of this application that holds non-replicable state, so its
-/// edge cases are where a browser silently stops receiving calls. These cover the three that matter:
-/// a page reload replacing a binding, a socket that dies between the liveness check and the write,
-/// and the "not on this node" answer, which means the binding is stale rather than that the address
-/// is unknown.
+/// edge cases are where a browser silently stops receiving calls: one account on several devices, a
+/// socket that dies between the liveness check and the write, and the "not on this node" answer,
+/// which means the binding is stale rather than that the address is unknown.
 public class BrowserRegistryTest {
 
 	private final List<FakeSocket> opened = new ArrayList<>();
@@ -47,35 +46,6 @@ public class BrowserRegistryTest {
 		assertEquals("alice@example.com", BrowserRegistry.addressOf(socket.session));
 		assertTrue(BrowserRegistry.deliver("alice@example.com", event()));
 		assertEquals(1, socket.sent.size());
-	}
-
-	@Test
-	public void reconnectingReplacesTheOldSocketAndClosesIt() {
-		FakeSocket first = socket("s1");
-		FakeSocket second = socket("s2");
-		BrowserRegistry.register("alice@example.com", first.session);
-
-		BrowserRegistry.register("alice@example.com", second.session);
-
-		// A reloaded page must not leave a ghost binding that swallows incoming calls.
-		assertEquals(1, first.closed.get());
-		assertNull(BrowserRegistry.addressOf(first.session));
-		assertTrue(BrowserRegistry.deliver("alice@example.com", event()));
-		assertEquals("the live socket receives it", 1, second.sent.size());
-		assertEquals("the replaced socket does not", 0, first.sent.size());
-	}
-
-	@Test
-	public void unregisteringAStaleSocketLeavesTheCurrentBindingAlone() {
-		FakeSocket first = socket("s1");
-		FakeSocket second = socket("s2");
-		BrowserRegistry.register("alice@example.com", first.session);
-		BrowserRegistry.register("alice@example.com", second.session);
-
-		// The old socket's close event arrives after the reconnect — a normal ordering.
-		assertNull(BrowserRegistry.unregister(first.session));
-
-		assertTrue("the reconnected browser is still reachable", BrowserRegistry.isLocal("alice@example.com"));
 	}
 
 	@Test
@@ -117,10 +87,138 @@ public class BrowserRegistryTest {
 		assertNull("a second close is a no-op", BrowserRegistry.unregister(socket.session));
 	}
 
+	@Test
+	public void everyConnectedBrowserIsPinged() {
+		FakeSocket alice = socket("s1");
+		FakeSocket bob = socket("s2");
+		BrowserRegistry.register("alice@example.com", alice.session);
+		BrowserRegistry.register("bob@example.com", bob.session);
+
+		// A proxy closes a socket that carries nothing for its idle timeout, ending the call.
+		assertEquals(2, BrowserRegistry.pingAll());
+		assertEquals(1, alice.pings.get());
+		assertEquals(1, bob.pings.get());
+	}
+
+	@Test
+	public void aSocketThePingCannotReachIsDropped() {
+		FakeSocket socket = socket("s1");
+		socket.failOnSend = true;
+		BrowserRegistry.register("alice@example.com", socket.session);
+
+		assertEquals(0, BrowserRegistry.pingAll());
+
+		assertFalse(BrowserRegistry.isLocal("alice@example.com"));
+		assertEquals(1, socket.closed.get());
+	}
+
+	@Test
+	public void aSecondDeviceJoinsAlongsideTheFirst() {
+		FakeSocket laptop = socket("s1");
+		FakeSocket phone = socket("s2");
+		BrowserRegistry.register("alice@example.com", laptop.session);
+
+		BrowserRegistry.register("alice@example.com", phone.session);
+
+		assertEquals("the first device stays connected", 0, laptop.closed.get());
+		assertEquals("alice@example.com", BrowserRegistry.addressOf(laptop.session));
+		assertEquals("alice@example.com", BrowserRegistry.addressOf(phone.session));
+	}
+
+	@Test
+	public void anUnboundCallRingsEveryDevice() {
+		FakeSocket laptop = socket("s1");
+		FakeSocket phone = socket("s2");
+		BrowserRegistry.register("alice@example.com", laptop.session);
+		BrowserRegistry.register("alice@example.com", phone.session);
+
+		assertTrue(BrowserRegistry.deliver("alice@example.com", event("call-1")));
+
+		assertEquals(1, laptop.sent.size());
+		assertEquals(1, phone.sent.size());
+	}
+
+	@Test
+	public void aBoundCallReachesOnlyTheDeviceHoldingIt() {
+		FakeSocket laptop = socket("s1");
+		FakeSocket phone = socket("s2");
+		BrowserRegistry.register("alice@example.com", laptop.session);
+		BrowserRegistry.register("alice@example.com", phone.session);
+		assertTrue(BrowserRegistry.bind("call-1", phone.session));
+
+		try {
+			assertTrue(BrowserRegistry.deliver("alice@example.com", event("call-1")));
+
+			assertEquals("a page never sees another device's call", 0, laptop.sent.size());
+			assertEquals(1, phone.sent.size());
+		} finally {
+			BrowserRegistry.forgetCall("call-1");
+		}
+	}
+
+	@Test
+	public void theFirstDeviceToAnswerTakesTheCall() {
+		FakeSocket laptop = socket("s1");
+		FakeSocket phone = socket("s2");
+		BrowserRegistry.register("alice@example.com", laptop.session);
+		BrowserRegistry.register("alice@example.com", phone.session);
+
+		try {
+			assertTrue(BrowserRegistry.bind("call-1", phone.session));
+			assertFalse("the second answer is refused", BrowserRegistry.bind("call-1", laptop.session));
+			assertTrue("the holder binding again is harmless", BrowserRegistry.bind("call-1", phone.session));
+
+			BrowserRegistry.deliverToOthers("alice@example.com", phone.session, event("call-1"));
+			assertEquals("the other device stops ringing", 1, laptop.sent.size());
+			assertEquals(0, phone.sent.size());
+		} finally {
+			BrowserRegistry.forgetCall("call-1");
+		}
+	}
+
+	@Test
+	public void theAddressIsReleasedOnlyWithItsLastDevice() {
+		FakeSocket laptop = socket("s1");
+		FakeSocket phone = socket("s2");
+		BrowserRegistry.register("alice@example.com", laptop.session);
+		BrowserRegistry.register("alice@example.com", phone.session);
+
+		// Withdrawing the address while the phone is still connected would stop its incoming calls.
+		assertNull(BrowserRegistry.unregister(laptop.session));
+		assertTrue(BrowserRegistry.isLocal("alice@example.com"));
+		assertEquals("alice@example.com", BrowserRegistry.unregister(phone.session));
+		assertFalse(BrowserRegistry.isLocal("alice@example.com"));
+	}
+
+	@Test
+	public void aClosingDeviceTakesOnlyItsOwnCalls() {
+		FakeSocket laptop = socket("s1");
+		FakeSocket phone = socket("s2");
+		BrowserRegistry.register("alice@example.com", laptop.session);
+		BrowserRegistry.register("alice@example.com", phone.session);
+		BrowserRegistry.bind("call-1", laptop.session);
+		BrowserRegistry.bind("call-2", phone.session);
+
+		try {
+			assertEquals(java.util.Collections.singletonList("call-1"), BrowserRegistry.callsOf(laptop.session));
+			BrowserRegistry.unregister(laptop.session);
+
+			assertNull("the closed device's call is unbound", BrowserRegistry.holderOf("call-1"));
+			assertEquals(phone.session, BrowserRegistry.holderOf("call-2"));
+		} finally {
+			BrowserRegistry.forgetCall("call-1");
+			BrowserRegistry.forgetCall("call-2");
+		}
+	}
+
 	// ---- fakes ------------------------------------------------------------------------------
 
 	private static CloudEvent event() {
-		return SignalProtocol.reason(SignalProtocol.CALL_ENDED, "call-1", "test");
+		return event("call-0");
+	}
+
+	private static CloudEvent event(String callId) {
+		return SignalProtocol.reason(SignalProtocol.CALL_ENDED, callId, "test");
 	}
 
 	private FakeSocket socket(String id) {
@@ -136,6 +234,7 @@ public class BrowserRegistryTest {
 		final List<String> sent = new ArrayList<>();
 		final AtomicInteger closed = new AtomicInteger();
 		final Session session;
+		final AtomicInteger pings = new AtomicInteger();
 		boolean open = true;
 		boolean failOnSend;
 
@@ -177,6 +276,13 @@ public class BrowserRegistryTest {
 								throw new IOException("socket gone");
 							}
 							sent.add((String) a[0]);
+							return null;
+						}
+						if ("sendPing".equals(m.getName())) {
+							if (failOnSend) {
+								throw new IOException("socket gone");
+							}
+							pings.incrementAndGet();
 							return null;
 						}
 						throw new UnsupportedOperationException(m.getName());

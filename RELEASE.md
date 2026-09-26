@@ -15,6 +15,33 @@ before any application sees them, so the health ping was refused along with
 everything else and the mirror never answered. Existing `options.json` files
 that still carry the two fields load unchanged; the fields are ignored.
 
+### Framework: a non-durable subscriber hears every engine
+
+`EventSubscriber` attaches a non-durable subscription to every member of the distributed bus
+topic, as it already did for a durable one. The topic is partitioned, so a message lives on the
+member it was published to, and one consumer on the logical topic heard only its own engine's
+share. The agent console had this gap on any cluster of more than one engine.
+
+### WebRTC: mid-call events on the bus; browsers sign in with a directory account
+
+- An application sends a browser events mid-call on the event bus, addressed to the call's
+  Vorpal-ID; the gateway node holding that browser pushes them down the socket
+  (`relayedEventTypes`, `meeting.` namespace only). The `blade-event` SIP `INFO` relay, its
+  `Recv-Info` advertisement and its sequencing rule are removed.
+- `browserRoles` admits tokens carrying a non-admin role, such as a meeting participant's; the
+  gateway asserts the token's roles on each call in `X-Asserted-Roles`, trusted only from
+  `blade.trustedPeers`.
+- The phone signs people in with the deployment's OpenID Connect provider when its WAR carries
+  `blade-oidc.properties` (falling back to the WebLogic login), and mints tokens for
+  `participantRoles`. `OidcLoginFilter` takes a `publicPaths` init parameter.
+- The gateway pings every browser socket every 25 seconds. A proxy in front of it (nginx, OCI's
+  load balancer) closes a socket idle for 60 seconds, and a quiet call lost its socket and ended.
+- A socket that closes without a hangup (a dropped network, a proxy timeout) now hangs up its
+  calls; they used to stay up with no browser behind them.
+- One account may be signed in on several devices at once. A second socket for an address joins
+  the first instead of closing it; an incoming call rings every device and the first to answer
+  takes it; a device's calls and their events stay on that device.
+
 ## 3.0.6 (2026-09-14)
 
 ### Framework SIP: keep-alive keeps no SDP

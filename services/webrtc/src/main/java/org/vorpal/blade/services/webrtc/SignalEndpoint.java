@@ -105,10 +105,13 @@ public class SignalEndpoint {
 
 	@OnClose
 	public void onClose(Session session, CloseReason reason) {
-		String aor = BrowserRegistry.unregister(session);
-		fine("webrtc: socket closed, " + session.getId() + (aor != null ? " (" + aor + ")" : "")
-				+ " reason=" + reason.getCloseCode());
-		deregisterQuietly(aor);
+		Logger logger = log();
+		if (logger != null) {
+			String aor = BrowserRegistry.addressOf(session);
+			logger.info("webrtc: socket closed, " + session.getId() + (aor != null ? " (" + aor + ")" : "")
+					+ " code=" + reason.getCloseCode().getCode() + " reason=" + reason.getReasonPhrase());
+		}
+		dropSocket(session);
 	}
 
 	@OnError
@@ -117,10 +120,35 @@ public class SignalEndpoint {
 		if (logger != null) {
 			logger.warning("webrtc: socket error on " + session.getId() + ": " + t);
 		}
-		deregisterQuietly(BrowserRegistry.unregister(session));
+		dropSocket(session);
+	}
+
+	/// A socket is gone: hang up the calls it held, and withdraw the address from the location
+	/// service if this was its last device.
+	///
+	/// The hangup is the one the page would have sent. A page that leaves sends it first; a socket
+	/// that drops (a proxy's idle timeout, a lost network, a closed laptop) sends nothing, and
+	/// without this its calls stay up with no browser behind them. Only this socket's calls: the
+	/// same account on another device keeps its own.
+	private void dropSocket(Session session) {
+		String aor = BrowserRegistry.addressOf(session);
+		java.util.List<String> calls = BrowserRegistry.callsOf(session);
+		String last = BrowserRegistry.unregister(session);
+		for (String callId : calls) {
+			SipApplicationSession app = Callflow.getSipUtil().getApplicationSessionById(callId);
+			if (app != null && app.isValid()) {
+				fine("webrtc: socket " + session.getId() + " closed; hanging up " + callId);
+				BrowserSignals.deliver(app, SignalProtocol.event(SignalProtocol.CALL_HANGUP, callId,
+						SignalProtocol.data().put("from", aor).put("reason", "socket closed")));
+			}
+		}
+		deregisterQuietly(last);
 	}
 
 	// ---- handlers -----------------------------------------------------------------------------
+
+	/// Why a device's ringing stopped: the same account answered on another device.
+	static final String ANSWERED_ELSEWHERE = "answered on another device";
 
 	/// WebSocket session property: the roles the browser's token carried ([BrowserAuthenticator.Decision#getRoles]).
 	static final String ROLES = "roles";
@@ -189,8 +217,8 @@ public class SignalEndpoint {
 	}
 
 	/// Withdraw `aor` from the location service, if it was ours to withdraw.
-	/// Null means this socket had no binding or was already superseded — in the
-	/// superseded case the replacement owns the registration now, and a
+	/// Null means this socket had no binding or another device still holds the
+	/// address — in that case the registration is still theirs, and a
 	/// deregister from the dying socket would tear down the live browser's.
 	private void deregisterQuietly(String aor) {
 		if (aor == null) {
@@ -223,7 +251,7 @@ public class SignalEndpoint {
 		}
 		@SuppressWarnings("unchecked")
 		java.util.List<String> roles = (java.util.List<String>) session.getUserProperties().get(ROLES);
-		String callId = new OutboundFromBrowser().start(aor, roles, event);
+		String callId = new OutboundFromBrowser().start(session, aor, roles, event);
 		if (callId != null) {
 			fine("webrtc: " + aor + " placed call " + callId);
 		}
@@ -266,6 +294,19 @@ public class SignalEndpoint {
 			log().warning("webrtc: " + sender + " sent " + event.getType() + " for call " + callId
 					+ " owned by " + app.getAttribute(BrowserSignals.BROWSER_AOR) + "; refused");
 			send(session, SignalProtocol.reason(SignalProtocol.CALL_ENDED, callId, "no such call"));
+			return;
+		}
+
+		// One account, several devices: a call belongs to the socket holding it. An incoming call
+		// rings them all, and the first to answer takes it; the others stop ringing.
+		if (SignalProtocol.CALL_ANSWER.equals(event.getType()) && BrowserRegistry.holderOf(callId) == null
+				&& BrowserRegistry.bind(callId, session)) {
+			BrowserRegistry.deliverToOthers(sender, session,
+					SignalProtocol.reason(SignalProtocol.CALL_ENDED, callId, ANSWERED_ELSEWHERE));
+		}
+		Session holder = BrowserRegistry.holderOf(callId);
+		if (holder != null && !holder.getId().equals(session.getId())) {
+			send(session, SignalProtocol.reason(SignalProtocol.CALL_ENDED, callId, ANSWERED_ELSEWHERE));
 			return;
 		}
 

@@ -61,16 +61,19 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 		// Nothing originates this callflow from the network; see start().
 	}
 
-	/// Place a call for `aor` to the target named in `offerEvent`, asserting the browser's verified
-	/// `roles` on it ([#ASSERTED_ROLES]; null when the browser was not authenticated).
+	/// Place a call for `aor`, from its socket `socket`, to the target named in `offerEvent`,
+	/// asserting the browser's verified `roles` on it ([#ASSERTED_ROLES]; null when the browser was
+	/// not authenticated). The call is bound to `socket` before any event for it is written, so the
+	/// account's other devices never see it ([BrowserRegistry#bind]).
 	///
 	/// @return the call id the browser should quote in later events, or null if the request was
 	///         rejected (the browser has already been told why)
-	public String start(String aor, java.util.List<String> roles, CloudEvent offerEvent) throws Exception {
+	public String start(javax.websocket.Session socket, String aor, java.util.List<String> roles,
+			CloudEvent offerEvent) throws Exception {
 		String target = SignalProtocol.field(offerEvent, "target");
 		String browserOffer = SignalProtocol.field(offerEvent, "sdp");
 		if (target == null || browserOffer == null) {
-			BrowserRegistry.deliver(aor, SignalProtocol.reason(SignalProtocol.ERROR, offerEvent.getSubject(),
+			BrowserRegistry.send(socket, SignalProtocol.reason(SignalProtocol.ERROR, offerEvent.getSubject(),
 					"call.offer requires a target and an sdp"));
 			return null;
 		}
@@ -83,7 +86,7 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 			invite = sipFactory.createRequest(app, "INVITE", "sip:" + aor, normalizeTarget(target, aor));
 		} catch (IllegalArgumentException | javax.servlet.sip.ServletParseException badAddress) {
 			app.invalidate();
-			BrowserRegistry.deliver(aor, SignalProtocol.reason(SignalProtocol.ERROR, offerEvent.getSubject(),
+			BrowserRegistry.send(socket, SignalProtocol.reason(SignalProtocol.ERROR, offerEvent.getSubject(),
 					"unroutable target: " + target));
 			return null;
 		}
@@ -92,6 +95,7 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 		// SignalEndpoint can resolve with getApplicationSessionById.
 		String callId = app.getId();
 		app.setAttribute(BrowserSignals.BROWSER_AOR, aor);
+		BrowserRegistry.bind(callId, socket);
 
 		// Assert the caller's identity to the far end (RFC 3325). The From URI is the JWT-authenticated
 		// address, so the network is vouching for it; the display name is what the browser supplied.
@@ -100,7 +104,6 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 		// be able to inject a second header line.
 		assertIdentity(invite, aor, SignalProtocol.field(offerEvent, "displayName"));
 		assertRoles(invite, roles);
-		advertiseEvents(invite);
 
 		String dialled = targetAor(target, aor);
 		MediaMode mode = WebrtcServlet.relaysTo(dialled) ? MediaMode.RELAY
@@ -246,7 +249,7 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 		expectRequest(response.getSession(), "BYE", bye -> onFarEndHungUp(bye, app, aor, callId));
 		expectDtmf(app, response.getSession());
 		expectReoffer(app, response.getSession(), aor, callId, null);
-		expectFarSideEvents(response.getSession(), aor, callId);
+		rememberCall(response.getApplicationSession(), aor, callId);
 
 		ObjectNode data = SignalProtocol.data();
 		String answer = firstAnswer(response, app);
@@ -366,7 +369,7 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 		expectRequest(response.getSession(), "BYE", bye -> onFarEndHungUp(bye, app, aor, callId));
 		expectDtmf(app, response.getSession());
 		expectReoffer(app, response.getSession(), aor, callId, networkLeg);
-		expectFarSideEvents(response.getSession(), aor, callId);
+		rememberCall(response.getApplicationSession(), aor, callId);
 
 		BrowserRegistry.deliver(aor, SignalProtocol.event(SignalProtocol.CALL_CONNECTED, callId,
 				SignalProtocol.data().put("negotiated", negotiated)));

@@ -48,6 +48,8 @@ public class WebrtcSettings extends Configuration implements Serializable {
 	private MediaMode mediaMode = MediaMode.AUTO;
 	private java.util.List<String> relayTargets = new java.util.ArrayList<>();
 	private java.util.List<String> browserRoles = new java.util.ArrayList<>();
+	private java.util.List<String> relayedEventTypes = new java.util.ArrayList<>(java.util.Arrays.asList(
+			"meeting.caption", "meeting.roster", "meeting.track", "meeting.speaker", "meeting.voice"));
 	private String driverName;
 	private Map<String, String> driverProperties = new LinkedHashMap<>();
 
@@ -66,6 +68,15 @@ public class WebrtcSettings extends Configuration implements Serializable {
 
 	public void setJwt(JwtAuthConfig jwt) {
 		this.jwt = (jwt == null) ? defaultJwt() : jwt;
+	}
+
+	@JsonPropertyDescription("Event types an application behind the gateway may send a browser mid-call on the event bus, addressed to the call's Vorpal-ID: a meeting's captions, roster, tracks, active speaker and voice alerts by default. Only types in the 'meeting.' namespace are passed to a browser.")
+	public java.util.List<String> getRelayedEventTypes() {
+		return relayedEventTypes;
+	}
+
+	public void setRelayedEventTypes(java.util.List<String> relayedEventTypes) {
+		this.relayedEventTypes = (relayedEventTypes == null) ? new java.util.ArrayList<>() : relayedEventTypes;
 	}
 
 	@JsonPropertyDescription("Roles or directory groups, beyond the four admin roles, whose members may connect a browser: a token must carry one of them, or an admin role, in its roles claim. Empty admits admin roles only. A meeting participant who is not an administrator needs a role here, such as 'Participant'.")

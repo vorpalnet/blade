@@ -203,6 +203,14 @@ token's roles on every call the browser places, in `X-Asserted-Roles` beside
 a meeting. Like the identity, an application believes the header only from a trusted hop
 (`blade.trustedPeers`).
 
+**An application talks to a browser mid-call on the event bus, not in the dialog.** It publishes
+a CloudEvent addressed to the call's Vorpal-ID, which the gateway stamped on the INVITE; every
+gateway node hears it, and the one holding that browser pushes it down the socket, filed under the
+browser's own call id. Only the types in `relayedEventTypes` are taken, and only in the `meeting.`
+namespace, so a far side cannot send `call.ended` into someone's call. A meeting's captions, roster
+and tracks travel this way: they are data, and a SIP `INFO` apiece would put them through the
+signaling path one transaction at a time.
+
 **The address comes from the token, not from the request.** The token names the single
 address its holder is allowed to bind; a browser asking for any other address is refused, not
 quietly corrected. Checking only the signature would let any signed-in employee register as a
@@ -251,11 +259,17 @@ the socket is not on this node, it means the binding is stale — the browser ha
 and not yet re-registered from wherever it reconnected — and until it does, it is unreachable
 from every engine, not only this one.
 
-When a socket closes or errors, the gateway sends `Expires: 0` to remove the binding. A page
-reload never tears down its replacement's binding: the old socket's unregister finds nothing
-to remove, and the new socket's REGISTER lands on the same keyed session, produces the
-identical contact, and refreshes the same binding. Registration is best-effort — a failed
-REGISTER logs a warning and the browser keeps its session regardless.
+One account may be signed in on several devices at once, a laptop and a phone or two windows.
+Each device's socket joins the address; none replaces another. An incoming call rings every
+device, the first to answer takes it, and the others stop ringing. A call a device places, and
+every event of a call once taken, stays on that device alone. Each new socket's REGISTER lands
+on the same keyed session and produces the identical contact, so the devices share one binding.
+
+When a socket closes or errors, the gateway hangs up the calls that socket held, as its page
+would have, and sends `Expires: 0` once the address's last device is gone. The gateway pings
+every socket every 25 seconds, inside the 60-second idle timeout of the proxies commonly in
+front of it. Registration is best-effort: a failed REGISTER logs a warning and the browser
+keeps its session regardless.
 
 A browser handles one call at a time, which follows naturally from the one-session-per-address
 design: inbound calls land on the registration's session, so a second simultaneous call to

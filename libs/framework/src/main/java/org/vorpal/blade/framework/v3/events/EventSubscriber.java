@@ -51,16 +51,19 @@ import org.vorpal.blade.framework.v3.metrics.Counter;
 ///
 /// An MDB does not meet this because the container subscribes to every physical
 /// member for it. This does the same explicitly: [DistributedMembers] reports
-/// the members, and each gets its own connection, session, durable subscriber
-/// and consumer thread, under a subscription name derived from this
-/// subscription's name and the member's. Members arriving and leaving — a
-/// server restarting, a migration — add and remove consumers while the rest
-/// keep running.
+/// the members, and each gets its own connection, session, subscriber and
+/// consumer thread, under a subscription name derived from this subscription's
+/// name and the member's. Members arriving and leaving — a server restarting, a
+/// migration — add and remove consumers while the rest keep running.
+///
+/// A non-durable subscription attaches to every member too. On a partitioned
+/// topic a message is held by the one member it was published to, so a single
+/// consumer on the destination as looked up hears only one member's share: a
+/// subscriber on one engine would miss what another engine published.
 ///
 /// Where members cannot be discovered (a plain topic, a queue, or a container
 /// that does not expose the extensions) it falls back to a single consumer on
-/// the destination as looked up. That fallback is also the non-durable path,
-/// which needs no member handling at all.
+/// the destination as looked up.
 ///
 /// ## What it costs
 ///
@@ -246,27 +249,28 @@ public class EventSubscriber {
 		factory = (ConnectionFactory) ctx.lookup(connectionFactoryJndi);
 		Destination destination = (Destination) ctx.lookup(destinationJndi);
 
-		if (durable) {
-			membership = DistributedMembers.register(destinationJndi, new DistributedMembers.Listener() {
-				@Override
-				public void onAvailable(String memberName, Destination member) {
-					addMember(memberName, member);
-				}
-
-				@Override
-				public void onUnavailable(String memberName) {
-					removeMember(memberName);
-				}
-			});
-			if (membership != null) {
-				// Members arrive through the listener, including the ones that
-				// already exist. There is nothing to open here.
-				return;
+		// Every member, durable or not: on a partitioned topic a message lives on the
+		// one member it was published to, so a consumer on one member hears only
+		// that member's share. See "One consumer per member" in the class comment.
+		membership = DistributedMembers.register(destinationJndi, new DistributedMembers.Listener() {
+			@Override
+			public void onAvailable(String memberName, Destination member) {
+				addMember(memberName, member);
 			}
+
+			@Override
+			public void onUnavailable(String memberName) {
+				removeMember(memberName);
+			}
+		});
+		if (membership != null) {
+			// Members arrive through the listener, including the ones that
+			// already exist. There is nothing to open here.
+			return;
 		}
 
-		// Not distributed, not durable, or no member discovery available: one
-		// consumer on the destination as looked up.
+		// Not distributed, or no member discovery available: one consumer on the
+		// destination as looked up.
 		boolean started = false;
 		try {
 			members.put(SOLE, open(SOLE, destination, subscriptionName));

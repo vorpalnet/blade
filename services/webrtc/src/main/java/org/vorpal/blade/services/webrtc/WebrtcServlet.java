@@ -102,6 +102,16 @@ public class WebrtcServlet extends AsyncSipServlet {
 		}
 	}
 
+	/// A call's application session ended: its browser can take no more events ([BrowserCalls]), and
+	/// its socket holds it no longer ([BrowserRegistry]).
+	@Override
+	protected void onSessionDestroyed(javax.servlet.sip.SipApplicationSessionEvent event) {
+		if (event != null && event.getApplicationSession() != null) {
+			BrowserCalls.forget(event.getApplicationSession().getId());
+			BrowserRegistry.forgetCall(event.getApplicationSession().getId());
+		}
+	}
+
 	@Override
 	protected void servletDestroyed(SipServletContextEvent event) {
 		sipLogger.info("WebrtcServlet: stopped");
@@ -132,6 +142,14 @@ public class WebrtcServlet extends AsyncSipServlet {
 		WebrtcSettings current = (sm == null) ? null : sm.getCurrent();
 		return (current == null || current.getBrowserRoles() == null) ? java.util.Collections.emptyList()
 				: current.getBrowserRoles();
+	}
+
+	/// The event types [FarSideEvents] relays to browsers; empty when settings are not loaded.
+	public static java.util.List<String> relayedEventTypes() {
+		SettingsManager<WebrtcSettings> sm = settings;
+		WebrtcSettings current = (sm == null) ? null : sm.getCurrent();
+		return (current == null || current.getRelayedEventTypes() == null) ? java.util.Collections.emptyList()
+				: current.getRelayedEventTypes();
 	}
 
 	/// The configured media policy, AUTO when settings are not loaded.

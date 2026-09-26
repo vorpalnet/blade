@@ -2,7 +2,6 @@ package org.vorpal.blade.services.webrtc;
 
 import java.nio.charset.StandardCharsets;
 
-import org.vorpal.blade.framework.v3.events.CloudEvent;
 
 import javax.media.mscontrol.networkconnection.NetworkConnection;
 import javax.servlet.sip.SipApplicationSession;
@@ -52,78 +51,11 @@ public abstract class WebrtcCallflow extends MediaCallflow {
 
 	// ---- events from the far side ---------------------------------------------------------------
 
-	/// The content type of an event the far side sends the browser: one CloudEvent, structured mode.
-	protected static final String EVENT_TYPE = "application/cloudevents+json";
 
-	/// The RFC 6086 Info Package these events travel as. The gateway advertises it with `Recv-Info`
-	/// on each call it establishes, and a sender names it in `Info-Package` on each `INFO`.
-	///
-	/// A sender keeps one `INFO` in this package outstanding per dialog, and sends none while an
-	/// INVITE transaction of its own is open on the dialog: the next event waits for the previous
-	/// one's final response. RFC 6086 section 10.8 leaves overlapping `INFO`s to each package to
-	/// allow or forbid, and this one forbids them. The gateway answers `491` to an `INFO` that arrives
-	/// while a transaction of its own is open on the dialog, and the sender retries it.
-	public static final String INFO_PACKAGE = "blade-event";
-
-	/// Say this dialog accepts [#INFO_PACKAGE] events (RFC 6086 `Recv-Info`), on the INVITE or the
-	/// 200 that establishes it.
-	protected static void advertiseEvents(javax.servlet.sip.SipServletMessage message) {
-		try {
-			message.setHeader("Recv-Info", INFO_PACKAGE);
-		} catch (Exception e) {
-			// A container that refuses the header still relays the event; the package is a courtesy.
-		}
-	}
-
-	/// The event types the far side may send through. Only an application's own namespace, never
-	/// this protocol's: a far side that could send `call.ended` or `call.update` could hang up or
-	/// renegotiate the browser's call from outside it.
-	protected static final String FAR_SIDE_PREFIX = "meeting.";
-
-	/// Relay events the far side sends in the dialog, as a SIP `INFO` whose body is one CloudEvent,
-	/// to the browser for the rest of the call.
-	///
-	/// This is how an application that is not a browser speaks to one mid-call: a meeting's captions,
-	/// its roster, which track carries whom. The event arrives with the application's `subject`
-	/// replaced by this call's id, so the browser files it under the call it belongs to. Re-armed
-	/// after each, like [#expectReoffer]. An `INFO` that is not an event, or names a type outside
-	/// [#FAR_SIDE_PREFIX], is refused with `415` and goes no further.
-	protected void expectFarSideEvents(SipSession dialog, String aor, String callId) {
-		expectRequest(dialog, "INFO", info -> onFarSideEvent(info, aor, callId));
-	}
-
-	private void onFarSideEvent(SipServletRequest info, String aor, String callId) throws Exception {
-		expectFarSideEvents(info.getSession(), aor, callId);
-		CloudEvent event = farSideEvent(info.getHeader("Info-Package"), info.getContentType(), rawContent(info), callId);
-		if (event == null) {
-			sendResponse(info.createResponse(415, "Unsupported Media Type"));
-			return;
-		}
-		BrowserRegistry.deliver(aor, event);
-		sendResponse(info.createResponse(200));
-	}
-
-	/// The event an `INFO` from the far side carries, filed under `callId`, or null when it is not an
-	/// event this relay passes on: another Info Package, not [#EVENT_TYPE], not a CloudEvent, or a
-	/// type outside [#FAR_SIDE_PREFIX]. An `INFO` with no `Info-Package` is taken on its content type,
-	/// as RFC 6086 allows for legacy use.
-	static CloudEvent farSideEvent(String infoPackage, String contentType, byte[] body, String callId) {
-		if (infoPackage != null && !INFO_PACKAGE.equalsIgnoreCase(infoPackage.trim())) {
-			return null; // another package's INFO: not ours to relay
-		}
-		if (contentType == null || body == null || !contentType.toLowerCase().startsWith(EVENT_TYPE)) {
-			return null;
-		}
-		CloudEvent event;
-		try {
-			event = CloudEvent.fromJson(new String(body, StandardCharsets.UTF_8));
-		} catch (Exception e) {
-			return null;
-		}
-		if (event == null || event.getType() == null || !event.getType().startsWith(FAR_SIDE_PREFIX)) {
-			return null;
-		}
-		return CloudEvent.create(event.getType(), event.getSource(), callId, event.getData());
+	/// Record this browser call by its Vorpal-ID, so events an application sends it on the bus
+	/// reach its socket ([FarSideEvents]). Called once the call is established.
+	protected static void rememberCall(javax.servlet.sip.SipApplicationSession app, String aor, String callId) {
+		BrowserCalls.remember(getVorpalSessionId(app), aor, callId);
 	}
 
 	// ---- re-INVITE ----------------------------------------------------------------------------
