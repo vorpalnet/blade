@@ -1,9 +1,7 @@
 package org.vorpal.blade.applications.agent;
 
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -13,18 +11,20 @@ import org.vorpal.blade.framework.v3.events.EventSubscriber;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /// Turns a bus event about a live call into an update on the agent's screen.
 ///
 /// Each event carries the call's Vorpal-ID (its subject and `data.vorpalId`) and
-/// its facts as name/value attributes. Two kinds are read:
+/// its facts as fields beside it. Three kinds are read:
 ///
 /// - **risk** (`call.risk.assessed` / `.flagged`): `riskBand`, `riskScore`, and
 ///   the per-signal `signal.<name>` values and `contribution.<name>` log-odds,
 ///   so the card can show not just how much but why;
 /// - **utterance** (`call.utterance`): `text`, `party`, `startMs`, appended to
-///   the card's transcript.
+///   the card's transcript;
+/// - **review** (`call.reviewed`): the labels a post-call review found.
 ///
 /// Either becomes the console's one general update frame, a partial `CallPop`
 /// keyed by Vorpal-ID, pushed to the console holding that call
@@ -64,8 +64,8 @@ public class ConsoleUpdater implements EventSubscriber.Handler {
 		if (event == null) {
 			return null;
 		}
-		JsonNode data = event.getData();
-		String vorpalId = (data == null) ? null : data.path("vorpalId").asText(null);
+		JsonNode data = event.fields();
+		String vorpalId = data.path("vorpalId").asText(null);
 		if (vorpalId == null && event.getSubject() != null) {
 			// subject = <vorpalIdHex>.<tsHex>; the first half is the call.
 			String subject = event.getSubject();
@@ -76,97 +76,66 @@ public class ConsoleUpdater implements EventSubscriber.Handler {
 			return null;
 		}
 
-		Map<String, String> attributes = new LinkedHashMap<>();
-		JsonNode list = (data == null) ? null : data.path("attributes");
-		if (list != null && list.isArray()) {
-			for (JsonNode attribute : list) {
-				String name = attribute.path("name").asText(null);
-				String value = attribute.path("value").asText(null);
-				if (name != null && value != null) {
-					attributes.put(name, value);
-				}
-			}
-		}
-
 		ObjectNode frame = MAPPER.createObjectNode();
 		frame.put("t", "update");
 		frame.put("vorpalId", vorpalId);
 
 		if (BladeEventTypes.CALL_UTTERANCE.equals(event.getType())) {
-			String text = attributes.get("text");
+			String text = text(data, "text");
 			if (text == null || text.isEmpty()) {
 				return null;
 			}
-			if (attributes.containsKey("source")) {
+			if (data.has("source")) {
 				// A pass labelled a line already on the card, the phrase patterns
 				// or the model: the page finds the line by its start time and adds
 				// the labels; not a new line.
-				String labels = attributes.get("labels");
-				if (labels == null || labels.isEmpty()) {
+				ArrayNode labels = labels(data);
+				if (labels.size() == 0) {
 					return null;
 				}
 				ObjectNode labelled = frame.putObject("labelled");
-				if (attributes.containsKey("startMs")) {
-					labelled.put("atMs", attributes.get("startMs"));
+				if (data.has("startMs")) {
+					labelled.put("atMs", text(data, "startMs"));
 				}
 				labelled.put("text", text);
-				labelled.put("source", attributes.get("source"));
-				com.fasterxml.jackson.databind.node.ArrayNode modelLabels = labelled.putArray("labels");
-				for (String label : labels.split(",")) {
-					if (!label.trim().isEmpty()) {
-						modelLabels.add(label.trim());
-					}
-				}
+				labelled.put("source", text(data, "source"));
+				labelled.set("labels", labels);
 				return new Update(vorpalId, frame.toString());
 			}
 			ObjectNode utterance = frame.putObject("utterance");
 			// The listener names the parties caller and callee; on this screen
 			// the callee is the agent reading it.
-			String party = attributes.getOrDefault("party", "caller");
+			String party = data.path("party").asText("caller");
 			utterance.put("party", "callee".equals(party) ? "agent" : party);
 			utterance.put("text", text);
-			if (attributes.containsKey("startMs")) {
-				utterance.put("atMs", attributes.get("startMs"));
+			if (data.has("startMs")) {
+				utterance.put("atMs", text(data, "startMs"));
 			}
 			// What the probe heard in it: the content labels, if any, as words the
 			// page maps to a reason ("asked for a gift card").
-			String labels = attributes.get("labels");
-			if (labels != null && !labels.isEmpty()) {
-				com.fasterxml.jackson.databind.node.ArrayNode labelList = utterance.putArray("labels");
-				for (String label : labels.split(",")) {
-					if (!label.trim().isEmpty()) {
-						labelList.add(label.trim());
-					}
-				}
+			ArrayNode labels = labels(data);
+			if (labels.size() > 0) {
+				utterance.set("labels", labels);
 			}
 			return new Update(vorpalId, frame.toString());
 		}
 
-		if (BladeEventTypes.CALL_EVENT.equals(event.getType())) {
-			// An application-named event: the only one the console shows is the
-			// post-call review, which lands on the card still on the agent's screen.
-			if (data == null || !"callReviewed".equals(data.path("eventName").asText(""))) {
-				return null;
-			}
-			String labels = attributes.get("labels");
-			if (labels == null || labels.isEmpty()) {
+		if (BladeEventTypes.CALL_REVIEWED.equals(event.getType())) {
+			// The post-call review, which lands on the card still on the agent's screen.
+			ArrayNode labels = labels(data);
+			if (labels.size() == 0) {
 				return null;
 			}
 			ObjectNode review = frame.putObject("review");
-			com.fasterxml.jackson.databind.node.ArrayNode reviewLabels = review.putArray("labels");
-			for (String label : labels.split(",")) {
-				if (!label.trim().isEmpty()) {
-					reviewLabels.add(label.trim());
-				}
-			}
-			if (attributes.containsKey("text")) {
-				review.put("text", attributes.get("text"));
+			review.set("labels", labels);
+			if (data.has("text")) {
+				review.put("text", text(data, "text"));
 			}
 			return new Update(vorpalId, frame.toString());
 		}
 
-		String band = attributes.get("riskBand");
-		String score = attributes.get("riskScore");
+		String band = text(data, "riskBand");
+		String score = text(data, "riskScore");
 		if (band == null && score == null) {
 			return null;
 		}
@@ -184,8 +153,9 @@ public class ConsoleUpdater implements EventSubscriber.Handler {
 		// The why: each fused signal's raw value and what it contributed, keyed by
 		// the signal's lower-case name. Absent signals are simply not listed.
 		ObjectNode signals = null;
-		for (Map.Entry<String, String> e : attributes.entrySet()) {
-			String name = e.getKey();
+		java.util.Iterator<String> names = data.fieldNames();
+		while (names.hasNext()) {
+			String name = names.next();
 			if (name.startsWith("signal.") || name.startsWith("contribution.")) {
 				if (signals == null) {
 					signals = frame.putObject("signals");
@@ -193,20 +163,51 @@ public class ConsoleUpdater implements EventSubscriber.Handler {
 				int dot = name.indexOf('.');
 				String signal = name.substring(dot + 1).toLowerCase(Locale.ROOT);
 				ObjectNode one = signals.has(signal) ? (ObjectNode) signals.get(signal) : signals.putObject(signal);
-				one.put(name.startsWith("signal.") ? "value" : "contribution", e.getValue());
+				one.put(name.startsWith("signal.") ? "value" : "contribution", text(data, name));
 			}
 		}
-		if (attributes.containsKey("triggerSignal")) {
-			frame.put("riskTrigger", attributes.get("triggerSignal").toLowerCase(Locale.ROOT));
+		if (data.has("triggerSignal")) {
+			frame.put("riskTrigger", text(data, "triggerSignal").toLowerCase(Locale.ROOT));
 		}
 		// The campaign check's facts, when the behaviour signal fired on them.
-		if (attributes.containsKey("campaignMatches")) {
-			frame.put("campaignMatches", attributes.get("campaignMatches"));
-			if (attributes.containsKey("campaignText")) {
-				frame.put("campaignText", attributes.get("campaignText"));
+		if (data.has("campaignMatches")) {
+			frame.put("campaignMatches", text(data, "campaignMatches"));
+			if (data.has("campaignText")) {
+				frame.put("campaignText", text(data, "campaignText"));
 			}
 		}
 		return new Update(vorpalId, frame.toString());
+	}
+
+	/// A field as the text the page has always been sent. The page parses the
+	/// numbers itself, so a typed field and a legacy string reach it the same.
+	private static String text(JsonNode data, String name) {
+		JsonNode value = data.get(name);
+		return (value == null || value.isNull()) ? null : value.asText();
+	}
+
+	/// The content labels: an array on the flat wire, a comma-separated string
+	/// from a producer on an older framework.
+	private static ArrayNode labels(JsonNode data) {
+		ArrayNode labels = MAPPER.createArrayNode();
+		JsonNode raw = data.get("labels");
+		if (raw == null || raw.isNull()) {
+			return labels;
+		}
+		if (raw.isArray()) {
+			for (JsonNode label : raw) {
+				if (!label.asText().trim().isEmpty()) {
+					labels.add(label.asText().trim());
+				}
+			}
+			return labels;
+		}
+		for (String label : raw.asText().split(",")) {
+			if (!label.trim().isEmpty()) {
+				labels.add(label.trim());
+			}
+		}
+		return labels;
 	}
 
 	/// One update: which call, and the frame to push.

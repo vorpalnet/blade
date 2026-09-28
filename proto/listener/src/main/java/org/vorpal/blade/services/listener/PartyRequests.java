@@ -1,6 +1,5 @@
 package org.vorpal.blade.services.listener;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -12,7 +11,6 @@ import javax.servlet.sip.SipApplicationSession;
 import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.framework.v3.events.BladeEventTypes;
 import org.vorpal.blade.framework.v3.events.CloudEvent;
-import org.vorpal.blade.framework.v3.events.EventSubscriber;
 import org.vorpal.blade.framework.v3.events.SubscriptionRegistrar;
 
 import com.bea.wcp.sip.WlssAction;
@@ -39,10 +37,8 @@ public class PartyRequests implements ServletContextListener {
 
 	@Override
 	public void contextInitialized(ServletContextEvent event) {
-		SubscriptionRegistrar.meter(event.getServletContext(), SUBSCRIPTION);
-		registrar = SubscriptionRegistrar.start(SUBSCRIPTION,
-				() -> Collections.singletonList(BladeEventTypes.CALL_PARTY_REQUESTED), /* durable */ false,
-				PartyRequests::handle, /* batch */ 1, EventSubscriber.DEFAULT_BATCH_MILLIS);
+		registrar = SubscriptionRegistrar.named(SUBSCRIPTION).types(BladeEventTypes.CALL_PARTY_REQUESTED).live()
+				.start(event.getServletContext(), PartyRequests::handle);
 	}
 
 	@Override
@@ -63,18 +59,18 @@ public class PartyRequests implements ServletContextListener {
 	}
 
 	private static void handle(CloudEvent event) throws Exception {
-		JsonNode data = event.getData();
-		String vorpalId = (data == null) ? null : data.path("vorpalId").asText(null);
+		JsonNode data = event.fields();
+		String vorpalId = data.path("vorpalId").asText(null);
 		Map.Entry<String, ListenerAnchor.Anchor> held = ListenerAnchor.byVorpalId(vorpalId);
 		if (held == null) {
 			return; // another node's call, or no call
 		}
-		String target = attribute(data, "target");
-		String label = attribute(data, "label");
+		String target = data.path("target").asText(null);
+		String label = data.path("label").asText(null);
 		ListenerSettings cfg = (ListenerServlet.settings == null) ? null : ListenerServlet.settings.getCurrent();
 		if (target == null || cfg == null || !allowed(cfg.getPartyTargets(), target)) {
 			Callflow.getSipLogger().warning("PartyRequests: refused to bring " + target + " into " + vorpalId
-					+ " (requested by " + attribute(data, "requestedBy") + "): not in partyTargets");
+					+ " (requested by " + data.path("requestedBy").asText(null) + "): not in partyTargets");
 			return;
 		}
 		String name = (label == null || label.isEmpty()) ? "guest" : label;
@@ -106,20 +102,5 @@ public class PartyRequests implements ServletContextListener {
 			}
 		}
 		return false;
-	}
-
-	/// One attribute of a call-scoped event, from `data.attributes`.
-	private static String attribute(JsonNode data, String name) {
-		JsonNode list = (data == null) ? null : data.path("attributes");
-		if (list != null && list.isArray()) {
-			for (JsonNode a : list) {
-				if (name.equals(a.path("name").asText(null))) {
-					return a.path("value").asText(null);
-				}
-			}
-		} else if (list != null && list.isObject() && list.has(name)) {
-			return list.path(name).asText(null);
-		}
-		return null;
 	}
 }

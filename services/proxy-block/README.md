@@ -73,7 +73,7 @@ Oracle reports the columns as `LISTED` and `TREATMENT`; on MySQL or PostgreSQL u
 
 ## Reporting
 
-Every decision is an analytics event: `callRouted` when the call passes or is forwarded to the challenge, the review mailbox or the tarpit, `callDeclined` when it is declined. The sample defines both with the caller, the dialed number and the `X-Call-Screen` verdict. Set `analytics.enabled` to `true` and each call puts one event on the BLADE event bus, where the analytics service stores it and any other subscriber can count blocks by reason.
+Every decision is an analytics event: `callRouted` when the call passes or is forwarded to the challenge, the review mailbox or the tarpit, `callDeclined` when it is declined. The sample defines both with the caller, the dialed number and the `X-Call-Screen` verdict. With the event bus on (`events.enabled`, which is on wherever the domain's JMS bus is provisioned unless set to `false`) each call puts one event on the BLADE event bus, where the analytics service stores it and any other subscriber can count blocks by reason.
 
 ## Feeding the call risk score
 

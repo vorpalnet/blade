@@ -9,6 +9,8 @@ import javax.ws.rs.core.Response;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.callflow.ClientCallflow;
+import org.vorpal.blade.framework.v3.events.BladeEventTypes;
+import org.vorpal.blade.framework.v3.events.Events;
 import org.vorpal.blade.framework.v3.media.CallflowHold;
 import org.vorpal.blade.services.tpcc.v1.DialogAPI;
 import org.vorpal.blade.services.tpcc.v1.DialogAPI.ResponseStuff;
@@ -31,6 +33,13 @@ public class CreateDialog extends ClientCallflow {
 	public void invoke(SipServletRequest invite) throws ServletException, IOException {
 
 		sendRequest(invite, (inviteResponse) -> {
+
+			if (!provisional(inviteResponse)) {
+				int status = inviteResponse.getStatus();
+				String party = String.valueOf(invite.getTo());
+				Events.publish(inviteResponse.getApplicationSession(), BladeEventTypes.CALL_ORIGINATED, data -> data
+						.put("party", party).put("status", status).put("answered", successful(inviteResponse)));
+			}
 
 			if (successful(inviteResponse)) {
 

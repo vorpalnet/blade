@@ -332,7 +332,7 @@ Each entry has three fields: `name` (the header), `value` (the template to stamp
 
 ## Decision events
 
-Each decision publishes an analytics event after the route's headers are stamped: `callRouted` for a forward, `callDeclined` for a direct response of 400 or above, `callResponded` for one below 400. Define the event under `analytics.events` with attribute selectors for the headers you want recorded, and set `analytics.enabled`. With analytics off nothing is created, unless logging is at the analytics level.
+Each decision publishes an analytics event after the route's headers are stamped: `callRouted` for a forward, `callDeclined` for a direct response of 400 or above, `callResponded` for one below 400. They are published whenever the application publishes to the event bus (`events.enabled`, which is on wherever the domain's JMS bus is provisioned unless set to `false`), as `org.vorpal.blade.call.routed`, `.declined` and `.responded`. To record headers the route stamps, define the event under `analytics.events` with attribute selectors for them.
 
 ## Boolean expressions
 

@@ -14,6 +14,7 @@ import javax.websocket.server.ServerEndpoint;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v3.Callflow;
 import org.vorpal.blade.framework.v3.events.CloudEvent;
+import org.vorpal.blade.services.webrtc.v3.MessageFromBrowser;
 
 /// The browser's end of the gateway: one WebSocket per browser, carrying
 /// [SignalProtocol] events.
@@ -89,7 +90,14 @@ public class SignalEndpoint {
 			case SignalProtocol.CALL_OFFER:
 				placeCall(session, event);
 				break;
+			case SignalProtocol.MESSAGE_SEND:
+				postMessage(session, event);
+				break;
 			default:
+				if (type.startsWith(FarSideEvents.FAR_SIDE_PREFIX)) {
+					forwardToCall(session, event); // a request to the application behind the call
+					break;
+				}
 				send(session, SignalProtocol.reason(SignalProtocol.ERROR, event.getSubject(),
 						"unsupported event type: " + type));
 				break;
@@ -257,6 +265,17 @@ public class SignalEndpoint {
 		}
 	}
 
+	/// Post to a messaging room on the browser's behalf, as a SIP MESSAGE ([MessageFromBrowser]).
+	/// Needs no call: a room is addressed, not dialled.
+	private void postMessage(Session session, CloudEvent event) throws Exception {
+		String aor = BrowserRegistry.addressOf(session);
+		if (aor == null) {
+			send(session, SignalProtocol.reason(SignalProtocol.ERROR, null, "session.connect required first"));
+			return;
+		}
+		new MessageFromBrowser().send(session, aor, event);
+	}
+
 	/// Hand an in-call event to the callflow that owns it.
 	///
 	/// The CloudEvents `subject` is the call id, which is also the application-session key the
@@ -316,7 +335,25 @@ public class SignalEndpoint {
 			((com.fasterxml.jackson.databind.node.ObjectNode) event.getData())
 					.put("from", BrowserRegistry.addressOf(session));
 		}
+		if (event.getType().startsWith(FarSideEvents.FAR_SIDE_PREFIX)) {
+			toApplication(session, app, event);
+			return;
+		}
 		BrowserSignals.deliver(app, event);
+	}
+
+	/// A browser's request to the application behind its call, such as a meeting's reaction or a raised
+	/// hand: published on the event bus under the call's Vorpal-ID, which the application knows the
+	/// participant by. The reverse of [FarSideEvents], with the same checks as any in-call event
+	/// already made: the sender holds the call. Its source is [FarSideEvents#BROWSER_SOURCE], which
+	/// the gateway never relays back to a browser and an application reads as "from the browser".
+	private void toApplication(Session session, SipApplicationSession app, CloudEvent event) {
+		String vorpalId = Callflow.getVorpalSessionId(app);
+		if (!org.vorpal.blade.framework.v3.events.Events.publish(
+				CloudEvent.create(event.getType(), FarSideEvents.BROWSER_SOURCE, vorpalId, event.getData()))) {
+			send(session, SignalProtocol.reason(SignalProtocol.ERROR, event.getSubject(),
+					"could not send the request; is the event bus enabled on this gateway (events.enabled)?"));
+		}
 	}
 
 	private void closeQuietly(Session session) {

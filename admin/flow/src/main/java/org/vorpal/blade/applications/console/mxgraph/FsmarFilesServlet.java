@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import org.vorpal.blade.framework.io.VersionedFileStore;
+import org.vorpal.blade.framework.v3.events.ConfigEvents;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -118,6 +119,7 @@ public class FsmarFilesServlet extends HttpServlet {
 			FlowFiles.ensureDirectory();
 			String pretty = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(tree);
 			store.write(path, pretty);
+			ConfigEvents.saved(request.getRemoteUser(), FsmarPublishServlet.relative(path), "flow", "saved");
 
 			ObjectNode result = mapper.createObjectNode();
 			result.put("name", path.getFileName().toString());
@@ -150,6 +152,7 @@ public class FsmarFilesServlet extends HttpServlet {
 			response.sendError(HttpServletResponse.SC_NOT_FOUND, "No saved flow named '" + name + "'");
 			return;
 		}
+		ConfigEvents.saved(request.getRemoteUser(), FsmarPublishServlet.relative(path), "flow", "deleted");
 		response.setStatus(HttpServletResponse.SC_NO_CONTENT);
 	}
 

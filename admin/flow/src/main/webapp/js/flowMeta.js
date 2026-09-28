@@ -23,7 +23,7 @@ window.flowMeta = (function() {
 		          'PUBLISH', 'MESSAGE', 'NOTIFY', 'REFER'],
 		regions: ['ORIGINATING', 'TERMINATING', 'NEUTRAL'],
 		routeModifiers: ['ROUTE', 'ROUTE_BACK', 'ROUTE_FINAL', 'NO_ROUTE'],
-		selectorTypes: ['attribute', 'json', 'xml', 'sdp', 'regex', 'table']
+		selectorTypes: ['attribute', 'json', 'xml', 'sdp', 'regex', 'table', 'identity']
 	};
 
 	var loaded = false;

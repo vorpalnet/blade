@@ -66,6 +66,16 @@
             <!-- Saved to disk but not yet pushed live. Only appears when auto-publish is off. -->
             <span id="unpublished-indicator" class="unpublished-indicator" style="display: none;"
                   title="These changes are saved to disk but not live yet. Click Publish to push them to running services.">▲ Not Published</span>
+            <!-- Auto-publish toggle. Global Configurator behavior, not tied to the
+                 currently-loaded app or to one editor, so it lives in the bar every
+                 tab shares: in the Form Editor's toolbar it vanished from the JSON
+                 Editor. State is shown by thumb position AND the on/off text label. -->
+            <label class="autopublish-switch" title="ON: saved files go live automatically and the Publish button is hidden. OFF: saves wait for Publish.">
+                <span class="autopublish-caption">Auto-publish</span>
+                <input type="checkbox" id="autopublish-toggle" checked onchange="setAutoPublish(this.checked)">
+                <span class="autopublish-track"><span class="autopublish-thumb"></span></span>
+                <span id="autopublish-state" class="autopublish-state">on</span>
+            </label>
             <div class="theme-selector">
                 <label for="app-theme-select">Theme:</label>
                 <select id="app-theme-select" onchange="switchAppTheme(this.value)">
@@ -136,15 +146,6 @@
                 <input id="import-file" type="file" accept="application/json,.json" style="display:none"
                        onchange="handleImportFile(event)">
 
-                <!-- Auto-publish toggle. Global Configurator behavior, not tied to the
-                     currently-loaded app, so it sits apart at the right of the toolbar.
-                     State is shown by thumb position AND the on/off text label. -->
-                <label class="autopublish-switch" title="ON: saved files go live automatically and the Publish button is hidden. OFF: saves wait for Publish.">
-                    <span class="autopublish-caption">Auto-publish</span>
-                    <input type="checkbox" id="autopublish-toggle" checked onchange="setAutoPublish(this.checked)">
-                    <span class="autopublish-track"><span class="autopublish-thumb"></span></span>
-                    <span id="autopublish-state" class="autopublish-state">on</span>
-                </label>
             </div>
 
             <!-- Welcome / empty state — shown until the first schema is loaded.

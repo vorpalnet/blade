@@ -16,6 +16,7 @@ import org.vorpal.blade.framework.v3.AsyncSipServlet;
 import org.vorpal.blade.framework.v3.Callflow;
 import org.vorpal.blade.framework.v3.media.MediaCallflow;
 import org.vorpal.blade.framework.v3.security.JwtAuthConfig;
+import org.vorpal.blade.services.webrtc.v3.MessageToBrowser;
 
 /// The SIP half of the WebRTC gateway.
 ///
@@ -120,9 +121,16 @@ public class WebrtcServlet extends AsyncSipServlet {
 	@Override
 	protected Callflow chooseCallflow(SipServletRequest request) {
 		// In-dialog requests reach the callflow's own continuations through the framework; only a
-		// new call needs one chosen.
-		if ("INVITE".equals(request.getMethod()) && request.isInitial()) {
-			return new InboundToBrowser();
+		// new call, or a room's message for a browser, needs one chosen.
+		if (request.isInitial()) {
+			switch (request.getMethod()) {
+			case "INVITE":
+				return new InboundToBrowser();
+			case "MESSAGE":
+				return new MessageToBrowser();
+			default:
+				break;
+			}
 		}
 		return null;
 	}

@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-/// The browser signaling vocabulary: fourteen event types in CloudEvents 1.0 envelopes, carried as
+/// The browser signaling vocabulary: seventeen event types in CloudEvents 1.0 envelopes, carried as
 /// text frames over one WebSocket.
 ///
 /// ## Two verbs that were declared and are deliberately gone
@@ -81,6 +81,11 @@ public final class SignalProtocol {
 	public static final String CALL_HANGUP = "call.hangup";
 	/// Send a DTMF digit on an established call. `data.digit`.
 	public static final String CALL_DTMF = "call.dtmf";
+	/// Post to a messaging room: `data.room` (a room id or SIP address), `data.body` and
+	/// `data.contentType` (the body is the pages' own format, passed through untouched), and
+	/// `data.to` for a private message to one member. Sent as a SIP MESSAGE; the answer is
+	/// [#MESSAGE_SENT] with the event's `id` as `data.ref`, or [#ERROR] with the same `ref`.
+	public static final String MESSAGE_SEND = "message.send";
 
 	// ---- gateway -> browser -------------------------------------------------------------------
 
@@ -148,6 +153,18 @@ public final class SignalProtocol {
 	/// A deployment that would rather not have that gap can anchor every call from the start; see
 	/// `WebrtcSettings.mediaMode`.
 	public static final String CALL_UPDATE = "call.update";
+
+	/// The room accepted a post: `data.ref` is the [#MESSAGE_SEND] event's `id`, `data.room`,
+	/// `data.seq` the room's number for it and `data.atMs` when it was accepted. Written to every
+	/// socket of the address; a page ignores a `ref` it did not send.
+	public static final String MESSAGE_SENT = "message.sent";
+
+	/// A room sent this browser a message: `data.room`, `data.seq`, `data.from` (the sender's
+	/// address, as the network asserted it), `data.displayName`, `data.atMs`, `data.to` on a private
+	/// message, and the body as posted in `data.body` and `data.contentType`. A page drops a `seq` it
+	/// already has for the room: a newcomer and a page that rejoins are sent the room's history
+	/// again.
+	public static final String MESSAGE_RECEIVED = "message.received";
 
 	// ---- both directions ----------------------------------------------------------------------
 

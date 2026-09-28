@@ -104,8 +104,8 @@ public class CalendarEventListener
 
 	@Override
 	public void contextInitialized(javax.servlet.ServletContextEvent event) {
-		registrar = org.vorpal.blade.framework.v3.events.SubscriptionRegistrar.start(
-				event.getServletContext(), SUBSCRIPTION, TYPES, this);
+		registrar = org.vorpal.blade.framework.v3.events.SubscriptionRegistrar.named(SUBSCRIPTION).types(TYPES)
+				.start(event.getServletContext(), this);
 		// deriveName, not getServletContextName: it is the derivation log files
 		// and config MBeans already use — documented as needing to agree
 		// byte-for-byte — and it cannot come back null.
@@ -140,7 +140,7 @@ public class CalendarEventListener
 
 			switch (String.valueOf(event.getType())) {
 			case "net.vorpal.attendant.meeting.scheduled":
-				onMeetingScheduled(event, MAPPER.treeToValue(event.getData(), MeetingScheduled.class));
+				onMeetingScheduled(event, MAPPER.treeToValue(event.fields(), MeetingScheduled.class));
 				break;
 			default:
 				// The broker filters to exactly the types above, so reaching here

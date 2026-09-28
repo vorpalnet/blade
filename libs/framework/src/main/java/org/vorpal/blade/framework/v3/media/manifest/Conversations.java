@@ -88,32 +88,19 @@ public final class Conversations {
 
 	/// Say on the bus that the conversation is a record now. Best effort: the
 	/// archive already holds the truth, and an index that missed the event is
-	/// rebuilt from the archive. A node with no publisher publishes into
-	/// nothing, which the bus reports as normal, so the miss is logged here.
+	/// rebuilt from the archive, so a miss is logged here and nothing more.
 	private static void announce(ConversationManifest manifest, String node) {
-		try {
-			com.fasterxml.jackson.databind.node.ObjectNode data = new com.fasterxml.jackson.databind.ObjectMapper()
-					.createObjectNode();
-			data.put("conversation", manifest.getConversation());
-			if (manifest.getCall() != null) {
-				data.put("call", manifest.getCall());
-			}
-			data.put("node", node == null ? "unknown" : node);
-			data.put("reason", manifest.getIncompleteReason() != null
-					&& manifest.getIncompleteReason().contains("sweep") ? "swept" : "closed");
-			org.vorpal.blade.framework.v3.events.CloudEvent event = org.vorpal.blade.framework.v3.events.CloudEvent
-					.create(org.vorpal.blade.framework.v3.events.BladeEventTypes.CONVERSATION_CLOSED, "/blade/recorder",
-							manifest.getConversation(), data,
-							org.vorpal.blade.framework.v3.events.BladeEventCatalog
-									.versionOf(org.vorpal.blade.framework.v3.events.BladeEventTypes.CONVERSATION_CLOSED));
-			if (!org.vorpal.blade.framework.v3.events.EventBus.isReady()) {
-				LOG.info("conversation " + manifest.getConversation() + " committed with no event publisher on this node; "
-						+ "an index learns of it on its next rebuild");
-				return;
-			}
-			org.vorpal.blade.framework.v3.events.EventBus.publish(event);
-		} catch (Exception e) {
-			LOG.log(Level.WARNING, "committed " + manifest.getConversation() + " but could not announce it", e);
+		boolean swept = manifest.getIncompleteReason() != null && manifest.getIncompleteReason().contains("sweep");
+		boolean published = org.vorpal.blade.framework.v3.events.Events.publish(
+				org.vorpal.blade.framework.v3.events.BladeEventTypes.CONVERSATION_CLOSED, manifest.getConversation(),
+				data -> data
+						.put("conversation", manifest.getConversation())
+						.put("call", manifest.getCall())
+						.put("node", node == null ? "unknown" : node)
+						.put("reason", swept ? "swept" : "closed"));
+		if (!published) {
+			LOG.info("conversation " + manifest.getConversation() + " committed but not announced; "
+					+ "an index learns of it on its next rebuild");
 		}
 	}
 

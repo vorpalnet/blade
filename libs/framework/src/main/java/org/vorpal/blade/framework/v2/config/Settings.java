@@ -493,36 +493,13 @@ public class Settings<T> implements SettingsMXBean {
 		return domain.toFile();
 	}
 
-	/// Make this node's publisher match what the configuration now says, and
-	/// say out loud which way it went.
-	///
-	/// **Both outcomes are logged, including "off".** A disabled bus used to be
-	/// an early return with no message at all, which is indistinguishable in a
-	/// log from a healthy one — and since publishing is a deliberate no-op when
-	/// no publisher is registered, every layer above stayed quiet too. One line
-	/// here is the difference between "the pipeline is dead and nobody can tell"
-	/// and "the pipeline is off and the log says so."
-	///
-	/// Analytics shares this publisher, so either switch turns it on. Requiring
-	/// both would let an application with analytics enabled and events not
-	/// build every event and publish none of them, silently.
+	/// Make this node's publisher match what the configuration now says
+	/// ([org.vorpal.blade.framework.v3.events.EventBus#reconcile]), on every
+	/// reload.
 	private void reconcileEventBus(org.vorpal.blade.framework.v3.events.EventBusSettings events,
 			Analytics analytics) {
-		boolean enabled = Boolean.TRUE.equals(events.isEnabled())
-				|| (analytics != null && Boolean.TRUE.equals(analytics.isEnabled()));
-		try {
-			boolean changed = org.vorpal.blade.framework.v3.events.EventBus.reconcilePublisher(
-					enabled, events.getConnectionFactoryJndi(), events.getDestinationJndi());
-			if (changed) {
-				sipLogger.info(enabled
-						? "event bus: publishing to " + events.getDestinationJndi()
-						: "event bus: DISABLED; nothing this application produces will be published");
-			}
-		} catch (Exception e) {
-			sipLogger.severe("event bus: cannot reach " + events.getDestinationJndi() + " through "
-					+ events.getConnectionFactoryJndi() + " — publishing will be a no-op until both are"
-					+ " provisioned: " + e.getMessage());
-		}
+		org.vorpal.blade.framework.v3.events.EventBus.reconcile(events,
+				analytics != null && Boolean.TRUE.equals(analytics.isEnabled()));
 	}
 
 	public Path getPath(String configType) {

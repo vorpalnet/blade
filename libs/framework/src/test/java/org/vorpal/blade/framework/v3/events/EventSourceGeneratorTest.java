@@ -304,8 +304,8 @@ class EventSourceGeneratorTest {
 			// Durability, destination and one-copy-per-application are the
 			// registrar's business now, decided from the catalog at runtime.
 			// What the generated file must do is start and stop cleanly.
-			assertTrue(mdb.contains("SubscriptionRegistrar.start(event.getServletContext(), SUBSCRIPTION,"), mdb);
-			assertTrue(mdb.contains("TYPES, this);"), mdb);
+			assertTrue(mdb.contains("SubscriptionRegistrar.named(SUBSCRIPTION).types(TYPES)"), mdb);
+			assertTrue(mdb.contains(".start(event.getServletContext(), this);"), mdb);
 			assertTrue(mdb.contains("registrar.stop()"), mdb);
 			assertTrue(mdb.contains("public void contextInitialized(ServletContextEvent event)"), mdb);
 			assertTrue(mdb.contains("public void contextDestroyed(ServletContextEvent event)"), mdb);
@@ -340,7 +340,7 @@ class EventSourceGeneratorTest {
 			// The envelope is parsed by the subscriber now; the consumer is
 			// handed CloudEvents and only decodes the typed payload.
 			assertTrue(mdb.contains("public void handle(List<CloudEvent> batch)"), mdb);
-			assertTrue(mdb.contains("MAPPER.treeToValue(event.getData(), Scheduled.class)"), mdb);
+			assertTrue(mdb.contains("MAPPER.treeToValue(event.fields(), Scheduled.class)"), mdb);
 		}
 
 		@Test
@@ -370,7 +370,7 @@ class EventSourceGeneratorTest {
 			// queue consumer's SOURCE is identical — it must simply not carry
 			// activation config of any kind.
 			assertFalse(queueMdb.contains("ActivationConfigProperty"), queueMdb);
-			assertTrue(queueMdb.contains("SubscriptionRegistrar.start"), queueMdb);
+			assertTrue(queueMdb.contains("SubscriptionRegistrar.named"), queueMdb);
 		}
 
 		@Test
@@ -511,7 +511,8 @@ class EventSourceGeneratorTest {
 			assertTrue(snippet.contains("Scheduled payload = new Scheduled();"));
 			assertTrue(snippet.contains("payload.setWhenText("));
 			assertTrue(snippet.contains("\"net.vorpal.attendant.meeting.scheduled\""));
-			assertTrue(snippet.contains("EventBus.publish(event);"));
+			assertTrue(snippet.contains("Events.publish(\"net.vorpal.attendant.meeting.scheduled\","), snippet);
+			assertTrue(snippet.contains("data -> data.setAll("), snippet);
 		}
 
 		@Test

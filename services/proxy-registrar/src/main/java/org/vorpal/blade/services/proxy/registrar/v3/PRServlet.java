@@ -4,6 +4,7 @@ import java.io.IOException;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
+import javax.servlet.sip.SipApplicationSessionEvent;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
@@ -54,6 +55,16 @@ public class PRServlet extends B2buaServlet {
 	protected void servletDestroyed(SipServletContextEvent event) throws ServletException, IOException {
 		sipLogger.finer("PRServlet.servletDestroyed...");
 		settingsManager.unregister();
+	}
+
+	/// A registration's session expires once its longest contact has lapsed;
+	/// report the contacts that went without a REGISTER saying so.
+	@Override
+	protected void onSessionExpired(SipApplicationSessionEvent event) {
+		Object registrar = event.getApplicationSession().getAttribute("registrar");
+		if (registrar instanceof Registrar) {
+			((Registrar) registrar).lapsed();
+		}
 	}
 
 	@Override

@@ -9,13 +9,11 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// Per-application settings for publishing onto the BLADE event bus — the
 /// `"events"` block of an app's configuration, sitting beside `"analytics"`.
 ///
-/// **Why this is per-app and opt-in.** The event *catalog* is domain-wide: it
-/// says what event types exist and what they carry, and it is a contract. This
-/// is the other thing — whether *this* application opens a connection to the bus
-/// at all. Standing a JMS connection up in every deployed app whether or not it
-/// publishes would cost one connection per app per node for nothing, so it is
-/// off until asked for, exactly as
-/// [org.vorpal.blade.framework.v2.analytics.Analytics#isEnabled] is.
+/// **Three settings, and unset is the default.** `true` publishes, and an
+/// unreachable bus is an error. `false` publishes nothing. Unset publishes when
+/// the domain's JMS bus is there and says nothing when it is not, so a domain
+/// that never paid for the bus gets no events and no errors. See
+/// [EventBus#reconcile], the one place this is read.
 ///
 /// **Why an app needs its own publisher.** The framework jar ships inside each
 /// WAR (`libs/shared` carries third-party jars only), so `EventBus`'s registry
@@ -28,23 +26,26 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// The JNDI names default to the constants in [EventBus] and only need setting
 /// on a domain whose destinations were provisioned under different names.
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonPropertyOrder({ "enabled", "connectionFactoryJndi", "destinationJndi", "source" })
+@JsonPropertyOrder({ "enabled", "connectionFactoryJndi", "destinationJndi", "providerUrl", "source" })
 public class EventBusSettings implements Serializable {
 
 	private static final long serialVersionUID = 1L;
 
-	private Boolean enabled = false;
+	/// Null is the default: publish when the bus is there, quietly skip when it
+	/// is not.
+	private Boolean enabled;
 	private String connectionFactoryJndi = EventBus.CONNECTION_FACTORY_JNDI;
 	private String destinationJndi = EventBus.TOPIC_JNDI;
 	private String source;
+	private String providerUrl;
 
-	@JsonPropertyDescription("Whether this application publishes to the event bus. Off by default: an app that does not publish should not hold a JMS connection. Switching on 'analytics' turns this on implicitly, because analytics publishes through this same bus.")
+	@JsonPropertyDescription("Whether this application publishes to the event bus, including the call lifecycle events the framework emits. Leave unset to publish only when the domain's JMS bus is provisioned and say nothing when it is not; true to require it (an unreachable bus is then an error); false to never publish.")
 	public Boolean isEnabled() {
 		return enabled;
 	}
 
 	public void setEnabled(Boolean enabled) {
-		this.enabled = (enabled == null) ? Boolean.FALSE : enabled;
+		this.enabled = enabled;
 	}
 
 	@JsonPropertyDescription("JNDI name of the connection factory the bus publishes through. Defaults to the framework constant; set it only on a domain provisioned under different names.")
@@ -66,6 +67,15 @@ public class EventBusSettings implements Serializable {
 	public void setDestinationJndi(String destinationJndi) {
 		this.destinationJndi = (destinationJndi == null || destinationJndi.isEmpty()) ? EventBus.TOPIC_JNDI
 				: destinationJndi;
+	}
+
+	@JsonPropertyDescription("Where the bus's JNDI names are looked up, when not in this server's own tree: a provider URL on the engine cluster, e.g. t3://engine0.example:8001 (several comma-separated). Leave empty: an engine finds the bus in its own tree, and an application on the AdminServer finds the running engines that host it by itself. Set it only to override that.")
+	public String getProviderUrl() {
+		return providerUrl;
+	}
+
+	public void setProviderUrl(String providerUrl) {
+		this.providerUrl = providerUrl;
 	}
 
 	@JsonPropertyDescription("CloudEvents 'source' stamped on events this application publishes. Leave empty to derive it from the application name.")

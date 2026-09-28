@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 #
-# Run sql/Oracle-database-schema.sql against the Autonomous Database.
+# Run sql/Oracle-database-schema.sql, then sql/Oracle-analytics-views.sql, against
+# the Autonomous Database.
 #
-# That file is already drop-and-recreate: a PL/SQL block at the top drops all seven
+# The schema file is drop-and-recreate: a PL/SQL block at the top drops all seven
 # tables with CASCADE CONSTRAINTS, then rebuilds them. So this is the whole reset --
 # there is no migration step and nothing to preserve. It is DESTRUCTIVE by design.
 #
@@ -21,6 +22,11 @@
 #   DB_URL    jdbc:oracle:thin:@<db>_tp?TNS_ADMIN=<wallet dir>
 #   BLADE_CONFIRM_DROP=yes   required; this drops tables, so it will not run by
 #                            accident on a database somebody cares about
+#   BLADE_VIEWS_ONLY=yes     skip the schema and only (re)create the views. This
+#                            is the upgrade step: the views file only replaces
+#                            views, keeps every row, and needs no confirmation.
+#                            Run it after every BLADE upgrade, because new event
+#                            types arrive with new views.
 #
 #   $MW_HOME/oracle_common/common/bin/wlst.sh run-oracle-schema.py
 #
@@ -36,31 +42,38 @@ blade_user = os.environ.get('DB_USER')
 blade_pass = os.environ.get('DB_PASS')
 blade_url = os.environ.get('DB_URL')
 blade_confirm = os.environ.get('BLADE_CONFIRM_DROP', '')
-# WLST does not define __file__, so the script cannot locate itself. Look in the
-# usual places relative to the working directory and let BLADE_SQL_FILE override.
-blade_candidates = [
-    'services/analytics/sql/Oracle-database-schema.sql',   # run from the repo root
-    '../sql/Oracle-database-schema.sql',                   # run from notes/
-    'sql/Oracle-database-schema.sql',                      # run from services/analytics/
-]
-blade_sql_file = os.environ.get('BLADE_SQL_FILE')
-if not blade_sql_file:
-    for blade_c in blade_candidates:
-        if os.path.exists(blade_c):
-            blade_sql_file = blade_c
-            break
-if not blade_sql_file or not os.path.exists(blade_sql_file):
-    print('FATAL: cannot find Oracle-database-schema.sql. Run from the repo root,')
-    print('       or set BLADE_SQL_FILE to its full path.')
-    raise SystemExit(2)
+blade_views_only = os.environ.get('BLADE_VIEWS_ONLY', '') == 'yes'
+
+
+def blade_find(name, override):
+    """WLST does not define __file__, so the script cannot locate itself. Look in
+    the usual places relative to the working directory; `override` wins."""
+    blade_path = os.environ.get(override)
+    if blade_path:
+        return blade_path
+    for blade_dir in ['services/analytics/sql/', '../sql/', 'sql/']:
+        if os.path.exists(blade_dir + name):
+            return blade_dir + name
+    return None
+
+
+blade_sql_file = blade_find('Oracle-database-schema.sql', 'BLADE_SQL_FILE')
+blade_views_file = blade_find('Oracle-analytics-views.sql', 'BLADE_VIEWS_FILE')
+for blade_name, blade_file, blade_needed in [('Oracle-database-schema.sql', blade_sql_file, not blade_views_only),
+                                             ('Oracle-analytics-views.sql', blade_views_file, True)]:
+    if blade_needed and (not blade_file or not os.path.exists(blade_file)):
+        print('FATAL: cannot find %s. Run from the repo root,' % blade_name)
+        print('       or set BLADE_SQL_FILE / BLADE_VIEWS_FILE to its full path.')
+        raise SystemExit(2)
 
 if not blade_user or not blade_pass or not blade_url:
     print('FATAL: set DB_USER, DB_PASS and DB_URL')
     raise SystemExit(2)
 
-if blade_confirm != 'yes':
+if not blade_views_only and blade_confirm != 'yes':
     print('REFUSING: this DROPS every analytics table and recreates it empty.')
-    print('          Re-run with BLADE_CONFIRM_DROP=yes if that is what you want.')
+    print('          Re-run with BLADE_CONFIRM_DROP=yes if that is what you want,')
+    print('          or with BLADE_VIEWS_ONLY=yes to only (re)create the views.')
     raise SystemExit(2)
 
 
@@ -97,8 +110,12 @@ def blade_statements(path):
     return [s for s in blade_out if s.strip()]
 
 
-blade_stmts = blade_statements(blade_sql_file)
-print('%s: %d statements' % (blade_sql_file, len(blade_stmts)))
+blade_files = ([] if blade_views_only else [blade_sql_file]) + [blade_views_file]
+blade_stmts = []
+for blade_file in blade_files:
+    blade_these = blade_statements(blade_file)
+    print('%s: %d statements' % (blade_file, len(blade_these)))
+    blade_stmts.extend(blade_these)
 
 blade_conn = DriverManager.getConnection(blade_url, blade_user, blade_pass)
 blade_conn.setAutoCommit(1)
@@ -142,6 +159,19 @@ try:
         print('  %s' % blade_t)
     print('')
     print('%d ok, %d failed, %d of 4 tables present' % (blade_ok, blade_failed, len(blade_found)))
+
+    # The views, and whether each compiled. INVALID means it references a
+    # column or table this schema does not have.
+    blade_st = blade_conn.createStatement()
+    blade_rs = blade_st.executeQuery(
+        "SELECT object_name, status FROM user_objects WHERE object_type = 'VIEW' "
+        "AND object_name LIKE 'V\\_%' ESCAPE '\\' ORDER BY object_name")
+    print('')
+    print('views now present:')
+    while blade_rs.next():
+        print('  %-24s %s' % (blade_rs.getString(1), blade_rs.getString(2)))
+    blade_rs.close()
+    blade_st.close()
     if len(blade_found) != 4:
         print('WARNING: expected exactly the four tables APPLICATIONS, EVENTS,')
         print('         SESSIONS, SESSION_KEYS. Anything else listed above is a')

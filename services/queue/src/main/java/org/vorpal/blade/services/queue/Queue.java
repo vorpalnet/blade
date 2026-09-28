@@ -93,6 +93,7 @@ public class Queue {
 								// A caller who hung up while waiting is still in the deque.
 								// Drop it without a drain slot, so a flood of INVITE+CANCEL
 								// cannot starve callers who are still on the line.
+								callflow.abandoned("caller");
 								if (sipLogger.isLoggable(Level.FINER)) {
 									sipLogger.finer(callflow.aliceRequest,
 											"Queue.initialize - queueTask, discarding CANCELED callflow");

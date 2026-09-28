@@ -93,7 +93,9 @@ Everything below is how the installer delivers those five properties.
   (`jms/BladeEventBusTopic` + its error queue) against the running AdminServer,
   and creates the `jdbc/BladeAnalytics` data source once you point it at your
   database on the "Analytics database" page. The database and its schema are
-  yours: run `services/analytics/sql/<Dialect>-database-schema.sql` once.
+  yours: run `services/analytics/sql/<Dialect>-database-schema.sql` once, then
+  `<Dialect>-analytics-views.sql`. Re-run the views file after every upgrade: it
+  only replaces views, and new event types arrive with new views.
   Headless: `./install.sh <env> jms` and `./install.sh <env> datasource`.
 
 ---

@@ -404,9 +404,83 @@
 		});
 	}
 
+	/* ---- operations (event bus) ----------------------------------------- */
+
+	/* The word each event type is shown as. The state is carried by the word:
+	   "down" and "failing" read as trouble without the colour. */
+	var OPS_WORDS = {
+		'org.vorpal.blade.endpoint.down': 'down',
+		'org.vorpal.blade.endpoint.up': 'up',
+		'org.vorpal.blade.trunk.failed': 'failing',
+		'org.vorpal.blade.trunk.registered': 'registered',
+		'org.vorpal.blade.trunk.unregistered': 'unregistered',
+		'org.vorpal.blade.queue.depth': 'queue',
+		'org.vorpal.blade.registration.added': 'registered',
+		'org.vorpal.blade.registration.removed': 'removed',
+		'org.vorpal.blade.presence.published': 'presence',
+		'org.vorpal.blade.sip.denied': 'refused',
+		'org.vorpal.blade.config.saved': 'config',
+		'org.vorpal.blade.config.published': 'pushed'
+	};
+	var OPS_BAD = { 'down': 1, 'failing': 1, 'refused': 1 };
+
+	function opsSummary(e) {
+		switch (e.type) {
+		case 'org.vorpal.blade.endpoint.down':
+		case 'org.vorpal.blade.endpoint.up': return e.endpoint + (e.note ? ' · ' + e.note : '');
+		case 'org.vorpal.blade.trunk.failed': return e.gateway + ' · ' + (e.status || '') + ' ' + (e.reason || '');
+		case 'org.vorpal.blade.trunk.registered':
+		case 'org.vorpal.blade.trunk.unregistered': return e.gateway + ' · ' + e.registrar;
+		case 'org.vorpal.blade.queue.depth': return e.queue + ' · ' + e.depth + ' waiting (low ' + e.low + ', high ' + e.high + ')';
+		case 'org.vorpal.blade.registration.added':
+		case 'org.vorpal.blade.registration.removed': return e.aor + ' · ' + e.contact + (e.reason ? ' · ' + e.reason : '');
+		case 'org.vorpal.blade.presence.published': return e.entity + (e.basic ? ' · ' + e.basic : '');
+		case 'org.vorpal.blade.sip.denied': return e.method + ' from ' + e.sourceAddress;
+		case 'org.vorpal.blade.config.saved': return e.file + ' ' + e.change + ' by ' + e.actor + ' (' + e.editor + ')';
+		case 'org.vorpal.blade.config.published': return e.file + ' → ' + (e.pushedTo || []).join(', ') + ((e.failed && e.failed.length) ? ' · FAILED on ' + e.failed.join(', ') : '');
+		default: return e.type;
+		}
+	}
+
+	function opsRows(box, items, word, empty) {
+		box.textContent = '';
+		if (!items.length) { msg(box, 'empty', empty); return; }
+		items.forEach(function (e) {
+			var w = word(e);
+			var row = document.createElement('div'); row.className = 'ops-row';
+			var a = document.createElement('span'); a.className = 'ops-row__what' + (OPS_BAD[w] ? ' bad' : ''); a.textContent = w;
+			var b = document.createElement('span'); b.className = 'ops-row__main'; b.textContent = opsSummary(e) + (e.node ? ' · ' + e.node : '');
+			var c = document.createElement('span'); c.className = 'ops-row__when';
+			c.textContent = e.time ? new Date(e.time).toLocaleTimeString() : '';
+			row.appendChild(a); row.appendChild(b); row.appendChild(c); box.appendChild(row);
+		});
+	}
+
+	function loadOps() {
+		return getJson('ops').then(function (o) {
+			if (!o || o.error) return;
+			var wrong = o.endpointsDown.map(function (e) { e.type = 'org.vorpal.blade.endpoint.down'; return e; })
+				.concat(o.trunksFailing.map(function (e) { e.type = 'org.vorpal.blade.trunk.failed'; return e; }));
+			var queued = o.queues.reduce(function (n, q) { return n + (q.depth || 0); }, 0);
+			var denied = o.recent.filter(function (e) { return e.type === 'org.vorpal.blade.sip.denied'; }).length;
+			setTile('t-endpoints-down', o.endpointsDown.length);
+			setTile('t-trunks-failing', o.trunksFailing.length);
+			setTile('t-queued', queued);
+			setTile('t-sip-denied', denied);
+			opsRows(document.getElementById('ops-wrong'), wrong, function (e) { return OPS_WORDS[e.type]; },
+				'Nothing down. An endpoint or trunk appears here from the event that reports it until the one that clears it.');
+			o.queues.forEach(function (e) { e.type = 'org.vorpal.blade.queue.depth'; });
+			opsRows(document.getElementById('ops-queues'), o.queues, function () { return 'queue'; },
+				'No queue has held a caller since this server started listening.');
+			opsRows(document.getElementById('ops-recent'), o.recent, function (e) { return OPS_WORDS[e.type] || 'event'; },
+				'No operations events yet.');
+		});
+	}
+
 	function refresh() {
 		setStatus('', 'refreshing…');
 		loadHealth().catch(function () {});
+		loadOps().catch(function () {});
 		loadStats().then(function () {
 			loadCharts();
 			updatedEl.textContent = new Date().toLocaleTimeString();
@@ -419,5 +493,5 @@
 	initMetricToggle();
 	refresh();
 	setInterval(refresh, REFRESH_MS);
-	setInterval(function () { loadHealth().catch(function () {}); }, HEALTH_MS);
+	setInterval(function () { loadHealth().catch(function () {}); loadOps().catch(function () {}); }, HEALTH_MS);
 })();

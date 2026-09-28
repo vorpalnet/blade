@@ -18,7 +18,7 @@ import javax.ws.rs.core.Response;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v3.events.AccessEvent;
 import org.vorpal.blade.framework.v3.events.CloudEvent;
-import org.vorpal.blade.framework.v3.events.EventBus;
+import org.vorpal.blade.framework.v3.events.Events;
 import org.vorpal.blade.framework.v3.security.AccessDecision;
 import org.vorpal.blade.framework.v3.security.AccessEvaluator;
 import org.vorpal.blade.framework.v3.security.AuditArchive;
@@ -128,13 +128,11 @@ public class AuditAPI {
 	}
 
 	private void publish(SubjectAttributes caller, AccessDecision decision, String date) {
-		try {
-			AccessEvent event = new AccessEvent(caller, decision, "auditDay", date)
-					.from(request == null ? null : request.getRemoteAddr());
-			EventBus.publish(event.toCloudEvent("/blade/audit"));
-		} catch (Exception e) {
+		AccessEvent event = new AccessEvent(caller, decision, "auditDay", date)
+				.from(request == null ? null : request.getRemoteAddr());
+		if (!Events.publish(event.toCloudEvent("/blade/audit"))) {
 			java.util.logging.Logger.getLogger(AuditAPI.class.getName())
-					.severe("audit: could not record that " + date + " was read: " + e);
+					.severe("audit: could not record that " + date + " was read");
 		}
 	}
 }

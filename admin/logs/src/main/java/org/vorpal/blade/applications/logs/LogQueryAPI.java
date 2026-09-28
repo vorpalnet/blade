@@ -30,6 +30,8 @@ import org.vorpal.blade.framework.v2.logging.LogMatch;
 import org.vorpal.blade.framework.v2.logging.LogSearchResult;
 import org.vorpal.blade.framework.v2.logging.LogSlice;
 import org.vorpal.blade.framework.v2.logging.VorpalLogReaderMXBean;
+import org.vorpal.blade.framework.v3.events.AccessEvent;
+import org.vorpal.blade.framework.v3.events.Events;
 
 @Path("/")
 @Tag(name = "Logs", description = "Cluster-wide log viewer")
@@ -42,6 +44,26 @@ public class LogQueryAPI {
 	/// would silently get this much anyway, and the loop would then mis-count
 	/// how far it had advanced.
 	private static final int CHUNK_BYTES = 1 << 20;
+
+	@javax.ws.rs.core.Context
+	private javax.ws.rs.core.SecurityContext security;
+
+	/// Record a read of call content in the access log: a trace captures whole
+	/// SIP messages and a log can hold caller numbers, so who looked is worth
+	/// the same record a recording gets. Explicit acts only: the page's own
+	/// polling (a trace refresh, a log follow) would bury them.
+	private void accessed(String action, String kind, String id) {
+		java.security.Principal user = (security == null) ? null : security.getUserPrincipal();
+		String role = "authenticated";
+		for (String candidate : new String[] { "Admin", "Operator", "Deployer", "Monitor" }) {
+			if (security != null && security.isUserInRole(candidate)) {
+				role = candidate;
+				break;
+			}
+		}
+		Events.publish(AccessEvent.granted((user == null) ? null : user.getName(), action, kind, id, role)
+				.toCloudEvent(Events.source()));
+	}
 
 	@GET
 	@Path("/servers")
@@ -108,6 +130,11 @@ public class LogQueryAPI {
 			@PathParam("path") String relativePath,
 			@DefaultValue("-1") @QueryParam("offset") long offset,
 			@DefaultValue("65536") @QueryParam("max") int maxBytes) {
+		if (offset == -1 && maxBytes == 0) {
+			// The size probe the viewer makes when a file is opened; the slices
+			// and the follow that come after it are the same read.
+			accessed("admin:logs", "log", serverName + "/" + relativePath);
+		}
 		try {
 			LogSlice s = LogReaderClient.readSlice(serverName, relativePath, offset, maxBytes);
 			String body = new String(s.getBytes(), StandardCharsets.UTF_8);
@@ -178,6 +205,7 @@ public class LogQueryAPI {
 	public Response download(
 			@PathParam("name") String serverName,
 			@PathParam("path") String relativePath) {
+		accessed("admin:logs", "log", serverName + "/" + relativePath + " (download)");
 		try {
 			VorpalLogReaderMXBean reader = LogReaderClient.forServer(serverName);
 
@@ -242,6 +270,7 @@ public class LogQueryAPI {
 			@DefaultValue("0") @QueryParam("from") long fromOffset,
 			@DefaultValue("500") @QueryParam("maxMatches") int maxMatches,
 			@DefaultValue("33554432") @QueryParam("maxScan") long maxBytesScanned) {
+		accessed("admin:logs", "log", serverName + "/" + relativePath + " search: " + pattern);
 		try {
 			ObjectNode n = mapper.createObjectNode();
 

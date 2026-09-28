@@ -40,6 +40,7 @@ import io.swagger.v3.oas.annotations.info.Info;
 
 import org.vorpal.blade.framework.v2.config.ConfigPublisher;
 import org.vorpal.blade.framework.v2.config.SettingsMXBean;
+import org.vorpal.blade.framework.v3.events.ConfigEvents;
 
 @OpenAPIDefinition(info = @Info(title = "BLADE Configurator", version = "1", description = "Configuration Validation and Deployment APIs"))
 @javax.ws.rs.Path("/")
@@ -332,6 +333,8 @@ public class ValidationAPI {
 		Map<String, Object> result = new LinkedHashMap<>();
 		result.put("app", app);
 		List<String> actions = new ArrayList<>();
+		List<String> pushedTo = new ArrayList<>();
+		String current = null;
 
 		try {
 			MBeanServer mbeanServer = ConfigPublisher.domainRuntimeMBeanServer();
@@ -346,6 +349,7 @@ public class ValidationAPI {
 			for (Map.Entry<ObjectName, SettingsMXBean> entry : proxies.entrySet()) {
 				ObjectName name = entry.getKey();
 				SettingsMXBean settings = entry.getValue();
+				current = name.getKeyProperty("Location");
 
 				// Push domain config
 				propagateConfig(settings, "domain", Paths.get(CONFIG_BASE + app + ".json"), actions);
@@ -367,14 +371,20 @@ public class ValidationAPI {
 				// Reload
 				settings.reload();
 				actions.add("Reloaded " + name);
+				if (current != null) {
+					pushedTo.add(current);
+				}
 			}
 
 			result.put(resultKey, true);
 			result.put("actions", actions);
+			ConfigEvents.published(app + ".json", app, "all", pushedTo, java.util.Collections.emptyList());
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "Publish failed for " + app, e);
 			result.put(resultKey, false);
 			result.put("error", e.getMessage());
+			ConfigEvents.published(app + ".json", app, "all", pushedTo,
+					java.util.Collections.singletonList((current == null) ? "unknown" : current));
 		}
 
 		return result;

@@ -380,7 +380,7 @@ public class InboundToBrowser extends WebrtcCallflow {
 
 	/// The address this INVITE is for, as `user@host` — the form a browser claims with
 	/// `session.connect`.
-	static String addressOf(SipServletRequest invite) {
+	public static String addressOf(SipServletRequest invite) {
 		URI uri = invite.getRequestURI();
 		if (uri instanceof SipURI) {
 			SipURI sip = (SipURI) uri;
@@ -390,7 +390,7 @@ public class InboundToBrowser extends WebrtcCallflow {
 	}
 
 	/// Who is calling, for the browser to display.
-	static String callerOf(SipServletRequest invite) {
+	public static String callerOf(SipServletRequest invite) {
 		URI from = invite.getFrom().getURI();
 		if (from instanceof SipURI) {
 			SipURI sip = (SipURI) from;

@@ -53,10 +53,9 @@ class AnalyticsEventTest {
 			event.addAttribute("caller", "alice");
 			event.addAttribute("callee", "bob");
 
-			JsonNode attributes = close(event).getData().path("attributes");
-			assertEquals(2, attributes.size());
-			assertEquals("caller", attributes.get(0).path("name").asText());
-			assertEquals("callee", attributes.get(1).path("name").asText());
+			JsonNode data = close(event).getData();
+			assertEquals("alice", data.path("caller").asText());
+			assertEquals("bob", data.path("callee").asText());
 		}
 
 		@Test
@@ -66,9 +65,7 @@ class AnalyticsEventTest {
 			event.addAttribute("caller", "alice");
 			event.addAttribute("caller", "carol");
 
-			JsonNode attributes = close(event).getData().path("attributes");
-			assertEquals(1, attributes.size(), "the payload declares attribute names unique");
-			assertEquals("carol", attributes.get(0).path("value").asText());
+			assertEquals("carol", close(event).getData().path("caller").asText());
 		}
 
 		@Test

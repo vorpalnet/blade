@@ -19,13 +19,13 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /// produce or consume that event.
 ///
 /// Six outputs from one input: the payload class, its JSON Schema, a consumer
-/// MDB, a producer snippet, a sample envelope, and a downloadable Maven module
-/// carrying all of them. They are generated from the same declaration, so they
-/// cannot disagree — which is the entire point. The message selector in the
-/// generated MDB comes from [EventType#selector()] rather than a human typing
-/// the string a second time, and that alone removes the failure mode where a
-/// consumer silently receives nothing because someone mistyped an event name
-/// inside a quoted string that no compiler ever checks.
+/// listener, a producer snippet, a sample envelope, and a downloadable Maven
+/// module carrying all of them. They are generated from the same declaration,
+/// so they cannot disagree — which is the entire point. The generated
+/// consumer's broker selector is derived from the types it names rather than a
+/// human typing the string a second time, and that alone removes the failure
+/// mode where a consumer silently receives nothing because someone mistyped an
+/// event name inside a quoted string that no compiler ever checks.
 ///
 /// **Pure.** Every method here is a static function of its arguments: no file
 /// IO, no JNDI, no MBeans, no `SettingsManager` state. Same contract as
@@ -81,6 +81,10 @@ public final class EventSourceGenerator {
 		appendImports(sb, declaration);
 
 		appendTypeJavadoc(sb, declaration, "", "the payload of");
+		// A payload read by a consumer built before a field was added must still
+		// parse, and a call-scoped event also carries whatever attributes the
+		// publishing application's analytics configuration extracted.
+		sb.append("@JsonIgnoreProperties(ignoreUnknown = true)").append(NL);
 		sb.append("public class ").append(className).append(" implements Serializable {").append(NL);
 		sb.append(NL);
 		sb.append("\tprivate static final long serialVersionUID = 1L;").append(NL);
@@ -195,39 +199,26 @@ public final class EventSourceGenerator {
 		sb.append(NL);
 	}
 
-	// ------------------------------------------------------------- Consumer MDB
+	// -------------------------------------------------------------- Consumer
 
-	/// Generate the consumer — a message-driven bean already wired to the right
-	/// destination, with the right subscription identity and the right selector.
+	/// Generate the consumer: a `ServletContextListener` that subscribes
+	/// through [SubscriptionRegistrar#named] and dispatches each event to a
+	/// typed handler.
 	///
-	/// **One MDB per subscription, not per event type.** The identity properties
-	/// come from the subscription's own name, which is what lets two applications
-	/// consume the same event and each receive a copy. When they came from the
-	/// event type, two consumers of one event generated the same
-	/// `subscriptionName` and the same `clientId` — not two subscriptions
-	/// clashing, but literally one subscription named twice, so the two apps
-	/// competed for a single stream. That is the defect this signature exists to
-	/// make impossible.
+	/// **One consumer per subscription, not per event type.** The broker's
+	/// subscription name comes from the subscription's own name, which is what
+	/// lets two applications consume the same event and each receive a copy.
+	/// When it came from the event type, two consumers of one event shared one
+	/// subscription and competed for a single stream. That is the defect this
+	/// signature exists to make impossible.
 	///
-	/// Every activation property is derived, and the reasoning for each is emitted
-	/// as a comment in the output so the developer who inherits the file knows why
-	/// it is shaped that way:
-	///
-	/// - `destinationType` follows the destination the subscription's types live on.
-	/// - `subscriptionName` and `clientId` are both the subscription's name. They
-	///   may equal each other; what matters is that they differ *between*
-	///   subscriptions.
-	/// - A durable subscription (topics only) means an event is held rather than
-	///   missed while the consumer is down.
-	/// - `topicMessagesDistributionMode = One-Copy-Per-Application` makes the
-	///   whole cluster act as one logical subscriber, so an event is handled once
-	///   cluster-wide rather than once per engine node.
-	/// - `messageSelector` comes from [EventSubscription#selector()] — never typed
-	///   twice, and omitted entirely when the subscription filters in code.
+	/// The generated `TYPES` are the fallback, not the authority: a deployed
+	/// consumer follows the catalog's entry for its subscription, and derives
+	/// its broker selector from [EventSubscription#selector()].
 	///
 	/// @param subscription the subscriber to generate for
 	/// @param catalog      the catalog its types are declared in
-	/// @return Java source for the MDB
+	/// @return Java source for the listener
 	public static String consumerSource(EventSubscription subscription, EventCatalog catalog) {
 		String className = (subscription == null) ? null : subscription.effectiveJavaClassName();
 		if (className == null) {
@@ -338,9 +329,8 @@ public final class EventSourceGenerator {
 		sb.append(NL);
 		sb.append("\t@Override").append(NL);
 		sb.append("\tpublic void contextInitialized(ServletContextEvent event) {").append(NL);
-		sb.append("\t\tregistrar = SubscriptionRegistrar.start(event.getServletContext(), SUBSCRIPTION,")
-				.append(NL);
-		sb.append("\t\t\t\tTYPES, this);").append(NL);
+		sb.append("\t\tregistrar = SubscriptionRegistrar.named(SUBSCRIPTION).types(TYPES)").append(NL);
+		sb.append("\t\t\t\t.start(event.getServletContext(), this);").append(NL);
 		sb.append("\t}").append(NL);
 		sb.append(NL);
 		sb.append("\t@Override").append(NL);
@@ -539,7 +529,7 @@ public final class EventSourceGenerator {
 					sb.append("\t\t\t\tcheckVersion(event, ").append(declared.getVersion()).append(");").append(NL);
 				}
 				sb.append("\t\t\t\t").append(handlerName(declared))
-						.append("(event, MAPPER.treeToValue(event.getData(), ").append(payload).append(".class));")
+						.append("(event, MAPPER.treeToValue(event.fields(), ").append(payload).append(".class));")
 						.append(NL);
 				sb.append("\t\t\t\tbreak;").append(NL);
 			}
@@ -657,15 +647,19 @@ public final class EventSourceGenerator {
 			return "// Declare an event type before generating its producer." + NL;
 		}
 
+		boolean callScoped = isCallScoped(declaration);
 		StringBuilder sb = new StringBuilder(512);
 		sb.append("// Publish a ").append(declaration.getType()).append(" event.").append(NL);
-		sb.append("// EventBus.publish is a no-op when the bus is not up on this node, so a").append(NL);
-		sb.append("// producer is never coupled to bus liveness — check isReady() only if you").append(NL);
-		sb.append("// need to know.").append(NL);
+		sb.append("// Events.publish never throws: a send that fails is logged with its type, and").append(NL);
+		sb.append("// the event is dropped rather than costing the call.").append(NL);
+		if (callScoped) {
+			sb.append("// The correlator, the publishing application and the dataversion are").append(NL);
+			sb.append("// stamped from the application session; set only the event's own facts.").append(NL);
+		}
 		sb.append(className).append(" payload = new ").append(className).append("();").append(NL);
 		for (EventField field : declaration.fieldsOrEmpty()) {
 			String javaName = field.javaName();
-			if (javaName == null) {
+			if (javaName == null || (callScoped && AnalyticsEventMapper.ENVELOPE.contains(field.getName()))) {
 				continue;
 			}
 			String capitalized = Character.toUpperCase(javaName.charAt(0)) + javaName.substring(1);
@@ -673,19 +667,29 @@ public final class EventSourceGenerator {
 					.append(NL);
 		}
 		sb.append(NL);
-		sb.append("CloudEvent event = CloudEvent.create(").append(NL);
-		sb.append("\t\t\"").append(escape(declaration.getType())).append("\",").append(NL);
-		sb.append("\t\t\"/blade/events\",").append(NL);
-		sb.append("\t\tsipSession.getId(),   // subject: the correlation key for this call").append(NL);
+		sb.append("Events.publish(").append(callScoped ? "appSession, " : "").append("\"")
+				.append(escape(declaration.getType())).append("\",").append(NL);
 		if (declaration.getVersion() != null) {
-			sb.append("\t\tnew ObjectMapper().valueToTree(payload),").append(NL);
-			sb.append("\t\t").append(className).append(".VERSION);   // the declaration revision this shape has")
+			sb.append("\t\t").append(className).append(".VERSION,   // the declaration revision this shape has")
 					.append(NL);
-		} else {
-			sb.append("\t\tnew ObjectMapper().valueToTree(payload));").append(NL);
 		}
-		sb.append("EventBus.publish(event);").append(NL);
+		if (!callScoped) {
+			sb.append("\t\tsubject,   // what a consumer correlates on").append(NL);
+		}
+		sb.append("\t\tdata -> data.setAll((ObjectNode) new ObjectMapper().valueToTree(payload)));").append(NL);
 		return sb.toString();
+	}
+
+	/// Whether a declaration has the call-scoped payload: the correlator and the
+	/// publishing application, which [Events] stamps.
+	private static boolean isCallScoped(EventType declaration) {
+		boolean vorpalId = false;
+		boolean appName = false;
+		for (EventField field : declaration.fieldsOrEmpty()) {
+			vorpalId |= "vorpalId".equals(field.getName());
+			appName |= "appName".equals(field.getName());
+		}
+		return vorpalId && appName;
 	}
 
 	// ------------------------------------------------------------- JSON Schema
@@ -952,7 +956,7 @@ public final class EventSourceGenerator {
 		return bytes.toByteArray();
 	}
 
-	/// Package a subscriber: the consumer MDB, plus the payload class and schema
+	/// Package a subscriber: the consumer listener, plus the payload class and schema
 	/// of every type it handles.
 	///
 	/// This is the module that goes into the *consuming* application. A
@@ -1103,7 +1107,7 @@ public final class EventSourceGenerator {
 		sb.append("| File | Role |").append(NL);
 		sb.append("|---|---|").append(NL);
 		sb.append("| `").append(className)
-				.append("Listener.java` | the consumer MDB, already bound to the destination, the subscription identity and the selector |")
+				.append("Listener.java` | the consumer, subscribing under its own name and dispatching each event to a typed handler |")
 				.append(NL);
 		for (EventType declared : handled) {
 			sb.append("| `").append(declared.effectiveJavaClassName()).append(".java` | the payload of `")
@@ -1113,14 +1117,14 @@ public final class EventSourceGenerator {
 		sb.append("## Where it goes").append(NL);
 		sb.append(NL);
 		sb.append("**Into the consuming application's own source tree.** Every BLADE WAR bundles").append(NL);
-		sb.append("the framework jar into its `WEB-INF/lib`, and EJB annotation scanning covers").append(NL);
-		sb.append("`WEB-INF/lib` — so a consumer placed in the framework would activate in every").append(NL);
-		sb.append("deployed BLADE application at once, all of them contending for one client id.").append(NL);
+		sb.append("the framework jar into its `WEB-INF/lib`, and `@WebListener` scanning covers").append(NL);
+		sb.append("`WEB-INF/lib` — so a consumer placed in the framework would start in every").append(NL);
+		sb.append("deployed BLADE application at once, all of them sharing one subscription.").append(NL);
 		sb.append(NL);
-		sb.append("The listener binds to `").append(catalog.destinationForSubscription(subscription)).append("`.")
+		sb.append("The listener subscribes to `").append(catalog.destinationForSubscription(subscription)).append("`.")
 				.append(NL);
-		sb.append("That destination must exist before the app starts, or the container will").append(NL);
-		sb.append("refuse to deploy the MDB — provision it from the Events console.").append(NL);
+		sb.append("Until that destination exists the listener logs that it is receiving nothing").append(NL);
+		sb.append("and keeps retrying; provision it from the Events console.").append(NL);
 		sb.append(NL);
 		sb.append("## Subscription identity").append(NL);
 		sb.append(NL);
@@ -1187,6 +1191,7 @@ public final class EventSourceGenerator {
 	private static void appendImports(StringBuilder sb, EventType declaration) {
 		Set<String> imports = new TreeSet<>();
 		imports.add("java.io.Serializable");
+		imports.add("com.fasterxml.jackson.annotation.JsonIgnoreProperties");
 		collectImports(declaration.fieldsOrEmpty(), imports);
 		for (String each : imports) {
 			sb.append("import ").append(each).append(";").append(NL);

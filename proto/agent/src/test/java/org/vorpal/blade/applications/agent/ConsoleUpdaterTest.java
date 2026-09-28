@@ -23,8 +23,8 @@ class ConsoleUpdaterTest {
 
 	private static final ObjectMapper M = new ObjectMapper();
 
-	/// A risk event shaped the way `RiskEvents` publishes it: the correlator in
-	/// `data.vorpalId` and the subject, the verdict as name/value attributes.
+	/// A risk event in the legacy wire shape, the verdict as name/value
+	/// attributes, which [CloudEvent#fields] still reads during the transition.
 	private static CloudEvent riskEvent(String type, String vorpalId, String band, String score) {
 		ObjectNode data = M.createObjectNode();
 		data.put("eventName", "callRiskAssessed");
@@ -113,5 +113,55 @@ class ConsoleUpdaterTest {
 		assertNull(ConsoleUpdater.toUpdate(riskEvent(BladeEventTypes.CALL_RISK_ASSESSED, "0BADF00D", null, null)));
 		// Carries a verdict but names no call: nowhere to put it.
 		assertNull(ConsoleUpdater.toUpdate(riskEvent(BladeEventTypes.CALL_RISK_ASSESSED, null, "WATCH", "0.5")));
+	}
+
+	/// The flat wire: typed fields beside the correlator, labels as an array.
+	/// The page is sent the same text it always was.
+	@Test
+	void aFlatUtteranceWithLabelsBecomesTheSameLine() throws Exception {
+		ObjectNode data = M.createObjectNode();
+		data.put("vorpalId", "0BADF00D");
+		data.put("text", "Buy a gift card.");
+		data.put("party", "callee");
+		data.put("startMs", 2140L);
+		data.putArray("labels").add("gift-card").add("urgency");
+		CloudEvent event = CloudEvent.create(BladeEventTypes.CALL_UTTERANCE, "/blade/listener",
+				"0BADF00D.18F3A2B4C10", data);
+
+		JsonNode frame = M.readTree(ConsoleUpdater.toUpdate(event).json);
+
+		assertEquals("agent", frame.path("utterance").path("party").asText());
+		assertEquals("2140", frame.path("utterance").path("atMs").asText());
+		assertEquals(2, frame.path("utterance").path("labels").size());
+		assertEquals("urgency", frame.path("utterance").path("labels").get(1).asText());
+	}
+
+	@Test
+	void aFlatRiskScoreReachesThePageAsText() throws Exception {
+		ObjectNode data = M.createObjectNode();
+		data.put("vorpalId", "0BADF00D");
+		data.put("riskScore", 0.55);
+		data.put("riskBand", "SUSPECT");
+		data.put("signal.acoustic", 0.81);
+		JsonNode frame = M.readTree(ConsoleUpdater
+				.toUpdate(CloudEvent.create(BladeEventTypes.CALL_RISK_FLAGGED, "/gryphon", null, data)).json);
+
+		assertEquals("0.55", frame.path("riskScore").asText());
+		assertEquals("suspect", frame.path("riskBand").asText());
+		assertTrue(frame.path("riskFlagged").asBoolean());
+		assertEquals("0.81", frame.path("signals").path("acoustic").path("value").asText());
+	}
+
+	@Test
+	void aReviewLandsOnTheCard() throws Exception {
+		ObjectNode data = M.createObjectNode();
+		data.put("vorpalId", "0BADF00D");
+		data.putArray("labels").add("scam-script");
+		data.put("text", "Read me the code.");
+		JsonNode frame = M.readTree(ConsoleUpdater
+				.toUpdate(CloudEvent.create(BladeEventTypes.CALL_REVIEWED, "/gryphon", null, data)).json);
+
+		assertEquals("scam-script", frame.path("review").path("labels").get(0).asText());
+		assertEquals("Read me the code.", frame.path("review").path("text").asText());
 	}
 }

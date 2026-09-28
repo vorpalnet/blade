@@ -2,6 +2,7 @@ package org.vorpal.blade.services.gateway;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.function.Consumer;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
@@ -11,6 +12,11 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
 import org.vorpal.blade.framework.v2.config.CredentialEncryption;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.events.BladeEventTypes;
+import org.vorpal.blade.framework.v3.events.Events;
+
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /// The `register-digest` registrar: originates a REGISTER for one {@link VirtualGateway},
 /// handles the 401/407 digest challenge (`addAuthHeader`), and keeps the registration alive
@@ -29,6 +35,10 @@ public class RegisterCallflow extends TrunkRegistrar {
 	private InetSocketAddress outboundInterface; // may be null → container default
 	private String sasId;
 	private String timerId;
+
+	/// Whether the last REGISTER succeeded, so the bus hears the change and not
+	/// every refresh. Null before the first answer.
+	private Boolean registered;
 
 	public RegisterCallflow(VirtualGateway gateway, RegisterDigestStyle style) {
 		super(gateway);
@@ -100,6 +110,7 @@ public class RegisterCallflow extends TrunkRegistrar {
 			if (alreadyAuthed) {
 				// A challenge to an already‑authenticated REGISTER means bad creds — don't loop.
 				sipLogger.severe("gateway " + name() + ": REGISTER auth rejected (" + status + ")");
+				failed(status, "authentication rejected");
 				return;
 			}
 			// Built on the challenged REGISTER's own session, so the registration
@@ -123,6 +134,9 @@ public class RegisterCallflow extends TrunkRegistrar {
 			int requested = response.getRequest().getExpires();
 			if (requested == 0) {
 				sipLogger.info("gateway " + name() + ": de‑registered (" + status + ")");
+				registered = null;
+				trunkEvent(BladeEventTypes.TRUNK_UNREGISTERED, data -> {
+				});
 				return;
 			}
 			// Arm the recurring re-REGISTER here, in the response-callback (a live
@@ -146,10 +160,31 @@ public class RegisterCallflow extends TrunkRegistrar {
 				}
 			}
 			sipLogger.info("gateway " + name() + ": REGISTER " + status + " (expires " + requested + "s)");
+			if (!Boolean.TRUE.equals(registered)) {
+				registered = Boolean.TRUE;
+				trunkEvent(BladeEventTypes.TRUNK_REGISTERED, data -> data.put("expires", requested));
+			}
 			return;
 		}
 
 		sipLogger.severe("gateway " + name() + ": REGISTER failed " + status + " " + response.getReasonPhrase());
+		failed(status, response.getReasonPhrase());
+	}
+
+	/// Announce a failure once, not on every refresh that repeats it.
+	private void failed(int status, String reason) {
+		if (!Boolean.FALSE.equals(registered)) {
+			registered = Boolean.FALSE;
+			trunkEvent(BladeEventTypes.TRUNK_FAILED, data -> data.put("status", status).put("reason", reason));
+		}
+	}
+
+	private void trunkEvent(String type, Consumer<ObjectNode> facts) {
+		Events.publish(type, name(), data -> {
+			data.put("gateway", name()).put("registrar", gateway.getRegistrarDomain())
+					.put("node", SettingsManager.getServerName());
+			facts.accept(data);
+		});
 	}
 
 	private void onTimer(ServletTimer timer) throws ServletException, IOException {

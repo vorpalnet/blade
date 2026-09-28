@@ -183,7 +183,16 @@ public final class Catalog {
 			try (ResultSet rs = ps.executeQuery()) {
 				if (rs.next() && rs.getString(1) != null) {
 					com.fasterxml.jackson.databind.JsonNode d = MAPPER.readTree(rs.getString(1));
-					call.reviewLabels = d.path("labels").asText(null);
+					// An array from the flat wire; a comma-separated string in
+					// rows written before it.
+					com.fasterxml.jackson.databind.JsonNode labels = d.path("labels");
+					if (labels.isArray()) {
+						java.util.List<String> each = new java.util.ArrayList<>();
+						labels.forEach(label -> each.add(label.asText()));
+						call.reviewLabels = String.join(",", each);
+					} else {
+						call.reviewLabels = labels.asText(null);
+					}
 					call.reviewText = d.path("text").asText(null);
 				}
 			}

@@ -18,6 +18,9 @@ import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import org.vorpal.blade.framework.v3.events.AccessEvent;
+import org.vorpal.blade.framework.v3.events.Events;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -48,6 +51,26 @@ public class TracesAPI {
 
 	private static final String JMX_DOMAIN_RUNTIME = "java:comp/env/jmx/domainRuntime";
 	private static final String TRACE_PATTERN = "vorpal.blade:Name=*,Type=Trace,*";
+
+	@javax.ws.rs.core.Context
+	private javax.ws.rs.core.SecurityContext security;
+
+	/// Record a read of call content in the access log: a trace captures whole
+	/// SIP messages and a log can hold caller numbers, so who looked is worth
+	/// the same record a recording gets. Explicit acts only: the page's own
+	/// polling (a trace refresh, a log follow) would bury them.
+	private void accessed(String action, String kind, String id) {
+		java.security.Principal user = (security == null) ? null : security.getUserPrincipal();
+		String role = "authenticated";
+		for (String candidate : new String[] { "Admin", "Operator", "Deployer", "Monitor" }) {
+			if (security != null && security.isUserInRole(candidate)) {
+				role = candidate;
+				break;
+			}
+		}
+		Events.publish(AccessEvent.granted((user == null) ? null : user.getName(), action, kind, id, role)
+				.toCloudEvent(Events.source()));
+	}
 
 	/// Every node's buffered steps, per app:
 	/// `{"sources":[{"app","server","steps":[...]}]}`. The browser aggregates.
@@ -126,6 +149,8 @@ public class TracesAPI {
 		}
 		int cap = maxCaptures != null ? maxCaptures : 5;
 		String ruleLabel = isBlank(label) ? attribute + " ~ " + pattern : label.trim();
+		// Arming decides whose calls are captured, message by message.
+		accessed("admin:trace", "traceRule", attribute.trim() + " ~ " + pattern);
 		return fanOut("arm",
 				new Object[] { ruleLabel, attribute.trim(), pattern, cap },
 				new String[] { String.class.getName(), String.class.getName(), String.class.getName(), "int" });

@@ -72,7 +72,7 @@ public class EventCatalogSample extends EventCatalog {
 		// The framework's own event types come first, so a fresh install can see
 		// what BLADE already emits before adding anything. The attendant example
 		// follows as a worked case of an application-defined type.
-		List<EventType> types = new ArrayList<>(BladeEventCatalog.analyticsTypes());
+		List<EventType> types = new ArrayList<>(BladeEventCatalog.allTypes());
 		types.add(meeting);
 		this.setTypes(types);
 

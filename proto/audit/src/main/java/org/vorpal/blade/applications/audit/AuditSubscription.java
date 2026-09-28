@@ -9,7 +9,6 @@ import javax.servlet.annotation.WebListener;
 
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v3.events.BladeEventTypes;
-import org.vorpal.blade.framework.v3.events.EventSubscriber;
 import org.vorpal.blade.framework.v3.events.SubscriptionRegistrar;
 import org.vorpal.blade.framework.v3.security.AuditSink;
 
@@ -88,14 +87,8 @@ public class AuditSubscription implements ServletContextListener {
 			throw new IllegalStateException("blade-audit will not start without an AuditSink on the classpath: "
 					+ "access records would be consumed and discarded");
 		}
-		SubscriptionRegistrar.meter(event.getServletContext(), SUBSCRIPTION);
-		registrar = SubscriptionRegistrar.start(
-				SUBSCRIPTION,
-				AuditSubscription::auditedTypes,
-				true,
-				handler,
-				BATCH_SIZE,
-				EventSubscriber.DEFAULT_BATCH_MILLIS);
+		registrar = SubscriptionRegistrar.named(SUBSCRIPTION).typesFrom(AuditSubscription::auditedTypes)
+				.batch(BATCH_SIZE).start(event.getServletContext(), handler);
 	}
 
 	@Override

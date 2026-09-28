@@ -8,7 +8,6 @@ import javax.servlet.ServletContextListener;
 
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v3.events.BladeEventTypes;
-import org.vorpal.blade.framework.v3.events.EventSubscriber;
 import org.vorpal.blade.framework.v3.events.SubscriptionRegistrar;
 import org.vorpal.blade.framework.v3.media.manifest.ManifestArchive;
 
@@ -51,9 +50,8 @@ public class CatalogSubscription implements ServletContextListener {
 			throw new IllegalStateException("blade-catalog will not start without a ManifestArchive on the classpath: "
 					+ "conversation events would be consumed and nothing indexed");
 		}
-		SubscriptionRegistrar.meter(event.getServletContext(), SUBSCRIPTION);
-		registrar = SubscriptionRegistrar.start(SUBSCRIPTION, CatalogSubscription::types, true, handler, BATCH_SIZE,
-				EventSubscriber.DEFAULT_BATCH_MILLIS);
+		registrar = SubscriptionRegistrar.named(SUBSCRIPTION).typesFrom(CatalogSubscription::types).batch(BATCH_SIZE)
+				.start(event.getServletContext(), handler);
 		CatalogSettings current = settings();
 		if (current != null && current.getRebuildDays() > 0) {
 			rebuild(current.getRebuildDays());

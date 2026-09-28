@@ -38,7 +38,7 @@ class DispositionServiceTest {
 		// No data source: every catalog write is a no-op, no analytics and no bus
 		// under test, but the treatment is still computed and returned.
 		Catalog catalog = new Catalog(null, null, null);
-		DispositionService service = new DispositionService(catalog, 7, () -> null);
+		DispositionService service = new DispositionService(catalog, 7);
 		DispositionService.Disposition d = new DispositionService.Disposition();
 		d.vorpalId = "0BADF00D";
 		d.ani = "5557654321";
@@ -57,7 +57,7 @@ class DispositionServiceTest {
 	@Test
 	void blockIsOnlyWrittenWhenTheActionAsksForIt() {
 		Catalog catalog = new Catalog(null, null, null);
-		DispositionService service = new DispositionService(catalog, 7, () -> null);
+		DispositionService service = new DispositionService(catalog, 7);
 		DispositionService.Disposition d = new DispositionService.Disposition();
 		d.ani = "5557654321";
 		d.outcome = "legitimate";

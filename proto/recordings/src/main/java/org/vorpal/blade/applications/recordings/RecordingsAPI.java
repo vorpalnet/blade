@@ -20,7 +20,7 @@ import javax.ws.rs.core.StreamingOutput;
 
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v3.events.AccessEvent;
-import org.vorpal.blade.framework.v3.events.EventBus;
+import org.vorpal.blade.framework.v3.events.Events;
 import org.vorpal.blade.framework.v3.media.MutingOutputStream;
 import org.vorpal.blade.framework.v3.media.RecordingArchive;
 import org.vorpal.blade.framework.v3.media.manifest.ConversationManifest;
@@ -548,27 +548,13 @@ public class RecordingsAPI {
 	}
 
 	private void publish(SubjectAttributes caller, AccessDecision decision, String kind, String id) {
-		try {
-			AccessEvent event = new AccessEvent(caller, decision, kind, id)
-					.from(request == null ? null : request.getRemoteAddr());
-			org.vorpal.blade.framework.v3.events.CloudEvent envelope = event.toCloudEvent("/blade/recordings");
-
-			// Diagnostic, kept deliberately. An access record that is published
-			// into nothing is the failure this whole path exists to prevent, and
-			// it is invisible: EventBus.publish returns normally when no publisher
-			// is installed, so silence here looks exactly like success. This says
-			// which it was.
-			java.util.logging.Logger diag = java.util.logging.Logger.getLogger(RecordingsAPI.class.getName());
-			diag.info("recordings: publishing " + envelope.getType() + " ready=" + EventBus.isReady()
-					+ " destinations=" + EventBus.registeredDestinations());
-
-			EventBus.publish(envelope);
-		} catch (Exception e) {
-			// An audit record that cannot be published must be visible somewhere.
-			// Losing it silently is the one failure this whole path exists to
-			// prevent.
+		AccessEvent event = new AccessEvent(caller, decision, kind, id)
+				.from(request == null ? null : request.getRemoteAddr());
+		// An audit record that cannot be published must be visible somewhere.
+		// Losing it silently is the one failure this whole path exists to prevent.
+		if (!Events.publish(event.toCloudEvent("/blade/recordings"))) {
 			SettingsManager.getSipLogger().severe(
-					"recordings: could not publish the access record for " + kind + ":" + id + " - " + e);
+					"recordings: the access record for " + kind + ":" + id + " was not published");
 		}
 	}
 }

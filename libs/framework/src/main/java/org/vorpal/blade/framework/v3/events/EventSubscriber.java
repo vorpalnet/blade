@@ -130,6 +130,10 @@ public class EventSubscriber {
 	private final long batchMillis;
 	private final Handler handler;
 
+	/// The provider this subscriber's names were looked up through, so a
+	/// change to [EventBus#getProviderUrl] rebuilds it.
+	private final String providerUrl = EventBus.getProviderUrl();
+
 	private final ConcurrentMap<String, Member> members = new ConcurrentHashMap<>();
 
 	/// Every member the container has reported available, whether or not a
@@ -192,6 +196,12 @@ public class EventSubscriber {
 		return selector;
 	}
 
+	/// The JNDI provider this subscriber was built against; null for this
+	/// server's own tree.
+	public String getProviderUrl() {
+		return providerUrl;
+	}
+
 	public boolean isDurable() {
 		return durable;
 	}
@@ -245,7 +255,7 @@ public class EventSubscriber {
 	/// @throws NamingException if a JNDI lookup fails
 	/// @throws JMSException    if the subscription cannot be established
 	public void init() throws NamingException, JMSException {
-		InitialContext ctx = new InitialContext();
+		InitialContext ctx = EventBus.context();
 		factory = (ConnectionFactory) ctx.lookup(connectionFactoryJndi);
 		Destination destination = (Destination) ctx.lookup(destinationJndi);
 

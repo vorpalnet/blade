@@ -365,23 +365,34 @@ testing should live below it — which is where it belongs anyway.
 
 Applications tell the rest of the system what happened by publishing events: a
 call answered, a meeting scheduled, a threshold crossed. An event is a
-[CloudEvent](https://cloudevents.io/) — a small JSON envelope with a type, a
-source, a subject, and data — published to the BLADE event bus, where any
-number of applications may subscribe:
+[CloudEvent](https://cloudevents.io/), a small JSON envelope with a type, a
+source, a subject and data, published to the BLADE event bus, where any number
+of applications may subscribe. Publishing names the type and states the facts:
 
 ```java
-EventBus.publish(CloudEvent.create(
-        "net.vorpal.example.call.answered",   // type
-        "/example",                           // source: this application
-        getVorpalSessionId(request),          // subject: the call
-        data));                               // your JSON payload
+Events.publish(appSession, BladeEventTypes.CALL_UTTERANCE, data -> data
+        .put("text", text)
+        .put("party", "caller")
+        .put("startMs", startMs));
 ```
 
-Publishing is fire-and-forget and always safe: if the bus is not provisioned,
-`publish` quietly does nothing. Subscribers select events by type or subject
-without parsing bodies, and more than one application can consume the same
-event, each receiving its own copy. The event catalog — itself ordinary BLADE
-configuration — names the event types and decides where each is delivered.
+The framework fills in the rest from the call: which call it is, which
+application and server said so, and the payload revision. `publish` never
+throws, and where the domain has no event bus it does nothing at all. An
+application's `"events": {"enabled": …}` turns that off (`false`) or insists
+on the bus (`true`, and an unreachable bus is then an error). Subscribing is one statement in a `ServletContextListener`:
+
+```java
+registrar = SubscriptionRegistrar.named("example-screen")
+        .types(BladeEventTypes.CALL_UTTERANCE)
+        .live()                          // not durable: a screen wants now, not a replay
+        .start(context, batch -> batch.forEach(e -> show(e.fields())));
+```
+
+The broker filters by type, so a subscriber never wakes for an event it would
+ignore, and each subscribing application receives its own copy. The event
+catalog, itself ordinary BLADE configuration, declares each type's fields and
+lets an operator change what a running subscriber hears.
 
 *More:* [events service README](services/events/README.md)
 

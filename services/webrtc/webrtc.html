@@ -368,7 +368,7 @@
 <section class="slide" aria-label="The protocol">
   <div class="head">
     <p class="eyebrow">The protocol</p>
-    <h2>CloudEvents 1.0, fourteen types, one WebSocket.</h2>
+    <h2>CloudEvents 1.0, seventeen types, one WebSocket.</h2>
     <p class="sub">Subprotocol <code>blade.webrtc.v1</code>, all in <code>SignalProtocol</code>.</p>
   </div>
   <div class="body"><div class="two" style="align-items:start">
@@ -381,6 +381,7 @@
         <tr><td class="ev">call.hangup</td><td class="df"></td></tr>
         <tr><td class="ev">call.dtmf</td><td class="df"></td></tr>
         <tr><td class="ev">ice.candidate</td><td class="df">both directions</td></tr>
+        <tr><td class="ev">message.send</td><td class="df">a post to a chat room, as SIP MESSAGE</td></tr>
       </tbody></table>
     </div>
     <div>
@@ -393,6 +394,8 @@
         <tr><td class="ev">call.connected</td><td class="df"></td></tr>
         <tr><td class="ev">call.ended</td><td class="df"></td></tr>
         <tr><td class="ev">call.update</td><td class="df"></td></tr>
+        <tr><td class="ev">message.sent</td><td class="df">the room took it</td></tr>
+        <tr><td class="ev">message.received</td><td class="df">a room's message</td></tr>
         <tr><td class="ev">signal.error</td><td class="df"></td></tr>
       </tbody></table>
     </div>
@@ -653,7 +656,7 @@
     </div>
     <ul class="facts">
       <li><b>Every fact carries a <code>dialog</code> attribute</b>, <code>inbound</code> or <code>outbound</code>. A browser-to-browser call is one call that crosses this application <b>twice</b> — out and back in through the location service — and the second dialog inherits the first's correlation id. Both publish under the same correlator, source and application name; <code>dialog</code> is the only thing that tells them apart.</li>
-      <li><b><code>analytics.enabled</code> is the switch, not <code>events.enabled</code>.</b> Setting <code>events.enabled</code> alone gives a live bus connection carrying no call facts.</li>
+      <li><b>The event bus is the one switch.</b> Left unset, <code>events.enabled</code> publishes the call facts wherever the domain's JMS bus is provisioned and nothing where it is not; <code>false</code> turns them off.</li>
       <li>The shipped sample fills in the selectors and <b>leaves the switch off</b>, the way every other BLADE application samples itself.</li>
     </ul>
   </div></div>

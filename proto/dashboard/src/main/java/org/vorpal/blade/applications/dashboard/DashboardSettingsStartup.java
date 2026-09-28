@@ -8,6 +8,7 @@ import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 
 import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.events.SubscriptionRegistrar;
 
 /// Registers the dashboard's SettingsManager so it appears on the Admin Portal
 /// deck and its configuration is Configurator-editable. The live settings are
@@ -21,6 +22,7 @@ public class DashboardSettingsStartup implements ServletContextListener {
 	private static final Logger logger = Logger.getLogger(DashboardSettingsStartup.class.getName());
 
 	private SettingsManager<DashboardSettings> settingsManager;
+	private SubscriptionRegistrar ops;
 
 	@Override
 	public void contextInitialized(ServletContextEvent sce) {
@@ -31,10 +33,19 @@ public class DashboardSettingsStartup implements ServletContextListener {
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "dashboard settings failed to register", e);
 		}
+		// After the settings, not in a listener of its own: the settings carry
+		// any `events.providerUrl` override, and a separate listener could start
+		// first and look in the wrong place (the container does not order
+		// annotated listeners).
+		ops = SubscriptionRegistrar.named(OpsFeed.SUBSCRIPTION).types(OpsFeed.TYPES).live()
+				.start(sce.getServletContext(), OpsFeed.FEED);
 	}
 
 	@Override
 	public void contextDestroyed(ServletContextEvent sce) {
+		if (ops != null) {
+			ops.stop();
+		}
 		sce.getServletContext().removeAttribute(SETTINGS_ATTR);
 		if (settingsManager != null) {
 			try {

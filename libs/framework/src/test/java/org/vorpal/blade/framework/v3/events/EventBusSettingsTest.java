@@ -31,11 +31,10 @@ class EventBusSettingsTest {
 	class Defaults {
 
 		@Test
-		@DisplayName("publishing is off until an app asks for it")
-		void disabledByDefault() {
-			EventBusSettings settings = new EventBusSettings();
-			assertFalse(Boolean.TRUE.equals(settings.isEnabled()),
-					"an app that does not publish should not hold a JMS connection");
+		@DisplayName("unset by default: the bus decides, not a flag")
+		void unsetByDefault() {
+			assertNull(new EventBusSettings().isEnabled(),
+					"null is auto: publish where the bus is provisioned, stay silent where it is not");
 		}
 
 		@Test
@@ -56,11 +55,54 @@ class EventBusSettingsTest {
 		}
 
 		@Test
-		void aNullEnabledIsFalseNotNull() {
+		void aNullEnabledStaysUnset() {
 			EventBusSettings settings = new EventBusSettings();
+			settings.setEnabled(Boolean.TRUE);
 			settings.setEnabled(null);
-			assertNotNull(settings.isEnabled());
-			assertFalse(settings.isEnabled());
+			assertNull(settings.isEnabled());
+		}
+	}
+
+	/// A plain JVM has no JNDI, which is exactly a domain with no bus.
+	@Nested
+	@DisplayName("reconcile on a domain with no bus")
+	class NoBus {
+
+		@org.junit.jupiter.api.AfterEach
+		void reset() {
+			EventBus.unregisterAll();
+		}
+
+		@Test
+		@DisplayName("unset: quietly not provisioned, and callers stay silent")
+		void unsetIsQuiet() {
+			assertEquals(EventBus.Outcome.NOT_PROVISIONED, EventBus.reconcile(new EventBusSettings(), false));
+			assertTrue(EventBus.isQuiet());
+			assertFalse(EventBus.isReady());
+		}
+
+		@Test
+		@DisplayName("explicitly on: an error, because somebody asked for it")
+		void askedForIsAFailure() {
+			EventBusSettings settings = new EventBusSettings();
+			settings.setEnabled(Boolean.TRUE);
+			assertEquals(EventBus.Outcome.FAILED, EventBus.reconcile(settings, false));
+			assertFalse(EventBus.isQuiet());
+		}
+
+		@Test
+		@DisplayName("analytics.enabled counts as asking")
+		void analyticsCountsAsAsking() {
+			assertEquals(EventBus.Outcome.FAILED, EventBus.reconcile(new EventBusSettings(), true));
+		}
+
+		@Test
+		@DisplayName("explicitly off: off, and never tries")
+		void offIsOff() {
+			EventBusSettings settings = new EventBusSettings();
+			settings.setEnabled(Boolean.FALSE);
+			assertEquals(EventBus.Outcome.OFF, EventBus.reconcile(settings, true));
+			assertTrue(EventBus.isQuiet());
 		}
 	}
 

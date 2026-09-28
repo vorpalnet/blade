@@ -146,8 +146,8 @@ class AnalyticsEventMapperTest {
 	class CallEvents {
 
 		@Test
-		@DisplayName("attributes flatten from entity-attribute-value into name/value pairs")
-		void attributesBecomeAnArray() {
+		@DisplayName("attributes lie flat in the payload beside the correlator")
+		void attributesLieFlat() {
 			Map<String, String> attributes = new LinkedHashMap<>();
 			attributes.put("caller", "alice");
 			attributes.put("callee", "bob");
@@ -155,11 +155,24 @@ class AnalyticsEventMapperTest {
 			CloudEvent event = AnalyticsEventMapper.callEvent("/blade/app", "callStarted", Long.valueOf(VORPAL_ID),
 					STARTED, STARTED, "app", "d", "s", APP_STARTED, attributes);
 
-			JsonNode array = event.getData().path("attributes");
-			assertTrue(array.isArray());
-			assertEquals(2, array.size());
-			assertEquals("caller", array.get(0).path("name").asText());
-			assertEquals("alice", array.get(0).path("value").asText());
+			assertEquals("alice", event.getData().path("caller").asText());
+			assertEquals("bob", event.getData().path("callee").asText());
+			assertFalse(event.getData().has("attributes"));
+			assertEquals(Integer.valueOf(2), event.getDataversion());
+		}
+
+		@Test
+		@DisplayName("an attribute cannot overwrite the correlator or the publisher")
+		void envelopeFieldsWin() {
+			Map<String, String> attributes = new LinkedHashMap<>();
+			attributes.put("server", "spoofed");
+			attributes.put("vorpalId", "FFFFFFFF");
+
+			CloudEvent event = AnalyticsEventMapper.callEvent("/blade/app", "callStarted", Long.valueOf(VORPAL_ID),
+					STARTED, STARTED, "app", "d", "s", APP_STARTED, attributes);
+
+			assertEquals("s", event.getData().path("server").asText());
+			assertEquals(String.format("%08X", VORPAL_ID), event.getData().path("vorpalId").asText());
 		}
 
 		@Test
@@ -175,9 +188,11 @@ class AnalyticsEventMapperTest {
 			assertEquals(BladeEventTypes.CALL_EVENT, operator.getType(),
 					"an operator's own name has no declaration to select on, so it takes the fallback");
 
-			assertEquals("transferRequested", framework.getData().path("eventName").asText(),
-					"the name stays in the payload either way");
-			assertEquals("agentWrapUp", operator.getData().path("eventName").asText());
+			assertFalse(framework.getData().has("eventName"), "a declared type needs no name beside it");
+			assertEquals("agentWrapUp", operator.getData().path("eventName").asText(),
+					"the fallback type carries the operator's name");
+			assertEquals("transferRequested", BladeEventTypes.eventNameOf(framework.getType()),
+					"the analytics name is recoverable from the type");
 		}
 
 		@Test

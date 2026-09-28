@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.vorpal.blade</groupId>
+		<artifactId>vorpal-blade</artifactId>
+		<version>${revision}</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>vorpal-blade-proto-messaging</artifactId>
+	<packaging>war</packaging>
+	<name>BLADE Messaging Service</name>
+
+	<dependencies>
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-library-framework</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<!-- A SIP application: finalName equals the context-root, unprefixed, because
+		     that is the name the container reports to the App Router and the name
+		     FSMAR configs target. -->
+		<finalName>messaging</finalName>
+	</build>
+
+</project>

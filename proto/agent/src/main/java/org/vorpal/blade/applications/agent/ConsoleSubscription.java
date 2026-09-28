@@ -11,7 +11,6 @@ import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 
 import org.vorpal.blade.framework.v3.events.BladeEventTypes;
-import org.vorpal.blade.framework.v3.events.EventSubscriber;
 import org.vorpal.blade.framework.v3.events.SubscriptionRegistrar;
 
 /// The console's ear on the bus: what makes a pop change after it appears.
@@ -23,11 +22,10 @@ import org.vorpal.blade.framework.v3.events.SubscriptionRegistrar;
 /// [ConsoleUpdater] turns each into an update pushed to the console holding
 /// that call, over the WebSocket it already has open.
 ///
-/// Subscribes to four types, by their first-class names (the generic call
-/// event carries the post-call review under its own name, `callReviewed`) (a precise broker
-/// selector; the contract is blade's, see [BladeEventTypes#CALL_RISK_ASSESSED]
-/// and [BladeEventTypes#CALL_UTTERANCE]). Whoever hears the audio publishes
-/// them — the agent app depends on blade alone.
+/// Subscribes to four types by name, so the broker filters: the risk pair,
+/// [BladeEventTypes#CALL_UTTERANCE] and [BladeEventTypes#CALL_REVIEWED]. The
+/// contract is blade's; whoever hears the audio publishes them, and the agent
+/// app depends on blade alone.
 ///
 /// **Non-durable, on purpose.** A durable subscription would hold verdicts while
 /// no console was open and replay them later, to nobody: a risk score for a call
@@ -47,7 +45,7 @@ public class ConsoleSubscription implements ServletContextListener {
 
 	static List<String> types() {
 		return Arrays.asList(BladeEventTypes.CALL_RISK_ASSESSED, BladeEventTypes.CALL_RISK_FLAGGED,
-				BladeEventTypes.CALL_UTTERANCE, BladeEventTypes.CALL_EVENT);
+				BladeEventTypes.CALL_UTTERANCE, BladeEventTypes.CALL_REVIEWED);
 	}
 
 	private final ConsoleUpdater handler = new ConsoleUpdater();
@@ -58,9 +56,8 @@ public class ConsoleSubscription implements ServletContextListener {
 
 	@Override
 	public void contextInitialized(ServletContextEvent event) {
-		SubscriptionRegistrar.meter(event.getServletContext(), SUBSCRIPTION);
-		registrar = SubscriptionRegistrar.start(SUBSCRIPTION, ConsoleSubscription::types, /* durable */ false, handler,
-				/* batch */ 1, EventSubscriber.DEFAULT_BATCH_MILLIS);
+		registrar = SubscriptionRegistrar.named(SUBSCRIPTION).types(types()).live()
+				.start(event.getServletContext(), handler);
 		keepalive = Executors.newSingleThreadScheduledExecutor(r -> {
 			Thread t = new Thread(r, "agent-console-ping");
 			t.setDaemon(true);

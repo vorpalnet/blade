@@ -64,10 +64,10 @@ public final class BladeEventTypes {
 	/// An analytics event whose name the framework does not define — one an
 	/// operator added to an application's `analytics.events` configuration.
 	///
-	/// The fallback, and only the fallback. A framework-emitted name resolves to
-	/// one of the eleven types below through [#forEventName]; anything else lands
-	/// here with its name in the payload, exactly as before, so an existing
-	/// customer configuration keeps flowing without a catalog edit.
+	/// The fallback, and only the fallback. A framework-defined name resolves to
+	/// its own type below through [#forEventName]; anything else lands here with
+	/// its name in the payload's `eventName`, so an existing customer
+	/// configuration keeps flowing without a catalog edit.
 	public static final String CALL_EVENT = "org.vorpal.blade.call.event";
 
 	// ------------------------------------------------------------------ the call
@@ -125,7 +125,7 @@ public final class BladeEventTypes {
 
 	/// A party said something and a transcriber decoded it: one utterance, as
 	/// text. Frequent, one per endpointed utterance while the call is
-	/// transcribed. Attributes carry `text`, `party` (caller or callee) and,
+	/// transcribed. Carries `text`, `party` (caller or callee) and,
 	/// when the transcriber has a media clock, `startMs` / `endMs` from when the
 	/// tap attached. Published by whatever hears the audio (Gryphon's in-server
 	/// ASR tap today); the contract is blade's so a screen or an indexer depends
@@ -134,7 +134,7 @@ public final class BladeEventTypes {
 
 	/// A party's voice was scored for being synthetic: one window of audio, as
 	/// a probability. Periodic, one per scored window while the call is heard.
-	/// Attributes carry `score` (0 genuine to 1 synthetic), `party` (caller or
+	/// Carries `score` (0 genuine to 1 synthetic), `party` (caller or
 	/// callee), `model` when the scorer names one, and `offsetMs` from when the
 	/// assessment attached. A raw measurement, not a verdict: a risk engine
 	/// fuses it with the other signals and publishes [#CALL_RISK_ASSESSED].
@@ -144,9 +144,117 @@ public final class BladeEventTypes {
 	/// supervisor, a specialist, an interpreter. A request, not a result: the
 	/// application that holds the call's media dials the party onto the call's
 	/// mix if its own rules allow the destination, and ignores it otherwise.
-	/// Attributes carry `target` (the SIP address to dial), `label` (the name
+	/// Carries `target` (the SIP address to dial), `label` (the name
 	/// the transcript gives the new voice) and `requestedBy`.
 	public static final String CALL_PARTY_REQUESTED = "org.vorpal.blade.call.party.requested";
+
+	/// A finished call was reviewed after the fact: a model or a person read
+	/// the conversation and labelled it. Carries `labels` (the content labels
+	/// found, an array) and optionally `line` and `text`, the line that earned them. One
+	/// per review; the agent console shows it on the call's card.
+	public static final String CALL_REVIEWED = "org.vorpal.blade.call.reviewed";
+
+	/// The agent who handled a call recorded its disposition: the outcome, the
+	/// caller's identity as the agent judged it, and what was done about it
+	/// (for example, blocking the number). One per disposition filed.
+	public static final String CALL_DISPOSITIONED = "org.vorpal.blade.call.dispositioned";
+
+	/// A proxy chose where the call goes and sent it there: iRouter's forward
+	/// route, or the balancer's endpoint. Carries `destination` and whatever
+	/// identifies the choice (`endpoint`, `tier`). A proxy that does not
+	/// record-route sees only the setup, so its session ends with the INVITE
+	/// transaction.
+	public static final String CALL_ROUTED = "org.vorpal.blade.call.routed";
+
+	/// A router answered the call itself with a response below 400, such as a
+	/// redirect server's 302. Carries `status`.
+	public static final String CALL_RESPONDED = "org.vorpal.blade.call.responded";
+
+	/// An application placed a call on someone's behalf (third-party call
+	/// control) and it was answered or refused. Carries `party`, `status`.
+	public static final String CALL_ORIGINATED = "org.vorpal.blade.call.originated";
+
+	/// A call was parked on hold: answered with inactive media and held open.
+	public static final String CALL_HELD = "org.vorpal.blade.call.held";
+
+	/// A parked call left hold, because the caller hung up or the call was
+	/// taken elsewhere. Carries `heldMs`.
+	public static final String CALL_HOLD_ENDED = "org.vorpal.blade.call.hold.ended";
+
+	/// A caller joined a queue because nothing downstream was free. Carries
+	/// `queue` and `depth`, the queue's length with this caller in it.
+	public static final String QUEUE_ENTERED = "org.vorpal.blade.queue.entered";
+
+	/// A queued caller was offered to the destination. Carries `queue`,
+	/// `waitedMs` and `attempt`: a retryable failure puts the caller back and
+	/// the next offer counts up.
+	public static final String QUEUE_RELEASED = "org.vorpal.blade.queue.released";
+
+	/// A caller left a queue without being connected. Carries `queue`,
+	/// `waitedMs` and `reason`: `caller` when they hung up, `refused` when the
+	/// destination refused for good.
+	public static final String QUEUE_ABANDONED = "org.vorpal.blade.queue.abandoned";
+
+	/// A prompt or announcement finished playing to a caller. Carries `media`.
+	public static final String MEDIA_PLAYED = "org.vorpal.blade.media.played";
+
+	// ------------------------------------------------------------- operations
+	//
+	// Facts about the platform rather than a call: not persisted by analytics,
+	// subscribed to by dashboards and alerting. Each names the `node` that saw it,
+	// because every engine keeps its own view.
+
+	/// A queue's length over the last minute: `queue`, `low`, `high`, `depth`
+	/// now. Published only for a minute in which the queue held somebody.
+	public static final String QUEUE_DEPTH = "org.vorpal.blade.queue.depth";
+
+	/// The balancer stopped offering calls to an endpoint: an OPTIONS ping
+	/// failed, or it answered a call 503. Published on the change, not on every
+	/// failed ping. Carries `endpoint`, `note`, and `retryAfter` when it asked
+	/// for a backoff.
+	public static final String ENDPOINT_DOWN = "org.vorpal.blade.endpoint.down";
+
+	/// An endpoint the balancer had marked down answered again.
+	public static final String ENDPOINT_UP = "org.vorpal.blade.endpoint.up";
+
+	/// A device registered a contact it did not already have: `aor`, `contact`,
+	/// `expires`. A refresh of a known contact is not published.
+	public static final String REGISTRATION_ADDED = "org.vorpal.blade.registration.added";
+
+	/// A contact left the registrar: `reason` is `unregistered` for an
+	/// Expires 0, `expired` for one found lapsed on the address's next REGISTER.
+	public static final String REGISTRATION_REMOVED = "org.vorpal.blade.registration.removed";
+
+	/// A gateway's registration with its carrier trunk succeeded, the first
+	/// time or after a failure. Refreshes are not published. Carries `gateway`,
+	/// `registrar`, `expires`.
+	public static final String TRUNK_REGISTERED = "org.vorpal.blade.trunk.registered";
+
+	/// A gateway's trunk registration failed: `status`, and `reason`. Calls
+	/// through it will fail until it recovers.
+	public static final String TRUNK_FAILED = "org.vorpal.blade.trunk.failed";
+
+	/// A gateway removed its trunk registration, as it does when stopping.
+	public static final String TRUNK_UNREGISTERED = "org.vorpal.blade.trunk.unregistered";
+
+	/// An entity published its presence: `entity`, `event` (the package, e.g.
+	/// presence), `expires`, and `basic` (open or closed) when the body is PIDF.
+	public static final String PRESENCE_PUBLISHED = "org.vorpal.blade.presence.published";
+
+	/// The SIP access list refused a request: `method`, `sourceAddress`,
+	/// `from`, `requestUri`. Not an access record for the audit sink: a scanner
+	/// produces thousands, and they answer to network operations.
+	public static final String SIP_DENIED = "org.vorpal.blade.sip.denied";
+
+	/// Somebody saved a configuration file from an editor: `actor`, `file`,
+	/// `editor`. The change reaches the engines as [#CONFIG_PUBLISHED].
+	public static final String CONFIG_SAVED = "org.vorpal.blade.config.saved";
+
+	/// A changed configuration file was pushed to the servers running its
+	/// application: `file`, `scope` (domain, cluster or server), `pushedTo`,
+	/// and `failed` for any server that did not take it. Published for every
+	/// change the Configurator sees, whoever or whatever made it.
+	public static final String CONFIG_PUBLISHED = "org.vorpal.blade.config.published";
 
 	// -------------------------------------------------------------- the transfer
 
@@ -201,14 +309,22 @@ public final class BladeEventTypes {
 	/// rebuilt from it.
 	public static final String CONVERSATION_CLOSED = "org.vorpal.blade.conversation.closed";
 
-	/// The CloudEvents type for an analytics event name — one of the eleven when
+	/// Somebody joined or left a messaging room. The application that owns
+	/// the room's membership publishes it (a meeting, when it admits a
+	/// participant and when they leave); `proto/messaging` applies it, so
+	/// the room delivers to exactly the people let in, and replays its stored
+	/// messages to a newcomer.
+	public static final String ROOM_MEMBER = "org.vorpal.blade.messaging.member";
+
+	/// The CloudEvents type for an analytics event name: its declared type when
 	/// the framework defines the name, [#CALL_EVENT] otherwise.
 	///
-	/// The one place the mapping lives, so the producer, the catalog and any
-	/// consumer that wants to reverse it cannot disagree. Deliberately a `switch`
-	/// over constants rather than a lookup table: the compiler checks the right
-	/// side, this runs on the SIP container thread, and there is no initialization
-	/// order to reason about.
+	/// Used by the configuration-driven path only, where an operator names
+	/// events in `analytics.events`. Code that publishes an event names its
+	/// type directly through [Events]. Deliberately a `switch` over constants
+	/// rather than a lookup table: the compiler checks the right side, this runs
+	/// on the SIP container thread, and there is no initialization order to
+	/// reason about.
 	public static String forEventName(String eventName) {
 		if (eventName == null) {
 			return CALL_EVENT;
@@ -236,6 +352,28 @@ public final class BladeEventTypes {
 			return CALL_VOICE_ASSESSED;
 		case "partyRequested":
 			return CALL_PARTY_REQUESTED;
+		case "callReviewed":
+			return CALL_REVIEWED;
+		case "agentDisposition":
+			return CALL_DISPOSITIONED;
+		case "callRouted":
+			return CALL_ROUTED;
+		case "callResponded":
+			return CALL_RESPONDED;
+		case "callOriginated":
+			return CALL_ORIGINATED;
+		case "callHeld":
+			return CALL_HELD;
+		case "callHoldEnded":
+			return CALL_HOLD_ENDED;
+		case "queueEntered":
+			return QUEUE_ENTERED;
+		case "queueReleased":
+			return QUEUE_RELEASED;
+		case "queueAbandoned":
+			return QUEUE_ABANDONED;
+		case "mediaPlayed":
+			return MEDIA_PLAYED;
 		case "transferRequested":
 			return TRANSFER_REQUESTED;
 		case "transferInitiated":
@@ -249,6 +387,78 @@ public final class BladeEventTypes {
 		default:
 			// An operator-defined name from an app's analytics.events config.
 			return CALL_EVENT;
+		}
+	}
+
+	/// The analytics event name for a type: the inverse of [#forEventName].
+	///
+	/// **This is the analytics database's `type` column.** The SQL views and the
+	/// agent console's queries select on these short names (`callerSaid`,
+	/// `callRiskAssessed`), and years of rows already carry them, so the names
+	/// stay fixed however the wire type is spelled. A type with no analytics
+	/// name falls back to its last dotted segment.
+	public static String eventNameOf(String type) {
+		if (type == null || type.isEmpty()) {
+			return "unknown";
+		}
+		switch (type) {
+		case CALL_STARTED:
+			return "callStarted";
+		case CALL_ANSWERED:
+			return "callAnswered";
+		case CALL_CONNECTED:
+			return "callConnected";
+		case CALL_COMPLETED:
+			return "callCompleted";
+		case CALL_ABANDONED:
+			return "callAbandoned";
+		case CALL_DECLINED:
+			return "callDeclined";
+		case CALL_RISK_ASSESSED:
+			return "callRiskAssessed";
+		case CALL_RISK_FLAGGED:
+			return "callRiskFlagged";
+		case CALL_UTTERANCE:
+			return "callerSaid";
+		case CALL_VOICE_ASSESSED:
+			return "voiceAssessed";
+		case CALL_PARTY_REQUESTED:
+			return "partyRequested";
+		case CALL_REVIEWED:
+			return "callReviewed";
+		case CALL_DISPOSITIONED:
+			return "agentDisposition";
+		case CALL_ROUTED:
+			return "callRouted";
+		case CALL_RESPONDED:
+			return "callResponded";
+		case CALL_ORIGINATED:
+			return "callOriginated";
+		case CALL_HELD:
+			return "callHeld";
+		case CALL_HOLD_ENDED:
+			return "callHoldEnded";
+		case QUEUE_ENTERED:
+			return "queueEntered";
+		case QUEUE_RELEASED:
+			return "queueReleased";
+		case QUEUE_ABANDONED:
+			return "queueAbandoned";
+		case MEDIA_PLAYED:
+			return "mediaPlayed";
+		case TRANSFER_REQUESTED:
+			return "transferRequested";
+		case TRANSFER_INITIATED:
+			return "transferInitiated";
+		case TRANSFER_COMPLETED:
+			return "transferCompleted";
+		case TRANSFER_DECLINED:
+			return "transferDeclined";
+		case TRANSFER_ABANDONED:
+			return "transferAbandoned";
+		default:
+			int dot = type.lastIndexOf('.');
+			return (dot < 0 || dot == type.length() - 1) ? type : type.substring(dot + 1);
 		}
 	}
 

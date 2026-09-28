@@ -33,7 +33,10 @@
 ///       configured attributes automatically</li>
 ///   <li><b>Publish events</b> &mdash;
 ///       {@link Analytics#sendEvent(org.vorpal.blade.framework.v3.events.AnalyticsEvent)}
-///       closes the event and puts it on the bus as a CloudEvent</li>
+///       closes the event and puts it on the bus as a CloudEvent, each extracted
+///       attribute a text field of its payload. Code that states its own facts
+///       rather than extracting them publishes through
+///       {@link org.vorpal.blade.framework.v3.events.Events} instead</li>
 ///   <li><b>Whoever wants it, subscribes</b> &mdash; the analytics service writes
 ///       the events its catalog marks persisted into the database; any other
 ///       application may subscribe to the same events independently, and each

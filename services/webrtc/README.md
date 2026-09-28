@@ -120,7 +120,7 @@ server, and giving the browser a simple JSON protocol, is the cleaner split.
 ## The protocol
 
 The browser and the gateway talk in CloudEvents 1.0 envelopes over a single WebSocket, using
-the subprotocol `blade.webrtc.v1`. There are fourteen event types, all defined in
+the subprotocol `blade.webrtc.v1`. There are seventeen event types, all defined in
 `SignalProtocol`:
 
 | browser → gateway | gateway → browser |
@@ -131,8 +131,16 @@ the subprotocol `blade.webrtc.v1`. There are fourteen event types, all defined i
 | `call.hangup` | `call.established` |
 | `call.dtmf` | `call.connected` |
 | `ice.candidate` (both directions) | `call.ended` |
-| | `call.update` |
+| `message.send` | `call.update` |
+| | `message.sent` |
+| | `message.received` |
 | | `signal.error` |
+
+The three `message.*` types are chat. `message.send` posts to a room of
+[proto/messaging](../../proto/messaging/README.md) as a SIP MESSAGE, with the page's body untouched
+and the signed-in address in `P-Asserted-Identity`; `message.sent` is the room's answer, and a
+room's MESSAGE to the browser's registered contact arrives as `message.received`. No call is
+needed: a room is addressed, not dialled.
 
 Every type is named `scope.verb`, in lower case. `signal.error` is the exception to the two
 scopes, because an error can belong either to a call or to the session as a whole; its
@@ -210,6 +218,13 @@ browser's own call id. Only the types in `relayedEventTypes` are taken, and only
 namespace, so a far side cannot send `call.ended` into someone's call. A meeting's captions, roster
 and tracks travel this way: they are data, and a SIP `INFO` apiece would put them through the
 signaling path one transaction at a time.
+
+A browser's requests go back the same way. A `meeting.*` event the page sends for a call its socket
+holds, such as a reaction or a raised hand, is published on the bus under the call's
+Vorpal-ID with the source `/webrtc/browser`, and the application acts on it. The gateway never
+relays that source back to a browser. This direction needs the gateway on the bus; where
+the domain has none, or `events.enabled` is `false` in `webrtc.json`, the page is told the
+request cannot be sent.
 
 **The address comes from the token, not from the request.** The token names the single
 address its holder is allowed to bind; a browser asking for any other address is refused, not
@@ -320,10 +335,10 @@ Two things are worth knowing before reading a report:
   location service — and the second dialog inherits the first's `X-Vorpal-ID` correlation id.
   Both dialogs are published under the same correlator, source, and application name, so `dialog` is
   the only attribute that tells them apart.
-- **`analytics.enabled` is the switch, not `events.enabled`.** Turning on `events.enabled`
-  alone gives a live bus connection that carries no call facts. The shipped sample fills in
-  the selectors but leaves the switch off, the same way every other BLADE application samples
-  itself.
+- **The event bus is the one switch.** Unset, `events.enabled` publishes the call facts
+  wherever the domain's JMS bus is provisioned and stays silent where it is not; `true`
+  requires it, `false` turns it off. `analytics.events` only adds the header values its
+  selectors extract.
 
 The browser signaling protocol is a separate channel and keeps its own short, imperative
 names. Five of them are commands the client sends — `session.connect`, `call.offer`,

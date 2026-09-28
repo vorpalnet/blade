@@ -21,6 +21,7 @@ import javax.ws.rs.core.Response;
 
 import org.vorpal.blade.framework.io.VersionedFileStore;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.events.ConfigEvents;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -129,6 +130,11 @@ public class FilesAPI {
 		}
 	}
 
+	private String actor() {
+		java.security.Principal user = (security == null) ? null : security.getUserPrincipal();
+		return (user == null) ? null : user.getName();
+	}
+
 	/// Validate (by entry type) and save a registered file. The new content is
 	/// the request body. A version backup is taken before overwrite.
 	@POST
@@ -151,6 +157,7 @@ public class FilesAPI {
 			}
 
 			store.write(resolved, content == null ? "" : content);
+			ConfigEvents.saved(actor(), entry.getPath(), "files", "saved");
 
 			ObjectNode result = mapper.createObjectNode();
 			result.put("ok", true);
@@ -218,6 +225,7 @@ public class FilesAPI {
 			EditableFile entry = requireEntry(path);
 			Path resolved = resolve(entry.getPath());
 			String restored = store.restore(resolved, timestamp);
+			ConfigEvents.saved(actor(), entry.getPath(), "files", "restored");
 			return Response.ok(restored)
 					.header("X-File-Type", entry.getType().name())
 					.build();

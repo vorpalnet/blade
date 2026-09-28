@@ -1482,10 +1482,11 @@ body.autopublish-on .btn-publish {
     display: none;
 }
 
-/* Auto-publish toggle — a sliding on/off switch. Pushed to the right of the
-   toolbar (margin-left:auto) because it controls a global Configurator
-   behavior, not the currently-loaded app. State is carried by thumb position
-   and the on/off text label, not by color alone. */
+/* Auto-publish toggle — a sliding on/off switch in the bar every tab shares,
+   pushed right (margin-left:auto) because it controls a global Configurator
+   behavior, not the currently-loaded app or one editor. The theme selector
+   follows it. State is carried by thumb position and the on/off text label,
+   not by color alone. */
 .autopublish-switch {
     margin-left: auto;
     display: inline-flex;
@@ -1495,6 +1496,9 @@ body.autopublish-on .btn-publish {
     user-select: none;
     font-size: 12px;
     color: var(--text-secondary);
+}
+.autopublish-switch + .theme-selector {
+    margin-left: 16px;
 }
 .autopublish-caption {
     font-weight: 500;

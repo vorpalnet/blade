@@ -66,19 +66,4 @@ final class Wire {
 		}
 		return (value.length() <= max) ? value : value.substring(0, max);
 	}
-
-	/// The last dotted segment of a CloudEvents type:
-	/// `org.vorpal.blade.transfer.requested` becomes `requested`.
-	///
-	/// Only used for a type carrying no `eventName` of its own — an event an
-	/// operator declared and marked persisted. The framework's own events all
-	/// carry their name in the payload, so `event_types` keeps storing
-	/// `transferRequested` and existing reports keep working.
-	static String shortName(String type) {
-		if (type == null || type.isEmpty()) {
-			return "unknown";
-		}
-		int dot = type.lastIndexOf('.');
-		return (dot < 0 || dot == type.length() - 1) ? type : type.substring(dot + 1);
-	}
 }

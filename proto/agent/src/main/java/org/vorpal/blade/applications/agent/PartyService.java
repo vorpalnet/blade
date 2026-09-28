@@ -1,21 +1,16 @@
 package org.vorpal.blade.applications.agent;
 
-import org.vorpal.blade.framework.v2.analytics.Analytics;
-import org.vorpal.blade.framework.v2.config.SettingsManager;
-import org.vorpal.blade.framework.v3.events.AnalyticsEvent;
+import org.vorpal.blade.framework.v3.events.BladeEventTypes;
+import org.vorpal.blade.framework.v3.events.Events;
 
 /// Asks for someone to be brought into a live call.
 ///
 /// The console names a person from [AgentSettings#getPeople]; this looks up the
-/// address and publishes `partyRequested` (`org.vorpal.blade.call.party.requested`)
-/// on the call. It does not dial: the application holding the call's media, the
+/// address and publishes [BladeEventTypes#CALL_PARTY_REQUESTED] on the call. It does not dial: the application holding the call's media, the
 /// listener, does that on whichever node owns the call, and only for an address
 /// its own `partyTargets` allow. This application never knows where a call's
 /// media lives, and a browser never supplies an address.
 final class PartyService {
-
-	/// The analytics event name, which the application's analytics configuration must list.
-	static final String EVENT = "partyRequested";
 
 	private PartyService() {
 	}
@@ -31,15 +26,11 @@ final class PartyService {
 		if (call == null) {
 			return "the call is not on this node's record";
 		}
-		Analytics analytics = SettingsManager.getAnalytics();
-		if (analytics == null) {
-			return "analytics is not configured, so the request cannot be sent";
+		boolean sent = Events.publish(call.vorpalId, call.startedAt, BladeEventTypes.CALL_PARTY_REQUESTED,
+				data -> data.put("target", target).put("label", label).put("requestedBy", agent));
+		if (!sent) {
+			return "the event bus is not up on this node, so the request cannot be sent";
 		}
-		AnalyticsEvent event = new AnalyticsEvent(EVENT, call.vorpalId, call.startedAt);
-		event.addAttribute("target", target);
-		event.addAttribute("label", label);
-		event.addAttribute("requestedBy", agent);
-		analytics.sendEvent(event);
 		return null;
 	}
 }

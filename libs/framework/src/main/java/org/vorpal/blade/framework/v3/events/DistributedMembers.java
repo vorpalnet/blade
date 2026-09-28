@@ -88,10 +88,11 @@ final class DistributedMembers {
 
 			Method register = helperClass.getMethod("register", java.util.Hashtable.class, String.class,
 					listenerClass);
-			// A null environment means "this server", which is what an
-			// in-container subscriber wants: the members it can reach are the
-			// ones its own cluster hosts.
-			return register.invoke(helper, null, jndiName, proxy);
+			// A null environment means "this server": right on an engine, whose
+			// cluster hosts the members. On the AdminServer the topic is not in
+			// this server's tree at all, and the watcher fails without a word, so
+			// it looks where the subscriber's own lookups do ([EventBus#environment]).
+			return register.invoke(helper, EventBus.environment(), jndiName, proxy);
 		} catch (Throwable notAvailable) {
 			return null;
 		}

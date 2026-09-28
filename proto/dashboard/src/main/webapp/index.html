@@ -26,8 +26,9 @@
 	<main>
 		<p class="eyebrow">Live operations</p>
 		<h1>OCCAS &amp; BLADE at a glance</h1>
-		<p class="lede">Cluster health from the runtime MBeans and call analytics from the reporting
-		views, in one pane. The health row reads the live cluster every 5s; the analytics refresh every 30s.</p>
+		<p class="lede">Cluster health from the runtime MBeans, operations from the event bus, and call
+		analytics from the reporting views, in one pane. Health and operations refresh every 5s; the
+		analytics every 30s.</p>
 
 		<p class="eyebrow">Cluster health</p>
 		<section class="tiles">
@@ -41,6 +42,28 @@
 			<div class="seg" id="metric-toggle"></div>
 		</div>
 		<div id="cluster-groups"></div>
+
+		<p class="eyebrow" style="margin-top:22px">Operations</p>
+		<section class="tiles">
+			<div class="tile accent"><div class="tile__l">Endpoints down</div><div class="tile__v" id="t-endpoints-down">—</div></div>
+			<div class="tile"><div class="tile__l">Trunks failing</div><div class="tile__v" id="t-trunks-failing">—</div></div>
+			<div class="tile"><div class="tile__l">Callers queued</div><div class="tile__v" id="t-queued">—</div></div>
+			<div class="tile"><div class="tile__l">SIP refusals</div><div class="tile__v" id="t-sip-denied">—</div></div>
+		</section>
+		<section class="grid">
+			<div class="card">
+				<div class="card__head"><span class="card__title">Wrong now</span><span class="card__sub">until the event that clears it</span></div>
+				<div class="card__body ops-list" id="ops-wrong"></div>
+			</div>
+			<div class="card">
+				<div class="card__head"><span class="card__title">Queues</span><span class="card__sub">last minute &middot; per node</span></div>
+				<div class="card__body ops-list" id="ops-queues"></div>
+			</div>
+			<div class="card card--wide">
+				<div class="card__head"><span class="card__title">Recent operations events</span><span class="card__sub">newest first &middot; since this server started listening</span></div>
+				<div class="card__body ops-list" id="ops-recent"></div>
+			</div>
+		</section>
 
 		<p class="eyebrow" style="margin-top:22px">Call analytics</p>
 		<section class="tiles">

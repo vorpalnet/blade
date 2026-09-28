@@ -89,7 +89,12 @@ public class EndpointHealth implements Serializable {
 		return status == Status.up;
 	}
 
-	public void markUp(String note, String source, int rttMs) {
+	/// Record the endpoint alive.
+	///
+	/// @return true when this changed it from down, the transition
+	///         [BalancerEvents] announces
+	public boolean markUp(String note, String source, int rttMs) {
+		boolean changed = this.status != Status.up;
 		this.status = Status.up;
 		this.downUntil = null;
 		this.lastChecked = System.currentTimeMillis();
@@ -98,9 +103,14 @@ public class EndpointHealth implements Serializable {
 			this.lastRttMs = rttMs;
 		}
 		addSample(new Sample(this.lastChecked, true, rttMs, source, note));
+		return changed;
 	}
 
-	public void markDown(String note, Integer retryAfterSeconds, String source, int rttMs) {
+	/// Record the endpoint down.
+	///
+	/// @return true when this changed it from up
+	public boolean markDown(String note, Integer retryAfterSeconds, String source, int rttMs) {
+		boolean changed = this.status != Status.down;
 		this.status = Status.down;
 		this.lastChecked = System.currentTimeMillis();
 		// a plain down CLEARS any old backoff — otherwise a stale, expired
@@ -113,6 +123,7 @@ public class EndpointHealth implements Serializable {
 			this.lastRttMs = rttMs;
 		}
 		addSample(new Sample(this.lastChecked, false, rttMs, source, note));
+		return changed;
 	}
 
 	private void addSample(Sample sample) {

@@ -76,7 +76,133 @@ public final class EventBus {
 	/// name one. Set at startup from the catalog; falls back to [#TOPIC_JNDI].
 	private static volatile String defaultDestinationJndi = TOPIC_JNDI;
 
+	/// Where the bus's JNDI names live, when not in this server's own tree.
+	/// Null for the usual case: an engine, whose cluster hosts the bus.
+	///
+	/// **Why an application on the AdminServer needs it.** The bus's topic is
+	/// a uniform distributed topic whose members live on the engine cluster's
+	/// JMS server. The AdminServer is not in that cluster, so the topic is not
+	/// bound in its JNDI tree and it cannot see the members even by name ("No
+	/// stable LoadBalancer"). Looking the factory and the topic up through a
+	/// context on the cluster gives an AdminServer application the same bus an
+	/// engine has.
+	///
+	/// The effective value: [#configuredProviderUrl] when an application sets
+	/// `events.providerUrl`, else what [#locate] found.
+	private static volatile String providerUrl;
+
+	/// The application's `events.providerUrl`, which always wins.
+	private static volatile String configuredProviderUrl;
+
+	/// What [#locate] found: the servers hosting the bus, when this one does not.
+	private static volatile String locatedProviderUrl;
+
+	/// When [#locate] last asked the domain, so a failing search is repeated
+	/// at most once a [#LOCATE_INTERVAL_MS].
+	private static volatile long locatedAt;
+
+	/// How often a search that found nothing is repeated.
+	static final long LOCATE_INTERVAL_MS = 60_000L;
+
 	private EventBus() {
+	}
+
+	/// Set the application's configured provider URL; null or empty to let
+	/// [#locate] decide. A change to the effective provider closes every
+	/// publisher, so the next reconcile opens them against the new one;
+	/// subscribers follow on their next reconcile.
+	///
+	/// @param url a WebLogic provider URL such as `t3://engine0:8001`, several
+	///            comma-separated
+	public static void setProviderUrl(String url) {
+		configuredProviderUrl = (url == null || url.trim().isEmpty()) ? null : url.trim();
+		apply();
+	}
+
+	/// Find the bus when this server's own naming directory does not have it,
+	/// unless the application configured where it is.
+	///
+	/// On an engine the topic resolves locally and this costs that one lookup.
+	/// On the AdminServer it does not, and [BusLocator] asks the domain for the
+	/// running servers that host it. Called on every reconcile, and by a
+	/// subscriber that cannot find the topic; a search that finds nothing is
+	/// repeated at most once a [#LOCATE_INTERVAL_MS], so an engine that starts
+	/// later is found without a redeploy.
+	///
+	/// @param destinationJndi the topic's JNDI name
+	static void locate(String destinationJndi) {
+		if (configuredProviderUrl != null) {
+			return;
+		}
+		String destination = destinationOr(destinationJndi);
+		try {
+			javax.naming.InitialContext local = new javax.naming.InitialContext();
+			try {
+				local.lookup(destination);
+			} finally {
+				local.close();
+			}
+			locatedProviderUrl = null;
+			apply();
+			return;
+		} catch (javax.naming.NamingException notHere) {
+			// Look elsewhere below.
+		}
+		long now = System.currentTimeMillis();
+		if (locatedProviderUrl == null && now - locatedAt < LOCATE_INTERVAL_MS) {
+			return;
+		}
+		locatedAt = now;
+		String found = BusLocator.discover(destination);
+		if (found != null && !equal(found, locatedProviderUrl)) {
+			log(java.util.logging.Level.INFO, "event bus: " + destination + " is hosted on " + found);
+		}
+		if (found != null || locatedProviderUrl == null) {
+			// Keep the last list that worked through a search that found
+			// nothing: its servers may be restarting, and WebLogic fails over
+			// among them on its own.
+			locatedProviderUrl = found;
+		}
+		apply();
+	}
+
+	/// Recompute the effective provider; on a change, close every publisher.
+	private static void apply() {
+		String wanted = (configuredProviderUrl != null) ? configuredProviderUrl : locatedProviderUrl;
+		if (equal(wanted, providerUrl)) {
+			return;
+		}
+		providerUrl = wanted;
+		for (String destination : registeredDestinations()) {
+			unregister(destination);
+		}
+	}
+
+	/// The provider the bus's names are looked up through, or null for this
+	/// server's own JNDI tree.
+	public static String getProviderUrl() {
+		return providerUrl;
+	}
+
+	/// A naming context for the bus's JNDI names: this server's own, or one on
+	/// [#getProviderUrl].
+	static javax.naming.InitialContext context() throws javax.naming.NamingException {
+		java.util.Hashtable<String, String> env = environment();
+		return (env == null) ? new javax.naming.InitialContext() : new javax.naming.InitialContext(env);
+	}
+
+	/// The JNDI environment for [#getProviderUrl], or null for this server's
+	/// own tree. Shared by the lookups and the distributed-member watcher, which
+	/// must look in the same place or it watches a topic that is not there.
+	static java.util.Hashtable<String, String> environment() {
+		String url = providerUrl;
+		if (url == null) {
+			return null;
+		}
+		java.util.Hashtable<String, String> env = new java.util.Hashtable<>();
+		env.put(javax.naming.Context.INITIAL_CONTEXT_FACTORY, "weblogic.jndi.WLInitialContextFactory");
+		env.put(javax.naming.Context.PROVIDER_URL, url);
+		return env;
 	}
 
 	/// Install a publisher, keyed by the destination it sends to. Called once
@@ -127,6 +253,122 @@ public final class EventBus {
 		}
 		SUBSCRIBERS.clear();
 		defaultDestinationJndi = TOPIC_JNDI;
+	}
+
+	/// Where this node's publisher stands after [#reconcile].
+	public enum Outcome {
+		/// A publisher is installed; events leave this node.
+		PUBLISHING,
+		/// The configuration says `"enabled": false`.
+		OFF,
+		/// Nothing was asked for and the bus is not there: its factory or topic
+		/// does not resolve. The quiet default of a domain that has not
+		/// provisioned JMS, or an AdminServer application with no `providerUrl`.
+		NOT_PROVISIONED,
+		/// `"enabled": true` and the bus cannot be reached, or the bus is
+		/// provisioned and failing. Either way, an error.
+		FAILED
+	}
+
+	/// Null until the first [#reconcile], so the first outcome, whatever it
+	/// is, gets its line in the log.
+	private static volatile Outcome outcome;
+
+	/// The last [#reconcile] outcome on this node; null before the first.
+	public static Outcome outcome() {
+		return outcome;
+	}
+
+	/// Whether nothing on this node is expected to publish: the bus is off, not
+	/// provisioned, or not yet decided. Callers stay silent rather than report a
+	/// miss nobody asked to avoid.
+	public static boolean isQuiet() {
+		Outcome now = outcome;
+		return now == null || now == Outcome.OFF || now == Outcome.NOT_PROVISIONED;
+	}
+
+	/// Bring this node's publisher in line with the application's `events`
+	/// settings. The one place the switch is read.
+	///
+	/// **Three settings.** `true` publishes and says so loudly if it cannot.
+	/// `false` publishes nothing. Unset (the default) publishes when the bus is
+	/// there and stays silent when it is not: a domain that never provisioned
+	/// JMS gets no events and no errors, and one that provisions it later starts
+	/// publishing at the next reload. An application with `analytics.enabled`
+	/// set counts as asking for the bus, since that is what the flag used to do.
+	///
+	/// Logged once per change, not once per reload.
+	///
+	/// @param settings        the application's `events` block; null is unset
+	/// @param analyticsAsked  whether `analytics.enabled` is true
+	/// @return where the publisher now stands
+	public static Outcome reconcile(EventBusSettings settings, boolean analyticsAsked) {
+		EventBusSettings s = (settings == null) ? new EventBusSettings() : settings;
+		Boolean enabled = s.isEnabled();
+		boolean asked = Boolean.TRUE.equals(enabled) || (enabled == null && analyticsAsked);
+		Outcome next;
+		String detail = null;
+		setProviderUrl(s.getProviderUrl());
+		if (!Boolean.FALSE.equals(enabled)) {
+			locate(s.getDestinationJndi());
+		}
+		if (Boolean.FALSE.equals(enabled)) {
+			unregister(destinationOr(s.getDestinationJndi()));
+			next = Outcome.OFF;
+		} else {
+			try {
+				reconcilePublisher(true, s.getConnectionFactoryJndi(), s.getDestinationJndi());
+				next = Outcome.PUBLISHING;
+			} catch (Exception e) {
+				unregister(destinationOr(s.getDestinationJndi()));
+				// A name that does not resolve is a bus nobody provisioned. Anything
+				// else is a bus that exists and is failing, which is worth saying
+				// whether or not anybody asked for it.
+				boolean missing = e instanceof javax.naming.NamingException;
+				next = (asked || !missing) ? Outcome.FAILED : Outcome.NOT_PROVISIONED;
+				detail = e.getClass().getSimpleName() + ": " + e.getMessage();
+			}
+		}
+		Outcome previous = outcome;
+		outcome = next;
+		if (next != previous || next == Outcome.FAILED) {
+			String where = s.getDestinationJndi() + (providerUrl == null ? "" : " via " + providerUrl);
+			switch (next) {
+			case PUBLISHING:
+				log(java.util.logging.Level.INFO, "event bus: publishing to " + where);
+				break;
+			case OFF:
+				log(java.util.logging.Level.INFO, "event bus: off in this application's configuration");
+				break;
+			case NOT_PROVISIONED:
+				log(java.util.logging.Level.INFO, "event bus: not provisioned (" + where
+						+ " does not resolve); this application will not publish");
+				break;
+			default:
+				log(java.util.logging.Level.SEVERE, "event bus: \"enabled\" is true but " + where
+						+ " cannot be reached; nothing this application produces is published: " + detail);
+			}
+		}
+		return next;
+	}
+
+	private static String destinationOr(String destinationJndi) {
+		return (destinationJndi == null || destinationJndi.isEmpty()) ? TOPIC_JNDI : destinationJndi;
+	}
+
+	/// The application's SIP logger when it has one; an application with no
+	/// SIP servlet, or one reconciling before its logger exists, uses the
+	/// server log.
+	private static void log(java.util.logging.Level level, String message) {
+		org.vorpal.blade.framework.v2.logging.Logger sip =
+				org.vorpal.blade.framework.v2.config.SettingsManager.getSipLogger();
+		if (sip == null) {
+			java.util.logging.Logger.getLogger(EventBus.class.getName()).log(level, message);
+		} else if (level == java.util.logging.Level.SEVERE) {
+			sip.severe(message);
+		} else {
+			sip.info(message);
+		}
 	}
 
 	/// Meters applied to any publisher this class creates. Set once by the
@@ -196,8 +438,22 @@ public final class EventBus {
 	/// whenever the selector changes, and meters attached to the instance would
 	/// stop counting at the first catalog edit — silently, which is the failure
 	/// mode this whole area had too much of.
-	private static final ConcurrentMap<String, org.vorpal.blade.framework.v3.metrics.Counter.Series[]>
-			SUBSCRIBER_METERS = new ConcurrentHashMap<>();
+	private static final ConcurrentMap<String, SubscriberMeters> SUBSCRIBER_METERS = new ConcurrentHashMap<>();
+
+	/// One subscription's three counters. Any of them may be null.
+	static final class SubscriberMeters {
+		final org.vorpal.blade.framework.v3.metrics.Counter.Series received;
+		final org.vorpal.blade.framework.v3.metrics.Counter.Series handled;
+		final org.vorpal.blade.framework.v3.metrics.Counter.Series failed;
+
+		SubscriberMeters(org.vorpal.blade.framework.v3.metrics.Counter.Series received,
+				org.vorpal.blade.framework.v3.metrics.Counter.Series handled,
+				org.vorpal.blade.framework.v3.metrics.Counter.Series failed) {
+			this.received = received;
+			this.handled = handled;
+			this.failed = failed;
+		}
+	}
 
 	/// Remember the meters for one subscription, now and after any rebuild.
 	///
@@ -209,14 +465,13 @@ public final class EventBus {
 			org.vorpal.blade.framework.v3.metrics.Counter.Series handled,
 			org.vorpal.blade.framework.v3.metrics.Counter.Series failed) {
 		if (subscriptionName != null) {
-			SUBSCRIBER_METERS.put(subscriptionName,
-					new org.vorpal.blade.framework.v3.metrics.Counter.Series[] { received, handled, failed });
+			SUBSCRIBER_METERS.put(subscriptionName, new SubscriberMeters(received, handled, failed));
 		}
 	}
 
 	/// This subscription's meters, or null when nobody is counting. Package
 	/// private: [EventBusControl] reports them, nothing else needs them.
-	static org.vorpal.blade.framework.v3.metrics.Counter.Series[] metersFor(String subscriptionName) {
+	static SubscriberMeters metersFor(String subscriptionName) {
 		return SUBSCRIBER_METERS.get(subscriptionName);
 	}
 
@@ -283,6 +538,7 @@ public final class EventBus {
 		if (installed != null
 				&& equal(installed.getDestinationJndi(), destinationJndi)
 				&& equal(installed.getSelector(), wanted)
+				&& equal(installed.getProviderUrl(), providerUrl)
 				&& installed.isDurable() == durable) {
 			return false;
 		}
@@ -297,9 +553,9 @@ public final class EventBus {
 
 		EventSubscriber subscriber = new EventSubscriber(connectionFactoryJndi, destinationJndi, subscriptionName,
 				wanted, durable, handler, batchSize, batchMillis);
-		org.vorpal.blade.framework.v3.metrics.Counter.Series[] meters = SUBSCRIBER_METERS.get(subscriptionName);
+		SubscriberMeters meters = SUBSCRIBER_METERS.get(subscriptionName);
 		if (meters != null) {
-			subscriber.meter(meters[0], meters[1], meters[2]);
+			subscriber.meter(meters.received, meters.handled, meters.failed);
 		}
 		subscriber.init();
 		SUBSCRIBERS.put(subscriptionName, subscriber);
@@ -345,6 +601,9 @@ public final class EventBus {
 	/// Publish an event to the default destination if a publisher is installed
 	/// on this node. Silently no-ops when the bus is not available, so a producer
 	/// is never coupled to bus liveness.
+	///
+	/// Application code publishes through [Events], which never throws and
+	/// reports a drop. This is for a producer that must see the failure.
 	///
 	/// @param event the CloudEvent to publish
 	/// @throws javax.jms.JMSException if the send fails

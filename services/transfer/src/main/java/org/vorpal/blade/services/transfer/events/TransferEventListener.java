@@ -135,8 +135,8 @@ public class TransferEventListener
 
 	@Override
 	public void contextInitialized(javax.servlet.ServletContextEvent event) {
-		registrar = org.vorpal.blade.framework.v3.events.SubscriptionRegistrar.start(
-				event.getServletContext(), SUBSCRIPTION, TYPES, this);
+		registrar = org.vorpal.blade.framework.v3.events.SubscriptionRegistrar.named(SUBSCRIPTION).types(TYPES)
+				.start(event.getServletContext(), this);
 		// deriveName, not getServletContextName: it is the derivation log files
 		// and config MBeans already use — documented as needing to agree
 		// byte-for-byte — and it cannot come back null.
@@ -171,19 +171,19 @@ public class TransferEventListener
 
 			switch (String.valueOf(event.getType())) {
 			case "org.vorpal.blade.transfer.requested":
-				onTransferRequested(event, MAPPER.treeToValue(event.getData(), TransferRequested.class));
+				onTransferRequested(event, MAPPER.treeToValue(event.fields(), TransferRequested.class));
 				break;
 			case "org.vorpal.blade.transfer.initiated":
-				onTransferInitiated(event, MAPPER.treeToValue(event.getData(), TransferInitiated.class));
+				onTransferInitiated(event, MAPPER.treeToValue(event.fields(), TransferInitiated.class));
 				break;
 			case "org.vorpal.blade.transfer.completed":
-				onTransferCompleted(event, MAPPER.treeToValue(event.getData(), TransferCompleted.class));
+				onTransferCompleted(event, MAPPER.treeToValue(event.fields(), TransferCompleted.class));
 				break;
 			case "org.vorpal.blade.transfer.declined":
-				onTransferDeclined(event, MAPPER.treeToValue(event.getData(), TransferDeclined.class));
+				onTransferDeclined(event, MAPPER.treeToValue(event.fields(), TransferDeclined.class));
 				break;
 			case "org.vorpal.blade.transfer.abandoned":
-				onTransferAbandoned(event, MAPPER.treeToValue(event.getData(), TransferAbandoned.class));
+				onTransferAbandoned(event, MAPPER.treeToValue(event.fields(), TransferAbandoned.class));
 				break;
 			default:
 				// The broker filters to exactly the types above, so reaching here

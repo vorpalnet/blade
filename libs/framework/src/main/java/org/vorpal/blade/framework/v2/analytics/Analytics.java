@@ -19,8 +19,7 @@ import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v3.events.AnalyticsEvent;
 import org.vorpal.blade.framework.v3.events.AnalyticsEventMapper;
 import org.vorpal.blade.framework.v3.events.CloudEvent;
-import org.vorpal.blade.framework.v3.events.EventBus;
-import org.vorpal.blade.framework.v3.events.EventBusSettings;
+import org.vorpal.blade.framework.v3.events.Events;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -196,33 +195,21 @@ public class Analytics implements Serializable {
 
 	/// Close the event and put it on the bus.
 	///
-	/// Never throws. Publishing runs on the SIP container thread, and an
-	/// unreachable or unprovisioned bus must not cost a call — the same contract
-	/// [EventBus#publish] has always had, restated here because this is where an
-	/// application's own code reaches it.
+	/// This is the configuration-driven path: an event named in
+	/// `analytics.events`, its attributes extracted by the configured selectors.
+	/// Code that states its own facts publishes through [Events] instead. Never
+	/// throws, for the same reason [Events] never does.
 	public void sendEvent(AnalyticsEvent event) {
 		if (event == null) {
 			return;
 		}
 		try {
-			EventBus.publish(event.toCloudEvent(source(), SettingsManager.getApplicationName(),
+			Events.publish(event.toCloudEvent(source(), SettingsManager.getApplicationName(),
 					SettingsManager.getDomainName(), SettingsManager.getServerName(), applicationStartedAt));
 		} catch (Throwable t) {
-			// Swallowed on purpose — a lost event must not cost a call — but say
-			// what was dropped and where. A full destination quota lands here, and
-			// this line plus the events.publish.failures counter is its only trace.
-			//
-			// The logger is resolved defensively because it is not always installed
-			// yet: an application whose WebSocket container starts before its SIP
-			// servlet can reach this line during deployment, and turning a dropped
-			// event into a NullPointerException would defeat the whole point of the
-			// catch it is standing in.
-			org.vorpal.blade.framework.v2.logging.Logger logger = Callflow.getSipLogger();
-			if (logger != null) {
-				logger.warning("Analytics.sendEvent - " + event.getName() + " DROPPED, not published to "
-						+ EventBus.getDefaultDestinationJndi() + ": " + t.getClass().getSimpleName() + ": "
-						+ t.getMessage());
-			}
+			// Swallowed on purpose, like everything Events publishes: a lost event
+			// must not cost a call. Shaping the envelope is the only step left to
+			// fail here, and Events logs every failure after it.
 		}
 	}
 
@@ -243,11 +230,7 @@ public class Analytics implements Serializable {
 	/// The CloudEvents `source` for events this application publishes — the
 	/// `events` config block's own value, else derived from the application name.
 	private static String source() {
-		EventBusSettings settings = SettingsManager.getEventBus();
-		if (settings != null && settings.getSource() != null && !settings.getSource().isEmpty()) {
-			return settings.getSource();
-		}
-		return "/blade/" + SettingsManager.getApplicationName();
+		return Events.source();
 	}
 
 	/// The cluster-unique vorpal-id for the call (the X-Vorpal-ID Callflow mints
@@ -316,12 +299,77 @@ public class Analytics implements Serializable {
 				new Date()));
 	}
 
+	/// The application-session attribute that records this application's
+	/// session as opened ([Date], the birth instant it was published with) and
+	/// then closed ([Boolean#FALSE]).
+	///
+	/// **The start and the stop are published once each, whoever asks.** The
+	/// framework opens the session on the first INVITE in or out
+	/// (`AsyncSipServlet.doRequest`, `Callflow.sendRequest`) and closes it on BYE,
+	/// CANCEL or failure where a callflow knows it ended, and otherwise when the
+	/// application session is invalidated or destroyed. Callflows that also call
+	/// [#sessionStart] or [#sessionStop] do nothing twice. The stop reuses the
+	/// birth instant the start carried, so a call whose Vorpal-ID has no `ts`
+	/// still closes the row it opened rather than a second one.
+	static final String SESSION_STATE = "blade.analytics.session";
+
+	/// Open this application's session for the call the message belongs to.
+	/// Does nothing if it is already open or closed, or the call has no
+	/// Vorpal-ID.
 	public static void sessionStart(SipServletMessage msg) {
-		publishSession(msg, null);
+		SipApplicationSession appSession = (msg == null) ? null : msg.getApplicationSession();
+		try {
+			if (appSession == null || appSession.getAttribute(SESSION_STATE) != null) {
+				return;
+			}
+			Long vorpalId = getVorpalId(appSession);
+			if (vorpalId == null) {
+				// Without the correlator there is nothing a consumer could join this
+				// to, so publishing would only add an orphan row.
+				return;
+			}
+			Date startedAt = getCallStartedAt(appSession);
+			appSession.setAttribute(SESSION_STATE, startedAt);
+			publish(AnalyticsEventMapper.session(source(), vorpalId.longValue(), startedAt, null,
+					SettingsManager.getApplicationName(), SettingsManager.getDomainName(),
+					SettingsManager.getServerName(), applicationStartedAt));
+		} catch (IllegalStateException invalidated) {
+			// The session went away under us; there is nothing left to open.
+		}
 	}
 
+	/// Close this application's session for the call the message belongs to.
+	/// Does nothing if it is already closed or the call has no Vorpal-ID.
 	public static void sessionStop(SipServletMessage msg) {
-		publishSession(msg, new Date());
+		sessionClose((msg == null) ? null : msg.getApplicationSession());
+	}
+
+	/// Close this application's session if it is still open: the backstop for
+	/// a call that ended without a callflow saying so (expiry, a failover
+	/// orphan, a proxy that never sees the BYE). `AsyncSipServlet` calls it when
+	/// the application session is ready to invalidate and when it is destroyed.
+	public static void sessionClose(SipApplicationSession appSession) {
+		try {
+			if (appSession == null) {
+				return;
+			}
+			Object state = appSession.getAttribute(SESSION_STATE);
+			if (Boolean.FALSE.equals(state)) {
+				return;
+			}
+			Long vorpalId = getVorpalId(appSession);
+			if (vorpalId == null) {
+				return;
+			}
+			Date startedAt = (state instanceof Date) ? (Date) state : getCallStartedAt(appSession);
+			appSession.setAttribute(SESSION_STATE, Boolean.FALSE);
+			publish(AnalyticsEventMapper.session(source(), vorpalId.longValue(), startedAt, new Date(),
+					SettingsManager.getApplicationName(), SettingsManager.getDomainName(),
+					SettingsManager.getServerName(), applicationStartedAt));
+		} catch (IllegalStateException invalidated) {
+			// Attributes are unreadable once the container has invalidated the
+			// session; the ready-to-invalidate call before it has done the work.
+		}
 	}
 
 	/// Publish a call's end from a thread that has no SIP message.
@@ -334,28 +382,16 @@ public class Analytics implements Serializable {
 	/// application can never close a call, and its rows sit open forever with a
 	/// null `destroyed`: every duration null, "live calls" counting the dead.
 	///
-	/// The two arguments are exactly what [#publishSession] extracts from a
-	/// message, so the event is indistinguishable on the wire from one published
-	/// the ordinary way.
+	/// The two arguments are exactly what [#sessionStop(SipServletMessage)]
+	/// takes from the application session, so the event is indistinguishable on
+	/// the wire from one published the ordinary way. A later backstop close of
+	/// the same session is harmless: the first stop the sink records wins.
 	///
 	/// @param vorpalId  the call's correlator
 	/// @param startedAt the call's birth instant — identity, not a report time, so
 	///                  it must be the same value the start was published with
 	public static void sessionStop(long vorpalId, Date startedAt) {
 		publish(AnalyticsEventMapper.session(source(), vorpalId, startedAt, new Date(),
-				SettingsManager.getApplicationName(), SettingsManager.getDomainName(),
-				SettingsManager.getServerName(), applicationStartedAt));
-	}
-
-	private static void publishSession(SipServletMessage msg, Date stoppedAt) {
-		SipApplicationSession appSession = (msg == null) ? null : msg.getApplicationSession();
-		Long vorpalId = getVorpalId(appSession);
-		if (vorpalId == null) {
-			// Without the correlator there is nothing a consumer could join this
-			// to, so publishing would only add an orphan row.
-			return;
-		}
-		publish(AnalyticsEventMapper.session(source(), vorpalId.longValue(), getCallStartedAt(appSession), stoppedAt,
 				SettingsManager.getApplicationName(), SettingsManager.getDomainName(),
 				SettingsManager.getServerName(), applicationStartedAt));
 	}
@@ -376,14 +412,6 @@ public class Analytics implements Serializable {
 	/// The one place the framework's own analytics facts reach the bus. Never
 	/// throws: this runs on the SIP container thread.
 	private static void publish(CloudEvent event) {
-		try {
-			EventBus.publish(event);
-		} catch (Throwable t) {
-			// Same contract as sendEvent: swallowed, but the drop is named.
-			Callflow.getSipLogger()
-					.warning("Analytics - " + event.getType() + " DROPPED, not published to "
-							+ EventBus.getDefaultDestinationJndi() + ": " + t.getClass().getSimpleName() + ": "
-							+ t.getMessage());
-		}
+		Events.publish(event);
 	}
 }

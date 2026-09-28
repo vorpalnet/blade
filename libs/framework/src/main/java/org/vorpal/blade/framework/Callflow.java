@@ -922,6 +922,11 @@ public abstract class Callflow implements Serializable {
 					}
 					if (request.isInitial()) {
 						stampVorpalIdHeaders(request, appSession, sipSession);
+						// An application that places a call opens its session as
+						// one that receives a call does (AsyncSipServlet.doRequest).
+						if (INVITE.equals(request.getMethod())) {
+							Analytics.sessionStart(request);
+						}
 					}
 					setGlareState(sipSession, GlareState.PROTECT);
 					break;

@@ -49,7 +49,9 @@ public class WebrtcSettings extends Configuration implements Serializable {
 	private java.util.List<String> relayTargets = new java.util.ArrayList<>();
 	private java.util.List<String> browserRoles = new java.util.ArrayList<>();
 	private java.util.List<String> relayedEventTypes = new java.util.ArrayList<>(java.util.Arrays.asList(
-			"meeting.caption", "meeting.roster", "meeting.track", "meeting.speaker", "meeting.voice"));
+			"meeting.caption", "meeting.roster", "meeting.track", "meeting.speaker", "meeting.voice",
+			"meeting.features", "meeting.reaction", "meeting.recording", "meeting.lobby",
+			"meeting.info", "meeting.muted", "meeting.spotlight", "meeting.answer", "meeting.waiting"));
 	private String driverName;
 	private Map<String, String> driverProperties = new LinkedHashMap<>();
 

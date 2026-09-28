@@ -155,8 +155,8 @@ CREATE TABLE events(
    INDEX idx_event_type_created (type, created),
    INDEX idx_event_created (created),
 
-   -- Attribute values arrive as strings and are stored as strings, faithful to
-   -- the wire. The reader's common question is numeric, so the cast lives in an
+   -- Values are numbers, or numeric strings in rows written before the flat
+   -- payload. The reader's common question is numeric, so the cast lives in an
    -- index rather than in every query. MySQL 8.0.13+ for functional indexes.
    INDEX idx_event_risk ((CAST(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.riskScore'))
                                AS DECIMAL(6,4))))

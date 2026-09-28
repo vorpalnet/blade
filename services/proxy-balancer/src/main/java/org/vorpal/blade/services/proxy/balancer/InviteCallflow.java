@@ -130,6 +130,7 @@ public class InviteCallflow extends Callflow implements Serializable {
 			if (!plan.isEmpty()) {
 				forwardTier(aliceRequest, plan, planKey, tierIndex + 1);
 			} else {
+				BalancerEvents.declined(aliceRequest, 503, tierIndex);
 				sendResponse(aliceRequest.createResponse(503));
 			}
 			return;
@@ -169,10 +170,12 @@ public class InviteCallflow extends Callflow implements Serializable {
 				copyContentAndHeaders(bobResponse, aliceResponse); // links alice to the winning dialog
 
 				if (successful(bobResponse)) {
+					BalancerEvents.routed(aliceRequest, bobResponse, tier.getName(), tierIndex);
 					sendResponse(aliceResponse, (aliceAck) -> {
 						sendAcknowledgement(aliceAck, bobResponse);
 					});
 				} else {
+					BalancerEvents.declined(aliceRequest, bobResponse.getStatus(), tierIndex);
 					sendResponse(aliceResponse);
 				}
 
@@ -360,7 +363,9 @@ public class InviteCallflow extends Callflow implements Serializable {
 			}
 
 			if (successful(dialogResponse)) {
-				health.markUp("INVITE " + status, "call", -1);
+				if (health.markUp("INVITE " + status, "call", -1)) {
+					BalancerEvents.up(name, health);
+				}
 			} else if (status == 503) {
 				Integer backoff = null;
 				String header = dialogResponse.getHeader("Retry-After");
@@ -375,7 +380,9 @@ public class InviteCallflow extends Callflow implements Serializable {
 					Integer configured = config.getHealth().getDefaultBackoff();
 					backoff = (configured != null && configured > 0) ? configured : null;
 				}
-				health.markDown("503" + (backoff != null ? " backoff " + backoff + "s" : ""), backoff, "call", -1);
+				if (health.markDown("503" + (backoff != null ? " backoff " + backoff + "s" : ""), backoff, "call", -1)) {
+					BalancerEvents.down(name, health, backoff);
+				}
 			}
 		} catch (Exception e) {
 			sipLogger.warning(dialogResponse, "InviteCallflow.trackHealth - " + e.getMessage());

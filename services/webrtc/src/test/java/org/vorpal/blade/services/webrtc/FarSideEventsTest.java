@@ -105,6 +105,15 @@ public class FarSideEventsTest {
 	}
 
 	@Test
+	public void aBrowsersOwnRequestIsNeverRelayedBack() throws Exception {
+		// The gateway publishes a browser's meeting.reaction request under the same type the application
+		// answers with; relayed, the sender would see its own request as the answer.
+		CloudEvent request = CloudEvent.create("meeting.reaction", FarSideEvents.BROWSER_SOURCE, VORPAL_ID,
+				new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode().put("emoji", "+1"));
+		assertNull(FarSideEvents.forBrowser(request, CALL_ID));
+	}
+
+	@Test
 	public void anEndedCallTakesNoMoreEvents() throws Exception {
 		BrowserCalls.forget(CALL_ID);
 		new FarSideEvents().handle(Collections.singletonList(event("meeting.caption", VORPAL_ID)));

@@ -66,7 +66,7 @@ public class CatalogAPI {
 				return ok(body);
 			}
 			EventCatalog defaults = new EventCatalog();
-			defaults.setTypes(BladeEventCatalog.analyticsTypes());
+			defaults.setTypes(BladeEventCatalog.allTypes());
 			defaults.setSubscriptions(
 					java.util.Collections.singletonList(BladeEventCatalog.analyticsSubscription()));
 			ObjectNode body = MAPPER.valueToTree(defaults);
@@ -78,14 +78,14 @@ public class CatalogAPI {
 	}
 
 	/// The framework's own event types, for a console that wants to offer
-	/// "restore what BLADE emits" without hand-typing six declarations.
+	/// "restore what BLADE emits" without hand-typing the declarations.
 	@GET
 	@Path("/framework-types")
 	@Produces(MediaType.APPLICATION_JSON)
 	public Response frameworkTypes() {
 		try {
 			EventCatalog catalog = new EventCatalog();
-			catalog.setTypes(BladeEventCatalog.analyticsTypes());
+			catalog.setTypes(BladeEventCatalog.allTypes());
 			return Response.ok(MAPPER.writeValueAsString(catalog.getTypes())).build();
 		} catch (Exception e) {
 			return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(e));

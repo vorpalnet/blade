@@ -2,6 +2,50 @@
 
 ## 3.0.7 (unreleased)
 
+### Event bus: publishes where it is provisioned, silent where it is not
+
+`events.enabled` has three settings. Unset, the default, an application publishes when the
+domain's JMS bus resolves and logs one INFO line when it does not; `true` requires the bus
+and an unreachable one is an error; `false` publishes nothing. `analytics.enabled` no longer
+switches publishing on by itself; set, it counts as asking for the bus. Samples no longer set
+`events` at all.
+
+- The analytics service subscribes only once `jdbc/BladeAnalytics` exists and has its `events`
+  table. A domain with no analytics database logs one INFO line and nothing else.
+- Applications on the AdminServer find the bus on the running engines by themselves. Its topic
+  lives on the engine cluster and is not bound on the AdminServer, whatever the JMS module's
+  targets say, so the framework asks the domain which running servers host it and looks it up
+  through them, failing over among them. `events.providerUrl` (a t3 URL list) overrides that.
+- `Events.publish` replaces `AnalyticsEvent`/`EventBus.publish` in application code, and
+  `SubscriptionRegistrar.named(...)` replaces its `start(...)` overloads, which are removed.
+- Call events carry their facts as typed fields beside the correlator (payload version 2)
+  instead of an `attributes` array of strings. `CloudEvent.fields()` reads both shapes; the
+  analytics database's `type` names and `payload` keys are unchanged.
+- Every SIP application opens and closes its analytics session, proxies and media anchors
+  included; a call that ends without a BYE is closed when its session goes.
+- New events: queue entered, released, abandoned and depth; balancer routing and endpoint
+  up/down; registrations; trunk registration; presence; hold; third-party calls; SIP access
+  refusals; played prompts; and configuration saved and published. The dashboard shows the
+  operations events live.
+- New reporting views `v_queue`, `v_queue_wait`, `v_call_routing`, `v_call_hold` and
+  `v_call_origination`. Re-run `<Dialect>-analytics-views.sql` after upgrading;
+  `notes/run-oracle-schema.py` with `BLADE_VIEWS_ONLY=yes` does it on Oracle ADB.
+
+### Configurator: auto-publish on every tab; one push per save
+
+- Auto-publish is on by default, as it has been since the sample started setting it; the
+  3.0.x note calling it off is superseded. Its switch sits in the bar above the editor tabs,
+  so the JSON Editor has it too; it used to live in the Form Editor's toolbar only.
+- A save arrived as two file events and was pushed to every server, and reloaded, twice. It is
+  pushed once. A newly created configuration file is pushed as well; only changes used to be.
+
+### deploy.sh: the REST engine refuses at WebLogic's job limit
+
+The AdminServer's REST API keeps every finished deployment job and, at 20, refuses the next
+with "Max count reached". Refused as a redeploy, that removes the existing application and
+never puts it back. `misc/deploy-rest.sh` counts the jobs first and refuses before WebLogic
+can; deploy on the admin box with the wlst engine meanwhile.
+
 ### Options: queue-pressure health signal replaces the overload mirror
 
 OPTIONS now answers `503 Busy` when the `wlss.transport` or `wlss.timer`
@@ -21,6 +65,20 @@ that still carry the two fields load unchanged; the fields are ignored.
 topic, as it already did for a durable one. The topic is partitioned, so a message lives on the
 member it was published to, and one consumer on the logical topic heard only its own engine's
 share. The agent console had this gap on any cluster of more than one engine.
+
+### Framework: three callbacks that never fired
+
+- `ProxyListener.proxyResponse` is now called. `ProxyInvite` passes it every response before
+  offering the call to the next tier; before, a v2 `ProxyServlet` never saw the callee's answer.
+- `SettingsManager.createEvent(name, message)` no longer replaces a pending event. `InitialInvite`
+  and `Terminate` hold `callStarted` and `callCompleted` pending while their listener runs, and an
+  application creating its own event on the same message from that listener lost the framework's.
+  A nested create now sets the pending event aside, and the matching send restores it.
+- `getAppSessionHashKey` detects collisions. It compared the hash with the hash that found the
+  session, which always matched; it now stores and compares the key.
+
+`Events.publish(vorpalId, startedAt, type, version, fields)` is public, for an application's own
+type published from a thread that holds the correlator but not the application session.
 
 ### Framework media: when a party starts speaking
 
@@ -46,6 +104,11 @@ share. The agent console had this gap on any cluster of more than one engine.
   load balancer) closes a socket idle for 60 seconds, and a quiet call lost its socket and ended.
 - A socket that closes without a hangup (a dropped network, a proxy timeout) now hangs up its
   calls; they used to stay up with no browser behind them.
+- A browser can send `meeting.*` requests for its call (a chat message, a raised hand); the gateway
+  publishes them on the event bus under the call's Vorpal-ID, source `/webrtc/browser`, and never
+  relays that source back. Needs `events.enabled` in `webrtc.json`. The default `relayedEventTypes`
+  now includes the meeting's features, chat, reactions, recording, lobby, info, muted, spotlight,
+  answer and waiting events.
 - One account may be signed in on several devices at once. A second socket for an address joins
   the first instead of closing it; an incoming call rings every device and the first to answer
   takes it; a device's calls and their events stay on that device.

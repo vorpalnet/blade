@@ -30,6 +30,8 @@ import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.UriInfo;
 
 import org.vorpal.blade.framework.v3.Callflow;
+import org.vorpal.blade.framework.v3.events.BladeEventTypes;
+import org.vorpal.blade.framework.v3.events.Events;
 import org.vorpal.blade.services.tpcc.TpccServlet;
 import org.vorpal.blade.services.tpcc.callflows.CreateDialog;
 import org.vorpal.blade.services.tpcc.v1.dialog.Dialog;
@@ -335,6 +337,8 @@ public class DialogAPI extends Callflow implements Serializable {
 					// ACK Alice with Bob's answer; ACK Bob.
 					sendRequest(copyContent(bobResponse, aliceResponse.createAck()));
 					sendRequest(bobResponse.createAck());
+					Events.publish(appSession, BladeEventTypes.CALL_CONNECTED, data -> data
+							.put("dialog", dialogId).put("otherDialog", dialogId2));
 
 					resumeConnect(sessionId,
 							Response.status(aliceResponse.getStatus(), aliceResponse.getReasonPhrase()).build());

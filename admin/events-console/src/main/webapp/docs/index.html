@@ -147,10 +147,13 @@
 				</p>
 				<h3>Publishing appears to do nothing</h3>
 				<p>
-					An application only opens a connection to the bus when its own
-					<code>events.enabled</code> configuration says so — off by default, so
-					an app that does not publish never holds a JMS connection. Check that
-					block in the Configurator before looking further.
+					Each application logs one line at startup saying what it decided:
+					<code>event bus: publishing to …</code>, <code>not provisioned</code>, or
+					<code>off</code>. Left unset, <code>events.enabled</code> publishes only
+					where the bus is found. An engine finds it in its own naming directory. An
+					application on the AdminServer, where the bus's topic is not bound, finds
+					the running engines that host it and logs <code>event bus: … is hosted
+					on …</code>; <code>events.providerUrl</code> overrides that search.
 				</p>
 
 			</div>

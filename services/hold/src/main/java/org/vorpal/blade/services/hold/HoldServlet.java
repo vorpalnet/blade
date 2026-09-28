@@ -7,11 +7,13 @@ import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 
-import org.vorpal.blade.framework.v3.AsyncSipServlet;
-import org.vorpal.blade.framework.v2.b2bua.Terminate;
 import org.vorpal.blade.framework.Callflow;
-import org.vorpal.blade.framework.v3.media.CallflowHold;
+import org.vorpal.blade.framework.v2.b2bua.Terminate;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.AsyncSipServlet;
+import org.vorpal.blade.framework.v3.events.BladeEventTypes;
+import org.vorpal.blade.framework.v3.events.Events;
+import org.vorpal.blade.framework.v3.media.CallflowHold;
 
 /// Parks a call: answers the dialog itself with inactive media and holds the
 /// dialog open until the far end resumes or hangs up. A single-dialog UAS — there
@@ -43,6 +45,21 @@ public class HoldServlet extends AsyncSipServlet {
 		}
 	}
 
+	/// When the call was parked, for `heldMs`.
+	private static final String HELD_AT = "blade.hold.heldAt";
+
+	/// Publish [BladeEventTypes#CALL_HOLD_ENDED] once, on the BYE or CANCEL that
+	/// ends the park.
+	private static void holdEnded(SipServletRequest request) {
+		javax.servlet.sip.SipApplicationSession app = request.getApplicationSession();
+		Object heldAt = app.getAttribute(HELD_AT);
+		if (heldAt instanceof Long) {
+			app.removeAttribute(HELD_AT);
+			long heldMs = System.currentTimeMillis() - (Long) heldAt;
+			Events.publish(app, BladeEventTypes.CALL_HOLD_ENDED, data -> data.put("heldMs", heldMs));
+		}
+	}
+
 	@Override
 	protected Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException {
 		Callflow callflow = null;
@@ -50,11 +67,16 @@ public class HoldServlet extends AsyncSipServlet {
 		switch (request.getMethod()) {
 		case "INVITE":
 			callflow = new CallflowHold();
+			if (request.isInitial()) {
+				request.getApplicationSession().setAttribute(HELD_AT, Long.valueOf(System.currentTimeMillis()));
+				Events.publish(request.getApplicationSession(), BladeEventTypes.CALL_HELD, null);
+			}
 			break;
 
 		case "CANCEL":
 		case "BYE":
 			callflow = new Terminate(null);
+			holdEnded(request);
 			break;
 
 		case "ACK":

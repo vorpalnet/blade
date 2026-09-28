@@ -1,9 +1,9 @@
 package org.vorpal.blade.events;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import java.io.Serializable;
 import java.time.Instant;
-import java.util.List;
 
 /// The transferee gave up before the transfer completed — a BYE or CANCEL from the transferee, or a
 /// 487 from the target caused by one.
@@ -14,9 +14,15 @@ import java.util.List;
 /// Regenerate rather than hand-edit: this class is derived from the
 /// event catalog, and the catalog is what the publisher, the consumer's
 /// selector and the ingress validation all agree on.
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class TransferAbandoned implements Serializable {
 
 	private static final long serialVersionUID = 1L;
+
+	/// The declaration revision this class was generated from. The producer
+	/// stamps it as the envelope's `dataversion`, so a consumer can tell which
+	/// shape an event was published with.
+	public static final int VERSION = 2;
 
 	private String vorpalId;
 	private Instant startedAt;
@@ -25,37 +31,6 @@ public class TransferAbandoned implements Serializable {
 	private String domain;
 	private String server;
 	private Instant appStartedAt;
-	private List<Attributes> attributes;
-
-	/// The shape of `attributes`.
-	public static class Attributes implements Serializable {
-
-		private static final long serialVersionUID = 1L;
-
-		private String name;
-		private String value;
-
-		/// Attribute name.
-		@JsonPropertyDescription("Attribute name.")
-		public String getName() {
-			return name;
-		}
-
-		public void setName(String name) {
-			this.name = name;
-		}
-
-		/// Attribute value.
-		@JsonPropertyDescription("Attribute value.")
-		public String getValue() {
-			return value;
-		}
-
-		public void setValue(String value) {
-			this.value = value;
-		}
-
-	}
 
 	/// The Vorpal-ID as it appears on the SIP wire — the correlator shared by every app handling this call.
 	@JsonPropertyDescription("The Vorpal-ID as it appears on the SIP wire — the correlator shared by every app handling this call.")
@@ -125,16 +100,6 @@ public class TransferAbandoned implements Serializable {
 
 	public void setAppStartedAt(Instant appStartedAt) {
 		this.appStartedAt = appStartedAt;
-	}
-
-	/// The attributes this application's configuration extracted from the SIP message. An array of name/value pairs rather than a free-form object, because the field model has no map kind — a map could not be declared, validated or generated from. Names must be unique; the consumer takes the last of any duplicate.
-	@JsonPropertyDescription("The attributes this application's configuration extracted from the SIP message. An array of name/value pairs rather than a free-form object, because the field model has no map kind — a map could not be declared, validated or generated from. Names must be unique; the consumer takes the last of any duplicate.")
-	public List<Attributes> getAttributes() {
-		return attributes;
-	}
-
-	public void setAttributes(List<Attributes> attributes) {
-		this.attributes = attributes;
 	}
 
 }

@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import org.vorpal.blade.framework.io.VersionedFileStore;
+import org.vorpal.blade.framework.v3.events.ConfigEvents;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -136,6 +137,7 @@ public class FsmarPublishServlet extends HttpServlet {
 			// Configurator saves. (No credential encryption pass — unlike an app
 			// config, the FSMAR model has no password-bearing fields.)
 			store.write(target.getConfigFile(), pretty);
+			ConfigEvents.saved(request.getRemoteUser(), relative(target.getConfigFile()), "flow", "saved");
 
 			ObjectNode result = mapper.createObjectNode();
 			result.put("path", target.getConfigFile().toAbsolutePath().toString());
@@ -150,6 +152,13 @@ public class FsmarPublishServlet extends HttpServlet {
 		} catch (IOException e) {
 			throw new ServletException("FSMAR publish failed: " + e.getMessage(), e);
 		}
+	}
+
+	/// The file as the Configurator names it, relative to its directory.
+	static String relative(Path file) {
+		Path base = Paths.get("config/custom/vorpal").toAbsolutePath().normalize();
+		Path full = file.toAbsolutePath().normalize();
+		return full.startsWith(base) ? base.relativize(full).toString() : file.toString();
 	}
 
 	/// A target id the domain doesn't offer. Overlay directories are created by

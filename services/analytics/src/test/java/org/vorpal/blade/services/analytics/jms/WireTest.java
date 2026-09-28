@@ -1,6 +1,7 @@
 package org.vorpal.blade.services.analytics.jms;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -154,19 +155,18 @@ class WireTest {
 	class Attributes {
 
 		@Test
-		@DisplayName("arrive as an array of name/value pairs, in order")
-		void arriveAsPairs() {
+		@DisplayName("arrive as flat text fields beside the correlator")
+		void arriveFlat() {
 			AnalyticsEvent event = new AnalyticsEvent("callStarted", Long.valueOf(1L), new Date());
 			Map<String, String> expected = new LinkedHashMap<>();
 			expected.put("caller", "alice");
 			expected.put("callee", "bob");
 			expected.forEach(event::addAttribute);
 
-			JsonNode array = publish(event).path("attributes");
-			assertTrue(array.isArray());
-			assertEquals(2, array.size());
-			assertEquals("caller", array.get(0).path("name").asText());
-			assertEquals("alice", array.get(0).path("value").asText());
+			JsonNode data = publish(event);
+			assertFalse(data.has("attributes"));
+			assertEquals("alice", data.path("caller").asText());
+			assertEquals("bob", data.path("callee").asText());
 		}
 
 		@Test
@@ -186,9 +186,9 @@ class WireTest {
 	@DisplayName("naming a row")
 	class Naming {
 
-		/// The framework's own events carry `eventName` in the payload, so
-		/// `event_types` keeps storing `transferRequested` exactly as it did
-		/// before the type existed — and reports built on it keep working.
+		/// The `type` column keeps storing `transferRequested` exactly as it did
+		/// before the wire type existed, and reports built on it keep working.
+		/// The name is recovered from the type, not carried beside it.
 		@Test
 		@DisplayName("a framework event still names itself the way the database expects")
 		void frameworkEventsKeepTheirShortName() {
@@ -196,17 +196,18 @@ class WireTest {
 					.toCloudEvent("/blade/app", "app", "dom", "srv", new Date());
 
 			assertEquals(BladeEventTypes.TRANSFER_REQUESTED, published.getType());
-			assertEquals("transferRequested", published.getData().path("eventName").asText(),
-					"the type is new; the name in event_types must not change under existing reports");
+			assertEquals("transferRequested", BladeEventTypes.eventNameOf(published.getType()),
+					"the type is new; the name in the type column must not change under existing reports");
+			assertEquals("callerSaid", BladeEventTypes.eventNameOf(BladeEventTypes.CALL_UTTERANCE));
 		}
 
 		@Test
-		@DisplayName("a type with no eventName falls back to its last segment")
+		@DisplayName("a type with no analytics name falls back to its last segment")
 		void undeclaredTypesUseTheLastSegment() {
-			assertEquals("scheduled", Wire.shortName("net.vorpal.attendant.meeting.scheduled"));
-			assertEquals("bare", Wire.shortName("bare"));
-			assertEquals("unknown", Wire.shortName(null));
-			assertEquals("trailing.", Wire.shortName("trailing."));
+			assertEquals("scheduled", BladeEventTypes.eventNameOf("net.vorpal.attendant.meeting.scheduled"));
+			assertEquals("bare", BladeEventTypes.eventNameOf("bare"));
+			assertEquals("unknown", BladeEventTypes.eventNameOf(null));
+			assertEquals("trailing.", BladeEventTypes.eventNameOf("trailing."));
 		}
 	}
 }

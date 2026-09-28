@@ -25,7 +25,8 @@ import org.vorpal.blade.framework.v3.events.SubscriptionRegistrar;
 ///
 /// Non-durable, on purpose: an event for a browser that has gone is nobody's. The types are the
 /// gateway's `relayedEventTypes` setting, and only an application's own namespace passes
-/// ([#FAR_SIDE_PREFIX]).
+/// ([#FAR_SIDE_PREFIX]). A browser's own requests to the application travel the other way on the
+/// same types ([SignalEndpoint]); their source ([#BROWSER_SOURCE]) keeps them from coming back.
 @WebListener
 public class FarSideEvents implements ServletContextListener, EventSubscriber.Handler {
 
@@ -37,13 +38,16 @@ public class FarSideEvents implements ServletContextListener, EventSubscriber.Ha
 	/// renegotiate the browser's call from outside it.
 	static final String FAR_SIDE_PREFIX = "meeting.";
 
+	/// The source of a browser's own request to the application ([SignalEndpoint]), published under
+	/// the same types the application answers with. The gateway never relays it back to a browser.
+	static final String BROWSER_SOURCE = "/webrtc/browser";
+
 	private SubscriptionRegistrar registrar;
 
 	@Override
 	public void contextInitialized(ServletContextEvent event) {
-		SubscriptionRegistrar.meter(event.getServletContext(), SUBSCRIPTION);
-		registrar = SubscriptionRegistrar.start(SUBSCRIPTION, WebrtcServlet::relayedEventTypes, /* durable */ false,
-				this, /* batch */ 1, EventSubscriber.DEFAULT_BATCH_MILLIS);
+		registrar = SubscriptionRegistrar.named(SUBSCRIPTION).typesFrom(WebrtcServlet::relayedEventTypes).live()
+				.start(event.getServletContext(), this);
 	}
 
 	@Override
@@ -77,7 +81,8 @@ public class FarSideEvents implements ServletContextListener, EventSubscriber.Ha
 	/// `event` filed under the browser's `callId`, or null when its type is outside
 	/// [#FAR_SIDE_PREFIX].
 	static CloudEvent forBrowser(CloudEvent event, String callId) {
-		if (event == null || event.getType() == null || !event.getType().startsWith(FAR_SIDE_PREFIX)) {
+		if (event == null || event.getType() == null || !event.getType().startsWith(FAR_SIDE_PREFIX)
+				|| BROWSER_SOURCE.equals(event.getSource())) {
 			return null;
 		}
 		return CloudEvent.create(event.getType(), event.getSource(), callId, event.getData());

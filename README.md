@@ -161,7 +161,7 @@ apps/           EAR packaging
   admin/          blade-admin.ear — the whole admin tier in one deployable
   test/           blade-test.ear — every service + test app, for a test server
 proto/          Incubator: new apps start here (built, never bundled in an EAR)
-  acl/  balancer/  demo/  player/  security/  test-console/  webrtc/
+  acl/  balancer/  demo/  messaging/  player/  security/  test-console/  webrtc/
 test/           Test applications (blade-test.ear)
   test-b2bua/     Reference B2BUA
   test-uac/       REST-operated User Agent Client

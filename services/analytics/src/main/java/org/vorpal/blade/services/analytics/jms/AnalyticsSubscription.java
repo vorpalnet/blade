@@ -44,14 +44,12 @@ public class AnalyticsSubscription implements ServletContextListener {
 		AnalyticsEventListener.meter(event.getServletContext());
 		control = org.vorpal.blade.framework.v3.events.EventBusControl.register(
 				org.vorpal.blade.framework.v2.config.SettingsManager.deriveName(event.getServletContext()));
-		SubscriptionRegistrar.meter(event.getServletContext(), BladeEventCatalog.ANALYTICS_SUBSCRIPTION);
-		registrar = SubscriptionRegistrar.start(
-				BladeEventCatalog.ANALYTICS_SUBSCRIPTION,
-				AnalyticsCatalog::persistedTypes,
-				true,
-				handler,
-				BATCH_SIZE,
-				EventSubscriber.DEFAULT_BATCH_MILLIS);
+		// Only once somebody has set up the database; until then, nothing is
+		// subscribed and nothing is logged beyond one line saying so.
+		registrar = SubscriptionRegistrar.named(BladeEventCatalog.ANALYTICS_SUBSCRIPTION)
+				.typesFrom(AnalyticsCatalog::persistedTypes).batch(BATCH_SIZE)
+				.when(DatabaseProbe::configured)
+				.start(event.getServletContext(), handler);
 	}
 
 	@Override

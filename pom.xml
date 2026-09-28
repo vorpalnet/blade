@@ -769,7 +769,12 @@ fi
 			<activation><property><name>!skip.hold</name></property></activation>
 			<modules><module>services/hold</module></modules>
 		</profile>
-<profile>
+		<profile>
+			<id>messaging</id>
+			<activation><property><name>!skip.messaging</name></property></activation>
+			<modules><module>proto/messaging</module></modules>
+		</profile>
+		<profile>
 			<id>options</id>
 			<activation><property><name>!skip.options</name></property></activation>
 			<modules><module>services/options</module></modules>
@@ -912,6 +917,16 @@ fi
 			<id>catalog</id>
 			<activation><property><name>!skip.catalog</name></property></activation>
 			<modules><module>proto/catalog</module></modules>
+		</profile>
+		<profile>
+			<id>agent</id>
+			<activation><property><name>!skip.agent</name></property></activation>
+			<modules><module>proto/agent</module></modules>
+		</profile>
+		<profile>
+			<id>dashboard</id>
+			<activation><property><name>!skip.dashboard</name></property></activation>
+			<modules><module>proto/dashboard</module></modules>
 		</profile>
 		<profile>
 			<id>logs</id>

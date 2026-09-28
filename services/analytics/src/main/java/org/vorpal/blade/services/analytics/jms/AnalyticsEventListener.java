@@ -16,6 +16,7 @@ import javax.sql.DataSource;
 
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
+import org.vorpal.blade.framework.v3.events.AnalyticsEventMapper;
 import org.vorpal.blade.framework.v3.events.BladeEventCatalog;
 import org.vorpal.blade.framework.v3.events.BladeEventTypes;
 import org.vorpal.blade.framework.v3.events.CloudEvent;
@@ -140,7 +141,10 @@ public class AnalyticsEventListener implements EventSubscriber.Handler {
 	/// Open the persistence unit. Called once when the subscription starts.
 	public void start() {
 		sipLogger = SettingsManager.getSipLogger();
-		if (emf != null) {
+		if (emf != null || !DatabaseProbe.configured()) {
+			// No database set up yet: nothing to open, and nothing to complain
+			// about. handle() opens it when the first batch arrives, which only
+			// happens once the subscription has found the database.
 			return;
 		}
 		try {
@@ -354,21 +358,25 @@ public class AnalyticsEventListener implements EventSubscriber.Handler {
 					Wire.instant(data, "startedAt"), event.getApplicationId()));
 		}
 
-		// The framework's own names travel as the type; an operator's name
-		// travels in the payload under the generic type. Either way the short
-		// name lands in the `type` column, so existing reports keep working.
-		String name = data.hasNonNull("eventName") ? data.path("eventName").asText() : Wire.shortName(type);
+		// The analytics name, not the wire type: the views and every report
+		// select on `callerSaid`, `callRiskAssessed`, and years of rows carry
+		// them. An operator's own name travels in the payload under the
+		// generic type.
+		String name = data.hasNonNull("eventName") ? data.path("eventName").asText()
+				: BladeEventTypes.eventNameOf(type);
 		event.setType(name);
 
-		ObjectNode payload = MAPPER.createObjectNode();
-		JsonNode attributes = data.path("attributes");
-		if (attributes.isArray()) {
-			for (JsonNode pair : attributes) {
-				String attrName = pair.path("name").asText(null);
-				if (attrName == null) {
-					continue;
-				}
-				payload.put(attrName, Wire.truncate(pair.path("value").asText(""), 1024));
+		// The event's own facts, without the correlator and publisher it was
+		// filed under. The keys are the payload's own, so the views' JSON paths
+		// ($."riskScore", $."signal.acoustic") read either wire shape.
+		ObjectNode payload = cloudEvent.fields();
+		payload.remove(AnalyticsEventMapper.ENVELOPE);
+		payload.remove("eventName");
+		java.util.Iterator<java.util.Map.Entry<String, JsonNode>> fields = payload.fields();
+		while (fields.hasNext()) {
+			java.util.Map.Entry<String, JsonNode> field = fields.next();
+			if (field.getValue().isTextual()) {
+				field.setValue(payload.textNode(Wire.truncate(field.getValue().asText(), 1024)));
 			}
 		}
 		event.setPayload(payload.toString());

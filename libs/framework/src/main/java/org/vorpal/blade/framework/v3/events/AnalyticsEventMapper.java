@@ -128,50 +128,80 @@ public final class AnalyticsEventMapper {
 				BladeEventCatalog.versionOf(BladeEventTypes.SESSION_KEY));
 	}
 
-	/// A named analytics event, with its attributes flattened from the
-	/// entity-attribute-value shape into a plain array of pairs.
+	/// A named analytics event from the configuration-driven path, its
+	/// extracted attributes laid flat in the payload as text fields.
 	///
-	/// **The type depends on the name.** One of the framework's eleven when
-	/// `eventName` is one BLADE emits itself, so a consumer can select precisely
-	/// on `eventType`; [BladeEventTypes#CALL_EVENT] otherwise, carrying the name
-	/// in the payload — which is what keeps an operator's own names in an app's
-	/// `analytics.events` configuration flowing without a catalog edit.
-	///
-	/// `eventName` stays in the payload either way. It costs one field and it
-	/// means a consumer that has the envelope but not the catalog can still say
-	/// what happened.
+	/// **The type depends on the name.** The declared type when `eventName` is
+	/// one the framework defines, so a consumer can select precisely on
+	/// `eventType`; [BladeEventTypes#CALL_EVENT] otherwise, with the name in the
+	/// payload's `eventName`, which is what keeps an operator's own names in an
+	/// app's `analytics.events` configuration flowing without a catalog edit.
 	///
 	/// @param vorpalId null for a genuinely sessionless event
 	public static CloudEvent callEvent(String source, String eventName, Long vorpalId, Date created, Date occurredAt,
 			String appName, String domain, String server, Date appStarted,
 			java.util.Map<String, String> attributes) {
 
+		String type = BladeEventTypes.forEventName(eventName);
+		ObjectNode fields = MAPPER.createObjectNode();
+		if (BladeEventTypes.CALL_EVENT.equals(type)) {
+			fields.put("eventName", eventName);
+		}
+		if (attributes != null) {
+			for (java.util.Map.Entry<String, String> entry : attributes.entrySet()) {
+				if (entry.getKey() != null) {
+					fields.put(entry.getKey(), entry.getValue());
+				}
+			}
+		}
+		return callScoped(source, type, vorpalId, created, occurredAt, appName, domain, server, appStarted, fields);
+	}
+
+	/// A call-scoped event: the correlator and the publishing application,
+	/// then the event's own fields beside them in one flat object.
+	///
+	/// **The envelope fields win a collision.** `vorpalId`, `startedAt`,
+	/// `occurredAt`, `appName`, `domain`, `server` and `appStartedAt` identify
+	/// the call and the publisher; a field of the same name is dropped rather
+	/// than allowed to misfile the event. Null fields are dropped too, so a
+	/// producer can set an optional value without testing it first.
+	///
+	/// @param vorpalId null for a genuinely sessionless event
+	/// @param fields   the event's own facts; may be null
+	public static CloudEvent callScoped(String source, String type, Long vorpalId, Date created, Date occurredAt,
+			String appName, String domain, String server, Date appStarted, ObjectNode fields) {
+
 		ObjectNode data = MAPPER.createObjectNode();
-		data.put("eventName", eventName);
-		put(data, "occurredAt", occurredAt);
+		if (vorpalId != null) {
+			data.put("vorpalId", String.format("%08X", vorpalId.longValue()));
+			put(data, "startedAt", created);
+		}
+		put(data, "occurredAt", (occurredAt == null) ? new Date() : occurredAt);
 		data.put("appName", appName);
 		data.put("domain", domain);
 		data.put("server", server);
 		put(data, "appStartedAt", appStarted);
 
-		if (vorpalId != null) {
-			data.put("vorpalId", String.format("%08X", vorpalId.longValue()));
-			put(data, "startedAt", created);
-		}
-
-		com.fasterxml.jackson.databind.node.ArrayNode array = data.putArray("attributes");
-		if (attributes != null) {
-			for (java.util.Map.Entry<String, String> entry : attributes.entrySet()) {
-				ObjectNode pair = array.addObject();
-				pair.put("name", entry.getKey());
-				pair.put("value", entry.getValue());
+		if (fields != null) {
+			java.util.Iterator<java.util.Map.Entry<String, com.fasterxml.jackson.databind.JsonNode>> it = fields.fields();
+			while (it.hasNext()) {
+				java.util.Map.Entry<String, com.fasterxml.jackson.databind.JsonNode> field = it.next();
+				if (!ENVELOPE.contains(field.getKey()) && field.getValue() != null && !field.getValue().isNull()) {
+					data.set(field.getKey(), field.getValue());
+				}
 			}
 		}
 
 		String subject = (vorpalId == null) ? null : subject(vorpalId.longValue(), created);
-		String type = BladeEventTypes.forEventName(eventName);
 		return CloudEvent.create(type, source, subject, data, BladeEventCatalog.versionOf(type));
 	}
+
+	/// The payload names [#callScoped] reserves for the correlator and the
+	/// publishing application. A consumer that wants only the event's own
+	/// facts (the analytics sink's `payload` column) removes these.
+	public static final java.util.Set<String> ENVELOPE = java.util.Collections.unmodifiableSet(
+			new java.util.LinkedHashSet<>(java.util.Arrays.asList("vorpalId", "startedAt", "occurredAt", "appName",
+					"domain", "server", "appStartedAt")));
 
 	private static void put(ObjectNode node, String field, String value) {
 		if (value != null && !value.isEmpty()) {

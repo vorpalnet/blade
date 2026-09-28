@@ -132,15 +132,21 @@ public class OptionsPingCallflow extends Callflow implements Serializable {
 					if (status == 408) {
 						// nothing answered — the 408 is locally generated, so
 						// the elapsed time is the timeout, not a round trip
-						health.markDown("OPTIONS 408", null, "ping", -1);
+						if (health.markDown("OPTIONS 408", null, "ping", -1)) {
+							BalancerEvents.down(name, health, null);
+						}
 					} else if (!PingVerdict.marksUp(status, require2xx)) {
 						// the endpoint said so (503: overloaded / draining /
 						// starting), or a require2xx engine answered non-2xx
 						// (it DID answer, so the round trip is real)
-						health.markDown("OPTIONS " + status, null, "ping", rttMs);
+						if (health.markDown("OPTIONS " + status, null, "ping", rttMs)) {
+							BalancerEvents.down(name, health, null);
+						}
 					} else {
 						// alive by the verdict rule — see PingVerdict
-						health.markUp("OPTIONS " + status, "ping", rttMs);
+						if (health.markUp("OPTIONS " + status, "ping", rttMs)) {
+							BalancerEvents.up(name, health);
+						}
 					}
 
 					if (sipLogger.isLoggable(Level.FINER)) {
@@ -156,7 +162,9 @@ public class OptionsPingCallflow extends Callflow implements Serializable {
 			} catch (Exception badEndpoint) {
 				// one unpingable endpoint (e.g. a malformed URI) must not
 				// stop the rest of the cycle — and the dashboard should say so
-				health.markDown("unpingable: " + badEndpoint.getMessage(), null, "ping", -1);
+				if (health.markDown("unpingable: " + badEndpoint.getMessage(), null, "ping", -1)) {
+					BalancerEvents.down(name, health, null);
+				}
 			}
 
 		}

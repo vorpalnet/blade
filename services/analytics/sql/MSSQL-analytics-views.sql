@@ -91,9 +91,9 @@ GO
 -- exist and return nothing. `$."signal.acoustic"` is correct and the difference
 -- is silent.
 --
--- TRY_CAST rather than CAST throughout: values are stored as strings, faithful
--- to the wire, and one malformed publisher must not fail the whole query for
--- every other call. A bad value becomes NULL and is visible as a gap.
+-- TRY_CAST rather than CAST throughout: values are numbers, or numeric strings
+-- in rows written before the flat payload, and one malformed publisher must
+-- not fail the whole query for every other call. A bad value becomes NULL and is visible as a gap.
 CREATE OR ALTER VIEW v_call_risk AS
 SELECT
    CAST(e.id AS VARCHAR(20))                  AS event_id,
@@ -187,4 +187,114 @@ SELECT
 FROM session_keys k
 JOIN sessions s     ON s.id = k.session_id
 JOIN applications a ON a.id = s.application_id;
+GO
+
+-- Queueing, one row per fact: a caller joining a queue, being offered to the
+-- destination (an offer that failed retryably counts up `attempt`), or leaving
+-- without being connected (`reason` caller or refused). `depth` is the queue's
+-- length with the caller in it.
+CREATE OR ALTER VIEW v_queue AS
+SELECT
+   CAST(e.id AS VARCHAR(20)) AS event_id,
+   CAST(e.session_id AS VARCHAR(20)) AS call_id,
+   e.created AS occurred_at,
+   e.type AS event_type,
+   a.tenant AS tenant,
+   a.name AS application,
+   s.cluster_name AS cluster_name,
+   RIGHT(CONVERT(VARCHAR(32), CONVERT(VARBINARY(8), s.vorpal_id), 2), 8) AS vorpal_id,
+   JSON_VALUE(e.payload, '$."queue"') AS queue,
+   TRY_CAST(JSON_VALUE(e.payload, '$."depth"') AS INT) AS depth,
+   TRY_CAST(JSON_VALUE(e.payload, '$."waitedMs"') AS DECIMAL(18,3)) / 1000 AS waited_seconds,
+   TRY_CAST(JSON_VALUE(e.payload, '$."attempt"') AS INT) AS attempt,
+   JSON_VALUE(e.payload, '$."reason"') AS reason
+FROM events e
+JOIN applications a ON a.id = e.application_id
+LEFT JOIN sessions s ON s.id = e.session_id
+WHERE e.type IN ('queueEntered', 'queueReleased', 'queueAbandoned');
+GO
+
+-- Where each call was sent. `callRouted` is a proxy's choice (iRouter's
+-- destination, or the balancer's endpoint and tier after `failovers` tiers
+-- failed); `callResponded` and `callDeclined` are answers the router or the
+-- balancer gave itself, with the `status` it sent.
+CREATE OR ALTER VIEW v_call_routing AS
+SELECT
+   CAST(e.id AS VARCHAR(20)) AS event_id,
+   CAST(e.session_id AS VARCHAR(20)) AS call_id,
+   e.created AS occurred_at,
+   e.type AS event_type,
+   a.tenant AS tenant,
+   a.name AS application,
+   s.cluster_name AS cluster_name,
+   RIGHT(CONVERT(VARCHAR(32), CONVERT(VARBINARY(8), s.vorpal_id), 2), 8) AS vorpal_id,
+   JSON_VALUE(e.payload, '$."destination"') AS destination,
+   JSON_VALUE(e.payload, '$."endpoint"') AS endpoint,
+   JSON_VALUE(e.payload, '$."tier"') AS tier,
+   TRY_CAST(JSON_VALUE(e.payload, '$."failovers"') AS INT) AS failovers,
+   TRY_CAST(JSON_VALUE(e.payload, '$."status"') AS INT) AS status
+FROM events e
+JOIN applications a ON a.id = e.application_id
+LEFT JOIN sessions s ON s.id = e.session_id
+WHERE e.type IN ('callRouted', 'callResponded', 'callDeclined');
+GO
+
+-- Parked calls: one row when a call is put on hold, one when it leaves, with
+-- how long it was held.
+CREATE OR ALTER VIEW v_call_hold AS
+SELECT
+   CAST(e.id AS VARCHAR(20)) AS event_id,
+   CAST(e.session_id AS VARCHAR(20)) AS call_id,
+   e.created AS occurred_at,
+   e.type AS event_type,
+   a.tenant AS tenant,
+   a.name AS application,
+   s.cluster_name AS cluster_name,
+   RIGHT(CONVERT(VARCHAR(32), CONVERT(VARBINARY(8), s.vorpal_id), 2), 8) AS vorpal_id,
+   TRY_CAST(JSON_VALUE(e.payload, '$."heldMs"') AS DECIMAL(18,3)) / 1000 AS held_seconds
+FROM events e
+JOIN applications a ON a.id = e.application_id
+LEFT JOIN sessions s ON s.id = e.session_id
+WHERE e.type IN ('callHeld', 'callHoldEnded');
+GO
+
+-- Calls an application placed on someone's behalf (third-party call
+-- control): who was called and how they answered.
+CREATE OR ALTER VIEW v_call_origination AS
+SELECT
+   CAST(e.id AS VARCHAR(20)) AS event_id,
+   CAST(e.session_id AS VARCHAR(20)) AS call_id,
+   e.created AS occurred_at,
+   e.type AS event_type,
+   a.tenant AS tenant,
+   a.name AS application,
+   s.cluster_name AS cluster_name,
+   RIGHT(CONVERT(VARCHAR(32), CONVERT(VARBINARY(8), s.vorpal_id), 2), 8) AS vorpal_id,
+   JSON_VALUE(e.payload, '$."party"') AS party,
+   TRY_CAST(JSON_VALUE(e.payload, '$."status"') AS INT) AS status,
+   JSON_VALUE(e.payload, '$."answered"') AS answered
+FROM events e
+JOIN applications a ON a.id = e.application_id
+LEFT JOIN sessions s ON s.id = e.session_id
+WHERE e.type IN ('callOriginated');
+GO
+
+-- Queue wait per call: what a call-center report asks first. One row per
+-- call per queue: when the caller joined, the longest wait recorded, how many
+-- offers it took, and how it ended. `outcome` is caller (hung up), refused
+-- (the destination refused for good), released (offered and not abandoned),
+-- or waiting (still queued, or the node went away before it said).
+CREATE OR ALTER VIEW v_queue_wait AS
+SELECT
+   q.call_id AS call_id,
+   q.tenant AS tenant,
+   q.cluster_name AS cluster_name,
+   q.queue AS queue,
+   MIN(CASE WHEN q.event_type = 'queueEntered' THEN q.occurred_at END) AS entered_at,
+   MAX(q.waited_seconds) AS wait_seconds,
+   MAX(q.attempt) AS offers,
+   COALESCE(MAX(CASE WHEN q.event_type = 'queueAbandoned' THEN q.reason END),
+            CASE WHEN MAX(q.attempt) IS NOT NULL THEN 'released' ELSE 'waiting' END) AS outcome
+FROM v_queue q
+GROUP BY q.call_id, q.tenant, q.cluster_name, q.queue;
 GO

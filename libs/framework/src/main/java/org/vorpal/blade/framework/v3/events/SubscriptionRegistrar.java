@@ -16,9 +16,9 @@ import org.vorpal.blade.framework.v2.logging.Logger;
 /// an operator can change it in the catalog afterwards.
 ///
 /// A consuming application starts one of these per subscription from a
-/// `ServletContextListener` and stops it on the way out. [EventSourceGenerator]
-/// emits exactly that, so a generated consumer and a hand-written one have the
-/// same shape.
+/// `ServletContextListener`, through [#named], and stops it on the way out.
+/// [EventSourceGenerator] emits exactly that, so a generated consumer and a
+/// hand-written one have the same shape.
 ///
 /// ## What it does on a tick
 ///
@@ -43,6 +43,12 @@ public final class SubscriptionRegistrar {
 	private final long batchMillis;
 
 	private volatile boolean running;
+
+	/// Consume only while this holds; null for always. See [Builder#when].
+	private java.util.function.BooleanSupplier when;
+
+	/// Whether "not provisioned" has been said, so it is said once.
+	private volatile boolean notProvisionedSaid;
 	private Thread watchdog;
 
 	private SubscriptionRegistrar(String subscriptionName, Supplier<List<String>> types,
@@ -56,23 +62,137 @@ public final class SubscriptionRegistrar {
 		this.batchMillis = batchMillis;
 	}
 
-	/// Start a subscription and count what it consumes.
+	/// Begin describing a subscription.
+	///
+	/// ```java
+	/// registrar = SubscriptionRegistrar.named("blade-agent-console")
+	///         .types(BladeEventTypes.CALL_UTTERANCE, BladeEventTypes.CALL_RISK_ASSESSED)
+	///         .live()
+	///         .start(context, handler);
+	/// ```
+	///
+	/// Stop it with [#stop] from the same listener's `contextDestroyed`.
+	///
+	/// @param subscriptionName this SUBSCRIBER's name, never an event type's.
+	///                         The broker knows the subscription by it, and its
+	///                         counters are named for it
+	public static Builder named(String subscriptionName) {
+		return new Builder(subscriptionName);
+	}
+
+	/// What a subscription wants, stated once. Defaults: durable, one event per
+	/// transaction.
+	public static final class Builder {
+
+		private final String name;
+		private List<String> types;
+		private Supplier<List<String>> computed;
+		private boolean durable = true;
+		private int batchSize = 1;
+		private java.util.function.BooleanSupplier when;
+
+		private Builder(String name) {
+			this.name = name;
+		}
+
+		/// The types this consumer handles.
+		///
+		/// **The catalog may override them.** When the catalog declares a
+		/// subscription of this name, its types and its durability win, so an
+		/// operator can change what a running consumer hears. An empty type
+		/// list there switches the consumer off. With no declaration the
+		/// consumer takes what it was built for, which is what makes a fresh
+		/// domain work.
+		public Builder types(String... types) {
+			return types(java.util.Arrays.asList(types));
+		}
+
+		/// @see #types(String...)
+		public Builder types(List<String> types) {
+			this.types = types;
+			this.computed = null;
+			return this;
+		}
+
+		/// Types the application computes itself, asked again on every
+		/// reconcile. The catalog's subscription entry is not consulted: this
+		/// is for a consumer whose wants are derived, like the analytics sink,
+		/// which takes every type the catalog marks persisted.
+		public Builder typesFrom(Supplier<List<String>> types) {
+			this.computed = types;
+			this.types = null;
+			return this;
+		}
+
+		/// Not durable: hear events only while deployed. Right for a screen,
+		/// where an event replayed after a restart is stale rather than late.
+		public Builder live() {
+			this.durable = false;
+			return this;
+		}
+
+		/// Events per transaction. 1 (the default) for an actor, which acts
+		/// on each event; more for a sink, which cannot afford a commit per
+		/// row. A handler that throws rolls its whole batch back.
+		public Builder batch(int size) {
+			this.batchSize = Math.max(1, size);
+			return this;
+		}
+
+		/// Consume only while `condition` holds, asked again on every reconcile.
+		/// While it does not, the subscription is closed (not unsubscribed, so a
+		/// durable one keeps its backlog) and nothing is logged here: the
+		/// condition's owner says why. The analytics sink uses it to wait for a
+		/// database somebody has set up.
+		public Builder when(java.util.function.BooleanSupplier condition) {
+			this.when = condition;
+			return this;
+		}
+
+		/// Subscribe now and keep the subscription matching the catalog until
+		/// [SubscriptionRegistrar#stop].
+		///
+		/// @param context this application's servlet context, for the
+		///                subscription's counters; may be null
+		/// @param handler what to do with each batch
+		public SubscriptionRegistrar start(javax.servlet.ServletContext context, EventSubscriber.Handler handler) {
+			if (context != null) {
+				meter(context, name);
+			}
+			String subscriptionName = name;
+			boolean coded = durable;
+			if (computed != null) {
+				return SubscriptionRegistrar.start(subscriptionName, computed, () -> coded, handler, batchSize,
+						EventSubscriber.DEFAULT_BATCH_MILLIS, when);
+			}
+			List<String> built = (types == null) ? java.util.Collections.<String>emptyList() : types;
+			Supplier<List<String>> wanted = () -> {
+				List<String> fromCatalog = EventCatalogFile.declaredTypes(subscriptionName);
+				return (fromCatalog != null) ? fromCatalog : built;
+			};
+			// Durability follows the catalog when the operator has declared this
+			// subscription, because it is an operational decision rather than a
+			// property of the code: a durable actor that has been down for a while
+			// wakes to stale facts it should probably not act on, and whether that
+			// matters depends on what the actor does.
+			java.util.function.BooleanSupplier durability = () -> {
+				EventSubscription declared = EventCatalogFile.declaredSubscription(subscriptionName);
+				return (declared == null) ? coded : declared.isDurable();
+			};
+			return SubscriptionRegistrar.start(subscriptionName, wanted, durability, handler, batchSize,
+					EventSubscriber.DEFAULT_BATCH_MILLIS, when);
+		}
+	}
+
+	/// Register this subscription's counters with the application's metrics.
+	/// [Builder#start] does this; call it directly only for a subscription
+	/// started some other way.
 	///
 	/// The counters are the answer to "is this consumer actually doing
 	/// anything", which the log alone cannot give once an application has been
 	/// up for a week. **`failed` is the one worth watching**: it counts
 	/// messages in a batch that was rolled back, each of which the broker will
 	/// redeliver and eventually park on the error destination.
-	///
-	/// @param context this application's servlet context, for its metrics
-	///                registry
-	public static SubscriptionRegistrar start(javax.servlet.ServletContext context, String subscriptionName,
-			List<String> declaredTypes, EventSubscriber.Handler handler) {
-		meter(context, subscriptionName);
-		return start(subscriptionName, declaredTypes, handler);
-	}
-
-	/// Register this subscription's counters with the application's metrics.
 	///
 	/// Counters are named per subscription rather than labelled, because two
 	/// subscriptions in one application would otherwise have to agree on a
@@ -100,57 +220,13 @@ public final class SubscriptionRegistrar {
 		}
 	}
 
-	/// Start a subscription whose wanted types come from the catalog, falling
-	/// back to what the consumer was built with.
-	///
-	/// This is what a generated consumer calls. The fallback is what makes a
-	/// fresh domain work: with no `events.json` published, the consumer still
-	/// subscribes to the types it was generated for.
-	///
-	/// @param subscriptionName this SUBSCRIBER's name, never an event type's
-	/// @param declaredTypes    the types the consumer was built for
-	/// @param handler          what to do with each batch
-	public static SubscriptionRegistrar start(String subscriptionName, List<String> declaredTypes,
-			EventSubscriber.Handler handler) {
-		Supplier<List<String>> wanted = () -> {
-			List<String> fromCatalog = EventCatalogFile.declaredTypes(subscriptionName);
-			return (fromCatalog != null) ? fromCatalog : declaredTypes;
-		};
-		// Durability follows the catalog when the operator has declared this
-		// subscription, because it is an operational decision rather than a
-		// property of the code: a durable actor that has been down for a while
-		// wakes to stale facts it should probably not act on, and whether that
-		// matters depends on what the actor does.
-		java.util.function.BooleanSupplier durable = () -> {
-			EventSubscription declared = EventCatalogFile.declaredSubscription(subscriptionName);
-			return (declared == null) || declared.isDurable();
-		};
-		// One event per transaction: an actor acts, and acting on a batch that
-		// may be rolled back and re-delivered as a unit is a different contract
-		// from writing rows.
-		return start(subscriptionName, wanted, durable, handler, 1, EventSubscriber.DEFAULT_BATCH_MILLIS);
-	}
-
-	/// Start a subscription whose wanted types are computed by the caller.
-	///
-	/// The analytics sink uses this: its types are every type the catalog marks
-	/// persisted, which is not a subscription entry anyone writes by hand.
-	///
-	/// @param types       asked on every tick for the types wanted now
-	/// @param durable     whether the subscription survives a restart
-	/// @param batchSize   events per transaction; 1 for an actor, more for a sink
-	/// @param batchMillis how long a partial batch waits before committing
-	public static SubscriptionRegistrar start(String subscriptionName, Supplier<List<String>> types,
-			boolean durable, EventSubscriber.Handler handler, int batchSize, long batchMillis) {
-		return start(subscriptionName, types, () -> durable, handler, batchSize, batchMillis);
-	}
-
 	private static SubscriptionRegistrar start(String subscriptionName, Supplier<List<String>> types,
 			java.util.function.BooleanSupplier durable, EventSubscriber.Handler handler, int batchSize,
-			long batchMillis) {
+			long batchMillis, java.util.function.BooleanSupplier when) {
 
 		SubscriptionRegistrar registrar = new SubscriptionRegistrar(subscriptionName, types, durable, handler,
 				batchSize, batchMillis);
+		registrar.when = when;
 		registrar.running = true;
 
 		// Reconcile once synchronously, so the log line reports the state the
@@ -196,6 +272,10 @@ public final class SubscriptionRegistrar {
 	/// application down with it.
 	private void reconcile(boolean announce) {
 		try {
+			if (when != null && !when.getAsBoolean()) {
+				EventBus.unregisterSubscriber(subscriptionName);
+				return;
+			}
 			List<String> wanted = types.get();
 
 			if (wanted == null || wanted.isEmpty()) {
@@ -238,6 +318,25 @@ public final class SubscriptionRegistrar {
 						+ (live == null ? "" : "; consumers=" + live.getConsumerCount()));
 			}
 		} catch (Throwable t) {
+			EventBusSettings settings = SettingsManager.getEventBus();
+			boolean asked = settings != null && Boolean.TRUE.equals(settings.isEnabled());
+			if (t instanceof javax.naming.NamingException) {
+				// Perhaps the bus is elsewhere: on the AdminServer it lives on the
+				// engine cluster, which may only now be running. The next tick
+				// uses whatever this finds.
+				EventBus.locate(EventBus.TOPIC_JNDI);
+			}
+			if (t instanceof javax.naming.NamingException && !asked) {
+				// The bus was never provisioned here and nobody asked for it: say
+				// so once, and keep checking quietly, so provisioning it later
+				// starts this consumer without a redeploy.
+				if (!notProvisionedSaid) {
+					notProvisionedSaid = true;
+					info("events: event bus not provisioned; '" + subscriptionName
+							+ "' is not subscribing until it is");
+				}
+				return;
+			}
 			severe("events: could not establish the '" + subscriptionName + "' subscription — THIS "
 					+ "CONSUMER IS RECEIVING NOTHING: " + t);
 		}

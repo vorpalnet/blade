@@ -145,7 +145,7 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 	/// the browser-supplied display name when there is one. The name is sanitized (CR, LF and quotes
 	/// removed) because it is client input carried in a header. `P-Asserted-Identity` is not a system
 	/// header, so it is set directly on the request.
-	private static void assertIdentity(SipServletRequest invite, String aor, String displayName) {
+	public static void assertIdentity(SipServletRequest invite, String aor, String displayName) {
 		String uri = "<sip:" + aor + ">";
 		String name = (displayName == null) ? "" : displayName.replaceAll("[\\r\\n\"]", "").trim();
 		invite.setHeader("P-Asserted-Identity", name.isEmpty() ? uri : "\"" + name + "\" " + uri);
@@ -420,7 +420,7 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 	/// A bare number takes the caller's own domain, so `alice@example.com` dialling `13125551212`
 	/// gets `sip:13125551212@example.com` and the routing decision stays where it belongs, in the
 	/// application router.
-	static String normalizeTarget(String target, String callerAor) {
+	public static String normalizeTarget(String target, String callerAor) {
 		String trimmed = target.trim();
 		if (trimmed.startsWith("sip:") || trimmed.startsWith("sips:") || trimmed.startsWith("tel:")) {
 			return trimmed;

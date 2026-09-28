@@ -13,6 +13,8 @@ import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
+import org.vorpal.blade.framework.v3.events.BladeEventTypes;
+import org.vorpal.blade.framework.v3.events.Events;
 import org.vorpal.blade.framework.v3.media.MediaCallflow;
 
 /// Answer an inbound INVITE, anchor its media on the 309 media server, and play the configured prompt
@@ -178,8 +180,11 @@ public class PlayerCallflow extends MediaCallflow {
 	private void playOnce(MediaGroup mg, SipServletRequest invite) throws MsControlException {
 		play(mg, new URI[] { URI.create(cfg.getMediaUri()) }, done -> {
 			if (cfg.isLoop()) {
+				// Music on a loop is not news each time round.
 				playOnce(mg, invite);
 			} else {
+				Events.publish(invite.getApplicationSession(), BladeEventTypes.MEDIA_PLAYED,
+						data -> data.put("media", cfg.getMediaUri()));
 				hangup(invite);
 			}
 		});

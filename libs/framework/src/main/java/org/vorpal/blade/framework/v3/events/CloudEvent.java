@@ -5,10 +5,12 @@ import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /// A CloudEvents 1.0 envelope — the on-the-wire message the BLADE v3 event bus
 /// carries.
@@ -163,6 +165,42 @@ public class CloudEvent implements Serializable {
 
 	public JsonNode getData() {
 		return data;
+	}
+
+	/// The payload as one flat object: what a consumer reads instead of
+	/// [#getData].
+	///
+	/// Call-scoped events used to carry their facts as
+	/// `"attributes": [{"name": …, "value": …}]`, every value a string. They
+	/// now carry them as ordinary typed fields beside the correlator. This
+	/// reads both: a legacy pair is folded in as a text field unless the
+	/// payload already has that name, and the `attributes` array itself is
+	/// dropped. Jackson's `asLong`/`asDouble` parse a numeric string, so a
+	/// reader written against the typed shape reads an old event too.
+	///
+	/// **The fold is for the transition only.** It covers the durable backlog
+	/// a rolling upgrade leaves on the broker, and producers still running an
+	/// older framework jar. Remove it once no producer publishes
+	/// `attributes`.
+	///
+	/// @return a copy, never null; empty when the event has no object payload
+	@JsonIgnore
+	public ObjectNode fields() {
+		ObjectNode fields = MAPPER.createObjectNode();
+		if (data == null || !data.isObject()) {
+			return fields;
+		}
+		fields.setAll((ObjectNode) data.deepCopy());
+		JsonNode legacy = fields.remove("attributes");
+		if (legacy != null && legacy.isArray()) {
+			for (JsonNode pair : legacy) {
+				String name = pair.path("name").asText(null);
+				if (name != null && !fields.has(name)) {
+					fields.put(name, pair.path("value").asText(null));
+				}
+			}
+		}
+		return fields;
 	}
 
 	public void setData(JsonNode data) {

@@ -18,18 +18,21 @@ import org.vorpal.blade.framework.sip.DetachedSipFactory;
 import org.vorpal.blade.framework.sip.DetachedSipSession;
 import org.vorpal.blade.framework.sip.DetachedSipSessionsUtil;
 import org.vorpal.blade.framework.sip.DetachedSipURI;
-import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.CapturingLogger;
 import org.vorpal.blade.framework.v3.configuration.MemoryContext;
 import org.vorpal.blade.framework.v3.configuration.routing.Route;
 import org.vorpal.blade.framework.v3.events.AnalyticsEvent;
+import org.vorpal.blade.framework.v3.events.CloudEvent;
+import org.vorpal.blade.framework.v3.events.EventBus;
+import org.vorpal.blade.framework.v3.events.EventPublisher;
 import org.vorpal.blade.framework.v3.irouter.IRouterConfig;
 import org.vorpal.blade.framework.v3.irouter.IRouterInvite;
 
 /// A declined call publishes `callDeclined` carrying the verdict header, using
-/// the sample's own analytics definitions and the router's real response path.
+/// the sample's own analytics definitions and the router's real response path —
+/// wherever there is an event bus to publish to, and nowhere else.
 class CallBlockingEventsTest {
 
 	private final List<AnalyticsEvent> events = new ArrayList<>();
@@ -67,13 +70,23 @@ class CallBlockingEventsTest {
 		Callflow.setLogger(logger);
 		SettingsManager.setSipLogger(logger);
 
-		Analytics analytics = new CallBlockingConfigSample().getAnalytics();
-		analytics.setEnabled(true);
-		SettingsManager.setAnalytics(analytics);
+		SettingsManager.setAnalytics(new CallBlockingConfigSample().getAnalytics());
+		// A provisioned bus: a publisher is installed, which is what turns event
+		// collection on.
+		EventBus.register(new EventPublisher(EventBus.CONNECTION_FACTORY_JNDI, EventBus.TOPIC_JNDI) {
+			@Override
+			public void publish(CloudEvent event) {
+			}
+
+			@Override
+			public void close() {
+			}
+		});
 	}
 
 	@AfterEach
 	void remove() {
+		EventBus.unregisterAll();
 		SettingsManager.setAnalytics(null);
 		SettingsManager.setSipLogger(null);
 		Callflow.setLogger(null);
@@ -106,8 +119,8 @@ class CallBlockingEventsTest {
 	}
 
 	@Test
-	void disabledAnalyticsPublishesNothing() throws Exception {
-		SettingsManager.getAnalytics().setEnabled(false);
+	void noBusPublishesNothing() throws Exception {
+		EventBus.unregisterAll();
 		Route blocked = new Route(603, "Decline").addHeader("X-Call-Screen", "block;reason=own-number");
 
 		new Probe(new CallBlockingConfigSample()).respond(invite(), blocked);

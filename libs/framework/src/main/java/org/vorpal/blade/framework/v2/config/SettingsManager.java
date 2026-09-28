@@ -33,6 +33,8 @@ import java.net.InetAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Map;
 import java.util.logging.Level;
 
@@ -1064,8 +1066,15 @@ public class SettingsManager<T> {
 	/// whether a `JmsPublisher` static happened to be non-null — which is
 	/// per-WAR state set by whichever code path ran first, not a statement about
 	/// what this application was configured to do.
+	///
+	/// **Whether a publisher is up, and nothing else.** An application
+	/// publishing to the event bus publishes the call lifecycle too, and one
+	/// whose bus is off or not provisioned builds nothing it could not send.
+	/// `analytics.enabled` used to be a second switch it also had to find, and a
+	/// subscriber acting on `transferRequested` then depended on a reporting flag
+	/// in somebody else's configuration.
 	private static boolean collecting() {
-		return (analytics != null && Boolean.TRUE.equals(analytics.isEnabled()))
+		return org.vorpal.blade.framework.v3.events.EventBus.isReady()
 				|| (sipLogger != null && sipLogger.isLoggable(sipLogger.getAnalyticsLoggingLevel()));
 	}
 
@@ -1073,13 +1082,48 @@ public class SettingsManager<T> {
 		return collecting() ? analytics.createEvent(name, message) : null;
 	}
 
+	/// Message attribute holding the events set aside by a nested
+	/// [#createEvent(String, SipServletMessage)], innermost last.
+	private static final String OUTER_EVENTS = "event.outer";
+
+	/// Creates an event and makes it the message's pending event, the one the
+	/// next [#sendEvent(SipServletMessage)] sends.
+	///
+	/// **Nests rather than replaces.** `InitialInvite` and `Terminate` hold
+	/// `callStarted` and `callCompleted` pending while their listener runs. An
+	/// application that creates and sends its own event on the same message from
+	/// inside that listener used to replace the framework's, which was then
+	/// never sent. The pending event is now set aside, and the send that matches
+	/// this create restores it.
+	@SuppressWarnings("unchecked")
 	public static AnalyticsEvent createEvent(String name, SipServletMessage message) {
 		if (!collecting()) {
 			return null;
 		}
 		AnalyticsEvent event = analytics.createEvent(name, message);
+		AnalyticsEvent pending = (AnalyticsEvent) message.getAttribute("event");
+		if (pending != null) {
+			Deque<AnalyticsEvent> outer = (Deque<AnalyticsEvent>) message.getAttribute(OUTER_EVENTS);
+			if (outer == null) {
+				outer = new ArrayDeque<>();
+				message.setAttribute(OUTER_EVENTS, outer);
+			}
+			outer.push(pending);
+		}
 		message.setAttribute("event", event);
 		return event;
+	}
+
+	/// Makes the event a nested create set aside pending again.
+	@SuppressWarnings("unchecked")
+	private static void restoreOuterEvent(SipServletMessage message) {
+		Deque<AnalyticsEvent> outer = (Deque<AnalyticsEvent>) message.getAttribute(OUTER_EVENTS);
+		if (outer != null && !outer.isEmpty()) {
+			message.setAttribute("event", outer.pop());
+			if (outer.isEmpty()) {
+				message.removeAttribute(OUTER_EVENTS);
+			}
+		}
 	}
 
 	public static AnalyticsEvent createEvent(String name, SipServletContextEvent context) {
@@ -1093,6 +1137,7 @@ public class SettingsManager<T> {
 			if (event != null) {
 				analytics.addDestinationAttributes(event, message);
 				message.removeAttribute("event");
+				restoreOuterEvent(message);
 				sipLogger.logEvent(message.getSession(), event);
 				analytics.sendEvent(event);
 			}

@@ -20,6 +20,8 @@ import org.vorpal.blade.framework.v3.configuration.connectors.Connector;
 import org.vorpal.blade.framework.v3.configuration.routing.ConditionalHeader;
 import org.vorpal.blade.framework.v3.configuration.routing.Route;
 import org.vorpal.blade.framework.v3.configuration.routing.Routing;
+import org.vorpal.blade.framework.v3.events.AnalyticsEvent;
+import org.vorpal.blade.framework.v3.events.BladeEventTypes;
 
 /// Callflow for the initial INVITE through the v3 iRouter pipeline.
 ///
@@ -48,12 +50,12 @@ public class IRouterInvite extends Callflow {
 	/// Analytics event for a forwarded call, published after the route's
 	/// headers are stamped on the outbound INVITE.
 	///
-	/// Every routing decision publishes one of three events, so a screening
-	/// config can report what it decided without code: add the event under
-	/// `analytics.events` with attribute selectors for the headers the route
-	/// stamps (for example `X-Call-Screen`) and set `analytics.enabled`.
-	/// Nothing is created while analytics is off, unless the logger is at its
-	/// analytics logging level, which collects events for the log.
+	/// Every routing decision publishes one of three events whenever the
+	/// application publishes to the event bus: [BladeEventTypes#CALL_ROUTED]
+	/// with the `destination`, and [BladeEventTypes#CALL_DECLINED] or
+	/// [BladeEventTypes#CALL_RESPONDED] with the `status`. A screening config
+	/// adds the headers its route stamps (for example `X-Call-Screen`) by naming
+	/// the event under `analytics.events` with attribute selectors.
 	public static final String EVENT_ROUTED = "callRouted";
 
 	/// Analytics event for a direct response of 400 or above. Shares the
@@ -62,7 +64,7 @@ public class IRouterInvite extends Callflow {
 	public static final String EVENT_DECLINED = "callDeclined";
 
 	/// Analytics event for a direct response below 400, such as a redirect
-	/// server's 302.
+	/// server's 302. Published as [BladeEventTypes#CALL_RESPONDED].
 	public static final String EVENT_RESPONDED = "callResponded";
 
 	public IRouterInvite(IRouterConfig config) {
@@ -271,7 +273,11 @@ public class IRouterInvite extends Callflow {
 		applyHeaders(response, route, ctx);
 		// The decision event reads the response after its headers are stamped,
 		// and must go before sendResponse for the same reason the log line does.
-		SettingsManager.createEvent(code >= 400 ? EVENT_DECLINED : EVENT_RESPONDED, response);
+		AnalyticsEvent decided = SettingsManager.createEvent(code >= 400 ? EVENT_DECLINED : EVENT_RESPONDED,
+				response);
+		if (decided != null) {
+			decided.addAttribute("status", String.valueOf(code));
+		}
 		SettingsManager.sendEvent(response);
 		// Log before send — a final non-2xx response invalidates the session,
 		// after which the logger's hexHash → getGlareState → session.getAttribute
@@ -308,7 +314,10 @@ public class IRouterInvite extends Callflow {
 					+ " supervised=" + proxy.getSupervised());
 		}
 		applyHeaders(request, route, ctx);
-		SettingsManager.createEvent(EVENT_ROUTED, request);
+		AnalyticsEvent routed = SettingsManager.createEvent(EVENT_ROUTED, request);
+		if (routed != null && destination != null) {
+			routed.addAttribute("destination", destination.toString());
+		}
 		SettingsManager.sendEvent(request);
 		proxyRequest(proxy, destination);
 	}

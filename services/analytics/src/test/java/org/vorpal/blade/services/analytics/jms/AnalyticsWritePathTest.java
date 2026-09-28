@@ -1,6 +1,7 @@
 package org.vorpal.blade.services.analytics.jms;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -189,6 +190,22 @@ class AnalyticsWritePathTest {
 				"the attribute the demo query reads must survive the write");
 	}
 
+	/// The flat, typed wire shape lands as the same row the legacy one did:
+	/// the same `type` name and the same payload keys, so the views read both.
+	@Test
+	@DisplayName("a flat risk event stores the same name and payload keys as the legacy shape")
+	void flatPayloadMatchesTheLegacyRow() throws Exception {
+		listener.handle(Collections.singletonList(flatRiskEvent(UUID.randomUUID().toString(), 0x55555556L)));
+
+		assertEquals("callRiskAssessed", text("SELECT type FROM events"));
+		com.fasterxml.jackson.databind.JsonNode payload = MAPPER.readTree(text("SELECT payload FROM events"));
+		assertEquals(0.661, payload.path("riskScore").asDouble(), 1e-9);
+		assertEquals(0.985, payload.path("signal.acoustic").asDouble(), 1e-9);
+		assertEquals("WATCH", payload.path("riskBand").asText());
+		assertFalse(payload.has("vorpalId"), "the correlator is the row's session, not its payload");
+		assertFalse(payload.has("appName"));
+	}
+
 	@Test
 	@DisplayName("an application event backfills host and version onto a row a call event created")
 	void applicationFactsArriveLate() throws Exception {
@@ -272,6 +289,21 @@ class AnalyticsWritePathTest {
 		event.setId(uid);
 		event.setSource("//blade/conference/test");
 		event.setData(data);
+		return event;
+	}
+
+	/// A `callRiskAssessed` in the flat shape the framework publishes now.
+	private CloudEvent flatRiskEvent(String uid, long vorpalId) {
+		long birth = 1_787_780_167_411L;
+		com.fasterxml.jackson.databind.node.ObjectNode fields = MAPPER.createObjectNode();
+		fields.put("riskScore", 0.661);
+		fields.put("riskBand", "WATCH");
+		fields.put("signal.acoustic", 0.985);
+		CloudEvent event = org.vorpal.blade.framework.v3.events.AnalyticsEventMapper.callScoped(
+				"//blade/conference/test", BladeEventTypes.CALL_RISK_ASSESSED, vorpalId, new java.util.Date(birth),
+				new java.util.Date(birth + 12_000L), "conference", CLUSTER, "engine1",
+				new java.util.Date(birth - 3_600_000L), fields);
+		event.setId(uid);
 		return event;
 	}
 

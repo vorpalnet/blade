@@ -877,7 +877,9 @@ phase_db() {
     help <<'EOF'
 Where analytics events land: one WebLogic data source (jdbc/BladeAnalytics)
 pointing at YOUR database. install.sh never creates the database or its schema.
-Run services/analytics/sql/<Dialect>-database-schema.sql yourself, once.
+Run services/analytics/sql/<Dialect>-database-schema.sql yourself, once, then
+<Dialect>-analytics-views.sql. Re-run the views file after every BLADE upgrade:
+it only replaces views, and new event types arrive with new views.
 Leave the URL blank to skip persistence for now: events still flow on the JMS
 topic and are held there (bounded by the topic quota and TTL) until a database
 comes up.
@@ -1263,7 +1265,8 @@ save_profile() {
         echo "# provisioned online by services/events/notes/configure-messaging-jms.py;"
         echo "# the jms.* knobs feed it. jdbc/BladeAnalytics points at YOUR database:"
         echo "# the password lives in this file as an ENC() secret, and the schema is"
-        echo "# yours to create once (services/analytics/sql/)."
+        echo "# yours to create once (services/analytics/sql/<Dialect>-database-schema.sql),"
+        echo "# then <Dialect>-analytics-views.sql, re-run after every upgrade."
         echo "jms.quota.bytes=${JMS_QUOTA_BYTES}"
         echo "jms.event.ttl.millis=${JMS_EVENT_TTL}"
         echo "jms.redelivery.limit=${JMS_REDELIVERY}"
@@ -4867,8 +4870,9 @@ do_jms() {
 # the engine cluster AND the AdminServer (the analytics sink in the admin EAR
 # needs the datasource in the AdminServer's JNDI too). The dialect picks the
 # driver, transaction protocol and test SQL; URL and credentials come from the
-# profile ('db' page). The schema is NEVER created here — it lives in the
-# operator's database; the hand-off command is printed on success. Credentials
+# profile ('db' page). The schema and its views are NEVER created here — they
+# live in the operator's database; the hand-off (schema once, views after every
+# upgrade) is printed on success. Credentials
 # reach WLST through the environment, never through the script file or argv.
 do_dbc() {
     if [ -z "$DB_URL" ]; then
@@ -4954,7 +4958,9 @@ PYDS
     if printf '%s' "$out" | grep -q "DATASOURCE_READY"; then
         printf '%s\n' "$out" | grep "DATASOURCE_READY" | sed 's/^/  /'
         ok "jdbc/BladeAnalytics ready on BEA_ENGINE_TIER_CLUST + AdminServer."
-        log "  ${C_DIM}Schema is yours: run services/analytics/sql/$(case "$DB_DIALECT" in mysql) echo MySQL;; oracle) echo Oracle;; mssql) echo MSSQL;; esac)-database-schema.sql against ${DB_URL} once.${C_RESET}"
+        local dialect; dialect="$(case "$DB_DIALECT" in mysql) echo MySQL;; oracle) echo Oracle;; mssql) echo MSSQL;; esac)"
+        log "  ${C_DIM}Schema is yours: run services/analytics/sql/${dialect}-database-schema.sql against ${DB_URL} once,${C_RESET}"
+        log "  ${C_DIM}then services/analytics/sql/${dialect}-analytics-views.sql, and the views file again after every upgrade.${C_RESET}"
         return 0
     fi
     warn "data-source creation FAILED:"

@@ -54,6 +54,26 @@ job_failed() {
     return 1
 }
 
+# The REST API keeps every finished deployment job as a progress object and, at
+# MAX_PROGRESS of them, refuses the next with HTTP 400 "Max count reached". The
+# refusal is not harmless on a redeploy: seen on ashburn 2026-09-27, eighteen
+# existing applications were REMOVED and never put back, taking the admin tier
+# down. So count first, and refuse before WebLogic can. Nothing here clears them;
+# that is an operator's call (Remote Console, or a restart of the AdminServer).
+MAX_PROGRESS=20
+refuse_if_full() {
+    local c n
+    c=$(req "$BASE/domainRuntime/deploymentManager/deploymentProgressObjects?fields=name&links=none")
+    [ "$c" = 200 ] || return 0
+    n=$(grep -o '"name"' "$body" | wc -l | tr -d ' ')
+    if [ "$n" -ge "$MAX_PROGRESS" ]; then
+        echo "  REFUSED: the AdminServer holds $n finished deployment jobs (its REST limit is $MAX_PROGRESS)." >&2
+        echo "  A deploy now is refused, and a redeploy would remove $NAME without putting it back." >&2
+        echo "  Clear them, or deploy on the admin box with the wlst engine (BLADE_DEPLOY_ENGINE=wlst)." >&2
+        exit 1
+    fi
+}
+
 print_messages() {  # concise: the last few distinct deploy messages + any failure detail
     # JSON escapes embedded quotes as \" — swap to a placeholder so a message
     # (which itself contains "quoted" words) can be grabbed whole, then restore.
@@ -105,6 +125,7 @@ case "$ACTION" in
 
   deploy)
     [ -f "$SOURCE" ] || { echo "  source not found: $SOURCE" >&2; exit 1; }
+    refuse_if_full
     # exists → redeploy (keeps targets); else create with the requested targets.
     code=$(req "$BASE/edit/$RES/$NAME?fields=name&links=none")
     [ "$code" = 000 ] && { echo "  could not connect to $WLS_ADMINURL" >&2; exit 3; }

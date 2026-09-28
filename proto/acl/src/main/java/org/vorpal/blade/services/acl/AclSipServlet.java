@@ -24,7 +24,6 @@
 package org.vorpal.blade.services.acl;
 
 import java.io.IOException;
-import java.util.Enumeration;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServlet;
@@ -33,8 +32,11 @@ import javax.servlet.sip.SipServletListener;
 import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
+import org.vorpal.blade.framework.v3.events.BladeEventTypes;
+import org.vorpal.blade.framework.v3.events.Events;
 
 /**
  * @author Jeff McDonald
@@ -54,65 +56,22 @@ public class AclSipServlet extends SipServlet implements SipServletListener {
 	@Override
 	protected void doRequest(SipServletRequest request) throws ServletException, IOException {
 
-		sipLogger.info("request.getServletContext().getServletContextName: "
-				+ request.getServletContext().getServletContextName());
-
-		sipLogger.info("request.getServletContext().getContextPath: " + request.getServletContext().getContextPath());
-
-		String attribute;
-		Object value;
-		Enumeration<String> e;
-
-		e = request.getServletContext().getAttributeNames();
-		while (e.hasMoreElements()) {
-			attribute = e.nextElement();
-			value = request.getServletContext().getAttribute(attribute);
-			sipLogger.info("Request attribute " + attribute + "=" + value.toString());
-		}
-
-		e = request.getServletContext().getInitParameterNames();
-		while (e.hasMoreElements()) {
-			attribute = e.nextElement();
-			value = request.getServletContext().getInitParameter(attribute);
-			sipLogger.info("Request initParameter " + attribute + "=" + value.toString());
-		}
-
-		sipLogger.info("request.getSession().getLocalParty: " + request.getSession().getLocalParty());
-		sipLogger.info("request.getSession().getRemoteParty: " + request.getSession().getRemoteParty());
-		sipLogger.info("request.getSession().getServletContext().getServletContextName: "
-				+ request.getSession().getServletContext().getServletContextName());
-
-		sipLogger.info("getInitialPoppedRoute: " + request.getInitialPoppedRoute());
-		sipLogger.info("getPoppedRoute: " + request.getPoppedRoute());
-		sipLogger.info("getRegion: " + request.getRegion());
-		sipLogger.info("getRequestURI: " + request.getRequestURI());
-		sipLogger.info("getRoutingDirective: " + request.getRoutingDirective());
-		sipLogger.info("getSubscriberURI: " + request.getSubscriberURI());
-		sipLogger.info("getAttributeNames: " + request.getAttributeNames());
-		sipLogger.info("getLocale: " + request.getLocale());
-		sipLogger.info("getLocales: " + request.getLocales());
-		sipLogger.info("getLocalName: " + request.getLocalName());
-		sipLogger.info("getParameterNames: " + request.getParameterNames());
-		sipLogger.info("getRemoteAddr: " + request.getRemoteAddr());
-		sipLogger.info("getRemoteHost: " + request.getRemoteHost());
-		sipLogger.info("getRemotePort: " + request.getRemotePort());
-		sipLogger.info("getServerName: " + request.getServerName());
-		sipLogger.info("getServerPort: " + request.getServerPort());
-		sipLogger.info("getAcceptLanguage: " + request.getAcceptLanguage());
-		sipLogger.info("getAttributeNames: " + request.getAttributeNames());
-		sipLogger.info("getFrom: " + request.getFrom());
-		sipLogger.info("getHeaderNameList: " + request.getHeaderNameList());
-		sipLogger.info("getRemoteUser: " + request.getRemoteUser());
-		sipLogger.info("getTo: " + request.getTo());
-		sipLogger.info("getUserPrincipal: " + request.getUserPrincipal());
-
 		AclRule.Permission permission = configManager.getCurrent().evaulate(request.getRemoteAddr());
-		sipLogger.info("Permission: " + permission);
+		if (sipLogger.isLoggable(java.util.logging.Level.FINE)) {
+			sipLogger.fine(request, "AclSipServlet - " + request.getMethod() + " from " + request.getRemoteAddr()
+					+ ": " + permission);
+		}
 
 		if (AclRule.Permission.allow == permission) {
 			request.getProxy().proxyTo(request.getRequestURI());
 		} else {
 			request.createResponse(403).send();
+			Events.publish(BladeEventTypes.SIP_DENIED, request.getRemoteAddr(), data -> data
+					.put("method", request.getMethod())
+					.put("sourceAddress", request.getRemoteAddr())
+					.put("from", String.valueOf(request.getFrom()))
+					.put("requestUri", String.valueOf(request.getRequestURI()))
+					.put("node", SettingsManager.getServerName()));
 		}
 
 	}

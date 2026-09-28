@@ -67,6 +67,34 @@ public class AccessEvent implements Serializable {
 		}
 	}
 
+	private AccessEvent(String actor, String action, String resourceKind, String resourceId, String rule) {
+		this.actor = actor;
+		this.action = action;
+		this.resourceKind = resourceKind;
+		this.resourceId = resourceId;
+		this.allowed = true;
+		this.decision = "permit";
+		this.rule = rule;
+		this.reason = null;
+	}
+
+	/// A grant made by the container rather than by an access policy: the
+	/// caller reached a page or API that a WebLogic role guards, and nothing in
+	/// BLADE evaluated anything. Recorded all the same, because what an access
+	/// review wants is who looked at what, not which mechanism let them.
+	///
+	/// @param actor        the authenticated caller
+	/// @param action       what they did, e.g. `phi:list`, `admin:trace`,
+	///                     `admin:logs`
+	/// @param resourceKind what sort of thing, e.g. `catalog`, `trace`, `log`
+	/// @param resourceId   which one: an identifier or a query, never content
+	/// @param role         the container role the grant rests on, as the
+	///                     record's `rule`
+	public static AccessEvent granted(String actor, String action, String resourceKind, String resourceId,
+			String role) {
+		return new AccessEvent(actor, action, resourceKind, resourceId, "role:" + role);
+	}
+
 	/// The client address the request arrived from, when the caller knows it.
 	public AccessEvent from(String address) {
 		this.sourceAddress = address;

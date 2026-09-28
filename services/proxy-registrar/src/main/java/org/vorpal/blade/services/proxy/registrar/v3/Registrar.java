@@ -17,11 +17,17 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
+import org.vorpal.blade.framework.v3.events.BladeEventTypes;
+import org.vorpal.blade.framework.v3.events.Events;
 
 public class Registrar implements Serializable {
 	private static final long serialVersionUID = -9141916534493575461L;
 	public Map<String, ContactInfo> contactsMap = new HashMap<>();
+
+	/// The address of record these contacts belong to, for the events.
+	private String aor;
 	private static Logger sipLogger = Callflow.getSipLogger();
 
 	private int expires(SipServletRequest registerRequest, Address contact) {
@@ -69,6 +75,7 @@ public class Registrar implements Serializable {
 
 		SipApplicationSession appSession = registerRequest.getApplicationSession();
 		List<Address> contacts = registerRequest.getAddressHeaderList("Contact");
+		aor = String.valueOf(registerRequest.getTo().getURI());
 
 		// add or remove contacts
 		int expires;
@@ -83,12 +90,16 @@ public class Registrar implements Serializable {
 //					sipLogger.finer(registerRequest, "Registrar.updateContacts - put strUri=" + strUri + ", contact="
 //							+ copiedAddress + ", expires=" + expires);
 //				}
-				contactsMap.put(strUri, new ContactInfo(copiedAddress, expiration(expires)));
+				if (contactsMap.put(strUri, new ContactInfo(copiedAddress, expiration(expires))) == null) {
+					added(strUri, expires);
+				}
 			} else {
 //				if (sipLogger.isLoggable(Level.FINER)) {
 //					sipLogger.finer(registerRequest, "Registrar.updateContacts - remove strUri=" + strUri);
 //				}
-				contactsMap.remove(strUri);
+				if (contactsMap.remove(strUri) != null) {
+					removed(strUri, "unregistered");
+				}
 			}
 		}
 
@@ -106,6 +117,7 @@ public class Registrar implements Serializable {
 //				}
 
 				itr.remove();
+				removed(entry.getKey(), "expired");
 			}
 		}
 
@@ -220,4 +232,36 @@ public class Registrar implements Serializable {
 		return response;
 	}
 
+	/// The application session is expiring: it was set to outlive the longest
+	/// contact, so whatever is still here lapsed without a REGISTER. Without
+	/// this, an address that simply went quiet never produced a removal.
+	public void lapsed() {
+		long now = System.currentTimeMillis();
+		Iterator<Entry<String, ContactInfo>> itr = contactsMap.entrySet().iterator();
+		while (itr.hasNext()) {
+			Entry<String, ContactInfo> entry = itr.next();
+			if (entry.getValue().getExpiration() <= now) {
+				itr.remove();
+				removed(entry.getKey(), "expired");
+			}
+		}
+	}
+
+	/// A contact this address did not have. A refresh of one it has is not
+	/// news, so it is not published.
+	private void added(String contact, int expires) {
+		String address = aor;
+		Events.publish(BladeEventTypes.REGISTRATION_ADDED, address, data -> data
+				.put("aor", address).put("contact", contact).put("expires", expires)
+				.put("node", SettingsManager.getServerName()));
+	}
+
+	/// A contact gone: `unregistered` by an Expires 0, or `expired`, noticed
+	/// on the address's next REGISTER or when its session expires ([#lapsed]).
+	private void removed(String contact, String reason) {
+		String address = aor;
+		Events.publish(BladeEventTypes.REGISTRATION_REMOVED, address, data -> data
+				.put("aor", address).put("contact", contact).put("reason", reason)
+				.put("node", SettingsManager.getServerName()));
+	}
 }

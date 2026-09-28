@@ -45,7 +45,12 @@ Schema DDL generation is off by design. Three dialects ship —
 `SchemaAgreementTest`, which also checks each against the entities. `install.sh` creates
 the data source for you (the "Analytics database" page + "Create the analytics data
 source" row, or headless `./install.sh <env> datasource`); WLST helpers for provisioning
-MySQL, Oracle ADB, SQL Server, and the schema live in `notes/`. Read `package-info.java`
+MySQL, Oracle ADB, SQL Server, and the schema live in `notes/`.
+
+The reporting views (`sql/<Dialect>-analytics-views.sql`) are the contract a BI tool and
+the dashboard read, not the tables. Run the file after the schema, and again after every
+upgrade: it only replaces views and keeps every row. On Oracle ADB,
+`notes/run-oracle-schema.py` with `BLADE_VIEWS_ONLY=yes` does exactly that. Read `package-info.java`
 for the architecture.
 
 A third dialect is cheap because **no key is assigned by the database**: nothing depends

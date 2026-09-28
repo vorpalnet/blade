@@ -73,7 +73,7 @@ class FsmarMetaTest {
 	@Test
 	@DisplayName("selector types match Selector's @JsonSubTypes")
 	void selectorTypes() {
-		assertEquals(Arrays.asList("attribute", "json", "xml", "sdp", "regex", "table"),
+		assertEquals(Arrays.asList("attribute", "json", "xml", "sdp", "regex", "table", "identity"),
 				FsmarMeta.SELECTOR_TYPES);
 	}
 

@@ -12,14 +12,14 @@ import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import java.security.Principal;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.management.JMX;
 import javax.management.MBeanServer;
 import javax.management.ObjectInstance;
 import javax.management.ObjectName;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
-import java.security.Principal;
-import java.util.concurrent.ConcurrentHashMap;
 
 import javax.websocket.CloseReason;
 import javax.websocket.HandshakeResponse;
@@ -40,6 +40,7 @@ import org.vorpal.blade.framework.cors.SameOriginFilter;
 import org.vorpal.blade.framework.io.VersionedFileStore;
 import org.vorpal.blade.framework.v2.config.ConfigPublisher;
 import org.vorpal.blade.framework.v2.config.SettingsMXBean;
+import org.vorpal.blade.framework.v3.events.ConfigEvents;
 
 @ServerEndpoint(value = "/websocket", configurator = FileManagerServlet.Handshake.class)
 public class FileManagerServlet {
@@ -161,6 +162,7 @@ public class FileManagerServlet {
 				String saveName = jsonNode.get("fileName").asText();
 				String saveText = jsonNode.get("content").asText();
 				saveTextFile(saveName, saveText);
+				saved(session, "_templates/" + saveName, "saved");
 				sendMessageToSession(session, createMessage("text_file_saved", saveName));
 				break;
 
@@ -169,6 +171,7 @@ public class FileManagerServlet {
 				String saveFile = jsonNode.get("file").asText();
 				String saveContent = jsonNode.get("content").asText();
 				saveConfigFile(saveFile, saveContent);
+				saved(session, saveFile, "saved");
 				sendMessageToSession(session, createMessage("save_success", "File saved successfully"));
 				break;
 
@@ -183,6 +186,7 @@ public class FileManagerServlet {
 				String restoreFile = jsonNode.get("file").asText();
 				String versionTimestamp = jsonNode.get("timestamp").asText();
 				String restoredContent = restoreVersion(restoreFile, versionTimestamp);
+				saved(session, restoreFile, "restored");
 				sendMessageToSession(session, createMessage("version_restored", restoredContent));
 				break;
 
@@ -214,6 +218,7 @@ public class FileManagerServlet {
 					sendMessageToSession(session, createMessage("error", "Invalid path"));
 				} else {
 					String rvContent = restoreVersion(rvPath.toString(), jsonNode.get("timestamp").asText());
+					saved(session, "_templates/" + restoreName, "restored");
 					sendMessageToSession(session,
 							createMessage("text_version_restored", textVersionPayload(restoreName, rvContent)));
 				}
@@ -791,6 +796,12 @@ public class FileManagerServlet {
 			}
 			return null;
 		}
+	}
+
+	/// Record who changed which file ([ConfigEvents#saved]).
+	private static void saved(Session session, String file, String change) {
+		Principal user = session.getUserPrincipal();
+		ConfigEvents.saved((user == null) ? null : user.getName(), file, "configurator", change);
 	}
 
 	private static Access access(Session session) {

@@ -69,6 +69,10 @@ public class ProxyInvite extends Callflow {
 								+ response.getStatus() + ", isBranchResponse=" + response.isBranchResponse());
 					}
 
+					if (this.proxyListener != null) {
+						this.proxyListener.proxyResponse(response, proxyPlan);
+					}
+
 					// this should probably go in 'proxyRequest'
 					this.expectRequest(inboundRequest.getApplicationSession(), ACK, (ack) -> {
 						if (sipLogger.isLoggable(Level.FINER)) {

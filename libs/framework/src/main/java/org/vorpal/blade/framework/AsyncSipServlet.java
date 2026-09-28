@@ -302,7 +302,7 @@ public abstract class AsyncSipServlet extends SipServlet
 
 				logSystemConfiguration(event);
 
-				if (analyticsEnabled()) {
+				if (publishing()) {
 					// Before the load balancer sends any SIP to this node, so the
 					// fact is on the bus ahead of any session that references it.
 					Analytics.applicationStart();
@@ -403,11 +403,10 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// looks-like-no-events-yet failure the catalog was built to abolish,
 	/// reappearing one layer down.
 	///
-	/// Opt-in per app through the `"events"` config block, for the same reason
-	/// analytics is: an app that does not publish should not hold a JMS
-	/// connection open. Never fatal — a bus that cannot be reached must not stop
-	/// an application from answering calls, so this logs and carries on exactly
-	/// as the analytics publisher does.
+	/// Decided by the `"events"` config block ([EventBus#reconcile]): unset
+	/// publishes when the bus is provisioned and stays silent when it is not.
+	/// Never fatal: a bus that cannot be reached must not stop an application
+	/// from answering calls.
 	private void initializeEventBus() {
 		EventBusSettings settings = SettingsManager.getEventBus();
 		if (settings == null) {
@@ -419,37 +418,13 @@ public abstract class AsyncSipServlet extends SipServlet
 					+ "servletCreated. Nothing this application publishes will reach the bus.");
 			return;
 		}
-		// Analytics publishes through this same bus, so its switch turns the bus
-		// on too. Requiring both would mean an app with analytics enabled and
-		// events not could extract every attribute, build every event, and
-		// publish exactly nothing — with no error anywhere, because
-		// EventBus.publish is a deliberate no-op when no publisher is
-		// registered. One system, so one thing to turn on.
-		boolean enabled = Boolean.TRUE.equals(settings.isEnabled()) || analyticsEnabled();
-
 		// Register the meters BEFORE the publisher exists, so a publisher this
 		// call creates and any publisher a later config reload rebuilds are
 		// both counted. Attaching them afterwards counted only the first one.
 		meterEventBus();
 
-		try {
-			boolean changed = EventBus.reconcilePublisher(enabled, settings.getConnectionFactoryJndi(),
-					settings.getDestinationJndi());
-			if (enabled) {
-				sipLogger.info("AsyncSipServlet.initializeEventBus - publishing to "
-						+ settings.getDestinationJndi() + (changed ? "" : " (already open)"));
-			} else {
-				// Say it. An application whose bus is off looked exactly like
-				// one whose bus was broken: no line here, and publishing is a
-				// deliberate no-op further down, so nothing ever reported it.
-				sipLogger.info("AsyncSipServlet.initializeEventBus - DISABLED. Nothing this application"
-						+ " produces will be published; set \"events\": {\"enabled\": true} to change that.");
-			}
-		} catch (Exception e) {
-			sipLogger.severe("AsyncSipServlet.initializeEventBus - cannot reach the event bus. Ensure "
-					+ settings.getConnectionFactoryJndi() + " and " + settings.getDestinationJndi()
-					+ " are provisioned. Publishing will be a no-op until they are.");
-		}
+		Analytics analytics = SettingsManager.getAnalytics();
+		EventBus.reconcile(settings, analytics != null && Boolean.TRUE.equals(analytics.isEnabled()));
 	}
 
 	/// Counts this app's bus publishes in its metrics registry, beside the SIP
@@ -621,7 +596,7 @@ public abstract class AsyncSipServlet extends SipServlet
 				SettingsManager.sendEvent(servletStopped, initialSipServletContextEvent);
 			}
 
-			if (analyticsEnabled()) {
+			if (publishing()) {
 				Analytics.applicationStop();
 			}
 
@@ -701,6 +676,12 @@ public abstract class AsyncSipServlet extends SipServlet
 					String indexKey = Callflow.getVorpalSessionId(request);
 					if (indexKey != null) {
 						appSession.addIndexKey(indexKey);
+					}
+					// Every application that handles a call opens its session here,
+					// proxies and media anchors as much as a B2BUA; see
+					// Analytics.SESSION_STATE for how it is closed.
+					if (INVITE.equals(method)) {
+						Analytics.sessionStart(request);
 					}
 					break;
 				}
@@ -944,14 +925,29 @@ public abstract class AsyncSipServlet extends SipServlet
 		onSessionCreated(event);
 	}
 
+	/// Final: closes this application's analytics session if no callflow did
+	/// ([Analytics#sessionClose]), then runs the hook.
 	@Override
 	public final void sessionDestroyed(SipApplicationSessionEvent event) {
+		closeSession(event);
 		onSessionDestroyed(event);
 	}
 
+	/// Final: closes this application's analytics session if no callflow did
+	/// ([Analytics#sessionClose]), then runs the hook. The attributes are still
+	/// readable here, which they may not be by `sessionDestroyed`.
 	@Override
 	public final void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
+		closeSession(event);
 		onSessionReadyToInvalidate(event);
+	}
+
+	private static void closeSession(SipApplicationSessionEvent event) {
+		try {
+			Analytics.sessionClose((event == null) ? null : event.getApplicationSession());
+		} catch (Throwable t) {
+			// A lost stop must never fail the container's session cleanup.
+		}
 	}
 
 	/// Overridable hook, invoked when a SipApplicationSession expires, before the
@@ -1143,9 +1139,12 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// and copy named regex groups onto the sessions.
 	/// Whether this application's own configuration has analytics switched on.
 	/// The publisher being non-null is not the same question.
-	private static boolean analyticsEnabled() {
-		Analytics analytics = SettingsManager.getAnalytics();
-		return analytics != null && Boolean.TRUE.equals(analytics.isEnabled());
+	/// Whether this application publishes: a publisher is up
+	/// ([EventBus#reconcile] decided). The same test `SettingsManager.collecting()`
+	/// makes, so the application's start, its sessions' keys and its call facts
+	/// all go out together or not at all.
+	private static boolean publishing() {
+		return EventBus.isReady();
 	}
 
 	protected static void applyOriginSelectors(SipServletRequest request, SipApplicationSession appSession,
@@ -1185,11 +1184,12 @@ public abstract class AsyncSipServlet extends SipServlet
 				// retransmission: the correlator, the selector id and the matched
 				// value are the same every time.
 				//
-				// Gated on this application's own analytics.enabled, and nothing
-				// else. It used to be gated on a static publisher reference being
-				// non-null as well — per-WAR state set by whichever code path ran
-				// first, not a statement about what this app was configured to do.
-				if (analyticsEnabled()) {
+				// Gated on this application's own configuration ([#publishing]),
+				// and nothing else. It used to be gated on a static publisher
+				// reference being non-null as well — per-WAR state set by
+				// whichever code path ran first, not a statement about what this
+				// app was configured to do.
+				if (publishing()) {
 					Analytics.sessionKey(appSession, selector.getId(), rr.key);
 				}
 			}
@@ -1894,15 +1894,17 @@ public abstract class AsyncSipServlet extends SipServlet
 		String hashedString = hash(stringToHash);
 		SipApplicationSession appSession = sipUtil.getApplicationSessionByKey(hashedString, true);
 
-		String existingHashKey = (String) appSession.getAttribute(HASHKEY);
+		// The session stores the key it was created for, not the hash: the hash
+		// is what found it, so comparing hashes would always match.
+		String existingKey = (String) appSession.getAttribute(HASHKEY);
 
-		if (existingHashKey == null) {
+		if (existingKey == null) {
 			// this is good because the AppSession did not previously exist
-			appSession.setAttribute(HASHKEY, hashedString);
-		} else if (!existingHashKey.equals(hashedString)) {
-			// this is bad because the hash keys collide;
+			appSession.setAttribute(HASHKEY, stringToHash);
+		} else if (!existingKey.equals(stringToHash)) {
+			// this is bad because two keys hash to the same session
 			sipLogger.severe("@SipApplicationKey hash key collision. SipApplicationSession.id: " + appSession.getId()
-					+ " collides with " + existingHashKey + " and " + hashedString);
+					+ ", hash " + hashedString + " is shared by " + existingKey + " and " + stringToHash);
 			appSession.setAttribute(HASHKEY_COLLISION, true);
 		}
 

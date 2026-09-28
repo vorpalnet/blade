@@ -33,6 +33,7 @@ import javax.naming.NameNotFoundException;
 import javax.naming.NamingException;
 
 import org.vorpal.blade.framework.v2.config.SettingsMXBean;
+import org.vorpal.blade.framework.v3.events.ConfigEvents;
 
 public class ConfigurationMonitor extends Thread {
 
@@ -281,15 +282,17 @@ public class ConfigurationMonitor extends Thread {
 
 //							if ((kind == ENTRY_CREATE || kind == ENTRY_MODIFY)
 //									&& false == Files.isDirectory(child, NOFOLLOW_LINKS)) {
-								if (kind == ENTRY_MODIFY //
+								// A new file counts as much as a changed one: a config
+								// created for an application that ran on its sample is
+								// the first one it has ever had.
+								if ((kind == ENTRY_MODIFY || kind == ENTRY_CREATE) //
 										&& false == Files.isDirectory(child, NOFOLLOW_LINKS)) {
 
-//									System.out.println("ConfigurationMonitor sleeping for 500");
-									Thread.sleep(1000); // prevent processing multiple MODIFY events on the same file
+									Thread.sleep(1000); // let the writer finish before reading
 
 									String filename = child.getFileName().toString();
 
-									if (filename.endsWith(".json")) {
+									if (filename.endsWith(".json") && firstSightOf(child)) {
 
 										String json = null;
 										try {
@@ -344,6 +347,22 @@ public class ConfigurationMonitor extends Thread {
 
 	}
 
+	/// Modification times already pushed, by file. One save arrives as two
+	/// events (the truncate and the write, or a create and a modify), and each
+	/// used to push the file to every server and reload it, twice.
+	private final java.util.Map<Path, Long> pushed = new java.util.concurrent.ConcurrentHashMap<>();
+
+	/// True the first time a file is seen at its current modification time.
+	private boolean firstSightOf(Path file) {
+		try {
+			long modified = Files.getLastModifiedTime(file).toMillis();
+			Long previous = pushed.put(file, modified);
+			return previous == null || previous.longValue() != modified;
+		} catch (IOException gone) {
+			return false;
+		}
+	}
+
 	public void updateManagedMBeans(Path path, String json) {
 		System.out.println("Begin... ConfigurationMonitor.updateManagedMBeans path=" + path);
 
@@ -364,6 +383,8 @@ public class ConfigurationMonitor extends Thread {
 		InitialContext ctx = null;
 		ObjectName objectName = null;
 		MBeanServer mbeanServer = null;
+		java.util.List<String> pushedTo = new java.util.ArrayList<>();
+		java.util.List<String> failed = new java.util.ArrayList<>();
 		if (domain || cluster || server) {
 
 			try {
@@ -458,12 +479,20 @@ public class ConfigurationMonitor extends Thread {
 
 						System.out.println("ConfigurationMonitor.updateManagedMBeans invoking reload()");
 						settings.reload();
+						pushedTo.add(String.valueOf(name.getKeyProperty("Location")));
 						} catch (Exception mbeanEx) {
 							System.out.println("ConfigurationMonitor.updateManagedMBeans MBean skipped ("
 									+ mbeanEx.getClass().getSimpleName() + "): " + mbeanEx.getMessage());
+							failed.add(String.valueOf(mbean.getObjectName().getKeyProperty("Location")));
 						}
 					}
 				}
+
+				// Every change seen, whoever made it: an editor, a restore, or a
+				// hand edit on this server that no editor could have recorded.
+				String relative = domain ? filename : (cluster ? "_clusters/" : "_servers/") + parent + "/" + filename;
+				ConfigEvents.published(relative, appName, domain ? "domain" : (cluster ? "cluster" : "server"),
+						pushedTo, failed);
 
 			} catch (NameNotFoundException e) {
 				System.out.println(e.getMessage());

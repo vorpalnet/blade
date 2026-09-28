@@ -12,8 +12,10 @@ import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipSession.State;
 
 import org.vorpal.blade.framework.v2.b2bua.Terminate;
-import org.vorpal.blade.framework.v3.Callflow;
 import org.vorpal.blade.framework.v2.callflow.Expectation;
+import org.vorpal.blade.framework.v3.Callflow;
+import org.vorpal.blade.framework.v3.events.BladeEventTypes;
+import org.vorpal.blade.framework.v3.events.Events;
 import org.vorpal.blade.services.queue.config.QueueAttributes;
 
 public class QueueCallflow extends Callflow {
@@ -22,6 +24,12 @@ public class QueueCallflow extends Callflow {
 	public SipServletRequest mediaRequest;
 	public String ringingPeriodTimer;
 	public String queueId;
+
+	/// When the caller joined, for `waitedMs`; how many times they have been
+	/// offered to the destination; and whether their leaving was published.
+	private long enteredAt;
+	private int attempts;
+	private boolean left;
 
 	public enum QueueState {
 		CANCELED, RINGING, MEDIA_RINGING, MEDIA_CONNECTED
@@ -50,6 +58,7 @@ public class QueueCallflow extends Callflow {
 
 				stopTimers();
 				setState(QueueState.CANCELED);
+				abandoned("caller");
 
 				// Try to CANCEL or BYE any outbound requests;
 				sipLogger.finer(inboundRequest,
@@ -109,6 +118,7 @@ public class QueueCallflow extends Callflow {
 													}
 													sendRequest(mediaRequest.createCancel());
 													setState(QueueState.CANCELED);
+													abandoned("caller");
 												});
 
 										setState(QueueState.MEDIA_RINGING);
@@ -148,7 +158,12 @@ public class QueueCallflow extends Callflow {
 			// the cancel expectation is armed. Only now is it safe for the drain
 			// timer (Queue.queueTask -> complete()) to pull this callflow.
 			// addFirst + pollLast = FIFO: newest at the head, drain from the tail.
-			QueueServlet.queues.get(queueId).callflows.addFirst(this);
+			Queue queue = QueueServlet.queues.get(queueId);
+			queue.callflows.addFirst(this);
+			enteredAt = System.currentTimeMillis();
+			int depth = queue.callflows.size();
+			Events.publish(aliceRequest.getApplicationSession(), BladeEventTypes.QUEUE_ENTERED,
+					data -> data.put("queue", queueId).put("depth", depth));
 
 		} catch (Exception ex) {
 			sipLogger.severe(aliceRequest,
@@ -202,6 +217,10 @@ public class QueueCallflow extends Callflow {
 
 					if (false == this.stateEquals(QueueState.CANCELED)) {
 						stopTimers();
+						attempts++;
+						int attempt = attempts;
+						Events.publish(appSession, BladeEventTypes.QUEUE_RELEASED, data -> data
+								.put("queue", queueId).put("waitedMs", waited()).put("attempt", attempt));
 
 						SipServletRequest bobRequest = sipFactory.createRequest(appSession, INVITE, //
 								aliceRequest.getFrom(), //
@@ -220,6 +239,7 @@ public class QueueCallflow extends Callflow {
 									}
 									sendRequest(bobRequest.createCancel());
 									setState(QueueState.CANCELED);
+									abandoned("caller");
 
 								} catch (Exception ex) {
 
@@ -273,6 +293,7 @@ public class QueueCallflow extends Callflow {
 										sendRequest(mediaRequest.getSession().createRequest(BYE));
 										sendRequest(aliceRequest.getSession().createRequest(BYE));
 										setState(QueueState.CANCELED);
+										abandoned("refused");
 									}
 								}
 							});
@@ -289,6 +310,7 @@ public class QueueCallflow extends Callflow {
 												"QueueCallflow.complete - Expcectation cancelWhileCalingBob invoked...");
 										sendRequest(bobRequest.createCancel());
 										setState(QueueState.CANCELED);
+										abandoned("caller");
 									});
 
 							sendRequest(copyContentAndHeaders(aliceRequest, bobRequest), (bobResponse) -> {
@@ -327,6 +349,24 @@ public class QueueCallflow extends Callflow {
 			sipLogger.finer(aliceRequest, "QueueCallflow.complete - Invalid SipSession. Nothing to do.");
 		}
 
+	}
+
+	/// Publish [BladeEventTypes#QUEUE_ABANDONED], once, however the caller left.
+	///
+	/// @param reason `caller` when they hung up, `refused` when the destination
+	///               refused for good
+	void abandoned(String reason) {
+		if (left) {
+			return;
+		}
+		left = true;
+		SipApplicationSession appSession = (aliceRequest == null) ? null : aliceRequest.getApplicationSession();
+		Events.publish(appSession, BladeEventTypes.QUEUE_ABANDONED,
+				data -> data.put("queue", queueId).put("waitedMs", waited()).put("reason", reason));
+	}
+
+	private long waited() {
+		return (enteredAt == 0) ? 0 : System.currentTimeMillis() - enteredAt;
 	}
 
 	public QueueState getState() {

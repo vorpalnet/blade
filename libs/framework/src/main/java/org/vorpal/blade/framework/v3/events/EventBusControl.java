@@ -114,14 +114,14 @@ public final class EventBusControl implements EventBusControlMXBean {
 							: subscriber.getSelector())
 					.append('\n');
 
-			org.vorpal.blade.framework.v3.metrics.Counter.Series[] meters = EventBus.metersFor(name);
+			EventBus.SubscriberMeters meters = EventBus.metersFor(name);
 			if (meters != null) {
 				// `failed` is the one to read. Each message it counts was rolled
 				// back and redelivered, and a message that keeps failing ends up
 				// on the error destination below.
-				status.append("      received=").append(value(meters[0]))
-						.append(" handled=").append(value(meters[1]))
-						.append(" failed=").append(value(meters[2]))
+				status.append("      received=").append(value(meters.received))
+						.append(" handled=").append(value(meters.handled))
+						.append(" failed=").append(value(meters.failed))
 						.append('\n');
 			}
 		}

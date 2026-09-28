@@ -65,6 +65,9 @@ class BladeEventCatalogTest {
 		for (EventType type : BladeEventCatalog.conversationTypes()) {
 			declared.add(type.getType());
 		}
+		for (EventType type : BladeEventCatalog.operationsTypes()) {
+			declared.add(type.getType());
+		}
 		return declared;
 	}
 
@@ -98,10 +101,12 @@ class BladeEventCatalogTest {
 
 		assertEquals(constants, declared.size(),
 				"BladeEventCatalog declares a type that BladeEventTypes does not name");
-		// 25 = application start/stop, session start/stop/key, the eleven call and
+		// 49 = application start/stop, session start/stop/key, the eleven call and
 		// transfer types + CALL_EVENT, the risk pair, the utterance, the voice
-		// assessment, the party request, the access pair, and CONVERSATION_CLOSED.
-		assertEquals(25, constants, "a type was added or removed without updating the taxonomy");
+		// assessment, the party request, the review, the disposition, the nine
+		// service call types, the access pair, CONVERSATION_CLOSED, ROOM_MEMBER
+		// and the twelve operations types.
+		assertEquals(49, constants, "a type was added or removed without updating the taxonomy");
 	}
 
 	/// Every framework event name resolves to a type the catalog declares.
@@ -210,7 +215,7 @@ class BladeEventCatalogTest {
 			// what the generated source has to get right.
 			assertTrue(mdb.contains("\"" + type.getType() + "\""),
 					type.getType() + " is not in the generated consumer's type list");
-			assertTrue(mdb.contains("SubscriptionRegistrar.start(event.getServletContext(), SUBSCRIPTION,"),
+			assertTrue(mdb.contains("SubscriptionRegistrar.named(SUBSCRIPTION).types(TYPES)"),
 					type.getType() + " consumer does not start its own subscription");
 			assertTrue(mdb.contains("on" + type.effectiveJavaClassName() + "(CloudEvent event"),
 					type.getType() + " has no handler stub");
@@ -254,21 +259,28 @@ class BladeEventCatalogTest {
 	}
 
 	@Test
-	@DisplayName("the call-event attribute array is declarable, which a free-form map would not be")
-	void callEventAttributesAreDeclared() {
-		EventType callEvent = null;
+	@DisplayName("a call-scoped payload is flat, typed, and admits the configured attributes")
+	void callScopedPayloadIsFlat() {
 		for (EventType type : BladeEventCatalog.analyticsTypes()) {
-			if (BladeEventTypes.CALL_EVENT.equals(type.getType())) {
-				callEvent = type;
+			JsonNode schema = EventSourceGenerator.schema(type, MAPPER);
+			assertFalse(schema.path("properties").has("attributes"),
+					type.getType() + " still declares the name/value attribute array");
+			assertFalse(schema.path("additionalProperties").isBoolean()
+					&& !schema.path("additionalProperties").asBoolean(),
+					type.getType() + " would reject an attribute the analytics configuration extracted");
+		}
+
+		EventType utterance = null;
+		for (EventType type : BladeEventCatalog.analyticsTypes()) {
+			if (BladeEventTypes.CALL_UTTERANCE.equals(type.getType())) {
+				utterance = type;
 			}
 		}
-		assertNotNull(callEvent);
-
-		JsonNode attributes = EventSourceGenerator.schema(callEvent, MAPPER).path("properties").path("attributes");
-		assertEquals("array", attributes.path("type").asText());
-		assertEquals("object", attributes.path("items").path("type").asText());
-		assertTrue(attributes.path("items").path("properties").has("name"));
-		assertTrue(attributes.path("items").path("properties").has("value"));
+		assertNotNull(utterance);
+		JsonNode properties = EventSourceGenerator.schema(utterance, MAPPER).path("properties");
+		assertEquals("string", properties.path("text").path("type").asText());
+		assertEquals("integer", properties.path("startMs").path("type").asText());
+		assertEquals(Integer.valueOf(2), utterance.getVersion());
 	}
 
 	@Test

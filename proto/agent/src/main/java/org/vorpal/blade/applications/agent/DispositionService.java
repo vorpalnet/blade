@@ -1,17 +1,10 @@
 package org.vorpal.blade.applications.agent;
 
 import java.util.Locale;
-import java.util.function.Supplier;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
-import org.vorpal.blade.framework.v2.analytics.Analytics;
-import org.vorpal.blade.framework.v3.events.AnalyticsEvent;
-import org.vorpal.blade.framework.v3.events.CloudEvent;
-import org.vorpal.blade.framework.v3.events.EventBus;
+import org.vorpal.blade.framework.v3.events.BladeEventTypes;
+import org.vorpal.blade.framework.v3.events.Events;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /// What an agent's "Update" does: records one disposition of one call. An
 /// outcome (legitimate, suspected scam, confirmed scam, robocall, wrong number,
@@ -28,38 +21,27 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 ///  2. **Catalog label**, when the call has a recorded conversation: a
 ///     `BLADE_LABEL` row, the catalog's label store and the ground truth a fraud
 ///     score is calibrated against.
-///  3. **The event**: one `agentDisposition` analytics event carrying every
-///     field, keyed to the call's analytics session, so the sink stores it beside
-///     the call and [Catalog#history] reads it back for the next pop. When the
-///     call is not known to this node (a console dispositioning a call another
-///     node popped) it goes out as a plain CloudEvent on the bus instead, which
-///     is audited but not indexed by session.
+///  3. **The event**: one [BladeEventTypes#CALL_DISPOSITIONED] carrying every
+///     field, correlated to the call, so the sink stores it beside the call and
+///     [Catalog#history] reads it back for the next pop.
 ///
 /// Outcome maps to a treatment the same way proxy-block's sample does:
 /// harassment goes to a review voicemail, robocall to a tarpit, scam is declined.
 public final class DispositionService {
 
-	private static final Logger LOG = Logger.getLogger(DispositionService.class.getName());
-	private static final ObjectMapper MAPPER = new ObjectMapper();
 
-	/// The analytics event name, and the `type` the sink files it under.
+	/// The name the analytics sink files [BladeEventTypes#CALL_DISPOSITIONED]
+	/// under, which [Catalog] selects on.
 	public static final String EVENT = "agentDisposition";
-
-	/// CloudEvent type for the fallback publish. Deliberately not under the
-	/// framework's reserved `org.vorpal.blade.` prefix.
-	public static final String FALLBACK_TYPE = "com.vorpal.agent.disposition";
 
 	/// The one action that writes the block list.
 	public static final String ACTION_BLOCK = "block";
 
 	private final Catalog catalog;
 	private final int expiryDays;
-	private final Supplier<Analytics> analytics;
-
-	public DispositionService(Catalog catalog, int expiryDays, Supplier<Analytics> analytics) {
+	public DispositionService(Catalog catalog, int expiryDays) {
 		this.catalog = catalog;
 		this.expiryDays = expiryDays;
-		this.analytics = analytics;
 	}
 
 	/// The treatment an outcome maps to (see proxy-block's block-list treatments).
@@ -117,66 +99,35 @@ public final class DispositionService {
 	}
 
 	private boolean publish(Disposition d, String outcome, String treatment, boolean blocked, String agent) {
-		try {
-			AgentConsoleRegistry.CallRef call = AgentConsoleRegistry.callRef(d.vorpalId);
-			Analytics a = (analytics == null) ? null : analytics.get();
-			if (call != null && a != null) {
-				AnalyticsEvent event = new AnalyticsEvent(EVENT, call.vorpalId, call.startedAt);
-				put(event, "outcome", outcome);
-				put(event, "identity", d.identity);
-				put(event, "action", d.action);
-				put(event, "notes", d.notes);
-				put(event, "reasons", d.reasons);
-				if (d.face != null) {
-					put(event, "face", String.valueOf(d.face));
-				}
-				put(event, "treatment", treatment);
-				put(event, "blocked", String.valueOf(blocked));
-				put(event, "agent", agent);
-				put(event, "ani", d.ani);
-				a.sendEvent(event);
-				return true;
-			}
-			if (!EventBus.isReady()) {
-				return false;
-			}
-			ObjectNode data = MAPPER.createObjectNode();
-			data.put("outcome", outcome);
-			if (d.identity != null) {
-				data.put("identity", d.identity);
-			}
-			if (d.action != null) {
-				data.put("action", d.action);
-			}
-			if (d.notes != null) {
-				data.put("notes", d.notes);
-			}
-			if (d.reasons != null) {
-				data.put("reasons", d.reasons);
-			}
-			if (d.face != null) {
-				data.put("face", d.face);
-			}
-			if (d.ani != null) {
-				data.put("ani", d.ani);
-			}
-			if (d.vorpalId != null) {
-				data.put("vorpalId", d.vorpalId);
-			}
-			data.put("treatment", treatment);
-			data.put("blocked", blocked);
-			data.put("agent", agent == null ? "?" : agent);
-			EventBus.publish(CloudEvent.create(FALLBACK_TYPE, "/agent", d.vorpalId != null ? d.vorpalId : d.ani, data));
-			return true;
-		} catch (Throwable t) {
-			LOG.log(Level.FINE, "agent: disposition not published: " + t.getMessage());
-			return false;
-		}
+		// This node's record of the call gives the correlator and its birth
+		// instant. A call another node popped is known here only by its hex id;
+		// published without a birth instant, the sink files it under that id's
+		// open session.
+		AgentConsoleRegistry.CallRef call = AgentConsoleRegistry.callRef(d.vorpalId);
+		Long vorpalId = (call != null) ? call.vorpalId : parseHex(d.vorpalId);
+		java.util.Date startedAt = (call != null) ? call.startedAt : null;
+		return Events.publish(vorpalId, startedAt, BladeEventTypes.CALL_DISPOSITIONED, data -> data
+				.put("outcome", outcome)
+				.put("treatment", treatment)
+				.put("blocked", blocked)
+				.put("agent", (agent == null) ? "?" : agent)
+				.put("identity", blank(d.identity))
+				.put("action", blank(d.action))
+				.put("notes", blank(d.notes))
+				.put("reasons", blank(d.reasons))
+				.put("face", d.face)
+				.put("ani", blank(d.ani)));
 	}
 
-	private static void put(AnalyticsEvent event, String name, String value) {
-		if (value != null && !value.isEmpty()) {
-			event.addAttribute(name, value);
+	private static String blank(String value) {
+		return (value == null || value.isEmpty()) ? null : value;
+	}
+
+	private static Long parseHex(String vorpalIdHex) {
+		try {
+			return (vorpalIdHex == null) ? null : Long.valueOf(Long.parseLong(vorpalIdHex, 16));
+		} catch (NumberFormatException e) {
+			return null;
 		}
 	}
 

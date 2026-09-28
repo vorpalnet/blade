@@ -162,7 +162,7 @@ public class EventPublisher {
 	/// @throws NamingException if a JNDI lookup fails
 	/// @throws JMSException    if the connection cannot be created or started
 	public void init() throws NamingException, JMSException {
-		InitialContext ctx = new InitialContext();
+		InitialContext ctx = EventBus.context();
 		factory = (ConnectionFactory) ctx.lookup(connectionFactoryJndi);
 		destination = (Destination) ctx.lookup(destinationJndi);
 		connection = factory.createConnection();

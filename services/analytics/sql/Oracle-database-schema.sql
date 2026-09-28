@@ -164,8 +164,8 @@ CREATE INDEX idx_event_session ON events(session_id, created);
 CREATE INDEX idx_event_type_created ON events(type, created);
 CREATE INDEX idx_event_created ON events(created);
 
--- Attribute values arrive as strings and are stored as strings, faithful to the
--- wire. The reader's common question is numeric, so the conversion lives in an
+-- Values are numbers, or numeric strings in rows written before the flat
+-- payload. The reader's common question is numeric, so the conversion lives in an
 -- index rather than in every query.
 CREATE INDEX idx_event_risk ON events(JSON_VALUE(payload, '$.riskScore' RETURNING NUMBER));
 

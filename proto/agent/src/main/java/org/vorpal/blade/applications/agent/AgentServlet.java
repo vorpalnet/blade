@@ -16,6 +16,8 @@ import javax.servlet.sip.annotation.SipServlet;
 import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v3.B2buaServlet;
+import org.vorpal.blade.framework.v3.events.AccessEvent;
+import org.vorpal.blade.framework.v3.events.Events;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -83,8 +85,7 @@ public class AgentServlet extends B2buaServlet {
 	public static DispositionService dispositions() {
 		AgentSettings s = settings();
 		Catalog cat = catalog();
-		return (cat == null) ? null : new DispositionService(cat, s.getDefaultReportExpiryDays(),
-				SettingsManager::getAnalytics);
+		return (cat == null) ? null : new DispositionService(cat, s.getDefaultReportExpiryDays());
 	}
 
 	// ============================================================ the B2BUA bridge
@@ -201,6 +202,14 @@ public class AgentServlet extends B2buaServlet {
 			// reached nobody is the first thing to look for.
 			sipLogger.info("agent: pop vorpalId=" + pop.vorpalId + " ani=" + pop.ani + " risk=" + pop.riskBand
 					+ " -> " + how);
+			// The pop shows the caller's earlier calls, what they said on them
+			// included, so it is a read of call content like any other and the
+			// access log records it. The actor is the agent it reached, or every
+			// open console when it broadcast.
+			if (pop.history != null && !pop.history.recent.isEmpty()) {
+				Events.publish(AccessEvent.granted(reached > 0 ? agentId : "broadcast", "phi:transcript",
+						"callerHistory", pop.ani, "agent-console").toCloudEvent(Events.source()));
+			}
 		} catch (Exception e) {
 			sipLogger.log(Level.FINE, "agent: could not serialize/broadcast pop for " + pop.vorpalId, e);
 		}

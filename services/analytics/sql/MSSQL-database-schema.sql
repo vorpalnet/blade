@@ -197,8 +197,8 @@ CREATE INDEX idx_event_type_created ON events(type, created);
 CREATE INDEX idx_event_created ON events(created);
 GO
 
--- Attribute values arrive as strings and are stored as strings, faithful to the
--- wire. The reader's common question is numeric, so the conversion lives in a
+-- Values are numbers, or numeric strings in rows written before the flat
+-- payload. The reader's common question is numeric, so the conversion lives in a
 -- persisted computed column rather than in every query — SQL Server cannot
 -- index a JSON_VALUE expression directly, so it is materialised first.
 --
