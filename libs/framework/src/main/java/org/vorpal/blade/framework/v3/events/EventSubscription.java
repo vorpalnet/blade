@@ -170,6 +170,28 @@ public class EventSubscription implements Serializable {
 		return (sb.length() > MAX_SELECTOR_LENGTH) ? null : sb.toString();
 	}
 
+	/// A selector for every call event (see [EventPublisher#PROP_CALL]) except
+	/// the listed types; null when the list is too long for a selector, so the
+	/// consumer takes everything and filters in code.
+	public static String callEventsSelector(List<String> except) {
+		StringBuilder sb = new StringBuilder(128);
+		sb.append(EventPublisher.PROP_CALL).append(" = TRUE");
+		if (except != null && !except.isEmpty()) {
+			if (except.size() > MAX_SELECTOR_TYPES) {
+				return null;
+			}
+			sb.append(" AND ").append(EventPublisher.PROP_TYPE).append(" NOT IN (");
+			for (int i = 0; i < except.size(); i++) {
+				if (i > 0) {
+					sb.append(", ");
+				}
+				sb.append("'").append(except.get(i)).append("'");
+			}
+			sb.append(")");
+		}
+		return (sb.length() > MAX_SELECTOR_LENGTH) ? null : sb.toString();
+	}
+
 	/// Why [#selector] came out the way it did, in one sentence, so the generated
 	/// source can say which branch was taken instead of leaving the reader to
 	/// infer it from an annotation that is present or absent.

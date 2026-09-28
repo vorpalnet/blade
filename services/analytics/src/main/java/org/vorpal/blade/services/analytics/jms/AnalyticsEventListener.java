@@ -183,7 +183,7 @@ public class AnalyticsEventListener implements EventSubscriber.Handler {
 			int written = 0;
 			for (CloudEvent event : batch) {
 				String type = event.getType();
-				if (!AnalyticsCatalog.persists(type)) {
+				if (!AnalyticsCatalog.persists(event)) {
 					// Should be rare now that the selector filters at the
 					// broker: this is the window between an operator clearing
 					// a `persist` flag and the subscription being rebuilt.

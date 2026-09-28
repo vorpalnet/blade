@@ -394,6 +394,16 @@ ignore, and each subscribing application receives its own copy. The event
 catalog, itself ordinary BLADE configuration, declares each type's fields and
 lets an operator change what a running subscriber hears.
 
+An application may define its own types. Name each one under a prefix the
+application owns (`com.example.shuffle.fraudScored`); the last segment becomes
+the analytics database's `type` column. A call event, one published with the
+call's application session, is stored in the analytics database with no further
+step. Describe the types in the WAR as `WEB-INF/blade-events.json`, an object
+with a `types` list in the catalog's shape. The framework publishes that file
+to the domain when the application deploys, and the Events console lists the
+types under the application that declares them. Nobody copies them into
+`events.json`; an operator adds one there only to override it.
+
 *More:* [events service README](services/events/README.md)
 
 ---

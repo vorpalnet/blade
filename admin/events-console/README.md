@@ -5,7 +5,9 @@ One place for BLADE messaging, served at `/blade/events`. Three tools in one con
 - **Event catalog** — declare the domain's event types; the catalog lives at
   `config/custom/vorpal/events.json` and is written through the framework's
   `VersionedFileStore`, exactly the mechanism the [Flow editor](../flow/README.md) uses
-  for `fsmar.json`, so there is no second publish path to maintain.
+  for `fsmar.json`, so there is no second publish path to maintain. Beside it, read-only, the types
+  applications declare themselves in `WEB-INF/blade-events.json`, found across the domain;
+  a type in both follows the catalog.
 - **Code designer** — generate producer and consumer source from an event declaration.
 - **JMS administration** — the WebLogic resources that carry the events: destinations,
   quotas, durable subscriptions, depths, and consumers.

@@ -21,6 +21,11 @@
     <listener>
         <listener-class>org.vorpal.blade.framework.v3.probe.KernelProbeRegistrar</listener-class>
     </listener>
+    <!-- Publishes the application's own event types (WEB-INF/blade-events.json)
+         to the domain, so they need no copy in events.json. -->
+    <listener>
+        <listener-class>org.vorpal.blade.framework.v3.events.EventDeclarations</listener-class>
+    </listener>
 
     <!-- Cross-origin filter for REST endpoints. No-op until an operator sets
          -Dblade.cors.allowedOrigins=<origin>[,<origin>...]; then it grants

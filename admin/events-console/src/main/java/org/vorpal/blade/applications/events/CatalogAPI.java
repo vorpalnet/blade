@@ -92,6 +92,52 @@ public class CatalogAPI {
 		}
 	}
 
+	/// The event types applications declare themselves, in their WARs'
+	/// `WEB-INF/blade-events.json`, found across the domain.
+	///
+	/// One entry per application: an application deployed to many servers
+	/// declares the same types on each, so the servers are listed rather than
+	/// the declarations repeated. The published `events.json` wins for any type
+	/// it also declares; the console shows these beside it, read-only.
+	@GET
+	@Path("/application-types")
+	@Produces(MediaType.APPLICATION_JSON)
+	public Response applicationTypes() {
+		try {
+			java.util.Map<String, ObjectNode> byApplication = new java.util.TreeMap<>();
+			javax.naming.InitialContext ctx = new javax.naming.InitialContext();
+			javax.management.MBeanServer mbs;
+			try {
+				mbs = (javax.management.MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
+			} finally {
+				ctx.close();
+			}
+			javax.management.ObjectName pattern = new javax.management.ObjectName(
+					"vorpal.blade:Type=EventDeclarations,*");
+			for (javax.management.ObjectName name : mbs.queryNames(pattern, null)) {
+				String application = (String) mbs.getAttribute(name, "Application");
+				String server = name.getKeyProperty("Location");
+				ObjectNode entry = byApplication.get(application);
+				if (entry == null) {
+					entry = MAPPER.createObjectNode();
+					entry.put("application", application);
+					entry.putArray("servers");
+					String catalog = (String) mbs.getAttribute(name, "Catalog");
+					entry.set("types", MAPPER.readTree(catalog).path("types"));
+					byApplication.put(application, entry);
+				}
+				if (server != null) {
+					((com.fasterxml.jackson.databind.node.ArrayNode) entry.get("servers")).add(server);
+				}
+			}
+			com.fasterxml.jackson.databind.node.ArrayNode body = MAPPER.createArrayNode();
+			byApplication.values().forEach(body::add);
+			return ok(body);
+		} catch (Exception e) {
+			return error(Response.Status.INTERNAL_SERVER_ERROR, String.valueOf(e));
+		}
+	}
+
 	/// Publish a catalog. Validated by round-tripping it through the model
 	/// before anything touches disk.
 	///

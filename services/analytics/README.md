@@ -12,9 +12,11 @@ The service has two halves:
 
 - **The JMS sink.** `AnalyticsEventListener` is a message-driven bean holding the durable
   `analytics-db` subscription on the shared BLADE CloudEvents bus (see
-  [services/events](../events/README.md)). It subscribes with no message selector and
-  decides per message whether to persist, driven by the event catalog's `persist` flags —
-  failing open, so an unknown event type is stored rather than dropped. Rows are written
+  [services/events](../events/README.md)). The broker filters for it: the framework's
+  types, any type the catalog marks `persist`, and every call event, declared or not, so an
+  application's new call event is stored without an `events.json` edit. A type the catalog
+  marks `"persist": false` is left out, and an event about no call is stored only when
+  declared. It waits to subscribe until the database answers. Rows are written
   through JPA. No key is assigned by the database: every id is a hash of the row's
   natural key, computed before the insert, so two cluster members writing the same call
   agree without consulting each other and a redelivered event collides with its own row.

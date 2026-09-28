@@ -47,6 +47,10 @@ public final class SubscriptionRegistrar {
 	/// Consume only while this holds; null for always. See [Builder#when].
 	private java.util.function.BooleanSupplier when;
 
+	/// Also take every call event but these types; null for off. See
+	/// [Builder#callEventsExcept].
+	private Supplier<List<String>> callEventsExcept;
+
 	/// Whether "not provisioned" has been said, so it is said once.
 	private volatile boolean notProvisionedSaid;
 	private Thread watchdog;
@@ -90,6 +94,7 @@ public final class SubscriptionRegistrar {
 		private boolean durable = true;
 		private int batchSize = 1;
 		private java.util.function.BooleanSupplier when;
+		private Supplier<List<String>> callEventsExcept;
 
 		private Builder(String name) {
 			this.name = name;
@@ -149,6 +154,16 @@ public final class SubscriptionRegistrar {
 			return this;
 		}
 
+		/// Also take every call event, of any type, except the types `except`
+		/// names (asked again on every reconcile). A call event is one about a
+		/// single call, marked by its publisher; this is how the analytics sink
+		/// persists an application's own call events without a catalog
+		/// declaration, while an operator can still switch a type off.
+		public Builder callEventsExcept(Supplier<List<String>> except) {
+			this.callEventsExcept = except;
+			return this;
+		}
+
 		/// Subscribe now and keep the subscription matching the catalog until
 		/// [SubscriptionRegistrar#stop].
 		///
@@ -163,7 +178,7 @@ public final class SubscriptionRegistrar {
 			boolean coded = durable;
 			if (computed != null) {
 				return SubscriptionRegistrar.start(subscriptionName, computed, () -> coded, handler, batchSize,
-						EventSubscriber.DEFAULT_BATCH_MILLIS, when);
+						EventSubscriber.DEFAULT_BATCH_MILLIS, when, callEventsExcept);
 			}
 			List<String> built = (types == null) ? java.util.Collections.<String>emptyList() : types;
 			Supplier<List<String>> wanted = () -> {
@@ -180,7 +195,7 @@ public final class SubscriptionRegistrar {
 				return (declared == null) ? coded : declared.isDurable();
 			};
 			return SubscriptionRegistrar.start(subscriptionName, wanted, durability, handler, batchSize,
-					EventSubscriber.DEFAULT_BATCH_MILLIS, when);
+					EventSubscriber.DEFAULT_BATCH_MILLIS, when, callEventsExcept);
 		}
 	}
 
@@ -222,11 +237,12 @@ public final class SubscriptionRegistrar {
 
 	private static SubscriptionRegistrar start(String subscriptionName, Supplier<List<String>> types,
 			java.util.function.BooleanSupplier durable, EventSubscriber.Handler handler, int batchSize,
-			long batchMillis, java.util.function.BooleanSupplier when) {
+			long batchMillis, java.util.function.BooleanSupplier when, Supplier<List<String>> callEventsExcept) {
 
 		SubscriptionRegistrar registrar = new SubscriptionRegistrar(subscriptionName, types, durable, handler,
 				batchSize, batchMillis);
 		registrar.when = when;
+		registrar.callEventsExcept = callEventsExcept;
 		registrar.running = true;
 
 		// Reconcile once synchronously, so the log line reports the state the
@@ -278,7 +294,7 @@ public final class SubscriptionRegistrar {
 			}
 			List<String> wanted = types.get();
 
-			if (wanted == null || wanted.isEmpty()) {
+			if ((wanted == null || wanted.isEmpty()) && callEventsExcept == null) {
 				// Stop consuming rather than subscribe with no selector. They
 				// are opposite meanings that would otherwise collide here: an
 				// empty type list is an operator saying "none", while a null
@@ -292,7 +308,7 @@ public final class SubscriptionRegistrar {
 				return;
 			}
 
-			String selector = selectorFor(subscriptionName, wanted);
+			String selector = selectorFor(subscriptionName, wanted, callEventsExcept);
 
 			boolean rebuilt = EventBus.reconcileSubscriber(subscriptionName, EventBus.CONNECTION_FACTORY_JNDI,
 					EventBus.TOPIC_JNDI, selector, durable.getAsBoolean(), handler, batchSize, batchMillis);
@@ -309,12 +325,14 @@ public final class SubscriptionRegistrar {
 			}
 
 			if (rebuilt || announce) {
+				int count = (wanted == null) ? 0 : wanted.size();
 				info("events: '" + subscriptionName + "' subscribed to " + EventBus.TOPIC_JNDI + ", "
 						+ (selector == null
-								? "taking every event and filtering in code (" + wanted.size()
+								? "taking every event and filtering in code (" + count
 										+ " types wanted, too many for a selector)"
-								: "filtering at the broker for " + wanted.size() + " event type"
-										+ (wanted.size() == 1 ? "" : "s"))
+								: "filtering at the broker for " + count + " event type"
+										+ (count == 1 ? "" : "s")
+										+ (callEventsExcept == null ? "" : " and every call event"))
 						+ (live == null ? "" : "; consumers=" + live.getConsumerCount()));
 			}
 		} catch (Throwable t) {
@@ -348,14 +366,30 @@ public final class SubscriptionRegistrar {
 	/// so every consumer's selector is produced by the code that also decides
 	/// what the publisher stamps. A selector written twice is a selector that
 	/// eventually disagrees.
-	private static String selectorFor(String subscriptionName, List<String> types) {
-		if (types == null || types.isEmpty()) {
+	///
+	/// With `callEventsExcept`, the named types OR any call event not excepted.
+	/// Either half too large for a selector makes the whole null: the consumer
+	/// then takes everything and filters in code.
+	static String selectorFor(String subscriptionName, List<String> types,
+			Supplier<List<String>> callEventsExcept) {
+		String named = null;
+		if (types != null && !types.isEmpty()) {
+			EventSubscription subscription = new EventSubscription(subscriptionName);
+			subscription.setSelectorMode(SelectorMode.DERIVED);
+			subscription.setTypes(types);
+			named = subscription.selector();
+			if (named == null) {
+				return null;
+			}
+		}
+		if (callEventsExcept == null) {
+			return named;
+		}
+		String calls = EventSubscription.callEventsSelector(callEventsExcept.get());
+		if (calls == null) {
 			return null;
 		}
-		EventSubscription subscription = new EventSubscription(subscriptionName);
-		subscription.setSelectorMode(SelectorMode.DERIVED);
-		subscription.setTypes(types);
-		return subscription.selector();
+		return (named == null) ? calls : "(" + named + ") OR (" + calls + ")";
 	}
 
 	/// Logging that works in an application with no SIP servlet.

@@ -47,7 +47,8 @@ public class AnalyticsSubscription implements ServletContextListener {
 		// Only once somebody has set up the database; until then, nothing is
 		// subscribed and nothing is logged beyond one line saying so.
 		registrar = SubscriptionRegistrar.named(BladeEventCatalog.ANALYTICS_SUBSCRIPTION)
-				.typesFrom(AnalyticsCatalog::persistedTypes).batch(BATCH_SIZE)
+				.typesFrom(AnalyticsCatalog::persistedTypes).callEventsExcept(AnalyticsCatalog::switchedOff)
+				.batch(BATCH_SIZE)
 				.when(DatabaseProbe::configured)
 				.start(event.getServletContext(), handler);
 	}

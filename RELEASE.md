@@ -1,6 +1,22 @@
 # BLADE Release Notes
 
-## 3.0.7 (unreleased)
+## 3.0.7 (2026-09-28)
+
+### Event bus: an application's events need no catalog edit
+
+- The analytics sink stores every call event, declared or not. The publisher marks an event
+  about one call with a JMS property (`eventCall`), and the sink's broker selector takes the
+  framework's types, the types `events.json` marks `persist`, and every call event except a
+  type the catalog marks `"persist": false`. An event about no call is still stored only when
+  declared. Before this, an application's new call event reached the bus and was never written
+  until someone added it to `events.json`. The mark comes from the framework in each WAR, so
+  an application built against an earlier framework does not carry it.
+- An application declares its own types in its WAR as `WEB-INF/blade-events.json`, in the
+  catalog's shape. The framework publishes the file when the application deploys, as the
+  MBean `vorpal.blade:Type=EventDeclarations,Name=<application>`, and the Events console lists
+  the types under the application that declares them. `events.json` still wins for a type it
+  also declares.
+
 
 ### Event bus: publishes where it is provisioned, silent where it is not
 

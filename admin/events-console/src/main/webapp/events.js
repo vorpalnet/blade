@@ -91,10 +91,46 @@ var events = (function () {
 				? 'Published catalog, read from config/custom/vorpal/events.json.'
 				: 'No catalog published yet — showing the event types the framework itself emits.';
 			pill(catalog.published ? 'Catalog published' : 'Defaults');
+			loadApplicationTypes(types);
 			return loadDrift();
 		}).catch(function (e) {
 			pill('Error');
 			el('catalog-source').textContent = String(e);
+		});
+	}
+
+	/** Types applications declare in their WARs, beside the catalog's own. */
+	function loadApplicationTypes(catalogTypes) {
+		var inCatalog = {};
+		catalogTypes.forEach(function (t) { inCatalog[t.type] = true; });
+		return getJson(API + '/catalog/application-types').then(function (apps) {
+			if (!Array.isArray(apps)) { throw new Error(apps && apps.error ? apps.error : 'unexpected reply'); }
+			var body = rows('app-types-table');
+			body.innerHTML = '';
+			var count = 0;
+			apps.forEach(function (app) {
+				(app.types || []).forEach(function (t) {
+					count++;
+					var tr = document.createElement('tr');
+					tr.innerHTML =
+						'<td><code>' + esc(t.type) + '</code></td>' +
+						'<td>' + esc(text(t.title)) + '</td>' +
+						'<td>' + esc(app.application) +
+						(app.servers && app.servers.length ? ' <span class="ev-muted">(' + esc(app.servers.join(', ')) + ')</span>' : '') +
+						'</td>' +
+						'<td>' + (t.persist ? 'Yes' : 'No') + '</td>' +
+						num((t.fields || []).length) +
+						'<td>' + (inCatalog[t.type] ? 'Overridden' : 'Not listed') + '</td>';
+					body.appendChild(tr);
+				});
+			});
+			el('app-type-count').textContent = count + (count === 1 ? ' type' : ' types');
+			el('app-types-empty').hidden = count > 0;
+		}).catch(function (e) {
+			el('app-type-count').textContent = 'Error';
+			var empty = el('app-types-empty');
+			empty.hidden = false;
+			empty.textContent = 'Could not read the applications\' declarations: ' + String(e);
 		});
 	}
 

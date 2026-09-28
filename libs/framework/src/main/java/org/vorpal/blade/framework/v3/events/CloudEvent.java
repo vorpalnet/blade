@@ -184,6 +184,14 @@ public class CloudEvent implements Serializable {
 	/// `attributes`.
 	///
 	/// @return a copy, never null; empty when the event has no object payload
+	/// Whether this event is about one call: its payload carries the call's
+	/// `vorpalId`, which [Events] puts there for every event published with an
+	/// application session or correlator.
+	@JsonIgnore
+	public boolean isCallScoped() {
+		return data != null && data.hasNonNull("vorpalId");
+	}
+
 	@JsonIgnore
 	public ObjectNode fields() {
 		ObjectNode fields = MAPPER.createObjectNode();

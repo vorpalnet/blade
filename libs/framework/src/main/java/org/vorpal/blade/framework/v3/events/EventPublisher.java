@@ -75,6 +75,12 @@ public class EventPublisher {
 	/// the producer predates versioning or the type is undeclared.
 	public static final String PROP_VERSION = "eventVersion";
 
+	/// JMS boolean-property name, true on an event about one call (see
+	/// [CloudEvent#isCallScoped]). Lets a consumer select every call event,
+	/// including types it has never heard of: the analytics sink persists them
+	/// without a catalog declaration.
+	public static final String PROP_CALL = "eventCall";
+
 	/// How many sessions a publisher retains between sends. Sized for the number
 	/// of threads realistically publishing at once on one engine node, not for
 	/// the number of threads that exist.
@@ -191,7 +197,8 @@ public class EventPublisher {
 
 	/// Publish a CloudEvent. The envelope is serialized to JSON and sent as a
 	/// `TextMessage`; `type`, `subject`, `id`, and `dataversion` are copied into
-	/// JMS properties for selector-based routing and version checks.
+	/// JMS properties for selector-based routing and version checks, and a call
+	/// event is marked with [#PROP_CALL].
 	///
 	/// @param event the event to publish
 	/// @throws JMSException        if the send fails
@@ -213,6 +220,9 @@ public class EventPublisher {
 				}
 				if (event.getDataversion() != null) {
 					message.setIntProperty(PROP_VERSION, event.getDataversion().intValue());
+				}
+				if (event.isCallScoped()) {
+					message.setBooleanProperty(PROP_CALL, true);
 				}
 				sender.producer.send(message);
 			} finally {

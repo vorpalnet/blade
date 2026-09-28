@@ -82,6 +82,37 @@
 
 			<div class="ev-panel" style="margin-top:1rem">
 				<header>
+					<span>Declared by applications</span>
+					<span id="app-type-count" class="vorpal-pill">—</span>
+				</header>
+				<div class="ev-body">
+					<p class="ev-muted">
+						Types an application ships in its WAR as
+						<code>WEB-INF/blade-events.json</code>. They need no copy above;
+						a type declared above as well follows the catalog. Call events are
+						stored whether declared or not.
+					</p>
+					<table class="ev-table" id="app-types-table">
+						<thead>
+							<tr>
+								<th>Type</th>
+								<th>Title</th>
+								<th>Application</th>
+								<th>Stored</th>
+								<th class="ev-num">Fields</th>
+								<th>Catalog</th>
+							</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+					<div id="app-types-empty" class="ev-empty ev-muted" hidden>
+						No running application declares its own event types.
+					</div>
+				</div>
+			</div>
+
+			<div class="ev-panel" style="margin-top:1rem">
+				<header>
 					<span>Catalog versus the running domain</span>
 					<span id="drift-count" class="vorpal-pill">—</span>
 				</header>
