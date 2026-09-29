@@ -16,9 +16,15 @@ import java.util.regex.Pattern;
 /// Values a caller reads out and a transcript must not hand to everyone who
 /// may read the words: card numbers, social security numbers, phone numbers,
 /// account and member identifiers, numeric dates. Each is a named kind with a
-/// regular expression, matched against the text the recognizer produced. The
-/// recognizers in use write numbers as digits, so "four one one one" arrives
-/// as `4111`, and a value is matched the way it was written.
+/// regular expression, matched against the text the recognizer produced.
+///
+/// The expressions are written for digits, yet recognizers do not agree on how
+/// they write a number read out digit by digit: one writes `4111`, another
+/// "four one one one", and a multilingual one "cuatro uno uno uno". So the
+/// rules run over a view of the text in which each digit word, English or
+/// Spanish, stands as its digit, and every span found is mapped back onto the
+/// words as they were written. Without the view, a card number the recognizer
+/// spelled out would pass through unredacted.
 ///
 /// A card number is the one kind with a test beyond its shape: a run of
 /// thirteen to nineteen digits is a card only if its check digit agrees,
@@ -169,21 +175,97 @@ public final class Redactor {
 		if (text == null || text.isEmpty() || isEmpty()) {
 			return found;
 		}
-		List<Rule> all = new ArrayList<>(phrases);
-		all.addAll(rules);
-		for (Rule rule : all) {
+		// Known values are matched as written; the shape rules over the digit view.
+		for (Rule rule : phrases) {
 			Matcher m = rule.pattern.matcher(text);
 			while (m.find()) {
-				if ("card".equals(rule.kind) && !luhn(m.group())) {
-					continue;
-				}
 				if (!overlaps(found, m.start(), m.end())) {
 					found.add(new Utterance.Redaction(rule.kind, m.start(), m.end()));
 				}
 			}
 		}
+		DigitView view = DigitView.of(text);
+		for (Rule rule : rules) {
+			Matcher m = rule.pattern.matcher(view.text);
+			while (m.find()) {
+				if ("card".equals(rule.kind) && !luhn(m.group())) {
+					continue;
+				}
+				int from = view.from[m.start()];
+				int to = view.to[m.end() - 1];
+				if (!overlaps(found, from, to)) {
+					found.add(new Utterance.Redaction(rule.kind, from, to));
+				}
+			}
+		}
 		found.sort((a, b) -> Integer.compare(a.getFrom(), b.getFrom()));
 		return found;
+	}
+
+	/// The text with each digit word replaced by its digit, and for every
+	/// character of the view the span of original text it stands for.
+	static final class DigitView {
+
+		private static final Pattern DIGIT_WORD = Pattern.compile("(?iu)(?<![\\p{L}])(zero|oh|one|two|three|four|five|six"
+				+ "|seven|eight|nine|cero|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve)(?![\\p{L}])");
+
+		private static final Map<String, Character> DIGITS = new java.util.HashMap<>();
+		static {
+			String[][] words = {{"zero", "oh", "cero"}, {"one", "uno", "una"}, {"two", "dos"}, {"three", "tres"},
+					{"four", "cuatro"}, {"five", "cinco"}, {"six", "seis"}, {"seven", "siete"}, {"eight", "ocho"},
+					{"nine", "nueve"}};
+			for (int d = 0; d < words.length; d++) {
+				for (String w : words[d]) {
+					DIGITS.put(w, (char) ('0' + d));
+				}
+			}
+		}
+
+		final String text;
+		final int[] from; // view index -> start of what it stands for in the original
+		final int[] to;   // view index -> end of what it stands for in the original
+
+		private DigitView(String text, int[] from, int[] to) {
+			this.text = text;
+			this.from = from;
+			this.to = to;
+		}
+
+		static DigitView of(String original) {
+			StringBuilder b = new StringBuilder(original.length());
+			int[] from = new int[original.length()];
+			int[] to = new int[original.length()];
+			int at = 0;
+			boolean afterDigitWord = false;
+			Matcher m = DIGIT_WORD.matcher(original);
+			while (m.find()) {
+				// Digit words read one after another join up, the way a recognizer
+				// writes 8165550142, so the phone and SSN shapes match as well as
+				// the general number rule: the spaces between them fold into the
+				// digit before. Any other word in the gap keeps them apart.
+				boolean joins = afterDigitWord && original.substring(at, m.start()).trim().isEmpty();
+				if (joins) {
+					to[b.length() - 1] = m.start();
+				} else {
+					for (int i = at; i < m.start(); i++) {
+						from[b.length()] = i;
+						to[b.length()] = i + 1;
+						b.append(original.charAt(i));
+					}
+				}
+				afterDigitWord = true;
+				from[b.length()] = m.start();
+				to[b.length()] = m.end();
+				b.append(DIGITS.get(m.group(1).toLowerCase(java.util.Locale.ROOT)));
+				at = m.end();
+			}
+			for (int i = at; i < original.length(); i++) {
+				from[b.length()] = i;
+				to[b.length()] = i + 1;
+				b.append(original.charAt(i));
+			}
+			return new DigitView(b.toString(), from, to);
+		}
 	}
 
 	/// `text` with each span replaced by its kind in brackets.

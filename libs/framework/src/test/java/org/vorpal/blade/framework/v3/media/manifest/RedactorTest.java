@@ -29,6 +29,50 @@ class RedactorTest {
 	}
 
 	@Nested
+	@DisplayName("numbers the recognizer spelled out")
+	class SpokenDigits {
+
+		@Test
+		void aCardReadOutInEnglishWords() {
+			String said = "my card is four one one one one one one one one one one one one one one one";
+			assertEquals("my card is [card]", masked(said));
+		}
+
+		@Test
+		void aMemberIdentifierInEnglishWords() {
+			assertEquals("My member I D is [number].", masked("My member I D is four five seven two nine one."));
+		}
+
+		@Test
+		void aMemberIdentifierInSpanishWords() {
+			assertEquals("Mi número de miembro es [number].",
+					masked("Mi número de miembro es cuatro cinco siete dos nueve uno."));
+		}
+
+		@Test
+		void ohReadsAsZero() {
+			assertEquals("[phone]", masked("eight one six five five five oh one four two"));
+		}
+
+		@Test
+		void theSpanCoversTheWordsAsWritten() {
+			String said = "it's Four Five Seven Two Nine One thanks";
+			Utterance.Redaction r = find(said).get(0);
+			assertEquals("Four Five Seven Two Nine One", said.substring(r.getFrom(), r.getTo()));
+		}
+
+		@Test
+		void ordinarySpeechIsLeftAlone() {
+			assertEquals("One moment, I need two weeks. Dos veces.", masked("One moment, I need two weeks. Dos veces."));
+		}
+
+		@Test
+		void mixedDigitsAndWords() {
+			assertEquals("It's [number].", masked("It's 45 seven two 91."));
+		}
+	}
+
+	@Nested
 	@DisplayName("the built-in kinds")
 	class Kinds {
 
