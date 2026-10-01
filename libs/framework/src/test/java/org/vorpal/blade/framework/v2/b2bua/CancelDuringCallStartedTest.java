@@ -41,7 +41,7 @@ import org.vorpal.blade.framework.v3.Callflow;
 class CancelDuringCallStartedTest {
 
 	/// Every request that reaches `send()`, by method, in order.
-	private static final List<String> wire = new ArrayList<>();
+	static final List<String> wire = new ArrayList<>();
 
 	/// A request whose `send()` is recorded and whose CANCEL is too.
 	static class RecordingRequest extends DetachedRequest {
@@ -241,7 +241,7 @@ class CancelDuringCallStartedTest {
 		deliver(calleeSays(180));
 
 		assertEquals(List.of("INVITE", "CANCEL"), wire);
-		assertTrue(Boolean.TRUE.equals(listener.outbound.getSession().getAttribute(InitialInvite.ATTR_CANCEL_SENT)));
+		assertTrue(Boolean.TRUE.equals(listener.outbound.getSession().getAttribute(Callflow.ATTR_CANCEL_SENT)));
 	}
 
 	@Test
@@ -260,7 +260,7 @@ class CancelDuringCallStartedTest {
 	void leavesItToTerminateWhenTerminateAlreadyCancelled() throws Exception {
 		new InitialInvite(listener).process(alice);
 		callerCancels();
-		listener.outbound.getSession().setAttribute(InitialInvite.ATTR_CANCEL_SENT, true);
+		listener.outbound.getSession().setAttribute(Callflow.ATTR_CANCEL_SENT, true);
 
 		deliver(calleeSays(180));
 

@@ -115,9 +115,9 @@ public class Terminate extends org.vorpal.blade.framework.v3.Callflow {
 							break;
 						}
 
-						// InitialInvite cancelled it already, on a provisional that
+						// endIfAbandoned cancelled it already, on a provisional that
 						// arrived before this CANCEL was dispatched.
-						if (Boolean.TRUE.equals(linkedSession.getAttribute(InitialInvite.ATTR_CANCEL_SENT))) {
+						if (Boolean.TRUE.equals(linkedSession.getAttribute(ATTR_CANCEL_SENT))) {
 							break;
 						}
 
@@ -125,8 +125,8 @@ public class Terminate extends org.vorpal.blade.framework.v3.Callflow {
 						// callee may not have answered at all yet: a caller who hangs up
 						// while callStarted is still working gets here moments after the
 						// INVITE left, and RFC 3261 9.1 bars a CANCEL before the first
-						// response. If this send fails for that reason, InitialInvite
-						// sends the CANCEL on the callee's first provisional instead.
+						// response. If this send fails for that reason, the callee's first
+						// provisional gets the CANCEL instead ([#endIfAbandoned]).
 						terminationRequest = activeInvite.createCancel();
 
 						if (request.getMethod().equals(CANCEL)) {
@@ -168,7 +168,7 @@ public class Terminate extends org.vorpal.blade.framework.v3.Callflow {
 						if (terminationRequest != null) {
 							sendRequest(terminationRequest);
 							if (terminationRequest.getMethod().equals(CANCEL)) {
-								linkedSession.setAttribute(InitialInvite.ATTR_CANCEL_SENT, true);
+								linkedSession.setAttribute(ATTR_CANCEL_SENT, true);
 							}
 						}
 					} catch (Exception ex1) {

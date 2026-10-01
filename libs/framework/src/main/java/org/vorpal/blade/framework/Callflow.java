@@ -1259,6 +1259,24 @@ public abstract class Callflow implements Serializable {
 	/// responses never stop the per-request timer, advance the hunt, or reach
 	/// `lambdaFunction`; only final responses do.
 	///
+	/// The hunt works through `requests` in place, so emptying it ends the hunt:
+	/// the request in flight runs to its final response, which goes to
+	/// `lambdaFunction`, and nothing more is sent. That is how a B2BUA stops
+	/// when its caller cancels mid-hunt:
+	///
+	/// ```java
+	/// sendRequestsInSerial(3000, requests, (response) -> {
+	///     if (callerInvite.isCommitted()) {
+	///         return;
+	///     }
+	///     ...
+	/// }, (response) -> {
+	///     if (endIfAbandoned(callerInvite, response)) {
+	///         requests.clear();
+	///     }
+	/// });
+	/// ```
+	///
 	/// @param milliseconds   timer duration in milliseconds for each request
 	/// @param requests       a list of SipServletRequest objects
 	/// @param lambdaFunction supplies the winning (or last failing) final response
@@ -1277,7 +1295,11 @@ public abstract class Callflow implements Serializable {
 		SipServletRequest request = requests.remove(0);
 		String timerId = startTimer(request.getApplicationSession(), milliseconds, false, (timeout) -> {
 			request.setAttribute(SERIAL_ABANDONED, Boolean.TRUE);
-			sendRequest(request.createCancel());
+			// endIfAbandoned may have cancelled it already; one CANCEL per INVITE
+			if (!Boolean.TRUE.equals(request.getSession().getAttribute(ATTR_CANCEL_SENT))) {
+				sendRequest(request.createCancel());
+				request.getSession().setAttribute(ATTR_CANCEL_SENT, true);
+			}
 			sendNextInSerialOrFail(milliseconds, requests, lambdaFunction, dialogResponse, request);
 		});
 
@@ -1663,6 +1685,55 @@ public abstract class Callflow implements Serializable {
 					"Callflow.sendResponse - dropping a " + response.getStatus() + " response to a CANCEL. "
 							+ "The container owns that transaction and has already answered it; sending "
 							+ "another would put a second final response on the wire.");
+		}
+		return true;
+	}
+
+	/// Set on a callee's SipSession once a CANCEL has gone out for its INVITE, by
+	/// [org.vorpal.blade.framework.v2.b2bua.Terminate] or by [#endIfAbandoned], so
+	/// that neither sends a second one.
+	public static final String ATTR_CANCEL_SENT = "cancel_sent";
+
+	/// Ends the callee's leg if the caller has already gone. Call it first in every
+	/// response callback of a callee INVITE; when it returns true, the callback is done.
+	///
+	/// A caller who cancels while the callee is ringing is answered by the container,
+	/// so `callerInvite.isCommitted()` turns true, yet the callee knows nothing of it.
+	/// The CANCEL handler cannot always tell it: RFC 3261 section 9.1 bars a CANCEL
+	/// before the callee's first response, and a caller who hangs up while a listener
+	/// is still working gets there moments after the INVITE left. So the callee's own
+	/// response finishes the job:
+	///
+	/// - a provisional gets the CANCEL, unless one already went out
+	/// - an answer that crossed the CANCEL gets an ACK and a BYE (section 9.1 again)
+	/// - a failure needs nothing, since the container acknowledges it
+	///
+	/// Without this a callee keeps ringing for a caller who is gone, and an answer
+	/// nobody relays leaves it holding a call nobody is on.
+	///
+	/// @param callerInvite   the caller's INVITE, the one the callee leg serves
+	/// @param calleeResponse a response to the callee's INVITE
+	/// @return true if the caller is gone and the callee has been dealt with
+	/// @throws ServletException if sending fails
+	/// @throws IOException      if sending fails
+	public boolean endIfAbandoned(SipServletRequest callerInvite, SipServletResponse calleeResponse)
+			throws ServletException, IOException {
+		if (!callerInvite.isCommitted()) {
+			return false;
+		}
+
+		SipSession callee = calleeResponse.getSession();
+		if (provisional(calleeResponse)) {
+			if (!Boolean.TRUE.equals(callee.getAttribute(ATTR_CANCEL_SENT))) {
+				sipLogger.fine(calleeResponse, "Callflow.endIfAbandoned - caller cancelled; cancelling callee");
+				sendRequest(calleeResponse.getRequest().createCancel());
+				callee.setAttribute(ATTR_CANCEL_SENT, true);
+			}
+		} else if (successful(calleeResponse)) {
+			sipLogger.fine(calleeResponse,
+					"Callflow.endIfAbandoned - callee answered after the caller cancelled; hanging up");
+			sendRequest(calleeResponse.createAck());
+			sendRequest(callee.createRequest(BYE));
 		}
 		return true;
 	}
