@@ -53,6 +53,10 @@ public class InitialInvite extends org.vorpal.blade.framework.v3.Callflow {
 	private static final String ATTR_X_PREVIOUS_DN = "X-Previous-DN";
 	/// Set on the SipSession of the leg this callflow placed, the callee side.
 	public static final String ATTR_INITIAL_INVITE = "initial_invite";
+	/// Set on the callee's SipSession once a CANCEL has gone out for its INVITE,
+	/// by [Terminate] or by the late-response cleanup here, so that neither sends
+	/// a second one.
+	public static final String ATTR_CANCEL_SENT = "cancel_sent";
 	private static final String ATTR_SIP_ADDRESS = "sipAddress";
 	private static final String ATTR_CALLFLOW = "callflow";
 	private static final String HEADER_SESSION_EXPIRES = "Session-Expires";
@@ -159,9 +163,28 @@ public class InitialInvite extends org.vorpal.blade.framework.v3.Callflow {
 	@Override
 	public void processContinue() throws ServletException, IOException {
 
+		// The caller hung up while callStarted was still working. A listener that
+		// waits on a web service or a database holds that window open for seconds,
+		// and a queue holds it longer. The container has already answered the CANCEL
+		// and sent the caller a 487, so calling the callee now would ring a phone
+		// nobody is on. Terminate discards the unsent leg.
+		if (aliceRequest.isCommitted()) {
+			sipLogger.fine(bobRequest,
+					"InitialInvite.processContinue - caller cancelled before the callee was called; not calling");
+			return;
+		}
+
 		sendRequest(bobRequest, (bobResponse) -> {
 
-			if (!aliceRequest.isCommitted()) {
+			if (aliceRequest.isCommitted()) {
+				// The caller cancelled after the callee's INVITE went out. Terminate
+				// cancels the callee when it can, but a CANCEL may not precede the
+				// callee's first response (RFC 3261 section 9.1), and a callee that
+				// answers as the CANCEL crosses it is owed an ACK and a BYE (section 9.1
+				// again). Whatever the callee says now, end its call.
+				endAbandonedCallee(bobResponse);
+
+			} else {
 
 //				setSessionExpiration(bobResponse);
 
@@ -239,6 +262,27 @@ public class InitialInvite extends org.vorpal.blade.framework.v3.Callflow {
 			}
 		});
 
+	}
+
+	/// Ends the callee's call after the caller has cancelled. A provisional gets
+	/// the CANCEL that Terminate could not send yet, unless one already went out;
+	/// an answer gets an ACK and a BYE; a failure needs nothing, since the
+	/// container acknowledges it.
+	private void endAbandonedCallee(SipServletResponse bobResponse) throws ServletException, IOException {
+		SipSession callee = bobResponse.getSession();
+
+		if (provisional(bobResponse)) {
+			if (!Boolean.TRUE.equals(callee.getAttribute(ATTR_CANCEL_SENT))) {
+				sipLogger.fine(bobResponse, "InitialInvite.endAbandonedCallee - caller cancelled; cancelling callee");
+				sendRequest(bobRequest.createCancel());
+				callee.setAttribute(ATTR_CANCEL_SENT, true);
+			}
+		} else if (successful(bobResponse)) {
+			sipLogger.fine(bobResponse,
+					"InitialInvite.endAbandonedCallee - callee answered after the caller cancelled; hanging up");
+			sendRequest(bobResponse.createAck());
+			sendRequest(callee.createRequest(BYE));
+		}
 	}
 
 	/**

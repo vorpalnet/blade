@@ -115,10 +115,18 @@ public class Terminate extends org.vorpal.blade.framework.v3.Callflow {
 							break;
 						}
 
+						// InitialInvite cancelled it already, on a provisional that
+						// arrived before this CANCEL was dispatched.
+						if (Boolean.TRUE.equals(linkedSession.getAttribute(InitialInvite.ATTR_CANCEL_SENT))) {
+							break;
+						}
+
 						// The INVITE is on the wire; cancel it. In the INITIAL case the
-						// transaction layer has already seen the downstream 100 Trying,
-						// which satisfies RFC 3261 9.1 even though the SipSession has
-						// not yet transitioned to EARLY.
+						// callee may not have answered at all yet: a caller who hangs up
+						// while callStarted is still working gets here moments after the
+						// INVITE left, and RFC 3261 9.1 bars a CANCEL before the first
+						// response. If this send fails for that reason, InitialInvite
+						// sends the CANCEL on the callee's first provisional instead.
 						terminationRequest = activeInvite.createCancel();
 
 						if (request.getMethod().equals(CANCEL)) {
@@ -159,6 +167,9 @@ public class Terminate extends org.vorpal.blade.framework.v3.Callflow {
 					try {
 						if (terminationRequest != null) {
 							sendRequest(terminationRequest);
+							if (terminationRequest.getMethod().equals(CANCEL)) {
+								linkedSession.setAttribute(InitialInvite.ATTR_CANCEL_SENT, true);
+							}
 						}
 					} catch (Exception ex1) {
 						sipLogger.warning(request,
