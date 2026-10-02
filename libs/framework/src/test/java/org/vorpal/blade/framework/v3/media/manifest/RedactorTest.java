@@ -70,6 +70,24 @@ class RedactorTest {
 		void mixedDigitsAndWords() {
 			assertEquals("It's [number].", masked("It's 45 seven two 91."));
 		}
+
+		@Test
+		void hindiDigitWordsAndDevanagariDigits() {
+			String spoken = "मेरा कार्ड नंबर चार पाँच तीन दो शून्य एक पाँच एक एक दो आठ तीन शून्य तीन छह छह है";
+			List<Utterance.Redaction> found = find(spoken);
+			assertEquals(1, found.size(), spoken);
+			assertEquals("card", found.get(0).getKind());
+			assertEquals(spoken.indexOf("चार"), found.get(0).getFrom());
+			assertEquals(spoken.indexOf(" है"), found.get(0).getTo());
+
+			String written = "मेरा कार्ड नंबर ४५३२०१५११२८३०३६६ है";
+			List<Utterance.Redaction> digits = find(written);
+			assertEquals(1, digits.size(), written);
+			assertEquals("card", digits.get(0).getKind());
+
+			// "दोनों" (both) begins with "दो" (two) but is not a digit; "एक बार" (once) is one word, not a number.
+			assertTrue(find("हम दोनों एक बार फिर कोशिश करेंगे").isEmpty());
+		}
 	}
 
 	@Nested
@@ -204,4 +222,5 @@ class RedactorTest {
 			assertEquals(12_400L, span.getEndMillis(), "the end of the last digit group");
 		}
 	}
+
 }

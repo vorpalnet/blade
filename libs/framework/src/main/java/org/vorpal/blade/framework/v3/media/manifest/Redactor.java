@@ -206,14 +206,18 @@ public final class Redactor {
 	/// character of the view the span of original text it stands for.
 	static final class DigitView {
 
-		private static final Pattern DIGIT_WORD = Pattern.compile("(?iu)(?<![\\p{L}])(zero|oh|one|two|three|four|five|six"
-				+ "|seven|eight|nine|cero|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve)(?![\\p{L}])");
+		// Hindi words take marks (vowel signs) that are not letters, so a boundary is neither a
+		// letter nor a mark: otherwise "दो" (two) would match inside "दोनों" (both).
+		private static final Pattern DIGIT_WORD = Pattern.compile("(?iu)(?<![\\p{L}\\p{M}])(zero|oh|one|two|three|four|five|six"
+				+ "|seven|eight|nine|cero|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve"
+				+ "|शून्य|एक|दो|तीन|चार|पाँच|पांच|छह|छः|सात|आठ|नौ)(?![\\p{L}\\p{M}])");
 
 		private static final Map<String, Character> DIGITS = new java.util.HashMap<>();
 		static {
-			String[][] words = {{"zero", "oh", "cero"}, {"one", "uno", "una"}, {"two", "dos"}, {"three", "tres"},
-					{"four", "cuatro"}, {"five", "cinco"}, {"six", "seis"}, {"seven", "siete"}, {"eight", "ocho"},
-					{"nine", "nueve"}};
+			String[][] words = {{"zero", "oh", "cero", "शून्य"}, {"one", "uno", "una", "एक"}, {"two", "dos", "दो"},
+					{"three", "tres", "तीन"}, {"four", "cuatro", "चार"}, {"five", "cinco", "पाँच", "पांच"},
+					{"six", "seis", "छह", "छः"}, {"seven", "siete", "सात"}, {"eight", "ocho", "आठ"},
+					{"nine", "nueve", "नौ"}};
 			for (int d = 0; d < words.length; d++) {
 				for (String w : words[d]) {
 					DIGITS.put(w, (char) ('0' + d));
@@ -250,7 +254,7 @@ public final class Redactor {
 					for (int i = at; i < m.start(); i++) {
 						from[b.length()] = i;
 						to[b.length()] = i + 1;
-						b.append(original.charAt(i));
+						b.append(ascii(original.charAt(i)));
 					}
 				}
 				afterDigitWord = true;
@@ -262,9 +266,15 @@ public final class Redactor {
 			for (int i = at; i < original.length(); i++) {
 				from[b.length()] = i;
 				to[b.length()] = i + 1;
-				b.append(original.charAt(i));
+				b.append(ascii(original.charAt(i)));
 			}
 			return new DigitView(b.toString(), from, to);
+		}
+
+		/// A Devanagari digit (०-९) as its ASCII digit, which the rules' `\d` matches; anything
+		/// else unchanged.
+		private static char ascii(char c) {
+			return (c >= '\u0966' && c <= '\u096F') ? (char) ('0' + (c - '\u0966')) : c;
 		}
 	}
 
