@@ -13,7 +13,7 @@ import org.vorpal.blade.framework.v3.events.SubscriptionRegistrar;
 /// Registers the dashboard's SettingsManager so it appears on the Admin Portal
 /// deck and its configuration is Configurator-editable. The live settings are
 /// stashed on the ServletContext so the data servlet reads current values
-/// without a redeploy.
+/// without a redeploy, beside the [AnalyticsStore] that owns the JPA factory.
 @WebListener
 public class DashboardSettingsStartup implements ServletContextListener {
 
@@ -33,6 +33,7 @@ public class DashboardSettingsStartup implements ServletContextListener {
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "dashboard settings failed to register", e);
 		}
+		sce.getServletContext().setAttribute(AnalyticsStore.ATTR, new AnalyticsStore());
 		// After the settings, not in a listener of its own: the settings carry
 		// any `events.providerUrl` override, and a separate listener could start
 		// first and look in the wrong place (the container does not order
@@ -46,6 +47,11 @@ public class DashboardSettingsStartup implements ServletContextListener {
 		if (ops != null) {
 			ops.stop();
 		}
+		Object store = sce.getServletContext().getAttribute(AnalyticsStore.ATTR);
+		if (store instanceof AnalyticsStore) {
+			((AnalyticsStore) store).close();
+		}
+		sce.getServletContext().removeAttribute(AnalyticsStore.ATTR);
 		sce.getServletContext().removeAttribute(SETTINGS_ATTR);
 		if (settingsManager != null) {
 			try {

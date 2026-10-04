@@ -1,0 +1,39 @@
+<persistence xmlns="http://xmlns.jcp.org/xml/ns/persistence"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/persistence
+		http://xmlns.jcp.org/xml/ns/persistence/persistence_2_2.xsd"
+	version="2.2"
+>
+
+	<!-- The dashboard reads the analytics reporting VIEWS through JPA so the same
+	     queries run on Oracle, MySQL and SQL Server: EclipseLink writes each
+	     database's SQL, and each database's view script already does its own
+	     JSON extraction.
+
+	     A unit of its own, not the analytics service's: that one maps the
+	     tables and writes; this one maps the views and only reads.
+
+	     The data source here is the default. AnalyticsStore passes the
+	     configured one (DashboardSettings.analyticsDataSource) as
+	     javax.persistence.nonJtaDataSource, which overrides it. -->
+	<persistence-unit name="BladeDashboard" transaction-type="RESOURCE_LOCAL">
+		<provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
+		<non-jta-data-source>jdbc/BladeAnalytics</non-jta-data-source>
+		<class>org.vorpal.blade.applications.dashboard.model.CallRow</class>
+		<class>org.vorpal.blade.applications.dashboard.model.EventRow</class>
+		<class>org.vorpal.blade.applications.dashboard.model.RiskRow</class>
+		<class>org.vorpal.blade.applications.dashboard.model.RiskCallRow</class>
+		<class>org.vorpal.blade.applications.dashboard.model.ConversationRow</class>
+		<exclude-unlisted-classes>true</exclude-unlisted-classes>
+		<properties>
+			<property name="eclipselink.target-server" value="WebLogic" />
+			<property name="eclipselink.logging.level" value="WARNING" />
+			<!-- Views, not tables: never let the provider create or alter anything. -->
+			<property name="eclipselink.ddl-generation" value="none" />
+			<!-- Every query here aggregates fresh data; a shared cache of entities
+			     the dashboard never loads would only hold stale rows. -->
+			<property name="eclipselink.cache.shared.default" value="false" />
+		</properties>
+	</persistence-unit>
+
+</persistence>

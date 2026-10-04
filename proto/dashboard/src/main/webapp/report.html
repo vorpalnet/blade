@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Report · BLADE Dashboard</title>
+	<link rel="icon" href="/blade/portal/brand/favicon.svg" type="image/svg+xml">
+	<link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+
+	<header class="topbar">
+		<a class="brand" href="/blade/portal/">
+			<img class="brand__logo" src="/blade/portal/brand/vorpal_logo_lightpurple.svg" alt="Vorpal">
+			<span class="brand__name">Dashboard<small>OCCAS &middot; BLADE</small></span>
+		</a>
+		<div class="spacer"></div>
+		<nav class="nav">
+			<a href="./">Overview</a>
+			<a href="/blade/portal/">Portal</a>
+			<a href="/blade/tuning/">Tuning</a>
+			<a href="/blade/balancer/">Balancer</a>
+		</nav>
+	</header>
+
+	<main>
+		<p class="eyebrow"><a href="./">&larr; Overview</a></p>
+		<h1 id="r-title">Report</h1>
+		<p class="lede" id="r-lede"></p>
+
+		<form class="toolbar" onsubmit="return false">
+			<label>Range
+				<select id="f-days">
+					<option value="1">last day</option>
+					<option value="7">last 7 days</option>
+					<option value="30">last 30 days</option>
+					<option value="90">last 90 days</option>
+				</select>
+			</label>
+			<label>Cluster
+				<select id="f-cluster"><option value="">all clusters</option></select>
+			</label>
+			<label class="check"><input type="checkbox" id="f-sample"> Include sample data</label>
+			<button type="button" id="f-refresh">Refresh</button>
+			<span class="toolbar__status" id="f-asof"></span>
+		</form>
+
+		<section class="grid" id="sections"></section>
+
+		<p class="foot">Live query on every load and refresh &middot; the link in your address bar keeps these settings &middot;
+		charts drawn with <a href="vendor/LICENSE-d3.txt">D3</a></p>
+	</main>
+
+	<script src="vendor/d3.min.js"></script>
+	<script src="charts.js"></script>
+	<script src="reports.js"></script>
+</body>
+</html>

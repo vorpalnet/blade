@@ -1,0 +1,29 @@
+<persistence xmlns="http://xmlns.jcp.org/xml/ns/persistence"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/persistence
+		http://xmlns.jcp.org/xml/ns/persistence/persistence_2_2.xsd"
+	version="2.2"
+>
+	<!-- The report queries, without a container. A separate unit name from the
+	     shipped one, as in the analytics service's tests: both files are on the
+	     test classpath, and one name would make it ambiguous which data source a
+	     test ran against. hsqldb-views.sql stands the views up as plain tables. -->
+	<persistence-unit name="BladeDashboardTest" transaction-type="RESOURCE_LOCAL">
+		<provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
+		<class>org.vorpal.blade.applications.dashboard.model.CallRow</class>
+		<class>org.vorpal.blade.applications.dashboard.model.EventRow</class>
+		<class>org.vorpal.blade.applications.dashboard.model.RiskRow</class>
+		<class>org.vorpal.blade.applications.dashboard.model.RiskCallRow</class>
+		<class>org.vorpal.blade.applications.dashboard.model.ConversationRow</class>
+		<exclude-unlisted-classes>true</exclude-unlisted-classes>
+		<properties>
+			<property name="javax.persistence.jdbc.driver" value="org.hsqldb.jdbc.JDBCDriver" />
+			<property name="javax.persistence.jdbc.url" value="jdbc:hsqldb:mem:blade-dashboard" />
+			<property name="javax.persistence.jdbc.user" value="sa" />
+			<property name="javax.persistence.jdbc.password" value="" />
+			<property name="eclipselink.ddl-generation" value="none" />
+			<property name="eclipselink.cache.shared.default" value="false" />
+			<property name="eclipselink.logging.level" value="OFF" />
+		</properties>
+	</persistence-unit>
+</persistence>

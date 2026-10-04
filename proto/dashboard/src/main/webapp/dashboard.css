@@ -1,4 +1,4 @@
-/* BLADE Dashboard — AIvent dark theme, recolored to Vorpal purple.
+/* BLADE Dashboard · AIvent dark theme, recolored to Vorpal purple.
    Dark-only (a NOC board). Zero CDN: fonts fall back to the system stack until
    Manrope is vendored under fonts/. */
 
@@ -19,6 +19,8 @@
 	--accent-3:  #602671;             /* brand-600 */
 	--ok:        #86c9a6;
 	--warn:      #dcb877;
+	--bad:       #e79ab0;
+	--info:      #7fb0e0;
 
 	--font: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 	--mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
@@ -75,7 +77,7 @@ a:hover { text-decoration: underline; }
 	background: var(--ok); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 22%, transparent);
 }
 .status.stale .dot { background: var(--warn); box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 22%, transparent); }
-.status.err .dot { background: #e06b8b; box-shadow: 0 0 0 4px rgba(224,107,139,.22); }
+.status.err .dot { background: var(--bad); box-shadow: 0 0 0 4px color-mix(in srgb, var(--bad) 22%, transparent); }
 
 /* ---- layout ---------------------------------------------------------- */
 main { max-width: 1360px; margin: 0 auto; padding: clamp(20px, 3vw, 40px); }
@@ -111,7 +113,7 @@ h1 { font-size: clamp(26px, 3.4vw, 40px); line-height: 1.08; letter-spacing: -.0
 .state-running  { color: var(--ok); }
 .state-starting { color: var(--warn); }
 .state-draining { color: var(--warn); }
-.state-down     { color: #e79ab0; }
+.state-down     { color: var(--bad); }
 .node__metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 16px; }
 .nm { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 12.5px; border-bottom: 1px solid var(--line); padding-bottom: 7px; }
 .nm__l { color: var(--ink-3); }
@@ -162,17 +164,24 @@ h1 { font-size: clamp(26px, 3.4vw, 40px); line-height: 1.08; letter-spacing: -.0
 	position: absolute; inset: 0; display: grid; place-items: center;
 	font-size: 13px; color: var(--ink-3); text-align: center; padding: 0 16px;
 }
-.error { color: #e79ab0; font-family: var(--mono); font-size: 12px; }
+.error { color: var(--bad); font-family: var(--mono); font-size: 12px; }
 
-/* chart marks */
-.bar { fill: url(#barGrad); }
-.bar:hover { fill: var(--accent); }
-.axis { stroke: var(--line); stroke-width: 1; }
-.gridline { stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 5; }
-.tick { fill: var(--ink-3); font-size: 10.5px; font-family: var(--mono); }
-.linepath { fill: none; stroke: var(--accent); stroke-width: 2; }
-.linearea { fill: url(#areaGrad); }
-.dot-m { fill: var(--accent); }
+/* chart marks (charts.js, D3). One accent for every bar: parallel categories
+   are not a ranking. Values are printed on the marks; colour never carries a
+   number or a state alone. */
+.chart { display: block; width: 100%; height: 100%; overflow: visible; }
+.bar { fill: var(--accent); fill-opacity: .85; }
+.bar:hover { fill-opacity: 1; }
+.value { fill: var(--ink-2); font-size: 10.5px; font-family: var(--mono); }
+.cat { fill: var(--ink-2); font-size: 11.5px; }
+.end { font-size: 11px; font-weight: 700; }
+.linepath { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.heat { fill: var(--accent); }
+.heat-n { fill: var(--ink); font-size: 10px; font-family: var(--mono); pointer-events: none; }
+.funnel-label { fill: var(--ink); font-size: 12px; font-weight: 600; }
+.y-axis line { stroke: var(--line); stroke-dasharray: 2 5; }
+.y-axis text, .x-axis text { fill: var(--ink-3); font-size: 10.5px; font-family: var(--mono); }
+.x-axis .baseline { stroke: var(--line-2); }
 
 .foot { margin-top: 26px; color: var(--ink-3); font-size: 12px; font-family: var(--mono); }
 
@@ -184,3 +193,68 @@ h1 { font-size: clamp(26px, 3.4vw, 40px); line-height: 1.08; letter-spacing: -.0
 .ops-row__what.bad { color: var(--warn); }
 .ops-row__main { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ops-row__when { font-family: var(--mono); font-size: 11px; color: var(--ink-3); white-space: nowrap; }
+
+/* ---- report cards (overview) ---------------------------------------- */
+.section-lede { color: var(--ink-2); max-width: 70ch; margin: 0 0 16px; font-size: 14px; }
+.rcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.rcard {
+	display: flex; flex-direction: column; color: var(--ink);
+	background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+	padding: 16px 18px 12px; box-shadow: var(--shadow); min-height: 220px;
+	transition: border-color .15s ease, background .15s ease;
+}
+.rcard:hover { text-decoration: none; border-color: var(--accent); background: var(--panel-2); }
+.rcard__head { display: flex; justify-content: space-between; align-items: baseline; }
+.rcard__title { font-weight: 700; font-size: 14px; }
+.rcard__go { font-size: 11.5px; color: var(--accent); font-weight: 600; }
+.rcard__value { font-size: 34px; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; margin-top: 10px; font-variant-numeric: tabular-nums; }
+.rcard__label { font-size: 12px; color: var(--ink-2); }
+.rcard__label.error { color: var(--bad); font-family: var(--mono); font-size: 11px; }
+.rcard__sub { font-size: 12px; color: var(--ink-3); margin-top: 2px; min-height: 1.4em; }
+.rcard__trend { flex: 1 1 auto; min-height: 56px; margin-top: 8px; position: relative; }
+.rcard__trend .band-row { padding: 2px 0; }
+.rcard__asof { font-size: 10.5px; color: var(--ink-3); font-family: var(--mono); margin-top: 6px; }
+
+/* ---- detail page ---------------------------------------------------- */
+.toolbar {
+	display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: 0 0 20px;
+	padding: 12px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+}
+.toolbar label { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-2); font-weight: 600; }
+.toolbar select, .toolbar button {
+	font: inherit; font-size: 13px; color: var(--ink); background: var(--bg-2);
+	border: 1px solid var(--line-2); border-radius: 8px; padding: 6px 10px;
+}
+.toolbar button { cursor: pointer; font-weight: 600; background: var(--accent-3); border-color: var(--accent-3); color: #fff; }
+.toolbar button:hover { background: var(--accent-2); }
+.toolbar .check input { accent-color: var(--accent); }
+.toolbar__status { margin-left: auto; font-size: 12px; color: var(--ink-3); font-family: var(--mono); }
+.card--tall { min-height: 380px; }
+.card--tiles { background: none; border: 0; box-shadow: none; padding: 0; min-height: 0; }
+.card--tiles .tiles { margin-bottom: 0; }
+.card--table { min-height: 0; }
+.card--table .card__body { overflow: visible; }
+
+/* risk band: the coloured pill carries the WORD; the score sits beside it */
+.pill {
+	display: inline-block; padding: 2px 10px; border-radius: 999px; white-space: pre;
+	font-size: 11px; font-weight: 700; letter-spacing: .06em;
+	color: var(--pill, var(--ink)); border: 1px solid var(--pill, var(--line-2));
+	background: color-mix(in srgb, var(--pill, transparent) 14%, transparent);
+}
+.band-row { display: grid; grid-template-columns: 9ch 1fr 7ch; align-items: center; gap: 10px; padding: 6px 0; }
+.band-row__track { height: 10px; border-radius: 5px; background: rgba(255,255,255,.06); overflow: hidden; }
+.band-row__fill { height: 100%; border-radius: 5px; }
+.band-row__n { text-align: right; font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+
+/* report tables */
+.table-wrap { overflow-x: auto; max-height: 560px; overflow-y: auto; margin: 4px 0 10px; }
+table.report { border-collapse: collapse; width: 100%; font-size: 13px; }
+table.report th {
+	position: sticky; top: 0; background: var(--bg-2); text-align: left;
+	font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3);
+	padding: 8px 10px; border-bottom: 1px solid var(--line-2); white-space: nowrap;
+}
+table.report td { padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.report td.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+table.report tr:hover td { background: var(--panel-2); }

@@ -26,6 +26,22 @@
 			<artifactId>junit-jupiter</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- The report queries against a real database, without a container:
+		     AnalyticsReportsTest runs every JPQL report on in-memory HSQLDB through
+		     EclipseLink, the provider WebLogic supplies at runtime. Test scope
+		     only; nothing reaches WEB-INF/lib. Same versions as the analytics
+		     service's write-path test. -->
+		<dependency>
+			<groupId>org.hsqldb</groupId>
+			<artifactId>hsqldb</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.eclipse.persistence</groupId>
+			<artifactId>org.eclipse.persistence.jpa</artifactId>
+			<version>2.7.15</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>

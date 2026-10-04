@@ -5,8 +5,9 @@
 ///
 /// ## Key Components
 ///
-/// - [AnalyticsEventListener] — the subscriber. A durable topic subscription
-///   named `analytics-db`, with no message selector.
+/// - [AnalyticsSubscription] — owns the durable topic subscription named
+///   `analytics-db` and rebuilds its selector whenever the catalog changes
+/// - [AnalyticsEventListener] — the handler: writes each batch
 /// - [AnalyticsCatalog] — the live event catalog, read for each type's `persist`
 ///   flag
 /// - [ApplicationResolver] / [SessionResolver] — the two foreign keys every row
@@ -32,22 +33,28 @@
 /// classpath, and made selector-based routing impossible. Nothing of the old
 /// path survives except the parts worth keeping, listed under resilience below.
 ///
-/// ## Why this subscriber has no selector
+/// ## How this subscriber selects
 ///
-/// An *actor* — a transfer application acting on a refer — names the event types
+/// An *actor* (a transfer application acting on a refer) names the event types
 /// it handles. A selector is derived from them, the broker filters, and the app
-/// never wakes for an event it would ignore. It fails **closed**: a type nobody
+/// never wakes for an event it would ignore. It fails closed: a type nobody
 /// listed is never enqueued for it.
 ///
-/// A *sink* names nothing and takes everything, deciding per message from the
-/// catalog's `persist` flags. It fails **open**: a type marked persisted this
-/// afternoon is recorded this afternoon, with no regeneration and no redeploy.
-/// A generated selector would freeze the list at generation time, and "analytics
-/// is quietly missing one event type" is close to undetectable.
+/// A *sink* wants "everything marked persisted", which is a property of the
+/// types, not of any subscription. Its selector has two halves: the types
+/// [AnalyticsCatalog#persistedTypes] names (declared `persist: true`, plus the
+/// framework's own unless a declaration turns one off), OR any event the
+/// publisher marked as call-scoped (`eventCall`) whose type is not in
+/// [AnalyticsCatalog#switchedOff]. The second half is why an application's
+/// undeclared call event is still recorded.
 ///
-/// The cost is real: this subscription's store holds events the code will drop,
-/// against the destination's shared quota. [AnalyticsEventListener] counts what
-/// it drops and logs the running total, so the question has an answer.
+/// The selector is rebuilt when the catalog changes, so a type marked
+/// persisted this afternoon is recorded this afternoon, with no redeploy. An
+/// undeclared operations event (no `vorpalId`) is not recorded until it is
+/// declared. [AnalyticsEventListener] still checks each event against the
+/// catalog and counts what it drops; with the broker filtering, that count
+/// should stay near zero, and a rising one means the live selector and the
+/// catalog disagree.
 ///
 /// ## Resolving the keys
 ///

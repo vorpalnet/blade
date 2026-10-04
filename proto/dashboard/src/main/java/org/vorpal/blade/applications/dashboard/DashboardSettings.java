@@ -23,7 +23,7 @@ public class DashboardSettings extends Configuration implements Serializable {
 	private int historyDays = 30;
 	private String analyticsDataSource = "jdbc/BladeAnalytics";
 
-	@JsonPropertyDescription("How many days of call history the trend charts cover by default. The browser can ask for a shorter window; this is the ceiling the charts open with.")
+	@JsonPropertyDescription("How many days of call history the overview cards cover. Each report page chooses its own range.")
 	public int getHistoryDays() {
 		return historyDays;
 	}

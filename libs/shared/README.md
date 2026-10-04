@@ -12,10 +12,13 @@ it from its own `weblogic.xml`:
 </wls:library-ref>
 ```
 
-This is the other half of BLADE's **skinny WAR** rule: application WARs bundle only
-`vorpal-blade-library-framework.jar` (the parent POM's war-plugin `packagingExcludes`
-enforces it), and everything else resolves from here. One library update patches the
-entire suite; a security scan of the dependency tree has one place to look.
+This is the other half of BLADE's **skinny WAR** guideline: application WARs normally
+bundle only `vorpal-blade-library-framework.jar` (the parent POM's war-plugin
+`packagingExcludes` strips the rest), and every shared dependency resolves from here. One
+library update patches the entire suite; a security scan of the dependency tree has one
+place to look. A JAR that only one application uses may instead ride in that
+application's own `WEB-INF/lib`, by widening `packagingExcludes` in its POM; it doesn't
+belong in a library every application loads.
 
 ## What's inside
 

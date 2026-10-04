@@ -22,7 +22,7 @@
 	</modules>
 
 	<properties>
-		<revision>3.0.7</revision>
+		<revision>3.0.8</revision>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<blade.java.version>11</blade.java.version>
 		<blade.weblogic.version>14.1.1</blade.weblogic.version>
@@ -491,7 +491,10 @@
 						     it explicitly — it's read-only in war-plugin 3.4.0 and setting it
 						     just emits a "must not be used in configuration" warning per WAR. -->
 						<failOnMissingWebXml>false</failOnMissingWebXml>
-						<!-- Include only the framework JAR; 3rd-party JARs come from the shared library -->
+						<!-- Include only the framework JAR; shared 3rd-party JARs come from the
+						     blade-shared library. A guideline, not a law: an app that needs a
+						     JAR no other app uses overrides this in its own pom, widening the
+						     lookahead, e.g. (?!vorpal-blade-library-framework|its-artifact). -->
 						<packagingExcludes>%regex[WEB-INF/lib/(?!vorpal-blade-library-framework).*\.jar]</packagingExcludes>
 						<archive>
 							<manifestEntries>

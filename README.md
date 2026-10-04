@@ -113,6 +113,7 @@ New apps start in `proto/`. They build with everything else and ship loose in `d
 | [ACL](proto/acl/README.md) | Allow or deny calls by remote IP address |
 | [Balancer](proto/balancer/README.md) | Load-balancer prototype |
 | [Demo](proto/demo/README.md) | Demo launcher and index of the BLADE demos |
+| [Dashboard](proto/dashboard/README.md) | Cluster health, operations and call reports in one page |
 | [Player](proto/player/README.md) | Vendor-neutral JSR-309 media player/recorder |
 | [Security](proto/security/README.md) | Admin-tier authentication configuration (JWT SSO) |
 | [Test Console](proto/test-console/README.md) | Cluster-wide control surface for the test apps |
@@ -292,7 +293,7 @@ Admin-tier WARs are named `blade-<app>.war` so their WebLogic app names never co
 - The dist holds every built module — `build.sh` copies each module's declared `<finalName>` artifact, so a stale WAR from an earlier build under a different name does **not** leak in.
 - **Dist layout — whole-tier EARs and loose WARs both ship.** `dev` writes flat into `dist/`; `prod` nests each release in `dist/<rev>-<build>/`. Either way: the three tier EARs (`blade-admin.ear`, `blade-services.ear`, `blade-test.ear`) at the root, plus the same apps loose in per-tier folders (`lib/ admin/ services/ test/ proto/`). Deploy an EAR for the whole tier in one step, or a loose WAR for per-service **lifecycle** — start/stop/target/redeploy one service. (The Remote Console GUI collapses an EAR to a single row; WLST reads per-module status either way.) **`proto/` has no EAR** — a grab-bag of admin- and service-shaped apps, deployed ad-hoc.
 - **FSMAR JAR** must be installed manually into the OCCAS approuter folder (`./deploy.sh <env> blade-fsmar.jar --approuter`).
-- **Admin WARs** are skinny like service WARs — `WEB-INF/lib` carries only the framework jar; 3rd-party JARs come from the `blade-shared` shared library. They deploy to AdminServer (as `blade-admin.ear`, or individually).
+- **Admin WARs** are skinny like service WARs: `WEB-INF/lib` normally carries only the framework jar, and shared 3rd-party JARs come from the `blade-shared` shared library (a JAR only one app uses may sit in that app's own `WEB-INF/lib`). They deploy to AdminServer (as `blade-admin.ear`, or individually).
 - On a failed build, the current build's `dist/` directory is deleted to prevent incomplete artifacts.
 
 ### Skipping the dist copy (dev mode)

@@ -1,36 +1,61 @@
 package org.vorpal.blade.applications.dashboard;
 
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import javax.naming.InitialContext;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.sql.DataSource;
 
-/// The dashboard's analytics data path. No JAX-RS: a plain servlet looks up the
-/// `jdbc/BladeAnalytics` datasource, runs one aggregation against the reporting
-/// VIEWS (never the raw tables), and writes the rows out as JSON for the chart
-/// JavaScript to draw.
+import org.vorpal.blade.framework.v2.config.SettingsManager;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+/// The dashboard's analytics data path: named reports from [AnalyticsReports],
+/// written as JSON.
 ///
-/// The queries are Oracle SQL because the analytics store it reads is an Oracle
-/// Autonomous DB. They read `v_calls`, the CDR view, so they survive the
-/// underlying table shape changing.
+/// URL: `/blade/dashboard/data?r=<report>[,<report>…][&days=N][&sample=include][&cluster=X][&fresh=1]`
 ///
-/// URL: `/blade/dashboard/data?q=&lt;chart&gt;[&days=N]`.
+/// The response is one object keyed by report name; each value is
+/// `{columns, rows, asOf}` or `{error}`. Several reports per request let the
+/// overview fill every card in one round trip.
+///
+/// **Cached for five minutes per report and scope.** The overview polls every
+/// minute on every open browser; the database sees each query at most once per
+/// five minutes per node. `fresh=1` (the detail pages) bypasses the cache and
+/// refills it. `asOf` says when the numbers were read, so a card can show its age.
+///
+/// No JAX-RS: a plain servlet, as the rest of this application.
 @WebServlet("/data")
 public class AnalyticsServlet extends HttpServlet {
 
 	private static final long serialVersionUID = 1L;
 	private static final Logger logger = Logger.getLogger(AnalyticsServlet.class.getName());
-	private static final String DS_JNDI = "jdbc/BladeAnalytics";
+	private static final ObjectMapper MAPPER = new ObjectMapper();
+
+	static final long TTL_MS = 5 * 60_000L;
+	static final int MAX_DAYS = 400;
+
+	/// Report results by [AnalyticsReports.Filter#key]. Per node, per application
+	/// instance; nothing is shared across the cluster.
+	private final Map<String, Cached> cache = new ConcurrentHashMap<>();
+
+	private static final class Cached {
+		final AnalyticsReports.Table table;
+		final long asOf;
+
+		Cached(AnalyticsReports.Table table, long asOf) {
+			this.table = table;
+			this.asOf = asOf;
+		}
+	}
 
 	@Override
 	protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
@@ -38,164 +63,97 @@ public class AnalyticsServlet extends HttpServlet {
 		resp.setCharacterEncoding("UTF-8");
 		resp.setHeader("Cache-Control", "no-store");
 
-		String q = req.getParameter("q");
-		int days = clamp(intParam(req, "days", 30), 1, 400);
-
-		try (Connection c = dataSource().getConnection(); PrintWriter out = resp.getWriter()) {
-			switch (q == null ? "" : q) {
-			case "stats":
-				stats(c, out);
-				break;
-			case "calls-per-day":
-				pairs(c, out, days,
-						"SELECT TO_CHAR(TRUNC(started_at),'YYYY-MM-DD') d, COUNT(*) n "
-						+ "FROM v_calls WHERE started_at >= SYSDATE - ? "
-						+ "GROUP BY TRUNC(started_at) ORDER BY TRUNC(started_at)");
-				break;
-			case "calls-by-app":
-				pairs(c, out, days,
-						"SELECT NVL(application,'—') a, COUNT(*) n "
-						+ "FROM v_calls WHERE started_at >= SYSDATE - ? "
-						+ "GROUP BY NVL(application,'—') ORDER BY COUNT(*) DESC FETCH FIRST 12 ROWS ONLY");
-				break;
-			case "avg-duration":
-				pairs(c, out, days,
-						"SELECT TO_CHAR(TRUNC(started_at),'YYYY-MM-DD') d, ROUND(AVG(duration_seconds),1) s "
-						+ "FROM v_calls WHERE started_at >= SYSDATE - ? AND duration_seconds IS NOT NULL "
-						+ "GROUP BY TRUNC(started_at) ORDER BY TRUNC(started_at)");
-				break;
-			case "calls-per-hour":
-				pairs(c, out, days,
-						"SELECT TO_CHAR(TRUNC(started_at,'HH24'),'DD HH24:MI') d, COUNT(*) n "
-						+ "FROM v_calls WHERE started_at >= SYSDATE - ? "
-						+ "GROUP BY TRUNC(started_at,'HH24') ORDER BY TRUNC(started_at,'HH24')");
-				break;
-			case "concurrent":
-				// running +1 at each start, -1 at each end; the max of that running
-				// sum per hour is the peak simultaneous calls that hour. Clamp the
-				// negative dips that come from calls that started before the window.
-				pairs(c, out, days,
-						"SELECT TO_CHAR(hr,'DD HH24:MI') d, MAX(GREATEST(running,0)) n FROM ("
-						+ "SELECT TRUNC(ts,'HH24') hr, SUM(delta) OVER (ORDER BY ts, delta DESC) running FROM ("
-						+ "SELECT started_at ts, 1 delta FROM v_calls WHERE started_at >= SYSDATE - ? "
-						+ "UNION ALL "
-						+ "SELECT ended_at ts, -1 delta FROM v_calls WHERE ended_at IS NOT NULL AND ended_at >= SYSDATE - ?"
-						+ ")) GROUP BY hr ORDER BY hr");
-				break;
-			case "heatmap":
-				// dow 0=Mon .. 6=Sun (ISO week, NLS-independent), hour 0..23.
-				rows(c, out, days,
-						"SELECT TO_CHAR(TRUNC(started_at) - TRUNC(started_at,'IW')) dow, "
-						+ "TO_NUMBER(TO_CHAR(started_at,'HH24')) hh, COUNT(*) n "
-						+ "FROM v_calls WHERE started_at >= SYSDATE - ? "
-						+ "GROUP BY TRUNC(started_at) - TRUNC(started_at,'IW'), TO_NUMBER(TO_CHAR(started_at,'HH24'))");
-				break;
-			case "asr-abandon":
-				// v_events exposes event_type / occurred_at. Naming-agnostic across the
-				// short writer names, camelCase, and dotted bus types.
-				rows(c, out, days,
-						"SELECT TO_CHAR(TRUNC(occurred_at),'YYYY-MM-DD') d, "
-						+ "SUM(CASE WHEN LOWER(event_type) IN ('call.answered','callanswered','answered','call.connected','callconnected','connected') THEN 1 ELSE 0 END) answered, "
-						+ "SUM(CASE WHEN LOWER(event_type) IN ('call.abandoned','callabandoned','abandoned') THEN 1 ELSE 0 END) abandoned, "
-						+ "SUM(CASE WHEN LOWER(event_type) IN ('call.started','callstarted','session.started','sessionstarted','sessionstart','started') THEN 1 ELSE 0 END) started "
-						+ "FROM v_events WHERE occurred_at >= SYSDATE - ? "
-						+ "GROUP BY TRUNC(occurred_at) ORDER BY TRUNC(occurred_at)");
-				break;
-			case "funnel":
-				pairs(c, out, days,
-						"SELECT stage, cnt FROM ("
-						+ "SELECT 'Started' stage, 1 ord, COUNT(*) cnt FROM v_events WHERE occurred_at >= SYSDATE - ? AND LOWER(event_type) IN ('call.started','callstarted','session.started','sessionstarted','sessionstart','started') "
-						+ "UNION ALL SELECT 'Answered', 2, COUNT(*) FROM v_events WHERE occurred_at >= SYSDATE - ? AND LOWER(event_type) IN ('call.answered','callanswered','answered') "
-						+ "UNION ALL SELECT 'Connected', 3, COUNT(*) FROM v_events WHERE occurred_at >= SYSDATE - ? AND LOWER(event_type) IN ('call.connected','callconnected','connected') "
-						+ "UNION ALL SELECT 'Completed', 4, COUNT(*) FROM v_events WHERE occurred_at >= SYSDATE - ? AND LOWER(event_type) IN ('call.completed','callcompleted','completed') "
-						+ ") ORDER BY ord");
-				break;
-			case "duration-hist":
-				pairs(c, out, days,
-						"SELECT bucket, COUNT(*) n FROM ("
-						+ "SELECT CASE WHEN duration_seconds < 15 THEN '0-15s' WHEN duration_seconds < 30 THEN '15-30s' "
-						+ "WHEN duration_seconds < 60 THEN '30-60s' WHEN duration_seconds < 180 THEN '1-3m' "
-						+ "WHEN duration_seconds < 600 THEN '3-10m' ELSE '10m+' END bucket, "
-						+ "CASE WHEN duration_seconds < 15 THEN 1 WHEN duration_seconds < 30 THEN 2 WHEN duration_seconds < 60 THEN 3 "
-						+ "WHEN duration_seconds < 180 THEN 4 WHEN duration_seconds < 600 THEN 5 ELSE 6 END ord "
-						+ "FROM v_calls WHERE started_at >= SYSDATE - ? AND duration_seconds IS NOT NULL"
-						+ ") GROUP BY bucket, ord ORDER BY ord");
-				break;
-			case "calls-by-tenant":
-				pairs(c, out, days,
-						"SELECT NVL(tenant,'(single-tenant)') t, COUNT(*) n FROM v_calls "
-						+ "WHERE started_at >= SYSDATE - ? GROUP BY NVL(tenant,'(single-tenant)') "
-						+ "ORDER BY COUNT(*) DESC FETCH FIRST 12 ROWS ONLY");
-				break;
-			case "event-types":
-				pairs(c, out, days,
-						"SELECT event_type, COUNT(*) n FROM v_events WHERE occurred_at >= SYSDATE - ? "
-						+ "GROUP BY event_type ORDER BY COUNT(*) DESC FETCH FIRST 20 ROWS ONLY");
-				break;
-			default:
-				resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-				out.write("{\"error\":\"unknown chart '" + esc(q) + "'\"}");
-			}
-		} catch (Exception e) {
-			logger.log(Level.WARNING, "dashboard analytics query failed for q=" + q, e);
-			resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-			resp.getWriter().write("{\"error\":\"" + esc(e.getClass().getSimpleName() + ": " + e.getMessage()) + "\"}");
+		String r = req.getParameter("r");
+		if (r == null || r.trim().isEmpty()) {
+			resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+			MAPPER.writeValue(resp.getWriter(), Map.of("error", "name at least one report: r=" + AnalyticsReports.NAMES));
+			return;
 		}
-	}
 
-	/// One aggregation → a JSON array of [label, number] pairs.
-	private void pairs(Connection c, PrintWriter out, int days, String sql) throws Exception {
-		rows(c, out, days, sql);
-	}
+		DashboardSettings settings = settings();
+		int days = clamp(intParam(req, "days", settings == null ? 30 : settings.getHistoryDays()), 1, MAX_DAYS);
+		boolean includeSample = "include".equals(req.getParameter("sample"));
+		boolean fresh = "1".equals(req.getParameter("fresh"));
+		AnalyticsReports.Filter filter = new AnalyticsReports.Filter(days, includeSample, req.getParameter("cluster"),
+				new Date());
 
-	/// A query → a JSON array of rows, each `[label, n1, n2, …]`: column 1 is the
-	/// label (quoted), the rest are numbers. Handles the single-value charts and
-	/// the multi-series ones (ASR/abandon, funnel, heatmap triples) alike. Every
-	/// `?` in the SQL is bound to `days`, so a UNION with two windows just works.
-	private void rows(Connection c, PrintWriter out, int days, String sql) throws Exception {
-		try (PreparedStatement ps = c.prepareStatement(sql)) {
-			bindDays(ps, sql, days);
-			try (ResultSet rs = ps.executeQuery()) {
-				int cols = rs.getMetaData().getColumnCount();
-				out.write('[');
-				boolean first = true;
-				while (rs.next()) {
-					if (!first) out.write(',');
-					first = false;
-					out.write("[\"" + esc(rs.getString(1)) + "\"");
-					for (int i = 2; i <= cols; i++) out.write("," + numOrNull(rs.getString(i)));
-					out.write(']');
+		Map<String, Object> out = new LinkedHashMap<>();
+		AnalyticsReports reports = null;
+		String unavailable = null;
+		for (String raw : r.split(",")) {
+			String name = raw.trim();
+			if (!AnalyticsReports.NAMES.contains(name)) {
+				out.put(name, Map.of("error", "unknown report"));
+				continue;
+			}
+			String key = filter.key(name);
+			Cached hit = fresh ? null : cache.get(key);
+			if (hit == null || System.currentTimeMillis() - hit.asOf > TTL_MS) {
+				if (reports == null && unavailable == null) {
+					try {
+						reports = store().reports(dataSource(settings));
+					} catch (RuntimeException e) {
+						unavailable = "analytics database unavailable: " + rootMessage(e);
+						logger.log(Level.WARNING, "dashboard " + unavailable, e);
+					}
 				}
-				out.write(']');
+				if (unavailable != null) {
+					out.put(name, Map.of("error", unavailable));
+					continue;
+				}
+				try {
+					hit = new Cached(reports.run(name, filter), System.currentTimeMillis());
+					cache.put(key, hit);
+				} catch (RuntimeException e) {
+					logger.log(Level.WARNING, "dashboard report " + name + " failed", e);
+					out.put(name, Map.of("error", rootMessage(e)));
+					continue;
+				}
+			}
+			Map<String, Object> result = new LinkedHashMap<>();
+			result.put("columns", hit.table.columns);
+			result.put("rows", hit.table.rows);
+			result.put("asOf", hit.asOf);
+			out.put(name, result);
+		}
+		prune();
+		MAPPER.writeValue(resp.getWriter(), out);
+	}
+
+	/// Drops expired entries, so odd `days` values and retired clusters do not
+	/// accumulate for the life of the application.
+	private void prune() {
+		long cutoff = System.currentTimeMillis() - TTL_MS;
+		for (Iterator<Cached> i = cache.values().iterator(); i.hasNext();) {
+			if (i.next().asOf < cutoff) {
+				i.remove();
 			}
 		}
 	}
 
-	private static void bindDays(PreparedStatement ps, String sql, int days) throws Exception {
-		int n = 0;
-		for (int i = 0; i < sql.length(); i++) if (sql.charAt(i) == '?') n++;
-		for (int i = 1; i <= n; i++) ps.setInt(i, days);
+	@SuppressWarnings("unchecked")
+	private DashboardSettings settings() {
+		Object sm = getServletContext().getAttribute(DashboardSettingsStartup.SETTINGS_ATTR);
+		return (sm instanceof SettingsManager) ? ((SettingsManager<DashboardSettings>) sm).getCurrent() : null;
 	}
 
-	/// The headline tiles, in one round trip.
-	private void stats(Connection c, PrintWriter out) throws Exception {
-		String sql = "SELECT "
-				+ "(SELECT COUNT(*) FROM v_calls WHERE started_at >= TRUNC(SYSDATE)) calls_today, "
-				+ "(SELECT COUNT(*) FROM v_calls WHERE ended_at IS NULL) active_calls, "
-				+ "(SELECT ROUND(AVG(duration_seconds),1) FROM v_calls WHERE started_at >= SYSDATE-1 AND duration_seconds IS NOT NULL) avg_dur, "
-				+ "(SELECT COUNT(DISTINCT application) FROM v_calls WHERE started_at >= SYSDATE-7) apps "
-				+ "FROM dual";
-		try (PreparedStatement ps = c.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
-			rs.next();
-			out.write("{\"callsToday\":" + numOrNull(rs.getString("calls_today"))
-					+ ",\"activeCalls\":" + numOrNull(rs.getString("active_calls"))
-					+ ",\"avgDurationSec\":" + numOrNull(rs.getString("avg_dur"))
-					+ ",\"apps\":" + numOrNull(rs.getString("apps")) + '}');
+	private AnalyticsStore store() {
+		return (AnalyticsStore) getServletContext().getAttribute(AnalyticsStore.ATTR);
+	}
+
+	private static String dataSource(DashboardSettings settings) {
+		return settings == null ? "jdbc/BladeAnalytics" : settings.getAnalyticsDataSource();
+	}
+
+	/// The innermost cause's message: JPA wraps a missing view or a refused
+	/// connection several layers deep, and the outer messages say only "failed".
+	private static String rootMessage(Throwable t) {
+		Throwable root = t;
+		while (root.getCause() != null && root.getCause() != root) {
+			root = root.getCause();
 		}
-	}
-
-	private DataSource dataSource() throws Exception {
-		return (DataSource) new InitialContext().lookup(DS_JNDI);
+		String m = root.getMessage();
+		return root.getClass().getSimpleName() + (m == null ? "" : ": " + m.trim());
 	}
 
 	private static int intParam(HttpServletRequest req, String name, int dflt) {
@@ -209,28 +167,5 @@ public class AnalyticsServlet extends HttpServlet {
 
 	private static int clamp(int v, int lo, int hi) {
 		return v < lo ? lo : (v > hi ? hi : v);
-	}
-
-	private static String numOrNull(String s) {
-		return (s == null) ? "null" : s;
-	}
-
-	private static String esc(String s) {
-		if (s == null) return "";
-		StringBuilder b = new StringBuilder(s.length());
-		for (int i = 0; i < s.length(); i++) {
-			char ch = s.charAt(i);
-			switch (ch) {
-			case '"': b.append("\\\""); break;
-			case '\\': b.append("\\\\"); break;
-			case '\n': b.append("\\n"); break;
-			case '\r': b.append("\\r"); break;
-			case '\t': b.append("\\t"); break;
-			default:
-				if (ch < 0x20) b.append(String.format("\\u%04x", (int) ch));
-				else b.append(ch);
-			}
-		}
-		return b.toString();
 	}
 }
