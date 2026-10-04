@@ -92,6 +92,7 @@ try:
 except Exception, e:
     print('CONNECT_FAILED: ' + str(e))
     exit(exitcode=3)
+refused = 0
 try:
     action = '${WLS_ACTION}'
     name   = '${WLS_NAME}'
@@ -141,6 +142,7 @@ try:
                     # then redeploy. We do NOT attempt it here (it would fail).
                     print('LIBRARY_VERSION_DIFFERS deployed=' + m[name] + ' new=' + target_id)
                     print('  -> run undeploy-all, then deploy again to update the library.')
+                    refused = 1
             else:
                 print('deploy library ' + name + ' (' + target_id + ') -> ${WLS_TARGETS} ...')
                 deploy(name, '${WLS_SOURCE}', targets='${WLS_TARGETS}', upload='true', block='true', libraryModule='true')
@@ -159,11 +161,18 @@ try:
                 print('deploy ' + name + ' -> ${WLS_TARGETS} ...')
                 deploy(name, '${WLS_SOURCE}', targets='${WLS_TARGETS}', upload='true', block='true')
                 print('DEPLOYED ' + name)
-        print('DEPLOY_OK')
+        # A refused library update is not a deploy: the old version is still the one
+        # every app binds. Reporting DEPLOY_OK here made a whole-profile run say "done".
+        if refused:
+            print('DEPLOY_REFUSED')
+        else:
+            print('DEPLOY_OK')
     disconnect()
 except Exception, e:
     print('DEPLOY_FAILED: ' + str(e))
     exit(exitcode=1)
+if refused:
+    exit(exitcode=2)
 EOF
 
 echo "WLST ${WLS_ACTION} ${WLS_NAME} via ${WLS_ADMINURL} ..."

@@ -605,6 +605,10 @@ public abstract class AsyncSipServlet extends SipServlet
 			// application registered.
 			EventBus.unregisterAll();
 
+			// The recording pools' threads are this application's: left running, they keep its
+			// undeployed copy loaded. Queued commits still finish first.
+			org.vorpal.blade.framework.v3.media.ConversationRecording.shutdown();
+
 		} catch (Exception ex1) {
 			sipLogger.warning("AsyncSipServlet.contextDestroyed - Exception #ex1");
 			sipLogger.severe(ex1);

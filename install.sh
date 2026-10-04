@@ -4655,6 +4655,25 @@ set('HostnameVerificationIgnored','true')
 PYBLOCK
 }
 
+# Domain-wide web-app settings, injected into the offline template before writeDomain.
+# JAX-RS monitoring off: WebLogic turns on per-resource statistics for every JAX-RS
+# application by default, about 6 MB of heap each, feeding console pages BLADE never
+# reads. This is a WebLogic domain setting (WebAppContainer), so no application has to
+# name the JAX-RS implementation to opt out.
+emit_webapp_block() {
+    cat <<'PYEOF'
+# --- BLADE: domain-wide web-app settings ---
+cd('/')
+try:
+    cd('/WebAppContainer/' + domainName)
+except:
+    create(domainName, 'WebAppContainer')
+    cd('/WebAppContainer/' + domainName)
+set('JaxRsMonitoringDefaultBehavior', 'false')
+cd('/')
+PYEOF
+}
+
 emit_tls_block() {
     local tmpl="${1}-template"
     local kspw trpw
@@ -5143,6 +5162,14 @@ Machine${idx}NodemanagerNMType=${type}"
         "${work}/serverstart.block" "${work}/occas-replicated-dynamiccluster.py" \
         > "${work}/.py.tmp" && mv "${work}/.py.tmp" "${work}/occas-replicated-dynamiccluster.py"
     log "  ServerStart: MBean-mode JVM args + SIP classpath on the template and AdminServer"
+
+    emit_webapp_block > "${work}/webapp.block"
+    awk 'NR==FNR { blk = blk $0 ORS; next }
+         /OverwriteDomain/ && !ins { printf "%s", blk; ins = 1 }
+         { print }' \
+        "${work}/webapp.block" "${work}/occas-replicated-dynamiccluster.py" \
+        > "${work}/.py.tmp" && mv "${work}/.py.tmp" "${work}/occas-replicated-dynamiccluster.py"
+    log "  Web apps: JAX-RS monitoring off domain-wide"
 
     # STATIC engine0 on machine0 (the admin box), a configured member of the
     # cluster. Spliced LAST so the cluster, machine0, the template and the

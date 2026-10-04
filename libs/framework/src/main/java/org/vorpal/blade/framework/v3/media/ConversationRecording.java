@@ -66,6 +66,24 @@ public final class ConversationRecording {
 		return thread;
 	});
 
+	/// Stop the pools once the work queued on them is done. Called when the application stops: the
+	/// pools are this application's static state, and their threads would otherwise keep the
+	/// undeployed copy of it loaded. A commit already queued still runs; nothing new is accepted.
+	public static void shutdown() {
+		TEARDOWN.shutdown();
+		STORE.shutdown();
+	}
+
+	/// Run `task` on `pool`, or here once the application has stopped and the pool with it
+	/// ([#shutdown]): a recording that closes late is still committed.
+	private static void run(ExecutorService pool, Runnable task) {
+		try {
+			pool.execute(task);
+		} catch (java.util.concurrent.RejectedExecutionException stopped) {
+			task.run();
+		}
+	}
+
 	private final URI destination;
 	private final ConversationManifest manifest;
 	private final long startedAtMillis = System.currentTimeMillis();
@@ -160,7 +178,7 @@ public final class ConversationRecording {
 					ref.setEngine(utterance.getEngine());
 					ref.setModel(utterance.getModel());
 				}
-				STORE.execute(() -> {
+				run(STORE, () -> {
 					try {
 						archive.append(conversation, LIVE_TRANSCRIPT, utterance);
 					} catch (Exception e) {
@@ -174,7 +192,7 @@ public final class ConversationRecording {
 	/// End the conversation: run `stopMedia` (may be null when the caller already stopped it), then
 	/// commit the manifest and release the destination, in that order, off the calling thread.
 	public void close(Runnable stopMedia) {
-		TEARDOWN.execute(() -> {
+		run(TEARDOWN, () -> {
 			// Throwable, not Exception: an executor drops whatever a task throws, so an Error here
 			// would vanish without a line and the recording would simply never be committed.
 			try {
@@ -191,7 +209,7 @@ public final class ConversationRecording {
 
 	/// Run `task` on the same pool [#close] uses, for media teardown with nothing to commit.
 	public static void teardown(Runnable task) {
-		TEARDOWN.execute(() -> {
+		run(TEARDOWN, () -> {
 			try {
 				task.run();
 			} catch (Throwable t) {

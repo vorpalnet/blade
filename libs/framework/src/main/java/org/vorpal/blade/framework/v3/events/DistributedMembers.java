@@ -48,6 +48,7 @@ final class DistributedMembers {
 	private static final String HELPER = "weblogic.jms.extensions.JMSDestinationAvailabilityHelper";
 	private static final String LISTENER = "weblogic.jms.extensions.DestinationAvailabilityListener";
 	private static final String DETAIL = "weblogic.jms.extensions.DestinationDetail";
+	private static final String HANDLE = "weblogic.jms.extensions.RegistrationHandle";
 
 	private DistributedMembers() {
 	}
@@ -99,15 +100,25 @@ final class DistributedMembers {
 	}
 
 	/// Stop watching. Safe to call with null.
+	///
+	/// Called through the public `RegistrationHandle` interface, never the handle's own class: the
+	/// container returns a non-public class, and a reflective call on its method fails with an
+	/// access error even though the method is public. That failure was swallowed, so no watcher was
+	/// ever removed. The container kept each one, with its listener, which is a class of the
+	/// application, so every undeployed copy of an application that subscribes stayed loaded:
+	/// about 125 MB per redeploy of one application until the server ran out of memory.
 	static void unregister(Object handle) {
 		if (handle == null) {
 			return;
 		}
 		try {
-			handle.getClass().getMethod("unregister").invoke(handle);
-		} catch (Throwable ignored) {
-			// The handle is being discarded either way; a failure to
-			// deregister a watcher must not stop a subscriber shutting down.
+			Class<?> handleClass = Class.forName(HANDLE, true, handle.getClass().getClassLoader());
+			handleClass.getMethod("unregister").invoke(handle);
+		} catch (Throwable failed) {
+			// A watcher that will not go must not stop a subscriber shutting down; it does keep the
+			// application loaded, though, so say so.
+			java.util.logging.Logger.getLogger(DistributedMembers.class.getName()).warning(
+					"could not stop watching a distributed destination's members: " + failed);
 		}
 	}
 
