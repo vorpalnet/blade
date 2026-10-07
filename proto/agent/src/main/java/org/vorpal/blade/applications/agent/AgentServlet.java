@@ -47,7 +47,7 @@ public class AgentServlet extends B2buaServlet {
 	private static final long serialVersionUID = 1L;
 
 	/// How many recent calls to carry in a pop.
-	private static final int RECENT_LIMIT = 5;
+	static final int RECENT_LIMIT = 5;
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -159,10 +159,8 @@ public class AgentServlet extends B2buaServlet {
 
 	// ============================================================ the screen-pop
 
-	/// Build the pop and push it to the console(s). If the call names the agent it
-	/// is delivered to (the `X-Agent-Id` header an ACD/CTI sets), the pop goes to
-	/// that agent's console only; otherwise, or if that agent has no console open,
-	/// it broadcasts (a supervisor's floor view, and never a silently lost pop).
+	/// Build the pop from the INVITE and [#deliver] it to the agent the call names
+	/// (the `X-Agent-Id` header an ACD/CTI sets), if any.
 	private void pop(SipServletRequest request) {
 		String callId = request.getCallId();
 		CallPop pop = CallPopBuilder.of(request, callId, CallerHistory.EMPTY);
@@ -181,6 +179,16 @@ public class AgentServlet extends B2buaServlet {
 			pop.history = cat.history(pop.ani, RECENT_LIMIT);
 		}
 		String agentId = header(request, "X-Agent-Id");
+		sipLogger.info("agent: pop vorpalId=" + pop.vorpalId + " ani=" + pop.ani + " risk=" + pop.riskBand
+				+ " -> " + deliver(pop, agentId));
+	}
+
+	/// Push a pop to the console(s) and keep it for consoles that open later. If
+	/// the call names an agent with a console open, it goes there only and that
+	/// agent holds the call; otherwise it broadcasts (a supervisor's floor view,
+	/// and never a silently lost pop). Returns where it went, for the one log
+	/// line per pop that is the first thing to read when a card does not appear.
+	static String deliver(CallPop pop, String agentId) {
 		try {
 			ObjectNode msg = MAPPER.createObjectNode();
 			msg.put("t", "pop");
@@ -198,10 +206,6 @@ public class AgentServlet extends B2buaServlet {
 				how = (agentId == null ? "broadcast" : "broadcast (agent " + agentId + " not connected)") + " to "
 						+ sent + " console(s)";
 			}
-			// One line per pop, at INFO: it is the demo's whole point, and a pop that
-			// reached nobody is the first thing to look for.
-			sipLogger.info("agent: pop vorpalId=" + pop.vorpalId + " ani=" + pop.ani + " risk=" + pop.riskBand
-					+ " -> " + how);
 			// The pop shows the caller's earlier calls, what they said on them
 			// included, so it is a read of call content like any other and the
 			// access log records it. The actor is the agent it reached, or every
@@ -210,8 +214,9 @@ public class AgentServlet extends B2buaServlet {
 				Events.publish(AccessEvent.granted(reached > 0 ? agentId : "broadcast", "phi:transcript",
 						"callerHistory", pop.ani, "agent-console").toCloudEvent(Events.source()));
 			}
+			return how;
 		} catch (Exception e) {
-			sipLogger.log(Level.FINE, "agent: could not serialize/broadcast pop for " + pop.vorpalId, e);
+			return "not delivered: " + e;
 		}
 	}
 

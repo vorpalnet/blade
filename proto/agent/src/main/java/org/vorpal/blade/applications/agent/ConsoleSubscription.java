@@ -22,8 +22,10 @@ import org.vorpal.blade.framework.v3.events.SubscriptionRegistrar;
 /// [ConsoleUpdater] turns each into an update pushed to the console holding
 /// that call, over the WebSocket it already has open.
 ///
-/// Subscribes to four types by name, so the broker filters: the risk pair,
-/// [BladeEventTypes#CALL_UTTERANCE] and [BladeEventTypes#CALL_REVIEWED]. The
+/// Subscribes to six types by name, so the broker filters: the risk pair,
+/// [BladeEventTypes#CALL_UTTERANCE], [BladeEventTypes#CALL_REVIEWED], and the
+/// start and end of a call, which make and close the card of a call a watched
+/// application answers ([AgentSettings#getWatchedApplications]). The
 /// contract is blade's; whoever hears the audio publishes them, and the agent
 /// app depends on blade alone.
 ///
@@ -45,7 +47,8 @@ public class ConsoleSubscription implements ServletContextListener {
 
 	static List<String> types() {
 		return Arrays.asList(BladeEventTypes.CALL_RISK_ASSESSED, BladeEventTypes.CALL_RISK_FLAGGED,
-				BladeEventTypes.CALL_UTTERANCE, BladeEventTypes.CALL_REVIEWED);
+				BladeEventTypes.CALL_UTTERANCE, BladeEventTypes.CALL_REVIEWED, BladeEventTypes.CALL_STARTED,
+				BladeEventTypes.CALL_COMPLETED);
 	}
 
 	private final ConsoleUpdater handler = new ConsoleUpdater();

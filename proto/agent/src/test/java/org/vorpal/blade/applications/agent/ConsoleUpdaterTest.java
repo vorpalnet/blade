@@ -164,4 +164,48 @@ class ConsoleUpdaterTest {
 		assertEquals("scam-script", frame.path("review").path("labels").get(0).asText());
 		assertEquals("Read me the code.", frame.path("review").path("text").asText());
 	}
+
+	/// A call-started or call-completed event as an application that answers its
+	/// own calls publishes it: the producer's name in `appName`, the caller's
+	/// headers beside it.
+	private static CloudEvent boundary(String type, String app) {
+		ObjectNode data = M.createObjectNode();
+		data.put("vorpalId", "1A2B3C4D");
+		data.put("startedAt", "2026-10-07T05:00:00Z");
+		data.put("appName", app);
+		data.put("caller", "\"Pat Caller\" <sip:+19165550123@carrier.example.com>;tag=1");
+		data.put("destination", "<sip:+14155550002@rig.example.com>");
+		return CloudEvent.create(type, "/blade/" + app, "1A2B3C4D.199bd1f1a00", data);
+	}
+
+	@Test
+	void onlyWatchedApplicationsMakeCards() {
+		java.util.List<String> watched = java.util.Arrays.asList("room");
+		assertTrue(ConsoleUpdater.watched(boundary(BladeEventTypes.CALL_STARTED, "room"), watched));
+		assertFalse(ConsoleUpdater.watched(boundary(BladeEventTypes.CALL_STARTED, "agent"), watched),
+				"this app's own calls already have a card from the INVITE");
+		assertFalse(ConsoleUpdater.watched(boundary(BladeEventTypes.CALL_STARTED, "room"), null),
+				"nothing watched by default");
+		assertTrue(ConsoleUpdater.isCallBoundary(boundary(BladeEventTypes.CALL_COMPLETED, "room")));
+		assertFalse(ConsoleUpdater.isCallBoundary(riskEvent(BladeEventTypes.CALL_RISK_ASSESSED, "0BADF00D", "WATCH", "0.5")));
+	}
+
+	@Test
+	void callStartedBuildsTheCardFromTheCallersHeaders() {
+		CallPop pop = ConsoleUpdater.popOf(boundary(BladeEventTypes.CALL_STARTED, "room"));
+
+		assertNotNull(pop);
+		assertEquals("1A2B3C4D", pop.vorpalId, "the key the risk and transcript updates find the card by");
+		assertEquals("9165550123", pop.ani);
+		assertEquals("Pat Caller", pop.displayName);
+		assertEquals("4155550002", pop.dialed);
+	}
+
+	@Test
+	void callCompletedEndsTheCard() throws Exception {
+		ConsoleUpdater.Update u = ConsoleUpdater.toUpdate(boundary(BladeEventTypes.CALL_COMPLETED, "room"));
+
+		assertNotNull(u);
+		assertEquals("ended", M.readTree(u.json).path("state").asText());
+	}
 }

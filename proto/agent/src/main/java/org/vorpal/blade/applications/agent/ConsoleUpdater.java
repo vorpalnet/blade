@@ -26,6 +26,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 ///   the card's transcript;
 /// - **review** (`call.reviewed`): the labels a post-call review found.
 ///
+/// Calls this app never forwards get their card here too. When an application
+/// in [AgentSettings#getWatchedApplications] answers a call itself (a room where
+/// AI agents answer), its `call.started` builds the card ([#popOf]) and its
+/// `call.completed` ends it; the updates above then find the card as they would
+/// for a forwarded call.
+///
 /// Either becomes the console's one general update frame, a partial `CallPop`
 /// keyed by Vorpal-ID, pushed to the console holding that call
 /// ([AgentConsoleRegistry#sendToCall]). The page merges it and redraws in place.
@@ -46,15 +52,104 @@ public class ConsoleUpdater implements EventSubscriber.Handler {
 	public void handle(List<CloudEvent> batch) {
 		for (CloudEvent event : batch) {
 			try {
+				if (isCallBoundary(event)) {
+					AgentSettings settings = AgentServlet.settings();
+					if (!watched(event, (settings == null) ? null : settings.getWatchedApplications())) {
+						continue;
+					}
+					if (BladeEventTypes.CALL_STARTED.equals(event.getType())) {
+						popWatched(event);
+						continue;
+					}
+				}
 				Update update = toUpdate(event);
 				if (update != null) {
 					String where = AgentConsoleRegistry.sendToCall(update.vorpalId, update.json);
 					AgentConsoleRegistry.log("agent: update vorpalId=" + update.vorpalId + " " + update.json + " -> " + where);
+					if (BladeEventTypes.CALL_COMPLETED.equals(event.getType())) {
+						AgentConsoleRegistry.forget(update.vorpalId);
+					}
 				}
 			} catch (Exception e) {
 				LOG.log(Level.FINE, "agent: risk event not applied: " + e.getMessage());
 			}
 		}
+	}
+
+	/// Whether the event starts or ends a call. The framework publishes both for
+	/// every call any B2BUA places, this app's own included, so they are read only
+	/// for the [AgentSettings#getWatchedApplications] calls.
+	static boolean isCallBoundary(CloudEvent event) {
+		return event != null && (BladeEventTypes.CALL_STARTED.equals(event.getType())
+				|| BladeEventTypes.CALL_COMPLETED.equals(event.getType()));
+	}
+
+	/// Whether the application that published the event is one the console
+	/// watches. The event names it in `data.appName`.
+	static boolean watched(CloudEvent event, List<String> applications) {
+		if (event == null || applications == null || applications.isEmpty()) {
+			return false;
+		}
+		String app = event.fields().path("appName").asText(null);
+		return app != null && applications.contains(app);
+	}
+
+	/// The card for a watched call, from its call-started event: the From,
+	/// P-Asserted-Identity and To values the publisher put in `caller`,
+	/// `assertedCaller` and `destination`. Null when the event names no call.
+	static CallPop popOf(CloudEvent event) {
+		JsonNode data = event.fields();
+		String vorpalId = vorpalIdOf(event);
+		if (vorpalId == null) {
+			return null;
+		}
+		CallPop pop = CallPopBuilder.of(text(data, "caller"), text(data, "assertedCaller"),
+				text(data, "destination"), CallerHistory.EMPTY);
+		pop.vorpalId = vorpalId;
+		return pop;
+	}
+
+	/// Pop a watched call on every open console and mark it talking: the
+	/// application that published it has already answered.
+	private static void popWatched(CloudEvent event) {
+		CallPop pop = popOf(event);
+		if (pop == null) {
+			return;
+		}
+		JsonNode data = event.fields();
+		try {
+			java.util.Date startedAt = data.has("startedAt")
+					? java.util.Date.from(java.time.Instant.parse(data.get("startedAt").asText()))
+					: null;
+			AgentConsoleRegistry.rememberCall(pop.vorpalId,
+					new AgentConsoleRegistry.CallRef(Long.parseLong(pop.vorpalId, 16), startedAt, pop.ani));
+		} catch (RuntimeException e) {
+			// No session identity: a disposition still publishes, just not by session.
+		}
+		Catalog cat = AgentServlet.catalog();
+		if (cat != null && pop.ani != null) {
+			pop.history = cat.history(pop.ani, AgentServlet.RECENT_LIMIT);
+		}
+		String how = AgentServlet.deliver(pop, null);
+		AgentConsoleRegistry.log("agent: pop vorpalId=" + pop.vorpalId + " ani=" + pop.ani + " from "
+				+ data.path("appName").asText() + " -> " + how);
+		ObjectNode talking = MAPPER.createObjectNode();
+		talking.put("t", "update");
+		talking.put("vorpalId", pop.vorpalId);
+		talking.put("state", "talking");
+		AgentConsoleRegistry.sendToCall(pop.vorpalId, talking.toString());
+	}
+
+	/// The call's Vorpal-ID: `data.vorpalId`, else the first half of the subject
+	/// (`<vorpalIdHex>.<tsHex>`).
+	private static String vorpalIdOf(CloudEvent event) {
+		String vorpalId = event.fields().path("vorpalId").asText(null);
+		if (vorpalId == null && event.getSubject() != null) {
+			String subject = event.getSubject();
+			int dot = subject.indexOf('.');
+			vorpalId = (dot > 0) ? subject.substring(0, dot) : subject;
+		}
+		return (vorpalId == null || vorpalId.isEmpty()) ? null : vorpalId;
 	}
 
 	/// The update frame for one event, or null if the event names no call or
@@ -65,20 +160,19 @@ public class ConsoleUpdater implements EventSubscriber.Handler {
 			return null;
 		}
 		JsonNode data = event.fields();
-		String vorpalId = data.path("vorpalId").asText(null);
-		if (vorpalId == null && event.getSubject() != null) {
-			// subject = <vorpalIdHex>.<tsHex>; the first half is the call.
-			String subject = event.getSubject();
-			int dot = subject.indexOf('.');
-			vorpalId = (dot > 0) ? subject.substring(0, dot) : subject;
-		}
-		if (vorpalId == null || vorpalId.isEmpty()) {
+		String vorpalId = vorpalIdOf(event);
+		if (vorpalId == null) {
 			return null;
 		}
 
 		ObjectNode frame = MAPPER.createObjectNode();
 		frame.put("t", "update");
 		frame.put("vorpalId", vorpalId);
+
+		if (BladeEventTypes.CALL_COMPLETED.equals(event.getType())) {
+			frame.put("state", "ended");
+			return new Update(vorpalId, frame.toString());
+		}
 
 		if (BladeEventTypes.CALL_UTTERANCE.equals(event.getType())) {
 			String text = text(data, "text");

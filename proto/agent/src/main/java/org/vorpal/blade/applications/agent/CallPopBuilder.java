@@ -90,6 +90,29 @@ public final class CallPopBuilder {
 		return pop;
 	}
 
+	/// Build the pop for a call another application answered, which never passes
+	/// through this one: from the From, P-Asserted-Identity and To header values
+	/// its call-started event carries. With no INVITE in hand there is no
+	/// STIR/SHAKEN, screening or call rate to show; the risk arrives later as
+	/// updates, the same as for a call this app forwards.
+	public static CallPop of(String from, String pai, String to, CallerHistory history) {
+		CallPop pop = new CallPop();
+		pop.receivedUtc = Instant.now().toString();
+		pop.history = (history != null) ? history : CallerHistory.EMPTY;
+		pop.ani = firstNanp(pai, from);
+		if (pop.ani == null) {
+			pop.ani = firstDigits(pai, from);
+		}
+		pop.displayName = display(from);
+		pop.dialed = firstNanp(to);
+		if (pop.dialed == null) {
+			pop.dialed = userPart(to);
+		}
+		pop.anonymous = from != null && from.toLowerCase().contains("anonymous");
+		pop.verstat = firstMatch(VERSTAT, pai, from);
+		return pop;
+	}
+
 	/// The digits of the first address whose user part is a phone number (six
 	/// or more digits, a leading + or 00 stripped), or null.
 	private static String firstDigits(String... addresses) {

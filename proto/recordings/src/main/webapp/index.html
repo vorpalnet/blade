@@ -45,10 +45,10 @@
   .player audio { width: 100%; max-width: 520px; }
   .player .note { color: var(--muted); font-size: 12px; }
   .transcript { border: 1px solid var(--line); border-radius: 4px; padding: 6px 0; max-height: 60vh; overflow: auto; }
-  .line { display: grid; grid-template-columns: 64px 70px 1fr; gap: 10px; padding: 5px 12px; }
+  .line { display: grid; grid-template-columns: 64px 150px 1fr; gap: 10px; padding: 5px 12px; }
   .line:hover { background: var(--panel); }
   .line .t { color: var(--muted); font-variant-numeric: tabular-nums; cursor: pointer; }
-  .line .p { font-weight: 600; }
+  .line .p { font-weight: 600; overflow-wrap: anywhere; }
   .line .p.callee { font-weight: 400; color: var(--muted); }
   .line .p::after { content: ""; }
   .line .x .k { border: 1px solid var(--ink); border-radius: 3px; padding: 0 4px; font-size: 12px; }
@@ -159,36 +159,70 @@
       audio.src = url; // the browser's own loader, the best that is left
       return;
     }
-    var ms = new MediaSource();
-    audio.src = URL.createObjectURL(ms);
-    audio.addEventListener('error', function () {
-      text(note, 'the recording could not be played' + (audio.error ? ' (code ' + audio.error.code + ')' : ''));
-    });
-    ms.addEventListener('sourceopen', function () {
-      var sb = ms.addSourceBuffer(mime);
-      var queue = [], done = false, busy = false;
-      function pump() {
-        if (busy || sb.updating) return;
-        if (queue.length) { busy = true; sb.appendBuffer(queue.shift()); }
-        else if (done && ms.readyState === 'open') { try { ms.endOfStream(); } catch (e) {} }
+    // The bytes are fetched once and kept: a damaged frame kills the player for
+    // good, and the way past one is a fresh player fed the same bytes.
+    var chunks = [], fetched = false, sink = null, failed = false;
+    var base = note.textContent, skips = 0, lastSeek = -1;
+    fetch(url, { credentials: 'same-origin' }).then(function (r) {
+      if (r.status === 403) throw new Error('you may not hear this recording' + (url.indexOf('verbatim') > 0 ? ' verbatim' : ''));
+      if (r.status === 409) return r.json().then(function (b) { throw new Error(b.error); });
+      if (!r.ok) throw new Error('the recording could not be fetched (' + r.status + ')');
+      var reader = r.body.getReader();
+      function next() {
+        reader.read().then(function (step) {
+          if (step.done) { fetched = true; if (sink) sink.end(); return; }
+          var b = step.value.buffer.slice(step.value.byteOffset, step.value.byteOffset + step.value.byteLength);
+          chunks.push(b);
+          if (sink) sink.push(b);
+          next();
+        });
       }
-      sb.addEventListener('updateend', function () { busy = false; pump(); });
-      sb.addEventListener('error', function () { text(note, 'the recording could not be decoded'); });
-      fetch(url, { credentials: 'same-origin' }).then(function (r) {
-        if (r.status === 403) throw new Error('you may not hear this recording' + (url.indexOf('verbatim') > 0 ? ' verbatim' : ''));
-        if (r.status === 409) return r.json().then(function (b) { throw new Error(b.error); });
-        if (!r.ok) throw new Error('the recording could not be fetched (' + r.status + ')');
-        var reader = r.body.getReader();
-        function next() {
-          reader.read().then(function (step) {
-            if (step.done) { done = true; pump(); return; }
-            queue.push(step.value.buffer.slice(step.value.byteOffset, step.value.byteOffset + step.value.byteLength));
-            pump(); next();
-          });
+      next();
+    }).catch(function (e) { failed = true; text(note, e.message); if (sink) sink.fail(); });
+
+    // A player over a new MediaSource holding every byte fetched so far, and
+    // the rest as it arrives; `at`, when given, is where it resumes playing.
+    function attach(at) {
+      var ms = new MediaSource();
+      audio.src = URL.createObjectURL(ms);
+      ms.addEventListener('sourceopen', function () {
+        var sb = ms.addSourceBuffer(mime);
+        var queue = chunks.slice(), done = fetched, busy = false;
+        function pump() {
+          if (busy || sb.updating) return;
+          if (queue.length) { busy = true; sb.appendBuffer(queue.shift()); }
+          else if (done && ms.readyState === 'open') { try { ms.endOfStream(); } catch (e) {} }
         }
-        next();
-      }).catch(function (e) { text(note, e.message); try { ms.endOfStream('network'); } catch (x) {} });
+        sink = {
+          push: function (b) { queue.push(b); pump(); },
+          end: function () { done = true; pump(); },
+          fail: function () { try { ms.endOfStream('network'); } catch (x) {} }
+        };
+        sb.addEventListener('updateend', function () { busy = false; pump(); });
+        sb.addEventListener('error', function () { text(note, 'the recording could not be decoded'); });
+        if (failed) { sink.fail(); return; }
+        pump();
+        if (at != null) { audio.currentTime = at; audio.play().catch(function () {}); }
+      }, { once: true });
+    }
+
+    // MEDIA_ERR_DECODE is one frame the browser cannot decode, not a bad
+    // recording: every AAC frame decodes on its own, so a new player started
+    // just past the failure plays on. Each retry moves forward, and they are
+    // capped, so a recording that is damaged throughout still stops.
+    audio.addEventListener('error', function () {
+      var code = audio.error ? audio.error.code : 0;
+      if (code === 3 && skips < 20) {
+        skips++;
+        var at = Math.max(audio.currentTime, lastSeek + 0.25);
+        lastSeek = at;
+        text(note, base + ' · skipped damaged audio at ' + fmtLen(at * 1000));
+        attach(at);
+        return;
+      }
+      text(note, 'the recording could not be played' + (code ? ' (code ' + code + ')' : ''));
     });
+    attach(null);
   }
 
   function select(tr, hit) {

@@ -31,6 +31,7 @@ public class AgentSettings extends Configuration implements Serializable {
 	private String reportGroups;
 	private int ringSeconds = 20;
 	private java.util.LinkedHashMap<String, String> people = new java.util.LinkedHashMap<>();
+	private java.util.List<String> watchedApplications = new java.util.ArrayList<>();
 
 	public AgentSettings() {
 	}
@@ -116,5 +117,17 @@ public class AgentSettings extends Configuration implements Serializable {
 
 	public void setPeople(java.util.LinkedHashMap<String, String> people) {
 		this.people = people;
+	}
+
+	@JsonPropertyDescription("Applications whose calls the console shows although they never pass through it, by "
+			+ "deployment name: an IVR, a room where AI agents answer. Each such call becomes a card when it starts, broadcast to every "
+			+ "open console: a supervisor's view of calls no human has answered yet. Empty shows only the calls "
+			+ "this app forwards to an agent.")
+	public java.util.List<String> getWatchedApplications() {
+		return watchedApplications;
+	}
+
+	public void setWatchedApplications(java.util.List<String> watchedApplications) {
+		this.watchedApplications = watchedApplications;
 	}
 }
