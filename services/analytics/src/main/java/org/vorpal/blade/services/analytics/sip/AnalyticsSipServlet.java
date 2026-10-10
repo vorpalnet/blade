@@ -39,6 +39,9 @@ public class AnalyticsSipServlet extends B2buaServlet implements B2buaListener, 
 	@Override
 	protected void servletDestroyed(SipServletContextEvent event) throws ServletException, IOException {
 		sipLogger.fine("AnalyticsSipServlet.servletDestroyed");
+		if (settingsManager != null) {
+			settingsManager.unregister();
+		}
 	}
 
 //	public static long combineToLong(long timestamp, int otherValue) {

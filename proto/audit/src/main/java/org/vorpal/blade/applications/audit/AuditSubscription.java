@@ -96,5 +96,12 @@ public class AuditSubscription implements ServletContextListener {
 		if (registrar != null) {
 			registrar.stop();
 		}
+		try {
+			if (settings != null) {
+				settings.unregister();
+			}
+		} catch (Exception e) {
+			// Shutting down regardless.
+		}
 	}
 }

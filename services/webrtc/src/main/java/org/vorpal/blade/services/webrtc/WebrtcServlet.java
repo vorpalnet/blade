@@ -116,6 +116,13 @@ public class WebrtcServlet extends AsyncSipServlet {
 	@Override
 	protected void servletDestroyed(SipServletContextEvent event) {
 		sipLogger.info("WebrtcServlet: stopped");
+		try {
+			if (settings != null) {
+				settings.unregister();
+			}
+		} catch (Exception e) {
+			sipLogger.warning("WebrtcServlet: settings MBean not unregistered: " + e);
+		}
 	}
 
 	@Override

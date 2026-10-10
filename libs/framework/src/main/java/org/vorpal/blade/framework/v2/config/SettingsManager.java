@@ -501,14 +501,37 @@ public class SettingsManager<T> {
 		// `[[settingsmxbean-introspection-bug]]`.
 		javax.management.StandardMBean mxbean =
 				new javax.management.StandardMBean(settings, SettingsMXBean.class, true);
+		// A bean left registered by an earlier deployment of this app, one that
+		// never called unregister(), pins that deployment's whole classloader.
+		// The container does not refuse a second registration under the same
+		// name: the call returns normally, the new bean answers lookups, and the
+		// old one stays registered behind it, held for the life of the server.
+		// Replacing it here frees the old deployment on the next one.
+		if (server.isRegistered(objectName)) {
+			try {
+				server.unregisterMBean(objectName);
+			} catch (javax.management.InstanceNotFoundException gone) {
+				// Already gone: nothing to replace.
+			}
+		}
 		oi = server.registerMBean(mxbean, objectName);
 		objectName = oi.getObjectName();
+		if (servletContext != null) {
+			SettingsUnregistrar.track(servletContext, this);
+		}
 	}
 
+	/// Removes this application's Configuration and Metrics MBeans. Runs by
+	/// itself when the application stops (see [SettingsUnregistrar]); calling
+	/// it again, or after the bean is gone, does nothing.
 	public void unregister() throws ServletException, IOException {
 		unregisterMetrics();
 		try {
-			server.unregisterMBean(objectName);
+			if (server.isRegistered(objectName)) {
+				server.unregisterMBean(objectName);
+			}
+		} catch (javax.management.InstanceNotFoundException gone) {
+			// Already gone.
 		} catch (Exception e) {
 			throw new IOException(e);
 		}

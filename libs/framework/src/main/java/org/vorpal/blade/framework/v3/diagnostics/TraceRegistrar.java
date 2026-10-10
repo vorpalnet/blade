@@ -42,6 +42,10 @@ public class TraceRegistrar implements ServletContextListener {
 					: "vorpal.blade:Name=" + name + ",Type=Trace");
 
 			StandardMBean mxbean = new StandardMBean(new Trace(name), TraceMXBean.class, true);
+			// Replace a bean an earlier deployment left behind; it would pin that copy.
+			if (server.isRegistered(on)) {
+				server.unregisterMBean(on);
+			}
 			objectName = server.registerMBean(mxbean, on).getObjectName();
 		} catch (Exception e) {
 			logger.log(Level.WARNING, "Trace MBean registration failed; app deploys without chain tracing", e);

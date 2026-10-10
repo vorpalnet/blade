@@ -18,6 +18,11 @@
     <listener>
         <listener-class>org.vorpal.blade.framework.v2.logging.LogReaderRegistrar</listener-class>
     </listener>
+    <!-- Unregisters the app's settings MBeans at undeploy, whether or not the
+         app remembers to: a bean left registered pins the whole deployment. -->
+    <listener>
+        <listener-class>org.vorpal.blade.framework.v2.config.SettingsUnregistrar</listener-class>
+    </listener>
     <listener>
         <listener-class>org.vorpal.blade.framework.v3.probe.KernelProbeRegistrar</listener-class>
     </listener>
