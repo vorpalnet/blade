@@ -18,6 +18,7 @@ import org.vorpal.blade.framework.v2.config.AttributesKey;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v3.events.AnalyticsEvent;
 import org.vorpal.blade.framework.v3.events.AnalyticsEventMapper;
+import org.vorpal.blade.framework.v3.events.CallScope;
 import org.vorpal.blade.framework.v3.events.CloudEvent;
 import org.vorpal.blade.framework.v3.events.Events;
 
@@ -90,6 +91,7 @@ public class Analytics implements Serializable {
 	public AnalyticsEvent createEvent(String eventName, SipServletMessage message) {
 		SipApplicationSession appSession = message.getApplicationSession();
 		AnalyticsEvent event = new AnalyticsEvent(eventName, getVorpalId(appSession), getCallStartedAt(appSession));
+		event.setScope(CallScope.of(appSession));
 		applyOrigin(event, selectorsFor(eventName), message);
 		return event;
 	}
@@ -330,9 +332,9 @@ public class Analytics implements Serializable {
 			}
 			Date startedAt = getCallStartedAt(appSession);
 			appSession.setAttribute(SESSION_STATE, startedAt);
-			publish(AnalyticsEventMapper.session(source(), vorpalId.longValue(), startedAt, null,
-					SettingsManager.getApplicationName(), SettingsManager.getDomainName(),
-					SettingsManager.getServerName(), applicationStartedAt));
+			publish(AnalyticsEventMapper.scoped(AnalyticsEventMapper.session(source(), vorpalId.longValue(), startedAt,
+					null, SettingsManager.getApplicationName(), SettingsManager.getDomainName(),
+					SettingsManager.getServerName(), applicationStartedAt), CallScope.of(appSession)));
 		} catch (IllegalStateException invalidated) {
 			// The session went away under us; there is nothing left to open.
 		}
@@ -363,9 +365,9 @@ public class Analytics implements Serializable {
 			}
 			Date startedAt = (state instanceof Date) ? (Date) state : getCallStartedAt(appSession);
 			appSession.setAttribute(SESSION_STATE, Boolean.FALSE);
-			publish(AnalyticsEventMapper.session(source(), vorpalId.longValue(), startedAt, new Date(),
-					SettingsManager.getApplicationName(), SettingsManager.getDomainName(),
-					SettingsManager.getServerName(), applicationStartedAt));
+			publish(AnalyticsEventMapper.scoped(AnalyticsEventMapper.session(source(), vorpalId.longValue(), startedAt,
+					new Date(), SettingsManager.getApplicationName(), SettingsManager.getDomainName(),
+					SettingsManager.getServerName(), applicationStartedAt), CallScope.of(appSession)));
 		} catch (IllegalStateException invalidated) {
 			// Attributes are unreadable once the container has invalidated the
 			// session; the ready-to-invalidate call before it has done the work.
@@ -385,7 +387,7 @@ public class Analytics implements Serializable {
 	/// The two arguments are exactly what [#sessionStop(SipServletMessage)]
 	/// takes from the application session, so the event is indistinguishable on
 	/// the wire from one published the ordinary way. A later backstop close of
-	/// the same session is harmless: the first stop the sink records wins.
+	/// the same session is harmless: the sink keeps the latest stop it hears.
 	///
 	/// @param vorpalId  the call's correlator
 	/// @param startedAt the call's birth instant — identity, not a report time, so
@@ -404,9 +406,10 @@ public class Analytics implements Serializable {
 		if (vorpalId == null) {
 			return;
 		}
-		publish(AnalyticsEventMapper.sessionKey(source(), vorpalId.longValue(), getCallStartedAt(appSession), name,
-				value, SettingsManager.getApplicationName(), SettingsManager.getDomainName(),
-				SettingsManager.getServerName(), applicationStartedAt));
+		publish(AnalyticsEventMapper.scoped(AnalyticsEventMapper.sessionKey(source(), vorpalId.longValue(),
+				getCallStartedAt(appSession), name, value, SettingsManager.getApplicationName(),
+				SettingsManager.getDomainName(), SettingsManager.getServerName(), applicationStartedAt),
+				CallScope.of(appSession)));
 	}
 
 	/// The one place the framework's own analytics facts reach the bus. Never

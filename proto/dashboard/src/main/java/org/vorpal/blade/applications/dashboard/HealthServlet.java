@@ -34,12 +34,15 @@ public class HealthServlet extends HttpServlet {
 	private static final long serialVersionUID = 1L;
 	private static final Logger logger = Logger.getLogger(HealthServlet.class.getName());
 	private static final String DOMAIN_RUNTIME = "java:comp/env/jmx/domainRuntime";
-	private static final String DRS = "com.bea:Name=DomainRuntimeService,Type=weblogic.management.mbeanservers.domainruntime.DomainRuntimeServiceMBean";
+	static final String DRS = "com.bea:Name=DomainRuntimeService,Type=weblogic.management.mbeanservers.domainruntime.DomainRuntimeServiceMBean";
 	private static final String SIP_PATTERN = "com.bea:Type=SipServerRuntime,*";
 	private static final String DRAIN_PATTERN = "vorpal.blade:Name=*,Type=Drain,*";
 
 	@Override
 	protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+		if (Access.refusePlatform(req, resp, getServletContext())) {
+			return;
+		}
 		resp.setContentType("application/json");
 		resp.setCharacterEncoding("UTF-8");
 		resp.setHeader("Cache-Control", "no-store");
@@ -58,7 +61,11 @@ public class HealthServlet extends HttpServlet {
 		Map<String, Boolean> drained = drainByServer(dr, admin);
 
 		ObjectName[] servers = (ObjectName[]) dr.getAttribute(new ObjectName(DRS), "ServerRuntimes");
-		out.write("{\"nodes\":[");
+		// This domain's name: the board reads these servers live, and every other
+		// domain from its samples.
+		ObjectName config = obj(dr, new ObjectName(DRS), "DomainConfiguration");
+		String domain = config == null ? null : str(dr, config, "Name");
+		out.write("{\"domain\":" + (domain == null ? "null" : ("\"" + esc(domain) + "\"")) + ",\"nodes\":[");
 		boolean first = true;
 		for (ObjectName sr : servers) {
 			String name = str(dr, sr, "Name");
@@ -139,7 +146,7 @@ public class HealthServlet extends HttpServlet {
 		return m;
 	}
 
-	private static String adminName(MBeanServer dr) {
+	static String adminName(MBeanServer dr) {
 		String n = System.getProperty("weblogic.Name", "AdminServer");
 		try {
 			ObjectName dc = (ObjectName) dr.getAttribute(new ObjectName(DRS), "DomainConfiguration");
@@ -149,24 +156,24 @@ public class HealthServlet extends HttpServlet {
 		return n;
 	}
 
-	private static String serverOf(ObjectName on, String admin) {
+	static String serverOf(ObjectName on, String admin) {
 		String loc = on.getKeyProperty("Location");
 		return (loc != null && !loc.isEmpty()) ? loc : admin;
 	}
 
-	private static ObjectName obj(MBeanServer mbs, ObjectName on, String attr) {
+	static ObjectName obj(MBeanServer mbs, ObjectName on, String attr) {
 		Object v = get(mbs, on, attr);
 		return (v instanceof ObjectName) ? (ObjectName) v : null;
 	}
-	private static String str(MBeanServer mbs, ObjectName on, String attr) {
+	static String str(MBeanServer mbs, ObjectName on, String attr) {
 		Object v = get(mbs, on, attr);
 		return v == null ? null : v.toString();
 	}
-	private static long lng(MBeanServer mbs, ObjectName on, String attr) {
+	static long lng(MBeanServer mbs, ObjectName on, String attr) {
 		Object v = get(mbs, on, attr);
 		return v instanceof Number ? ((Number) v).longValue() : -1;
 	}
-	private static Object get(MBeanServer mbs, ObjectName on, String attr) {
+	static Object get(MBeanServer mbs, ObjectName on, String attr) {
 		try { return mbs.getAttribute(on, attr); } catch (Exception e) { return null; }
 	}
 	private static String num(long v) { return v < 0 ? "null" : Long.toString(v); }

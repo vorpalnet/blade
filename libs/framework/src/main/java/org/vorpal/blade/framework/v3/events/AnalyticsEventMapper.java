@@ -196,12 +196,34 @@ public final class AnalyticsEventMapper {
 		return CloudEvent.create(type, source, subject, data, BladeEventCatalog.versionOf(type));
 	}
 
-	/// The payload names [#callScoped] reserves for the correlator and the
-	/// publishing application. A consumer that wants only the event's own
-	/// facts (the analytics sink's `payload` column) removes these.
+	/// The payload names [#callScoped] reserves for the correlator, the
+	/// publishing application and the call's scope. A consumer that wants only
+	/// the event's own facts (the analytics sink's `payload` column) removes
+	/// these.
 	public static final java.util.Set<String> ENVELOPE = java.util.Collections.unmodifiableSet(
 			new java.util.LinkedHashSet<>(java.util.Arrays.asList("vorpalId", "startedAt", "occurredAt", "appName",
-					"domain", "server", "appStartedAt")));
+					"domain", "server", "appStartedAt", "tenant", "department")));
+
+	/// Stamp a call event with the call's scope, `tenant` and `department`.
+	/// Applied after the event is built, so it overwrites whatever a producer
+	/// put under those names: a scope comes from the call, never from the
+	/// producer's fields.
+	///
+	/// @param event a call-scoped event
+	/// @param scope the call's scope; null or [CallScope#NONE] leaves both out
+	/// @return the event
+	public static CloudEvent scoped(CloudEvent event, CallScope scope) {
+		if (event != null && event.getData() instanceof ObjectNode) {
+			ObjectNode data = (ObjectNode) event.getData();
+			data.remove("tenant");
+			data.remove("department");
+			if (scope != null) {
+				put(data, "tenant", scope.getTenant());
+				put(data, "department", scope.getDepartment());
+			}
+		}
+		return event;
+	}
 
 	private static void put(ObjectNode node, String field, String value) {
 		if (value != null && !value.isEmpty()) {

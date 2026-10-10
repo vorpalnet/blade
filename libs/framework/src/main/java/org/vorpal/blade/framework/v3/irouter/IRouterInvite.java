@@ -209,7 +209,34 @@ public class IRouterInvite extends Callflow {
 		}
 	}
 
+	/// Context variables that set the call's scope: a translation row whose
+	/// extras name them (for example a table keyed on the dialed number) files
+	/// every later event of the call under that tenant and department. See
+	/// [Callflow#setTenant].
+	public static final String TENANT_VAR = "blade.tenant";
+	public static final String DEPARTMENT_VAR = "blade.department";
+
+	/// Promote [#TENANT_VAR] and [#DEPARTMENT_VAR] from the pipeline's results
+	/// to the call, before the INVITE goes on, so the next hop receives them
+	/// on X-Vorpal-ID. A value that is not a name is refused with a warning
+	/// rather than half-applied.
+	static void applyScope(SipServletRequest request, Context ctx) {
+		String tenant = ctx.get(TENANT_VAR);
+		String department = ctx.get(DEPARTMENT_VAR);
+		try {
+			if (tenant != null && !tenant.isEmpty()) {
+				Callflow.setTenant(request.getApplicationSession(), tenant);
+			}
+			if (department != null && !department.isEmpty()) {
+				Callflow.setDepartment(request.getApplicationSession(), department);
+			}
+		} catch (IllegalArgumentException e) {
+			sipLogger.warning(request, "iRouter: call scope not applied: " + e.getMessage());
+		}
+	}
+
 	private void applyRouting(SipServletRequest request, Context ctx, IRouterConfig config) {
+		applyScope(request, ctx);
 		Routing routing = config.getRouting();
 		Route route = (routing != null) ? routing.decide(ctx) : null;
 

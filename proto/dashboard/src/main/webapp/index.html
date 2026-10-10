@@ -7,14 +7,18 @@
 	<link rel="icon" href="/blade/portal/brand/favicon.svg" type="image/svg+xml">
 	<link rel="stylesheet" href="dashboard.css">
 </head>
-<body>
+<body class="board">
 
-	<header class="topbar">
+	<header class="topbar topbar--board">
 		<a class="brand" href="/blade/portal/">
 			<img class="brand__logo" src="/blade/portal/brand/vorpal_logo_lightpurple.svg" alt="Vorpal">
 			<span class="brand__name">Dashboard<small>OCCAS &middot; BLADE</small></span>
 		</a>
+		<div class="seg" id="range" title="Range for the call analytics. Server health and operations are always live."></div>
+		<select class="tz" id="scope" title="Which domain the board shows. This domain is read live; every other one from its minute samples."></select>
 		<div class="spacer"></div>
+		<span class="clock" id="clock"></span>
+		<select class="tz" id="tz" title="Time zone for every time on the board. The data is UTC."></select>
 		<nav class="nav">
 			<a href="/blade/portal/">Portal</a>
 			<a href="/blade/tuning/">Tuning</a>
@@ -23,59 +27,21 @@
 		<span class="status" id="status"><span class="dot"></span><span id="statusText">loading…</span></span>
 	</header>
 
-	<main>
-		<p class="eyebrow">Live operations</p>
-		<h1>OCCAS &amp; BLADE at a glance</h1>
-		<p class="lede">Cluster health from the runtime MBeans, operations from the event bus, and call
-		analytics from the reporting views, in one pane. Health and operations refresh every 5 s; the
-		analytics cards every minute.</p>
+	<main class="board__grid">
+		<section class="kpis" id="kpis"></section>
 
-		<p class="eyebrow">Cluster health</p>
-		<section class="tiles">
-			<div class="tile accent"><div class="tile__l">Nodes running</div><div class="tile__v" id="t-nodes">—</div></div>
-			<div class="tile"><div class="tile__l">SIP sessions</div><div class="tile__v" id="t-sip-sessions">—</div></div>
-			<div class="tile"><div class="tile__l">App sessions</div><div class="tile__v" id="t-app-sessions">—</div></div>
-			<div class="tile"><div class="tile__l">SIP throughput</div><div class="tile__v" id="t-throughput">—</div></div>
-		</section>
-		<div class="health-controls">
-			<span class="health-controls__l">Trend · last hour</span>
-			<div class="seg" id="metric-toggle"></div>
-		</div>
-		<div id="cluster-groups"></div>
+		<section class="panel panel--cluster" data-panel="cluster"></section>
+		<section class="panel panel--traffic" data-panel="traffic"></section>
+		<section class="panel panel--ops" data-panel="ops"></section>
 
-		<p class="eyebrow" style="margin-top:22px">Operations</p>
-		<section class="tiles">
-			<div class="tile accent"><div class="tile__l">Endpoints down</div><div class="tile__v" id="t-endpoints-down">—</div></div>
-			<div class="tile"><div class="tile__l">Trunks failing</div><div class="tile__v" id="t-trunks-failing">—</div></div>
-			<div class="tile"><div class="tile__l">Callers queued</div><div class="tile__v" id="t-queued">—</div></div>
-			<div class="tile"><div class="tile__l">SIP refusals</div><div class="tile__v" id="t-sip-denied">—</div></div>
-		</section>
-		<section class="grid">
-			<div class="card">
-				<div class="card__head"><span class="card__title">Wrong now</span><span class="card__sub">until the event that clears it</span></div>
-				<div class="card__body ops-list" id="ops-wrong"></div>
-			</div>
-			<div class="card">
-				<div class="card__head"><span class="card__title">Queues</span><span class="card__sub">last minute &middot; per node</span></div>
-				<div class="card__body ops-list" id="ops-queues"></div>
-			</div>
-			<div class="card card--wide">
-				<div class="card__head"><span class="card__title">Recent operations events</span><span class="card__sub">newest first &middot; since this server started listening</span></div>
-				<div class="card__body ops-list" id="ops-recent"></div>
-			</div>
-		</section>
-
-		<p class="eyebrow" style="margin-top:22px">Call analytics</p>
-		<p class="section-lede">One card per report, from data at most five minutes old. Open a card for the full
-		report: live numbers, charts and tables, your own date range, with or without the sample data.</p>
-		<section class="rcards" id="report-cards"></section>
-
-		<p class="foot">Sample data excluded &middot; cards updated <span id="updated">—</span> &middot; charts drawn with <a href="vendor/LICENSE-d3.txt">D3</a></p>
+		<section class="panel panel--outcomes" data-panel="outcomes"></section>
+		<section class="panel panel--apps" data-panel="apps"></section>
+		<section class="panel panel--risk" data-panel="risk"></section>
 	</main>
 
 	<script src="vendor/d3.min.js"></script>
 	<script src="charts.js"></script>
 	<script src="reports.js"></script>
-	<script src="dashboard.js"></script>
+	<script src="board.js"></script>
 </body>
 </html>

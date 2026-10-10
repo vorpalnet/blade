@@ -11,30 +11,30 @@
 		<welcome-file>index.html</welcome-file>
 	</welcome-file-list>
 
-	<!-- the login form and its assets need no auth -->
-	<security-constraint>
-		<web-resource-collection>
-			<web-resource-name>login</web-resource-name>
-			<url-pattern>/login/*</url-pattern>
-		</web-resource-collection>
-	</security-constraint>
-
-	<!-- everything else, pages and the data servlet alike, requires an admin
-	     role. "/" is WebLogic's catch-all, so the servlet is FORM-protected with
-	     the pages. Read-only board; per-operation authz would live in the servlet
-	     if it ever grew a write. -->
-	<security-constraint>
-		<web-resource-collection>
-			<web-resource-name>dashboard</web-resource-name>
-			<url-pattern>/</url-pattern>
-		</web-resource-collection>
-		<auth-constraint>
-			<role-name>Admin</role-name>
-			<role-name>Operator</role-name>
-			<role-name>Deployer</role-name>
-			<role-name>Monitor</role-name>
-		</auth-constraint>
-	</security-constraint>
+	<!--
+	  Who is asking: OidcLoginFilter signs the browser in with the deployment's
+	  OpenID Connect provider when WEB-INF/blade-oidc.properties is present
+	  (deploy.sh adds it), so a tenant's people need no WebLogic account; a WAR
+	  deployed without the file falls back to the container's login named below.
+	  What they may see: the dashboard's grants, by group (Access). With no
+	  grants configured, only the WebLogic admin roles see anything.
+	  There is deliberately no auth-constraint. The container checks one before
+	  any filter runs, so a constraint would demand the container's own login of
+	  every browser and the OpenID sign-in could never start. The container's
+	  login form stays public: it must answer before anyone is signed in.
+	-->
+	<filter>
+		<filter-name>OidcLoginFilter</filter-name>
+		<filter-class>org.vorpal.blade.framework.v3.security.OidcLoginFilter</filter-class>
+		<init-param>
+			<param-name>publicPaths</param-name>
+			<param-value>/login/*</param-value>
+		</init-param>
+	</filter>
+	<filter-mapping>
+		<filter-name>OidcLoginFilter</filter-name>
+		<url-pattern>/*</url-pattern>
+	</filter-mapping>
 
 	<login-config>
 		<auth-method>CLIENT-CERT,FORM</auth-method>

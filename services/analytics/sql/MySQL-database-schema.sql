@@ -50,7 +50,7 @@ CREATE TABLE applications(
    domain VARCHAR(64) DEFAULT NULL,    -- weblogic cluster domain; not DNS
    server VARCHAR(64) DEFAULT NULL,    -- weblogic server name; not hostname
    tenant VARCHAR(64) DEFAULT NULL,    -- customer code for multi-tenant RLS; NULL = single-tenant
-   created DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+   created DATETIME(3) NOT NULL DEFAULT (UTC_TIMESTAMP(3)),
    destroyed DATETIME(3) NULL DEFAULT NULL,
    comments TEXT NULL,                 -- user-defined data (JSON)
 
@@ -86,8 +86,9 @@ CREATE TABLE sessions(
    -- Millisecond precision is load-bearing: this column is an input to the
    -- primary key, and the wire carries milliseconds. It is also what keeps the
    -- correlator unique over time — the X-Vorpal-ID is 32 bits and is reused.
-   created   DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),  -- real call-start time
+   created   DATETIME(3) NOT NULL DEFAULT (UTC_TIMESTAMP(3)),  -- real call-start time
    destroyed DATETIME(3) NULL DEFAULT NULL,                      -- NULL while open
+   tenant    VARCHAR(64) NULL DEFAULT NULL,  -- the call's tenant when it opened (X-Vorpal-ID tn)
 
    CONSTRAINT session_natural_uk UNIQUE (cluster_name, vorpal_id, created),
 
@@ -144,7 +145,13 @@ CREATE TABLE events(
 
    -- DATETIME, not TIMESTAMP: the 2038 limit the header calls out applies here
    -- too, and this column was the one place it had been missed.
-   created DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+   created DATETIME(3) NOT NULL DEFAULT (UTC_TIMESTAMP(3)),
+
+   -- Who may see this event: the call's tenant and department when it was
+   -- published, from X-Vorpal-ID. NULL when the call carried none; a reader
+   -- falls back to applications.tenant (the deployment's blade.tenant).
+   tenant VARCHAR(64) NULL DEFAULT NULL,
+   department VARCHAR(64) NULL DEFAULT NULL,
 
    -- The event's attributes as one JSON object of name to value. This replaced
    -- an attributes/attribute_names pair that cost one insert per attribute on
@@ -154,6 +161,7 @@ CREATE TABLE events(
    INDEX idx_event_session (session_id, created),
    INDEX idx_event_type_created (type, created),
    INDEX idx_event_created (created),
+   INDEX idx_event_scope (tenant, department, created),
 
    -- Values are numbers, or numeric strings in rows written before the flat
    -- payload. The reader's common question is numeric, so the cast lives in an

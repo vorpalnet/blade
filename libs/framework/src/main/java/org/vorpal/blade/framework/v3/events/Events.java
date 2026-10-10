@@ -76,7 +76,7 @@ public final class Events {
 		try {
 			Long vorpalId = (app == null) ? null : Analytics.getVorpalId(app);
 			Date startedAt = (vorpalId == null) ? null : Analytics.getCallStartedAt(app);
-			return publish(vorpalId, startedAt, type, version, fields);
+			return publish(vorpalId, startedAt, CallScope.of(app), type, version, fields);
 		} catch (Throwable t) {
 			dropped(type, t);
 			return false;
@@ -91,7 +91,18 @@ public final class Events {
 	/// @param startedAt the call's birth instant. Identity, not a report time:
 	///                  it must be the value the call's other events carry
 	public static boolean publish(Long vorpalId, Date startedAt, String type, Consumer<ObjectNode> fields) {
-		return publish(vorpalId, startedAt, type, null, fields);
+		return publish(vorpalId, startedAt, CallScope.NONE, type, null, fields);
+	}
+
+	/// As [#publish(Long, Date, String, Consumer)], stamped with the call's
+	/// scope. An application that publishes off the container thread keeps the
+	/// [CallScope] beside the correlator, taken with [CallScope#of] while it
+	/// still held the application session.
+	///
+	/// @param scope the call's tenant and department; null for none
+	public static boolean publish(Long vorpalId, Date startedAt, CallScope scope, String type,
+			Consumer<ObjectNode> fields) {
+		return publish(vorpalId, startedAt, scope, type, null, fields);
 	}
 
 	/// As [#publish(Long, Date, String, Consumer)], for an application's own
@@ -100,6 +111,11 @@ public final class Events {
 	/// @param version the declaration revision this producer was written
 	///                against, its generated payload class's `VERSION`
 	public static boolean publish(Long vorpalId, Date startedAt, String type, Integer version,
+			Consumer<ObjectNode> fields) {
+		return publish(vorpalId, startedAt, CallScope.NONE, type, version, fields);
+	}
+
+	private static boolean publish(Long vorpalId, Date startedAt, CallScope scope, String type, Integer version,
 			Consumer<ObjectNode> fields) {
 		try {
 			ObjectNode data = MAPPER.createObjectNode();
@@ -112,7 +128,7 @@ public final class Events {
 			if (version != null) {
 				event.setDataversion(version);
 			}
-			return publish(event);
+			return publish(AnalyticsEventMapper.scoped(event, scope));
 		} catch (Throwable t) {
 			dropped(type, t);
 			return false;

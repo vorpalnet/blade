@@ -18,6 +18,9 @@ public class OpsServlet extends HttpServlet {
 
 	@Override
 	protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+		if (Access.refusePlatform(req, resp, getServletContext())) {
+			return;
+		}
 		resp.setContentType("application/json");
 		resp.setCharacterEncoding("UTF-8");
 		resp.setHeader("Cache-Control", "no-store");

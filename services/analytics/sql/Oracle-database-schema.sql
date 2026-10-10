@@ -9,7 +9,9 @@
 -- Oracle dialect notes:
 --   * Types: BIGINT -> NUMBER(19); VARCHAR(n) -> VARCHAR2(n CHAR); TEXT -> CLOB;
 --     DATETIME(3) -> TIMESTAMP (which is fractional by default, 6 digits);
---     DEFAULT CURRENT_TIMESTAMP(3) -> DEFAULT SYSTIMESTAMP.
+--     DEFAULT (UTC_TIMESTAMP(3)) -> DEFAULT SYS_EXTRACT_UTC(SYSTIMESTAMP). Every
+--     timestamp holds UTC wall-clock time; SYSTIMESTAMP alone is the database
+--     server's zone.
 --   * NO identity columns and NO sequences, by design. Every id is a 64-bit
 --     hash of the row's natural key computed by the writer (see the
 --     framework's v3.analytics.NaturalKey). This is not merely a preference
@@ -66,7 +68,7 @@ CREATE TABLE applications(
    domain    VARCHAR2(64 CHAR),             -- weblogic cluster domain; not DNS
    server    VARCHAR2(64 CHAR),             -- weblogic server name; not hostname
    tenant    VARCHAR2(64 CHAR),             -- customer code for multi-tenant RLS; NULL = single-tenant
-   created   TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL,
+   created   TIMESTAMP DEFAULT SYS_EXTRACT_UTC(SYSTIMESTAMP) NOT NULL,
    destroyed TIMESTAMP,
    comments  CLOB,
 
@@ -97,8 +99,11 @@ CREATE TABLE sessions(
    -- Millisecond precision is load-bearing: this column is an input to the
    -- primary key, and it is what keeps the correlator unique over time, since
    -- the X-Vorpal-ID is 32 bits and is reused.
-   created   TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL,
+   created   TIMESTAMP DEFAULT SYS_EXTRACT_UTC(SYSTIMESTAMP) NOT NULL,
    destroyed TIMESTAMP,
+
+   -- The call's tenant when it opened (X-Vorpal-ID `tn`); NULL if none.
+   tenant    VARCHAR2(64 CHAR),
 
    CONSTRAINT session_natural_uk UNIQUE (cluster_name, vorpal_id, created)
 );
@@ -151,7 +156,13 @@ CREATE TABLE events(
    event_uid CHAR(36 CHAR) NOT NULL,
    CONSTRAINT event_uid_uk UNIQUE (event_uid),
 
-   created TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL,
+   created TIMESTAMP DEFAULT SYS_EXTRACT_UTC(SYSTIMESTAMP) NOT NULL,
+
+   -- Who may see this event: the call's tenant and department when it was
+   -- published, from X-Vorpal-ID. NULL when the call carried none; a reader
+   -- falls back to applications.tenant (the deployment's blade.tenant).
+   tenant     VARCHAR2(64 CHAR),
+   department VARCHAR2(64 CHAR),
 
    -- The event's attributes as one JSON object of name to value, replacing an
    -- attributes/attribute_names pair that cost one insert per attribute on
@@ -163,6 +174,7 @@ CREATE TABLE events(
 CREATE INDEX idx_event_session ON events(session_id, created);
 CREATE INDEX idx_event_type_created ON events(type, created);
 CREATE INDEX idx_event_created ON events(created);
+CREATE INDEX idx_event_scope ON events(tenant, department, created);
 
 -- Values are numbers, or numeric strings in rows written before the flat
 -- payload. The reader's common question is numeric, so the conversion lives in an

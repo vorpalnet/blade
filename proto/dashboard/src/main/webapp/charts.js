@@ -78,7 +78,10 @@
 		var longest = d3.max(domain, function (d) { return shortLabel(d).length; }) || 4;
 		var minPx = Math.max(44, longest * 7 + 12);
 		var every = Math.max(1, Math.ceil(domain.length / Math.max(1, Math.floor(w / minPx))));
-		return domain.filter(function (_, i) { return i % every === 0 || i === domain.length - 1; });
+		// The last label always shows; the regular one before it gives way if the
+		// two would touch.
+		var last = domain.length - 1;
+		return domain.filter(function (_, i) { return i === last || (i % every === 0 && last - i >= every); });
 	}
 
 	function shortLabel(s) {
@@ -120,7 +123,8 @@
 		if (!rows || !rows.length) return message(el, 'empty', opts.empty || 'Nothing in this window.');
 		rows = rows.slice(0, opts.limit || 15);
 		var s = surface(el, { l: opts.labelWidth || 120, r: 54, t: 4, b: 4 });
-		var y = d3.scaleBand().domain(rows.map(function (r) { return r[0]; })).range([0, s.h]).padding(0.22);
+		// A bar never thicker than 26 px: two categories should not fill a panel.
+		var y = d3.scaleBand().domain(rows.map(function (r) { return r[0]; })).range([0, Math.min(s.h, rows.length * 34)]).padding(0.22);
 		var max = d3.max(rows, function (r) { return +r[1] || 0; }) || 1;
 		var x = d3.scaleLinear().domain([0, max]).range([0, s.w]);
 		s.g.selectAll('rect.bar').data(rows, function (r) { return r[0]; }).join('rect').attr('class', 'bar')
@@ -149,8 +153,17 @@
 		var max = opts.pct ? 100 : d3.max(series, function (sr) { return d3.max(sr.values, function (v) { return +v[1] || 0; }); });
 		var y = integer ? countScale(max, [s.h, 0]) : d3.scaleLinear().domain([0, max || 1]).nice().range([s.h, 0]);
 		gridY(s.g, y, s.w, integer);
+		// A label that reads the same as the one before it (the same minute,
+		// early in a live chart) is dropped rather than printed twice.
+		var tickFormat = opts.tickFormat || shortLabel, shown = null;
+		var tickValues = sparseTicks(labels, s.w).filter(function (v) {
+			var t = tickFormat(v);
+			if (t === shown) return false;
+			shown = t;
+			return true;
+		});
 		s.g.selectAll('g.x-axis').data([0]).join('g').attr('class', 'x-axis').attr('transform', 'translate(0,' + s.h + ')')
-			.call(d3.axisBottom(x).tickValues(sparseTicks(labels, s.w)).tickFormat(opts.tickFormat || shortLabel).tickSize(0).tickPadding(6))
+			.call(d3.axisBottom(x).tickValues(tickValues).tickFormat(tickFormat).tickSize(0).tickPadding(6))
 			.call(function (a) { a.select('.domain').attr('class', 'domain baseline'); });
 		var colors = opts.colors || [token('--accent')];
 		var line = d3.line().defined(function (v) { return v[1] != null; })
@@ -158,11 +171,19 @@
 		var lines = s.g.selectAll('g.series').data(series, function (sr) { return sr.name; }).join('g').attr('class', 'series');
 		lines.selectAll('path').data(function (sr, i) { return [{ sr: sr, color: colors[i % colors.length] }]; }).join('path')
 			.attr('class', 'linepath').attr('stroke', function (d) { return d.color; }).attr('d', function (d) { return line(d.sr.values); });
-		lines.selectAll('text.end').data(function (sr, i) {
+		// End labels, pushed apart where lines finish at the same height, so two
+		// names never print over each other.
+		var ends = [];
+		series.forEach(function (sr, i) {
 			var last = sr.values.filter(function (v) { return v[1] != null; }).pop();
-			return last ? [{ name: sr.name, last: last, color: colors[i % colors.length] }] : [];
+			if (last) ends.push({ name: sr.name, last: last, color: colors[i % colors.length], y: y(+last[1] || 0) });
+		});
+		ends.sort(function (a, b) { return b.y - a.y; });
+		for (var e = 1; e < ends.length; e++) ends[e].y = Math.min(ends[e].y, ends[e - 1].y - 12);
+		lines.selectAll('text.end').data(function (sr) {
+			return ends.filter(function (d) { return d.name === sr.name; });
 		}).join('text').attr('class', 'end').attr('fill', function (d) { return d.color; })
-			.attr('x', function (d) { return x(d.last[0]) + 6; }).attr('y', function (d) { return y(+d.last[1] || 0); }).attr('dy', '.35em')
+			.attr('x', function (d) { return x(d.last[0]) + 6; }).attr('y', function (d) { return d.y; }).attr('dy', '.35em')
 			.text(function (d) { return d.name + ' ' + fmt(d.last[1]) + (opts.pct ? '%' : ''); });
 	}
 
@@ -183,7 +204,9 @@
 		var x = d3.scaleBand().domain(hours).range([0, s.w]).padding(0.06);
 		var y = d3.scaleBand().domain(days).range([0, s.h]).padding(0.08);
 		var max = d3.max(rows, function (r) { return +r[2] || 0; }) || 1;
-		var ramp = d3.scaleLinear().domain([0, max]).range([0.06, 1]);
+		// Square root, so one busy hour (a load test) leaves the ordinary ones
+		// visible; the printed count says how far apart they are.
+		var ramp = d3.scaleSqrt().domain([0, max]).range([0.06, 1]);
 		var cells = s.g.selectAll('g.cell').data(rows, function (r) { return r[0] + ' ' + r[1]; }).join('g').attr('class', 'cell')
 			.attr('transform', function (r) { return 'translate(' + x(r[1]) + ',' + y(r[0]) + ')'; });
 		cells.selectAll('rect').data(function (r) { return [r]; }).join('rect').attr('class', 'heat')
@@ -194,7 +217,7 @@
 		var showNumbers = x.bandwidth() >= 18 && y.bandwidth() >= 12;
 		cells.selectAll('text').data(function (r) { return showNumbers && +r[2] ? [r] : []; }).join('text').attr('class', 'heat-n')
 			.attr('x', x.bandwidth() / 2).attr('y', y.bandwidth() / 2).attr('dy', '.35em').attr('text-anchor', 'middle')
-			.text(function (r) { return d3.format('~s')(r[2]); });
+			.text(function (r) { return +r[2] < 1000 ? fmt(+r[2]) : d3.format('.2~s')(r[2]); });
 		s.g.selectAll('g.y-axis').data([0]).join('g').attr('class', 'y-axis').call(d3.axisLeft(y).tickSize(0).tickPadding(6))
 			.call(function (a) { a.select('.domain').remove(); });
 		s.g.selectAll('g.x-axis').data([0]).join('g').attr('class', 'x-axis').attr('transform', 'translate(0,' + s.h + ')')

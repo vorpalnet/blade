@@ -108,6 +108,7 @@ CREATE TABLE sessions(
    -- the X-Vorpal-ID is 32 bits and is reused.
    created   DATETIME2(3) NOT NULL CONSTRAINT session_created_df DEFAULT SYSUTCDATETIME(),
    destroyed DATETIME2(3) NULL,
+   tenant    NVARCHAR(64) NULL,  -- the call's tenant when it opened (X-Vorpal-ID tn)
 
    CONSTRAINT session_natural_uk UNIQUE (cluster_name, vorpal_id, created)
 );
@@ -175,6 +176,12 @@ CREATE TABLE events(
 
    created DATETIME2(3) NOT NULL CONSTRAINT event_created_df DEFAULT SYSUTCDATETIME(),
 
+   -- Who may see this event: the call's tenant and department when it was
+   -- published, from X-Vorpal-ID. NULL when the call carried none; a reader
+   -- falls back to applications.tenant (the deployment's blade.tenant).
+   tenant NVARCHAR(64) NULL,
+   department NVARCHAR(64) NULL,
+
    -- The event's attributes as one JSON object of name to value, replacing an
    -- attributes/attribute_names pair that cost one insert per attribute on
    -- write and a two-table join plus a cast on read.
@@ -185,6 +192,7 @@ CREATE TABLE events(
 CREATE INDEX idx_event_session ON events(session_id, created);
 CREATE INDEX idx_event_type_created ON events(type, created);
 CREATE INDEX idx_event_created ON events(created);
+CREATE INDEX idx_event_scope ON events(tenant, department, created);
 
 -- Attribute values arrive as strings and are stored as strings, faithful to the
 -- wire. The reader's common question is numeric, so the conversion lives in a

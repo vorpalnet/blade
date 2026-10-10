@@ -4,11 +4,10 @@ import java.io.Serializable;
 import java.util.Date;
 
 import javax.persistence.Column;
+import javax.persistence.Convert;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Table;
-import javax.persistence.Temporal;
-import javax.persistence.TemporalType;
 
 /// One call, as the `v_calls` reporting view presents it.
 ///
@@ -38,12 +37,12 @@ public class CallRow implements Serializable {
 	@Column(name = "vorpal_id")
 	private String vorpalId;
 
-	@Temporal(TemporalType.TIMESTAMP)
+	@Convert(converter = UtcTimestamp.class)
 	@Column(name = "started_at")
 	private Date startedAt;
 
 	/// Null while the call is up, or forever if the session never closed.
-	@Temporal(TemporalType.TIMESTAMP)
+	@Convert(converter = UtcTimestamp.class)
 	@Column(name = "ended_at")
 	private Date endedAt;
 

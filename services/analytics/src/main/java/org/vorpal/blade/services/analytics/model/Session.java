@@ -1,17 +1,15 @@
 package org.vorpal.blade.services.analytics.model;
 
 import java.io.Serializable;
-import java.sql.Timestamp;
 import java.util.Date;
 
 import javax.persistence.Column;
+import javax.persistence.Convert;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.NamedQueries;
 import javax.persistence.NamedQuery;
 import javax.persistence.Table;
-import javax.persistence.Temporal;
-import javax.persistence.TemporalType;
 
 import org.vorpal.blade.framework.v3.analytics.NaturalKey;
 
@@ -41,7 +39,8 @@ public class Session implements Serializable {
 	private long vorpalId;
 	private String clusterName;
 	private Date created;
-	private Timestamp destroyed;
+	private Date destroyed;
+	private String tenant;
 
 	public Session() {
 	}
@@ -91,7 +90,7 @@ public class Session implements Serializable {
 		this.clusterName = clusterName;
 	}
 
-	@Temporal(TemporalType.TIMESTAMP)
+	@Convert(converter = UtcTimestamp.class)
 	@Column(nullable = false)
 	public Date getCreated() {
 		return this.created;
@@ -101,12 +100,23 @@ public class Session implements Serializable {
 		this.created = created;
 	}
 
-	public Timestamp getDestroyed() {
+	@Convert(converter = UtcTimestamp.class)
+	public Date getDestroyed() {
 		return this.destroyed;
 	}
 
-	public void setDestroyed(Timestamp destroyed) {
+	public void setDestroyed(Date destroyed) {
 		this.destroyed = destroyed;
+	}
+
+	/// The call's tenant when it opened (X-Vorpal-ID `tn`), or null.
+	@Column(length = 64)
+	public String getTenant() {
+		return this.tenant;
+	}
+
+	public void setTenant(String tenant) {
+		this.tenant = tenant;
 	}
 
 }

@@ -70,9 +70,14 @@ class AnalyticsWritePathTest {
 	private EntityManagerFactory factory;
 	private AnalyticsEventListener listener;
 	private Connection keepAlive;
+	private java.util.TimeZone savedZone;
 
 	@BeforeEach
 	void setUp() throws Exception {
+		// The columns hold UTC wall-clock time whatever zone the JVM runs in.
+		// Running six hours off UTC makes a write in the JVM's zone show.
+		savedZone = java.util.TimeZone.getDefault();
+		java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("America/Chicago"));
 		Map<String, Object> properties = new HashMap<>();
 
 		if (MSSQL_URL != null && !MSSQL_URL.isEmpty()) {
@@ -107,6 +112,7 @@ class AnalyticsWritePathTest {
 			}
 		}
 		keepAlive.close();
+		java.util.TimeZone.setDefault(savedZone);
 	}
 
 	@Test
@@ -238,7 +244,101 @@ class AnalyticsWritePathTest {
 		assertEquals("3.0.6", text("SELECT version FROM applications"));
 	}
 
+	@Test
+	@DisplayName("every application closes the call's row, and the latest stop is when the call ended")
+	void theLatestStopEndsTheCall() throws Exception {
+		// One call through two applications: both open the one row, and each
+		// stop moves its end to the later instant, whatever order they arrive in.
+		long vorpalId = 0x77770001L;
+		long birth = 1_787_780_167_411L;
+		listener.handle(Arrays.asList(
+				session("listener", vorpalId, birth, null),
+				session("agent", vorpalId, birth, null),
+				session("agent", vorpalId, birth, birth + 30_000L)));
+		assertEquals(1, count("sessions"), "one call, one row");
+		assertEquals(birth + 30_000L, destroyed(), "closed by the first stop");
+
+		listener.handle(Collections.singletonList(session("listener", vorpalId, birth, birth + 45_000L)));
+		assertEquals(birth + 45_000L, destroyed(), "a later stop moves the end");
+
+		listener.handle(Collections.singletonList(session("agent", vorpalId, birth, birth + 10_000L)));
+		assertEquals(birth + 45_000L, destroyed(), "an earlier stop arriving late does not");
+
+		assertEquals(1, count("sessions"));
+		assertEquals(0, count("events"), "a session start or stop is the row, not an event");
+	}
+
+	@Test
+	@DisplayName("each event keeps the scope it was published under; the call keeps the first tenant")
+	void eventsAreFiledUnderTheCallsScope() throws Exception {
+		long vorpalId = 0x77770002L;
+		long birth = 1_787_780_167_411L;
+		CloudEvent opened = org.vorpal.blade.framework.v3.events.AnalyticsEventMapper.scoped(
+				session("irouter", vorpalId, birth, null),
+				new org.vorpal.blade.framework.v3.events.CallScope("uhg", "sales"));
+		CloudEvent inSales = scoped(flatRiskEvent(UUID.randomUUID().toString(), vorpalId), "uhg", "sales");
+		CloudEvent inRadiology = scoped(flatRiskEvent(UUID.randomUUID().toString(), vorpalId), "uhg", "radiology");
+		CloudEvent forged = flatRiskEvent(UUID.randomUUID().toString(), vorpalId);
+		((com.fasterxml.jackson.databind.node.ObjectNode) forged.getData()).put("tenant", "bofa' OR 1=1");
+		listener.handle(Arrays.asList(opened, inSales, inRadiology, forged));
+
+		assertEquals("uhg", text("SELECT tenant FROM sessions"), "the call opened under uhg");
+		assertEquals(1, count("events WHERE department = 'sales'"));
+		assertEquals(1, count("events WHERE department = 'radiology'"), "transferred: its later part is radiology's");
+		assertEquals(1, count("events WHERE tenant IS NULL"), "a value that is not a name is not stored");
+		assertEquals(0, count("events WHERE payload LIKE '%tenant%'"), "the scope is a column, not payload");
+	}
+
+	@Test
+	@DisplayName("an application sample is stored without a call, under its publisher")
+	void appSampleIsAStoredFact() throws Exception {
+		long now = 1_787_780_167_411L;
+		com.fasterxml.jackson.databind.node.ObjectNode fields = MAPPER.createObjectNode();
+		fields.put("app", "meetings");
+		fields.put("node", "engine0");
+		fields.put("seconds", 60L);
+		fields.put("published", 30L);
+		fields.put("failures", 2L);
+		fields.put("invites", 3L);
+		fields.put("sipErrors", 0L);
+		fields.put("restarted", false);
+		java.util.Date dashboardStarted = new java.util.Date(now - 3_600_000L);
+		for (int minute = 0; minute < 2; minute++) {
+			listener.handle(Collections.singletonList(org.vorpal.blade.framework.v3.events.AnalyticsEventMapper
+					.callScoped("//blade/dashboard/test", BladeEventTypes.APPLICATION_SAMPLED, null, null,
+							new java.util.Date(now + minute * 60_000L), "blade-dashboard", CLUSTER, "AdminServer",
+							dashboardStarted, fields)));
+		}
+
+		assertEquals(2, count("events WHERE type = 'applicationSampled' AND session_id IS NULL"));
+		assertEquals(0, count("sessions"), "a sample is about no call");
+		assertEquals(1, count("applications"),
+				"both samples resolve to the one dashboard instance, not a new row each");
+		com.fasterxml.jackson.databind.JsonNode payload = MAPPER
+				.readTree(text("SELECT payload FROM events FETCH FIRST 1 ROWS ONLY"));
+		assertEquals("meetings", payload.path("app").asText(), "the sampled application, as the view reads it");
+		assertEquals(2, payload.path("failures").asLong());
+		assertFalse(payload.has("appName"), "the publisher's identity is the row's, not the payload's");
+	}
+
 	// ─────────────────────────────────────────────────────────────── fixtures
+
+	/// The call row's end, epoch millis. The column holds UTC wall-clock time.
+	private long destroyed() throws Exception {
+		try (Statement statement = keepAlive.createStatement();
+				ResultSet rs = statement.executeQuery("SELECT destroyed FROM sessions")) {
+			rs.next();
+			return rs.getTimestamp(1).toLocalDateTime().toInstant(java.time.ZoneOffset.UTC).toEpochMilli();
+		}
+	}
+
+	/// A `session.started` (or, with `stopped`, `session.stopped`) exactly as
+	/// the framework's mapper publishes it.
+	private CloudEvent session(String app, long vorpalId, long birth, Long stopped) {
+		return org.vorpal.blade.framework.v3.events.AnalyticsEventMapper.session("//blade/" + app + "/test", vorpalId,
+				new java.util.Date(birth), stopped == null ? null : new java.util.Date(stopped), app, CLUSTER,
+				"engine1", new java.util.Date(birth - 3_600_000L));
+	}
 
 	/// An `application.started` for the same instance the call events name, so
 	/// both resolve to one `applications` row.
@@ -305,6 +405,11 @@ class AnalyticsWritePathTest {
 				new java.util.Date(birth - 3_600_000L), fields);
 		event.setId(uid);
 		return event;
+	}
+
+	private static CloudEvent scoped(CloudEvent event, String tenant, String department) {
+		return org.vorpal.blade.framework.v3.events.AnalyticsEventMapper.scoped(event,
+				new org.vorpal.blade.framework.v3.events.CallScope(tenant, department));
 	}
 
 	private static String iso(long millis) {

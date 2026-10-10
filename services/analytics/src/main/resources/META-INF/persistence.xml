@@ -8,6 +8,7 @@
 	<persistence-unit name="BladeAnalytics" transaction-type="RESOURCE_LOCAL">
 		<provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
 		<non-jta-data-source>jdbc/BladeAnalytics</non-jta-data-source>
+		<class>org.vorpal.blade.services.analytics.model.UtcTimestamp</class>
 		<class>org.vorpal.blade.services.analytics.model.Application</class>
 		<class>org.vorpal.blade.services.analytics.model.Event</class>
 		<class>org.vorpal.blade.services.analytics.model.Session</class>

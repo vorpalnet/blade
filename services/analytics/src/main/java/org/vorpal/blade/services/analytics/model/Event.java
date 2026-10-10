@@ -4,13 +4,12 @@ import java.io.Serializable;
 import java.util.Date;
 
 import javax.persistence.Column;
+import javax.persistence.Convert;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Lob;
 import javax.persistence.NamedQuery;
 import javax.persistence.Table;
-import javax.persistence.Temporal;
-import javax.persistence.TemporalType;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
@@ -46,7 +45,7 @@ public class Event implements Serializable {
 	@Column(name = "application_id", nullable = false)
 	private long applicationId;
 
-	@Temporal(TemporalType.TIMESTAMP)
+	@Convert(converter = UtcTimestamp.class)
 	@Column(updatable = false, nullable = false)
 	private Date created;
 
@@ -58,6 +57,14 @@ public class Event implements Serializable {
 
 	@Column(name = "session_id")
 	private Long sessionId;
+
+	/// Who may see this event: the call's tenant and department when it was
+	/// published (X-Vorpal-ID `tn` and `dp`), or null.
+	@Column(length = 64)
+	private String tenant;
+
+	@Column(length = 64)
+	private String department;
 
 	/// The CloudEvent `id` this row was built from.
 	///
@@ -141,6 +148,22 @@ public class Event implements Serializable {
 
 	public String getPayload() {
 		return this.payload;
+	}
+
+	public String getTenant() {
+		return this.tenant;
+	}
+
+	public void setTenant(String tenant) {
+		this.tenant = tenant;
+	}
+
+	public String getDepartment() {
+		return this.department;
+	}
+
+	public void setDepartment(String department) {
+		this.department = department;
 	}
 
 	public void setPayload(String payload) {

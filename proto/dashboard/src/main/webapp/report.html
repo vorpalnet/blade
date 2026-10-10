@@ -37,8 +37,14 @@
 					<option value="90">last 90 days</option>
 				</select>
 			</label>
-			<label>Cluster
-				<select id="f-cluster"><option value="">all clusters</option></select>
+			<label>Domain
+				<select id="f-domain"><option value="">all domains</option></select>
+			</label>
+			<label>Time zone
+				<select id="f-tz"></select>
+			</label>
+			<label title="One caller's calls: the account an application filed them under. Needs a grant that shows content; a department finds the caller only on its own calls.">Account
+				<input type="search" id="f-account" size="12" placeholder="any caller">
 			</label>
 			<label class="check"><input type="checkbox" id="f-sample"> Include sample data</label>
 			<button type="button" id="f-refresh">Refresh</button>

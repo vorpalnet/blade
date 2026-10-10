@@ -4,11 +4,10 @@ import java.io.Serializable;
 import java.util.Date;
 
 import javax.persistence.Column;
+import javax.persistence.Convert;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Table;
-import javax.persistence.Temporal;
-import javax.persistence.TemporalType;
 
 /// One recorded fact, as the `v_events` reporting view presents it.
 ///
@@ -29,7 +28,7 @@ public class EventRow implements Serializable {
 	@Column(name = "event_type")
 	private String eventType;
 
-	@Temporal(TemporalType.TIMESTAMP)
+	@Convert(converter = UtcTimestamp.class)
 	@Column(name = "occurred_at")
 	private Date occurredAt;
 
@@ -46,6 +45,9 @@ public class EventRow implements Serializable {
 	private String application;
 
 	private String tenant;
+
+	/// The department that handled this part of the call, or null.
+	private String department;
 
 	@Column(name = "cluster_name")
 	private String clusterName;

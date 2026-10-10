@@ -1,6 +1,5 @@
 package org.vorpal.blade.services.analytics.jms;
 
-import java.sql.Timestamp;
 import java.util.Date;
 import java.util.List;
 
@@ -53,12 +52,23 @@ public final class SessionResolver {
 	/// @return the session's database primary key
 	public static Long resolveOrCreate(EntityManager em, String clusterName, long vorpalId, Date created,
 			long applicationId) {
+		return resolveOrCreate(em, clusterName, vorpalId, created, applicationId, null);
+	}
+
+	/// As [#resolveOrCreate(EntityManager, String, long, Date, long)], filing
+	/// the call under `tenant` if its row has none yet: the first tenant the
+	/// call is heard with is the one it opened under.
+	///
+	/// @param tenant the call's tenant from the event, or null
+	public static Long resolveOrCreate(EntityManager em, String clusterName, long vorpalId, Date created,
+			long applicationId, String tenant) {
 
 		if (created == null) {
 			// No birth instant on the wire, so no key can be computed. Adopt
 			// the correlator's open session BY ITS ID — see #openSessionId.
 			Long open = openSessionId(em, clusterName, vorpalId);
 			if (open != null) {
+				adoptTenant(em, em.find(Session.class, open), tenant);
 				return open;
 			}
 			created = new Date();
@@ -68,6 +78,7 @@ public final class SessionResolver {
 
 		Session existing = em.find(Session.class, id);
 		if (existing != null) {
+			adoptTenant(em, existing, tenant);
 			return id;
 		}
 
@@ -77,24 +88,24 @@ public final class SessionResolver {
 		stub.setVorpalId(vorpalId);
 		stub.setApplicationId(applicationId);
 		stub.setCreated(birth);
+		stub.setTenant(tenant);
 		return insert(em, stub, id);
 	}
 
 	/// Close a session, creating it already-closed if the stop arrives first.
 	///
-	/// First stop wins: a second one finds the row already closed and does
-	/// nothing, which keeps `session_open_uk` meaningful.
+	/// **The latest stop wins.** A session is the call through the whole
+	/// system, and every application on it sends its own stop as it lets go, so
+	/// the last of them is when the call ended. Latest by `destroyed`, not by
+	/// arrival: stops from different nodes reach the bus in any order, and an
+	/// earlier one arriving late must not pull the end back.
 	public static Long close(EntityManager em, String clusterName, long vorpalId, Date created, long applicationId,
-			Timestamp destroyed) {
+			Date destroyed) {
 
 		if (created == null) {
 			Long open = openSessionId(em, clusterName, vorpalId);
 			if (open != null) {
-				Session row = em.find(Session.class, open);
-				if (row != null && row.getDestroyed() == null) {
-					row.setDestroyed(destroyed);
-					em.merge(row);
-				}
+				extend(em, em.find(Session.class, open), destroyed);
 				return open;
 			}
 			created = new Date();
@@ -115,11 +126,25 @@ public final class SessionResolver {
 			row.setDestroyed(destroyed);
 			return insert(em, row, id);
 		}
-		if (existing.getDestroyed() == null) {
-			existing.setDestroyed(destroyed);
-			em.merge(existing);
-		}
+		extend(em, existing, destroyed);
 		return id;
+	}
+
+	/// File a session under `tenant` if it has none. Never moves a call from
+	/// one tenant to another: the first one heard stands.
+	private static void adoptTenant(EntityManager em, Session row, String tenant) {
+		if (row != null && tenant != null && row.getTenant() == null) {
+			row.setTenant(tenant);
+			em.merge(row);
+		}
+	}
+
+	/// Move a session's end to `destroyed` if that is later than the end it has.
+	private static void extend(EntityManager em, Session row, Date destroyed) {
+		if (row != null && (row.getDestroyed() == null || destroyed.after(row.getDestroyed()))) {
+			row.setDestroyed(destroyed);
+			em.merge(row);
+		}
 	}
 
 	/// The id of the correlator's one open session, or null when there is none.

@@ -54,7 +54,7 @@ SELECT
    a.host                                     AS host,
    a.domain                                   AS domain,
    a.server                                   AS server,
-   a.tenant                                   AS tenant
+   COALESCE(s.tenant, a.tenant) AS tenant
 FROM sessions s
 JOIN applications a ON a.id = s.application_id;
 GO
@@ -73,7 +73,8 @@ SELECT
    CAST(e.session_id AS VARCHAR(20))          AS call_id,
    CAST(e.application_id AS VARCHAR(20))      AS application_id,
    a.name                                     AS application,
-   a.tenant                                   AS tenant,
+   COALESCE(e.tenant, a.tenant) AS tenant,
+   e.department AS department,
    s.cluster_name                             AS cluster_name,
    RIGHT(CONVERT(VARCHAR(32), CONVERT(VARBINARY(8), s.vorpal_id), 2), 8)
                                               AS vorpal_id,
@@ -100,7 +101,8 @@ SELECT
    CAST(e.session_id AS VARCHAR(20))          AS call_id,
    e.created                                  AS assessed_at,
    e.type                                     AS event_type,
-   a.tenant                                   AS tenant,
+   COALESCE(e.tenant, a.tenant) AS tenant,
+   e.department AS department,
    a.name                                     AS application,
    s.cluster_name                             AS cluster_name,
    RIGHT(CONVERT(VARCHAR(32), CONVERT(VARBINARY(8), s.vorpal_id), 2), 8)
@@ -159,7 +161,8 @@ SELECT
    CAST(e.session_id AS VARCHAR(20))          AS call_id,
    e.created                                  AS occurred_at,
    e.type                                     AS event_type,
-   a.tenant                                   AS tenant,
+   COALESCE(e.tenant, a.tenant) AS tenant,
+   e.department AS department,
    a.name                                     AS application,
    s.cluster_name                             AS cluster_name,
    RIGHT(CONVERT(VARCHAR(32), CONVERT(VARBINARY(8), s.vorpal_id), 2), 8)
@@ -183,7 +186,7 @@ SELECT
    CAST(k.session_id AS VARCHAR(20))          AS call_id,
    k.name                                     AS key_name,
    k.value                                    AS key_value,
-   a.tenant                                   AS tenant
+   COALESCE(s.tenant, a.tenant) AS tenant
 FROM session_keys k
 JOIN sessions s     ON s.id = k.session_id
 JOIN applications a ON a.id = s.application_id;
@@ -199,7 +202,8 @@ SELECT
    CAST(e.session_id AS VARCHAR(20)) AS call_id,
    e.created AS occurred_at,
    e.type AS event_type,
-   a.tenant AS tenant,
+   COALESCE(e.tenant, a.tenant) AS tenant,
+   e.department AS department,
    a.name AS application,
    s.cluster_name AS cluster_name,
    RIGHT(CONVERT(VARCHAR(32), CONVERT(VARBINARY(8), s.vorpal_id), 2), 8) AS vorpal_id,
@@ -224,7 +228,8 @@ SELECT
    CAST(e.session_id AS VARCHAR(20)) AS call_id,
    e.created AS occurred_at,
    e.type AS event_type,
-   a.tenant AS tenant,
+   COALESCE(e.tenant, a.tenant) AS tenant,
+   e.department AS department,
    a.name AS application,
    s.cluster_name AS cluster_name,
    RIGHT(CONVERT(VARCHAR(32), CONVERT(VARBINARY(8), s.vorpal_id), 2), 8) AS vorpal_id,
@@ -247,7 +252,8 @@ SELECT
    CAST(e.session_id AS VARCHAR(20)) AS call_id,
    e.created AS occurred_at,
    e.type AS event_type,
-   a.tenant AS tenant,
+   COALESCE(e.tenant, a.tenant) AS tenant,
+   e.department AS department,
    a.name AS application,
    s.cluster_name AS cluster_name,
    RIGHT(CONVERT(VARCHAR(32), CONVERT(VARBINARY(8), s.vorpal_id), 2), 8) AS vorpal_id,
@@ -266,7 +272,8 @@ SELECT
    CAST(e.session_id AS VARCHAR(20)) AS call_id,
    e.created AS occurred_at,
    e.type AS event_type,
-   a.tenant AS tenant,
+   COALESCE(e.tenant, a.tenant) AS tenant,
+   e.department AS department,
    a.name AS application,
    s.cluster_name AS cluster_name,
    RIGHT(CONVERT(VARCHAR(32), CONVERT(VARBINARY(8), s.vorpal_id), 2), 8) AS vorpal_id,
@@ -297,4 +304,133 @@ SELECT
             CASE WHEN MAX(q.attempt) IS NOT NULL THEN 'released' ELSE 'waiting' END) AS outcome
 FROM v_queue q
 GROUP BY q.call_id, q.tenant, q.cluster_name, q.queue;
+GO
+
+-- What each application did, per node, minute by minute: events published,
+-- publishes the bus refused (each one a dropped event), INVITEs received and
+-- SIP errors. The dashboard reads every application's metrics MBean and
+-- publishes the difference since its last look; the MBean itself resets on
+-- every deploy, so these rows are the only history of it. `restarted` says
+-- the application restarted within the sample and its counts run from then.
+CREATE OR ALTER VIEW v_app_samples AS
+SELECT
+   CAST(e.id AS VARCHAR(20)) AS event_id,
+   e.created AS sampled_at,
+   JSON_VALUE(e.payload, '$."app"') AS application,
+   JSON_VALUE(e.payload, '$."node"') AS node,
+   JSON_VALUE(e.payload, '$."cluster"') AS weblogic_cluster,
+   TRY_CAST(JSON_VALUE(e.payload, '$."seconds"') AS BIGINT) AS seconds,
+   TRY_CAST(JSON_VALUE(e.payload, '$."published"') AS BIGINT) AS published,
+   TRY_CAST(JSON_VALUE(e.payload, '$."failures"') AS BIGINT) AS failures,
+   TRY_CAST(JSON_VALUE(e.payload, '$."invites"') AS BIGINT) AS invites,
+   TRY_CAST(JSON_VALUE(e.payload, '$."sipErrors"') AS BIGINT) AS sip_errors,
+   JSON_VALUE(e.payload, '$."restarted"') AS restarted,
+   TRY_CAST(JSON_VALUE(e.payload, '$."activeAppSessions"') AS BIGINT) AS active_app_sessions,
+   a.domain AS domain
+FROM events e
+JOIN applications a ON a.id = e.application_id
+WHERE e.type = 'applicationSampled';
+GO
+
+-- How each server stood, minute by minute: SIP messages its container
+-- received and rejected, application sessions created, and at each sample its
+-- live sessions, heap and threads. `rejected` is the only record of a message
+-- the container refused under overload: it never reached an application.
+-- Published by the dashboard; readings a server lacks (the AdminServer runs
+-- no SIP container) are absent, not zero.
+CREATE OR ALTER VIEW v_server_samples AS
+SELECT
+   CAST(e.id AS VARCHAR(20)) AS event_id,
+   e.created AS sampled_at,
+   JSON_VALUE(e.payload, '$."node"') AS node,
+   JSON_VALUE(e.payload, '$."cluster"') AS weblogic_cluster,
+   JSON_VALUE(e.payload, '$."state"') AS state,
+   JSON_VALUE(e.payload, '$."restarted"') AS restarted,
+   TRY_CAST(JSON_VALUE(e.payload, '$."seconds"') AS BIGINT) AS seconds,
+   TRY_CAST(JSON_VALUE(e.payload, '$."received"') AS BIGINT) AS received,
+   TRY_CAST(JSON_VALUE(e.payload, '$."rejected"') AS BIGINT) AS rejected,
+   TRY_CAST(JSON_VALUE(e.payload, '$."appSessionsCreated"') AS BIGINT) AS app_sessions_created,
+   TRY_CAST(JSON_VALUE(e.payload, '$."routed"') AS BIGINT) AS routed,
+   TRY_CAST(JSON_VALUE(e.payload, '$."routingFallbacks"') AS BIGINT) AS routing_fallbacks,
+   TRY_CAST(JSON_VALUE(e.payload, '$."undeployedBypasses"') AS BIGINT) AS undeployed_bypasses,
+   TRY_CAST(JSON_VALUE(e.payload, '$."routingCycles"') AS BIGINT) AS routing_cycles,
+   TRY_CAST(JSON_VALUE(e.payload, '$."activeAppSessions"') AS BIGINT) AS active_app_sessions,
+   TRY_CAST(JSON_VALUE(e.payload, '$."activeSipSessions"') AS BIGINT) AS active_sip_sessions,
+   TRY_CAST(JSON_VALUE(e.payload, '$."heapUsedPct"') AS BIGINT) AS heap_used_pct,
+   TRY_CAST(JSON_VALUE(e.payload, '$."threadsStuck"') AS BIGINT) AS threads_stuck,
+   TRY_CAST(JSON_VALUE(e.payload, '$."threadsHogging"') AS BIGINT) AS threads_hogging,
+   TRY_CAST(JSON_VALUE(e.payload, '$."threadsPending"') AS BIGINT) AS threads_pending,
+   a.domain AS domain
+FROM events e
+JOIN applications a ON a.id = e.application_id
+WHERE e.type = 'serverSampled';
+GO
+
+-- Every counter an application declares, one row per counter that moved in
+-- a sample: the history of what an application counts about itself (a speech
+-- service that did not answer, a media server that refused), kept past the
+-- redeploy that resets the counter. A labelled counter is `name.value`.
+CREATE OR ALTER VIEW v_app_counters AS
+SELECT
+   CONCAT(e.id, ':', c.counter_name) AS row_id,
+   e.created AS sampled_at,
+   JSON_VALUE(e.payload, '$."app"') AS application,
+   JSON_VALUE(e.payload, '$."node"') AS node,
+   c.counter_name AS counter,
+   c.delta AS delta,
+   (SELECT a.domain FROM applications a WHERE a.id = e.application_id) AS domain
+FROM events e
+CROSS APPLY OPENJSON(e.payload, '$.counters') WITH (
+   counter_name NVARCHAR(200) '$.name',
+   delta BIGINT '$.delta') c
+WHERE e.type = 'applicationSampled';
+GO
+
+-- Every timing an application records, one row per timing per sample: how
+-- many recordings and their summed milliseconds, so a mean over any window is
+-- SUM(sum_millis) / SUM(recordings).
+CREATE OR ALTER VIEW v_app_timings AS
+SELECT
+   CONCAT(e.id, ':', t.timing_name) AS row_id,
+   e.created AS sampled_at,
+   JSON_VALUE(e.payload, '$."app"') AS application,
+   JSON_VALUE(e.payload, '$."node"') AS node,
+   t.timing_name AS timing,
+   t.recordings AS recordings,
+   t.sum_millis AS sum_millis,
+   (SELECT a.domain FROM applications a WHERE a.id = e.application_id) AS domain
+FROM events e
+CROSS APPLY OPENJSON(e.payload, '$.timings') WITH (
+   timing_name NVARCHAR(200) '$.name',
+   recordings BIGINT '$.count',
+   sum_millis BIGINT '$.sumMillis') t
+WHERE e.type = 'applicationSampled';
+GO
+
+-- An agent's verdict on a call, as filed from the Agent Console: the outcome
+-- (legitimate, scam, ...), the treatment, whether the number was blocked, and
+-- who filed it. Beside v_call_risk_summary it says whether the risk score was
+-- right. The caller's number stays in the payload, not in the view.
+CREATE OR ALTER VIEW v_call_disposition AS
+SELECT
+   CAST(e.id AS VARCHAR(20)) AS event_id,
+   CAST(e.session_id AS VARCHAR(20)) AS call_id,
+   e.created AS dispositioned_at,
+   COALESCE(e.tenant, a.tenant) AS tenant,
+   e.department AS department,
+   a.name AS application,
+   s.cluster_name AS cluster_name,
+   RIGHT(CONVERT(VARCHAR(32), CONVERT(VARBINARY(8), s.vorpal_id), 2), 8) AS vorpal_id,
+   JSON_VALUE(e.payload, '$."outcome"') AS outcome,
+   JSON_VALUE(e.payload, '$."treatment"') AS treatment,
+   JSON_VALUE(e.payload, '$."blocked"') AS blocked,
+   JSON_VALUE(e.payload, '$."agent"') AS agent,
+   JSON_VALUE(e.payload, '$."identity"') AS caller_identity,
+   JSON_VALUE(e.payload, '$."action"') AS action,
+   JSON_VALUE(e.payload, '$."reasons"') AS reasons,
+   TRY_CAST(JSON_VALUE(e.payload, '$."face"') AS INT) AS face
+FROM events e
+JOIN applications a ON a.id = e.application_id
+LEFT JOIN sessions s ON s.id = e.session_id
+WHERE e.type = 'agentDisposition';
 GO

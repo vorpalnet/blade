@@ -10,11 +10,18 @@
 	     test ran against. hsqldb-views.sql stands the views up as plain tables. -->
 	<persistence-unit name="BladeDashboardTest" transaction-type="RESOURCE_LOCAL">
 		<provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
+		<class>org.vorpal.blade.applications.dashboard.model.UtcTimestamp</class>
 		<class>org.vorpal.blade.applications.dashboard.model.CallRow</class>
+		<class>org.vorpal.blade.applications.dashboard.model.KeyRow</class>
 		<class>org.vorpal.blade.applications.dashboard.model.EventRow</class>
 		<class>org.vorpal.blade.applications.dashboard.model.RiskRow</class>
 		<class>org.vorpal.blade.applications.dashboard.model.RiskCallRow</class>
 		<class>org.vorpal.blade.applications.dashboard.model.ConversationRow</class>
+		<class>org.vorpal.blade.applications.dashboard.model.SampleRow</class>
+		<class>org.vorpal.blade.applications.dashboard.model.ServerSampleRow</class>
+		<class>org.vorpal.blade.applications.dashboard.model.CounterRow</class>
+		<class>org.vorpal.blade.applications.dashboard.model.TimingRow</class>
+		<class>org.vorpal.blade.applications.dashboard.model.DispositionRow</class>
 		<exclude-unlisted-classes>true</exclude-unlisted-classes>
 		<properties>
 			<property name="javax.persistence.jdbc.driver" value="org.hsqldb.jdbc.JDBCDriver" />
@@ -23,6 +30,11 @@
 			<property name="javax.persistence.jdbc.password" value="" />
 			<property name="eclipselink.ddl-generation" value="none" />
 			<property name="eclipselink.cache.shared.default" value="false" />
+			<!-- Literals written into the SQL, not bound. The day and hour reports
+			     group on FLOOR(EXTRACT(MINUTE FROM t) / 15); bound, the 15 becomes a
+			     separate parameter in the SELECT and in the GROUP BY, and Oracle
+			     refuses the two as different expressions (ORA-00979). -->
+			<property name="eclipselink.target-database-properties" value="shouldBindLiterals=false" />
 			<property name="eclipselink.logging.level" value="OFF" />
 		</properties>
 	</persistence-unit>

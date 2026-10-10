@@ -20,14 +20,22 @@
 -- not hold a long transaction against a live writer. Repeat until it reports
 -- zero rows.
 --   DELETE FROM events
---    WHERE created < NOW() - INTERVAL 90 DAY
+--    WHERE created < UTC_TIMESTAMP() - INTERVAL 90 DAY
 --    LIMIT 10000;
 
 -- Oracle: the same window. Repeat until SQL%ROWCOUNT is zero.
 --   DELETE FROM events
---    WHERE created < SYSTIMESTAMP - INTERVAL '90' DAY
+--    WHERE created < SYS_EXTRACT_UTC(SYSTIMESTAMP) - INTERVAL '90' DAY
 --      AND ROWNUM <= 10000;
 
+-- The per-minute samples (`applicationSampled`, `serverSampled`) are most of
+-- the rows on a quiet system: one per server a minute, one per busy
+-- application a minute. Their use is trends and a look back at a bad hour, so
+-- they can go sooner than the call facts. Oracle, 30 days:
+--   DELETE FROM events
+--    WHERE type IN ('applicationSampled', 'serverSampled')
+--      AND created < SYS_EXTRACT_UTC(SYSTIMESTAMP) - INTERVAL '30' DAY
+--      AND ROWNUM <= 10000;
 -- Closed sessions whose events are already gone, and the application
 -- instances left with nothing under them:
 --   DELETE FROM sessions

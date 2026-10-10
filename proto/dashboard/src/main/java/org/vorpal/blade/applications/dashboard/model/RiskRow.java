@@ -4,11 +4,10 @@ import java.io.Serializable;
 import java.util.Date;
 
 import javax.persistence.Column;
+import javax.persistence.Convert;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Table;
-import javax.persistence.Temporal;
-import javax.persistence.TemporalType;
 
 /// One fused risk assessment of a call, as the `v_call_risk` view types it.
 ///
@@ -28,7 +27,7 @@ public class RiskRow implements Serializable {
 	@Column(name = "call_id")
 	private String callId;
 
-	@Temporal(TemporalType.TIMESTAMP)
+	@Convert(converter = UtcTimestamp.class)
 	@Column(name = "assessed_at")
 	private Date assessedAt;
 
@@ -38,6 +37,9 @@ public class RiskRow implements Serializable {
 	private String eventType;
 
 	private String tenant;
+
+	/// The department that handled this part of the call, or null.
+	private String department;
 
 	private String application;
 

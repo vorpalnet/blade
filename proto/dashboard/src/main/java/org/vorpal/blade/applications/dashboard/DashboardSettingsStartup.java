@@ -1,5 +1,6 @@
 package org.vorpal.blade.applications.dashboard;
 
+import java.util.concurrent.ScheduledFuture;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -7,6 +8,7 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 
+import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v3.events.SubscriptionRegistrar;
 
@@ -19,10 +21,18 @@ public class DashboardSettingsStartup implements ServletContextListener {
 
 	public static final String SETTINGS_ATTR = "org.vorpal.blade.dashboard.settings";
 
+	/// The live settings, or null before they are registered.
+	@SuppressWarnings("unchecked")
+	static DashboardSettings settings(javax.servlet.ServletContext context) {
+		Object sm = context.getAttribute(SETTINGS_ATTR);
+		return (sm instanceof SettingsManager) ? ((SettingsManager<DashboardSettings>) sm).getCurrent() : null;
+	}
+
 	private static final Logger logger = Logger.getLogger(DashboardSettingsStartup.class.getName());
 
 	private SettingsManager<DashboardSettings> settingsManager;
 	private SubscriptionRegistrar ops;
+	private ScheduledFuture<?> sampling;
 
 	@Override
 	public void contextInitialized(ServletContextEvent sce) {
@@ -40,10 +50,21 @@ public class DashboardSettingsStartup implements ServletContextListener {
 		// annotated listeners).
 		ops = SubscriptionRegistrar.named(OpsFeed.SUBSCRIPTION).types(OpsFeed.TYPES).live()
 				.start(sce.getServletContext(), OpsFeed.FEED);
+		// The dashboard publishes facts of its own now (AppSampling), so it
+		// announces itself like any application: every event's row resolves to
+		// this instance by its start time, and without one each would mint a
+		// new application row.
+		Analytics.applicationStart();
+		sampling = AppSampling.start();
 	}
 
 	@Override
 	public void contextDestroyed(ServletContextEvent sce) {
+		if (sampling != null) {
+			sampling.cancel(false);
+			sampling = null;
+		}
+		Analytics.applicationStop();
 		if (ops != null) {
 			ops.stop();
 		}

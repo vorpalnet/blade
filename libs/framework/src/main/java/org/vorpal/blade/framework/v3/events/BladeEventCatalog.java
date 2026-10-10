@@ -80,7 +80,8 @@ public final class BladeEventCatalog {
 	///
 	/// All of them are marked [EventType#isPersist] — they are what the analytics
 	/// database is built from — and all carry the call correlator as `subject`
-	/// except the application-lifecycle pair, which is not call-scoped.
+	/// except the application-lifecycle pair and the application and server
+	/// samples, which are not call-scoped.
 	public static List<EventType> analyticsTypes() {
 		List<EventType> types = new ArrayList<>();
 		types.add(applicationStarted());
@@ -97,6 +98,9 @@ public final class BladeEventCatalog {
 		types.add(callReviewed());
 		types.add(callDispositioned());
 		types.addAll(serviceCallTypes());
+		types.add(applicationSampled());
+		types.add(serverSampled());
+		types.add(dashboardViewed());
 		return types;
 	}
 
@@ -808,6 +812,83 @@ public final class BladeEventCatalog {
 		types.add(configSaved());
 		types.add(configPublished());
 		return types;
+	}
+
+	/// A platform fact that IS persisted, unlike [#operationsTypes]: an
+	/// application's counters are reset on every deploy, so the only record of
+	/// what it dropped last week is the samples analytics kept.
+	private static EventType applicationSampled() {
+		EventType declaration = base(BladeEventTypes.APPLICATION_SAMPLED, "Application Sampled",
+				"What one application on one node did since the last sample, from its metrics: events published, publishes that failed (each one a dropped event), INVITEs received and SIP errors. Published once a minute by the dashboard.",
+				"ApplicationSampled");
+		List<EventField> fields = applicationIdentity();
+		fields.add(field("app", EventFieldType.STRING, true, "The application sampled."));
+		fields.add(field("node", EventFieldType.STRING, true, "The server it runs on."));
+		fields.add(field("cluster", EventFieldType.STRING, false, "Its cluster, if any."));
+		fields.add(field("seconds", EventFieldType.LONG, true, "How long the sample covers."));
+		fields.add(field("published", EventFieldType.LONG, true, "Events handed to the bus."));
+		fields.add(field("failures", EventFieldType.LONG, true, "Publishes the bus refused: dropped events."));
+		fields.add(field("invites", EventFieldType.LONG, true, "INVITE requests received."));
+		fields.add(field("sipErrors", EventFieldType.LONG, true, "SIP messages whose handling threw."));
+		fields.add(field("activeAppSessions", EventFieldType.LONG, false,
+				"Application sessions the container holds for it at the sample. Absent for a non-SIP application."));
+		fields.add(field("counters", EventFieldType.ARRAY, false,
+				"Every other counter the application declares that moved: {name, delta}, a labelled counter as name.value."));
+		fields.add(field("timings", EventFieldType.ARRAY, false,
+				"Every timing it recorded: {name, count, sumMillis} for the sample."));
+		fields.add(field("restarted", EventFieldType.BOOLEAN, true,
+				"The application restarted since the last sample; the counts run from its restart."));
+		declaration.setFields(fields);
+		return declaration;
+	}
+
+	/// See [#applicationSampled]; this is the server's side of the same minute.
+	private static EventType serverSampled() {
+		EventType declaration = base(BladeEventTypes.SERVER_SAMPLED, "Server Sampled",
+				"How one server stood over the last minute: SIP messages its container received and rejected (a rejected message never reached an application, so nothing else records it), application sessions created, and at the sample its active sessions, heap and threads. Published once a minute by the dashboard.",
+				"ServerSampled");
+		List<EventField> fields = applicationIdentity();
+		fields.add(field("node", EventFieldType.STRING, true, "The server sampled."));
+		fields.add(field("cluster", EventFieldType.STRING, false, "Its cluster, if any."));
+		fields.add(field("state", EventFieldType.STRING, false, "Its lifecycle state, e.g. RUNNING."));
+		fields.add(field("seconds", EventFieldType.LONG, true, "How long the sample covers."));
+		fields.add(field("restarted", EventFieldType.BOOLEAN, true,
+				"The server restarted since the last sample; the counts run from its restart."));
+		fields.add(field("received", EventFieldType.LONG, true, "SIP messages the container received."));
+		fields.add(field("rejected", EventFieldType.LONG, true, "SIP messages the container refused."));
+		fields.add(field("appSessionsCreated", EventFieldType.LONG, true, "Application sessions created."));
+		fields.add(field("routed", EventFieldType.LONG, false, "Initial requests the App Router routed."));
+		fields.add(field("routingFallbacks", EventFieldType.LONG, false,
+				"Requests no routing rule matched, sent to the default application."));
+		fields.add(field("undeployedBypasses", EventFieldType.LONG, false,
+				"Requests routed past an application that was not deployed."));
+		fields.add(field("routingCycles", EventFieldType.LONG, false, "Routing loops the App Router detected."));
+		fields.add(field("activeAppSessions", EventFieldType.LONG, false, "Application sessions alive at the sample."));
+		fields.add(field("activeSipSessions", EventFieldType.LONG, false, "SIP sessions alive at the sample."));
+		fields.add(field("heapUsedPct", EventFieldType.LONG, false, "Heap in use at the sample, percent."));
+		fields.add(field("threadsStuck", EventFieldType.LONG, false, "Stuck execute threads at the sample."));
+		fields.add(field("threadsHogging", EventFieldType.LONG, false, "Hogging execute threads at the sample."));
+		fields.add(field("threadsPending", EventFieldType.LONG, false, "Requests waiting for a thread at the sample."));
+		declaration.setFields(fields);
+		return declaration;
+	}
+
+	private static EventType dashboardViewed() {
+		EventType declaration = base(BladeEventTypes.DASHBOARD_VIEWED, "Dashboard Viewed",
+				"Someone looked at call data on the dashboard: who, which reports, and the scope they asked for. The audit record of who saw which calls and when.",
+				"DashboardViewed");
+		List<EventField> fields = applicationIdentity();
+		fields.add(field("viewer", EventFieldType.STRING, true, "Who looked, as the sign-in named them."));
+		fields.add(field("reports", EventFieldType.STRING, true, "The reports shown, comma-separated."));
+		fields.add(field("days", EventFieldType.INTEGER, true, "The range asked for, in days."));
+		fields.add(field("forDomain", EventFieldType.STRING, false, "The domain asked for; absent for every domain."));
+		fields.add(field("access", EventFieldType.STRING, true,
+				"What the viewer's grants let them see: domains/tenants/departments per grant, platform, content."));
+		fields.add(field("refused", EventFieldType.STRING, false,
+				"Reports asked for and refused, comma-separated."));
+		fields.add(field("account", EventFieldType.STRING, false, "The caller's account searched for, if any."));
+		declaration.setFields(fields);
+		return declaration;
 	}
 
 	private static EventType queueDepth() {

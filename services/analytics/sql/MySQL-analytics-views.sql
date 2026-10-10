@@ -39,7 +39,7 @@ SELECT
    a.host                                     AS host,
    a.domain                                   AS domain,
    a.server                                   AS server,
-   a.tenant                                   AS tenant
+   COALESCE(s.tenant, a.tenant) AS tenant
 FROM sessions s
 JOIN applications a ON a.id = s.application_id;
 
@@ -57,7 +57,8 @@ SELECT
    CAST(e.session_id AS CHAR(20))             AS call_id,
    CAST(e.application_id AS CHAR(20))         AS application_id,
    a.name                                     AS application,
-   a.tenant                                   AS tenant,
+   COALESCE(e.tenant, a.tenant) AS tenant,
+   e.department AS department,
    s.cluster_name                             AS cluster_name,
    LPAD(HEX(s.vorpal_id), 8, '0')             AS vorpal_id,
    e.payload                                  AS payload
@@ -82,7 +83,8 @@ SELECT
    CAST(e.session_id AS CHAR(20))             AS call_id,
    e.created                                  AS assessed_at,
    e.type                                     AS event_type,
-   a.tenant                                   AS tenant,
+   COALESCE(e.tenant, a.tenant) AS tenant,
+   e.department AS department,
    a.name                                     AS application,
    s.cluster_name                             AS cluster_name,
    LPAD(HEX(s.vorpal_id), 8, '0')             AS vorpal_id,
@@ -138,7 +140,8 @@ SELECT
    CAST(e.session_id AS CHAR(20))             AS call_id,
    e.created                                  AS occurred_at,
    e.type                                     AS event_type,
-   a.tenant                                   AS tenant,
+   COALESCE(e.tenant, a.tenant) AS tenant,
+   e.department AS department,
    a.name                                     AS application,
    s.cluster_name                             AS cluster_name,
    LPAD(HEX(s.vorpal_id), 8, '0')             AS vorpal_id,
@@ -160,7 +163,7 @@ SELECT
    CAST(k.session_id AS CHAR(20))             AS call_id,
    k.name                                     AS key_name,
    k.value                                    AS key_value,
-   a.tenant                                   AS tenant
+   COALESCE(s.tenant, a.tenant) AS tenant
 FROM session_keys k
 JOIN sessions s     ON s.id = k.session_id
 JOIN applications a ON a.id = s.application_id;
@@ -175,7 +178,8 @@ SELECT
    CAST(e.session_id AS CHAR(20)) AS call_id,
    e.created AS occurred_at,
    e.type AS event_type,
-   a.tenant AS tenant,
+   COALESCE(e.tenant, a.tenant) AS tenant,
+   e.department AS department,
    a.name AS application,
    s.cluster_name AS cluster_name,
    LPAD(HEX(s.vorpal_id), 8, '0') AS vorpal_id,
@@ -199,7 +203,8 @@ SELECT
    CAST(e.session_id AS CHAR(20)) AS call_id,
    e.created AS occurred_at,
    e.type AS event_type,
-   a.tenant AS tenant,
+   COALESCE(e.tenant, a.tenant) AS tenant,
+   e.department AS department,
    a.name AS application,
    s.cluster_name AS cluster_name,
    LPAD(HEX(s.vorpal_id), 8, '0') AS vorpal_id,
@@ -221,7 +226,8 @@ SELECT
    CAST(e.session_id AS CHAR(20)) AS call_id,
    e.created AS occurred_at,
    e.type AS event_type,
-   a.tenant AS tenant,
+   COALESCE(e.tenant, a.tenant) AS tenant,
+   e.department AS department,
    a.name AS application,
    s.cluster_name AS cluster_name,
    LPAD(HEX(s.vorpal_id), 8, '0') AS vorpal_id,
@@ -239,7 +245,8 @@ SELECT
    CAST(e.session_id AS CHAR(20)) AS call_id,
    e.created AS occurred_at,
    e.type AS event_type,
-   a.tenant AS tenant,
+   COALESCE(e.tenant, a.tenant) AS tenant,
+   e.department AS department,
    a.name AS application,
    s.cluster_name AS cluster_name,
    LPAD(HEX(s.vorpal_id), 8, '0') AS vorpal_id,
@@ -269,3 +276,127 @@ SELECT
             CASE WHEN MAX(q.attempt) IS NOT NULL THEN 'released' ELSE 'waiting' END) AS outcome
 FROM v_queue q
 GROUP BY q.call_id, q.tenant, q.cluster_name, q.queue;
+
+-- What each application did, per node, minute by minute: events published,
+-- publishes the bus refused (each one a dropped event), INVITEs received and
+-- SIP errors. The dashboard reads every application's metrics MBean and
+-- publishes the difference since its last look; the MBean itself resets on
+-- every deploy, so these rows are the only history of it. `restarted` says
+-- the application restarted within the sample and its counts run from then.
+CREATE OR REPLACE VIEW v_app_samples AS
+SELECT
+   CAST(e.id AS CHAR(20)) AS event_id,
+   e.created AS sampled_at,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."app"')) AS application,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."node"')) AS node,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."cluster"')) AS weblogic_cluster,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."seconds"')) AS SIGNED) AS seconds,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."published"')) AS SIGNED) AS published,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."failures"')) AS SIGNED) AS failures,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."invites"')) AS SIGNED) AS invites,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."sipErrors"')) AS SIGNED) AS sip_errors,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."restarted"')) AS restarted,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."activeAppSessions"')) AS SIGNED) AS active_app_sessions,
+   a.domain AS domain
+FROM events e
+JOIN applications a ON a.id = e.application_id
+WHERE e.type = 'applicationSampled';
+
+-- How each server stood, minute by minute: SIP messages its container
+-- received and rejected, application sessions created, and at each sample its
+-- live sessions, heap and threads. `rejected` is the only record of a message
+-- the container refused under overload: it never reached an application.
+-- Published by the dashboard; readings a server lacks (the AdminServer runs
+-- no SIP container) are absent, not zero.
+CREATE OR REPLACE VIEW v_server_samples AS
+SELECT
+   CAST(e.id AS CHAR(20)) AS event_id,
+   e.created AS sampled_at,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."node"')) AS node,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."cluster"')) AS weblogic_cluster,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."state"')) AS state,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."restarted"')) AS restarted,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."seconds"')) AS SIGNED) AS seconds,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."received"')) AS SIGNED) AS received,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."rejected"')) AS SIGNED) AS rejected,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."appSessionsCreated"')) AS SIGNED) AS app_sessions_created,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."routed"')) AS SIGNED) AS routed,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."routingFallbacks"')) AS SIGNED) AS routing_fallbacks,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."undeployedBypasses"')) AS SIGNED) AS undeployed_bypasses,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."routingCycles"')) AS SIGNED) AS routing_cycles,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."activeAppSessions"')) AS SIGNED) AS active_app_sessions,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."activeSipSessions"')) AS SIGNED) AS active_sip_sessions,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."heapUsedPct"')) AS SIGNED) AS heap_used_pct,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."threadsStuck"')) AS SIGNED) AS threads_stuck,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."threadsHogging"')) AS SIGNED) AS threads_hogging,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."threadsPending"')) AS SIGNED) AS threads_pending,
+   a.domain AS domain
+FROM events e
+JOIN applications a ON a.id = e.application_id
+WHERE e.type = 'serverSampled';
+
+-- Every counter an application declares, one row per counter that moved in
+-- a sample: the history of what an application counts about itself (a speech
+-- service that did not answer, a media server that refused), kept past the
+-- redeploy that resets the counter. A labelled counter is `name.value`.
+CREATE OR REPLACE VIEW v_app_counters AS
+SELECT
+   CONCAT(e.id, ':', c.counter_name) AS row_id,
+   e.created AS sampled_at,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."app"')) AS application,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."node"')) AS node,
+   c.counter_name AS counter,
+   c.delta AS delta,
+   (SELECT a.domain FROM applications a WHERE a.id = e.application_id) AS domain
+FROM events e,
+   JSON_TABLE(e.payload, '$.counters[*]' COLUMNS (
+      counter_name VARCHAR(200) PATH '$.name',
+      delta BIGINT PATH '$.delta')) c
+WHERE e.type = 'applicationSampled';
+
+-- Every timing an application records, one row per timing per sample: how
+-- many recordings and their summed milliseconds, so a mean over any window is
+-- SUM(sum_millis) / SUM(recordings).
+CREATE OR REPLACE VIEW v_app_timings AS
+SELECT
+   CONCAT(e.id, ':', t.timing_name) AS row_id,
+   e.created AS sampled_at,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."app"')) AS application,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."node"')) AS node,
+   t.timing_name AS timing,
+   t.recordings AS recordings,
+   t.sum_millis AS sum_millis,
+   (SELECT a.domain FROM applications a WHERE a.id = e.application_id) AS domain
+FROM events e,
+   JSON_TABLE(e.payload, '$.timings[*]' COLUMNS (
+      timing_name VARCHAR(200) PATH '$.name',
+      recordings BIGINT PATH '$.count',
+      sum_millis BIGINT PATH '$.sumMillis')) t
+WHERE e.type = 'applicationSampled';
+
+-- An agent's verdict on a call, as filed from the Agent Console: the outcome
+-- (legitimate, scam, ...), the treatment, whether the number was blocked, and
+-- who filed it. Beside v_call_risk_summary it says whether the risk score was
+-- right. The caller's number stays in the payload, not in the view.
+CREATE OR REPLACE VIEW v_call_disposition AS
+SELECT
+   CAST(e.id AS CHAR(20)) AS event_id,
+   CAST(e.session_id AS CHAR(20)) AS call_id,
+   e.created AS dispositioned_at,
+   COALESCE(e.tenant, a.tenant) AS tenant,
+   e.department AS department,
+   a.name AS application,
+   s.cluster_name AS cluster_name,
+   LPAD(HEX(s.vorpal_id), 8, '0') AS vorpal_id,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."outcome"')) AS outcome,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."treatment"')) AS treatment,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."blocked"')) AS blocked,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."agent"')) AS agent,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."identity"')) AS caller_identity,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."action"')) AS action,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."reasons"')) AS reasons,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."face"')) AS SIGNED) AS face
+FROM events e
+JOIN applications a ON a.id = e.application_id
+LEFT JOIN sessions s ON s.id = e.session_id
+WHERE e.type = 'agentDisposition';

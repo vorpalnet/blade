@@ -148,7 +148,9 @@ public final class Histogram {
 		long total = count.sum();
 		report.setCount(total);
 		report.setMaxMillis(max.get());
-		report.setMeanMillis(total == 0 ? 0 : sum.sum() / total);
+		long summed = sum.sum();
+		report.setMeanMillis(total == 0 ? 0 : summed / total);
+		report.setSumMillis(summed);
 		report.setBoundsMillis(bounds.clone());
 		long[] counts = new long[buckets.length];
 		for (int i = 0; i < buckets.length; i++) {

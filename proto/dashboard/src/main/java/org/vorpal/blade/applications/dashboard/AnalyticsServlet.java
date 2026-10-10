@@ -1,9 +1,13 @@
 package org.vorpal.blade.applications.dashboard;
 
 import java.io.IOException;
+import java.time.DateTimeException;
+import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
@@ -15,13 +19,19 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.events.BladeEventTypes;
+import org.vorpal.blade.framework.v3.events.Events;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /// The dashboard's analytics data path: named reports from [AnalyticsReports],
 /// written as JSON.
 ///
-/// URL: `/blade/dashboard/data?r=<report>[,<report>…][&days=N][&sample=include][&cluster=X][&fresh=1]`
+/// URL: `/blade/dashboard/data?r=<report>[,<report>…][&days=N][&sample=include][&domain=X][&account=A][&tz=Zone][&fresh=1]`
+///
+/// `tz` is the viewer's IANA time zone (`America/Chicago`): days and hours are
+/// cut, and times printed, in it. The data is UTC; without `tz`, or with one
+/// this JVM does not know, the reports are in UTC.
 ///
 /// The response is one object keyed by report name; each value is
 /// `{columns, rows, asOf}` or `{error}`. Several reports per request let the
@@ -74,10 +84,21 @@ public class AnalyticsServlet extends HttpServlet {
 		int days = clamp(intParam(req, "days", settings == null ? 30 : settings.getHistoryDays()), 1, MAX_DAYS);
 		boolean includeSample = "include".equals(req.getParameter("sample"));
 		boolean fresh = "1".equals(req.getParameter("fresh"));
-		AnalyticsReports.Filter filter = new AnalyticsReports.Filter(days, includeSample, req.getParameter("cluster"),
-				new Date());
+		AnalyticsReports.Filter filter = new AnalyticsReports.Filter(days, includeSample, req.getParameter("domain"),
+				new Date(), zone(req.getParameter("tz")));
+		if (settings != null) {
+			filter = filter.tuned(settings.getLeakHours() * 3_600_000L, settings.getSplitCallSeconds() * 1000L,
+					settings.getSampleFreshMinutes() * 60_000L);
+		}
+		long ttl = ttl(settings);
+		Access access = Access.forRequest(req, settings);
+		if (access != null) {
+			filter = filter.limitedTo(access);
+		}
+		filter = filter.forAccount(req.getParameter("account"));
 
 		Map<String, Object> out = new LinkedHashMap<>();
+		List<String> shown = new ArrayList<>(), refused = new ArrayList<>();
 		AnalyticsReports reports = null;
 		String unavailable = null;
 		for (String raw : r.split(",")) {
@@ -88,7 +109,7 @@ public class AnalyticsServlet extends HttpServlet {
 			}
 			String key = filter.key(name);
 			Cached hit = fresh ? null : cache.get(key);
-			if (hit == null || System.currentTimeMillis() - hit.asOf > TTL_MS) {
+			if (hit == null || System.currentTimeMillis() - hit.asOf > ttl) {
 				if (reports == null && unavailable == null) {
 					try {
 						reports = store().reports(dataSource(settings));
@@ -104,11 +125,18 @@ public class AnalyticsServlet extends HttpServlet {
 				try {
 					hit = new Cached(reports.run(name, filter), System.currentTimeMillis());
 					cache.put(key, hit);
+				} catch (SecurityException e) {
+					refused.add(name);
+					out.put(name, Map.of("error", e.getMessage()));
+					continue;
 				} catch (RuntimeException e) {
 					logger.log(Level.WARNING, "dashboard report " + name + " failed", e);
 					out.put(name, Map.of("error", rootMessage(e)));
 					continue;
 				}
+			}
+			if (AnalyticsReports.CONTENT.contains(name) || filter.account != null) {
+				shown.add(name);
 			}
 			Map<String, Object> result = new LinkedHashMap<>();
 			result.put("columns", hit.table.columns);
@@ -116,14 +144,34 @@ public class AnalyticsServlet extends HttpServlet {
 			result.put("asOf", hit.asOf);
 			out.put(name, result);
 		}
-		prune();
+		prune(ttl);
+		audit(req, filter, shown, refused);
 		MAPPER.writeValue(resp.getWriter(), out);
 	}
 
-	/// Drops expired entries, so odd `days` values and retired clusters do not
+	/// The audit record: who saw individual calls or what was said, or was
+	/// refused them. Counts, durations and bands are not recorded, so a board
+	/// left open does not write a row a minute; anything that identifies a
+	/// call or a caller is.
+	private static void audit(HttpServletRequest req, AnalyticsReports.Filter filter, List<String> shown,
+			List<String> refused) {
+		if (shown.isEmpty() && refused.isEmpty()) {
+			return;
+		}
+		Events.publish((Long) null, null, BladeEventTypes.DASHBOARD_VIEWED, data -> data
+				.put("viewer", req.getRemoteUser() == null ? "(anonymous)" : req.getRemoteUser())
+				.put("reports", String.join(",", shown))
+				.put("days", filter.days)
+				.put("forDomain", filter.domain)
+				.put("access", filter.access == null ? "everything (no grants configured)" : filter.access.key())
+				.put("refused", refused.isEmpty() ? null : String.join(",", refused))
+				.put("account", filter.account));
+	}
+
+	/// Drops expired entries, so odd `days` values and retired domains do not
 	/// accumulate for the life of the application.
-	private void prune() {
-		long cutoff = System.currentTimeMillis() - TTL_MS;
+	private void prune(long ttl) {
+		long cutoff = System.currentTimeMillis() - ttl;
 		for (Iterator<Cached> i = cache.values().iterator(); i.hasNext();) {
 			if (i.next().asOf < cutoff) {
 				i.remove();
@@ -139,6 +187,11 @@ public class AnalyticsServlet extends HttpServlet {
 
 	private AnalyticsStore store() {
 		return (AnalyticsStore) getServletContext().getAttribute(AnalyticsStore.ATTR);
+	}
+
+	/// How long a result is reused: the settings' `cacheMinutes`, else [#TTL_MS].
+	private static long ttl(DashboardSettings settings) {
+		return settings == null ? TTL_MS : settings.getCacheMinutes() * 60_000L;
 	}
 
 	private static String dataSource(DashboardSettings settings) {
@@ -167,5 +220,17 @@ public class AnalyticsServlet extends HttpServlet {
 
 	private static int clamp(int v, int lo, int hi) {
 		return v < lo ? lo : (v > hi ? hi : v);
+	}
+
+	/// The viewer's zone, or null (UTC) for none or one this JVM does not know.
+	static ZoneId zone(String tz) {
+		if (tz == null || tz.isEmpty()) {
+			return null;
+		}
+		try {
+			return ZoneId.of(tz);
+		} catch (DateTimeException unknown) {
+			return null;
+		}
 	}
 }

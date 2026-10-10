@@ -4,11 +4,10 @@ import java.io.Serializable;
 import java.util.Date;
 
 import javax.persistence.Column;
+import javax.persistence.Convert;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Table;
-import javax.persistence.Temporal;
-import javax.persistence.TemporalType;
 
 /// What a caller said and what the system made of it, from `v_conversation`.
 ///
@@ -27,7 +26,7 @@ public class ConversationRow implements Serializable {
 	@Column(name = "call_id")
 	private String callId;
 
-	@Temporal(TemporalType.TIMESTAMP)
+	@Convert(converter = UtcTimestamp.class)
 	@Column(name = "occurred_at")
 	private Date occurredAt;
 
@@ -35,6 +34,9 @@ public class ConversationRow implements Serializable {
 	private String eventType;
 
 	private String tenant;
+
+	/// The department that handled this part of the call, or null.
+	private String department;
 
 	private String application;
 

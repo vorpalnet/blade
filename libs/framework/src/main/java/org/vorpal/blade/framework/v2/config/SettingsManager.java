@@ -395,12 +395,15 @@ public class SettingsManager<T> {
 		serverPath = Paths.get(CONFIG_BASE_PATH + "_servers/" + serverName);
 		Files.createDirectories(serverPath);
 		ObjectName managedServerName = new ObjectName("com.bea:Name=" + serverName + ",Type=Server");
+		// Every server knows its domain, clustered or not. Set only for a
+		// clustered one, it left the AdminServer's applications publishing with
+		// no domain, so their rows could not be told apart in a shared database.
+		domainName = server.getDefaultDomain();
 		ObjectName clusterObjectName = (ObjectName) server.getAttribute(managedServerName, "Cluster");
 		if (clusterObjectName != null) {
 			clusterName = (String) server.getAttribute(clusterObjectName, "Name");
 			clusterPath = Paths.get(CONFIG_BASE_PATH + "_clusters/" + clusterName);
 			Files.createDirectories(clusterPath);
-			domainName = server.getDefaultDomain();
 		}
 	}
 

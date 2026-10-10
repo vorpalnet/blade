@@ -35,6 +35,7 @@ CREATE TABLE sessions(
    vorpal_id BIGINT NOT NULL,
    created TIMESTAMP NOT NULL,
    destroyed TIMESTAMP DEFAULT NULL,
+   tenant VARCHAR(64) DEFAULT NULL,
    CONSTRAINT session_natural_uk UNIQUE (cluster_name, vorpal_id, created)
 );
 
@@ -60,5 +61,7 @@ CREATE TABLE events(
    event_uid CHAR(36) NOT NULL,
    CONSTRAINT event_uid_uk UNIQUE (event_uid),
    created TIMESTAMP NOT NULL,
+   tenant VARCHAR(64) DEFAULT NULL,
+   department VARCHAR(64) DEFAULT NULL,
    payload LONGVARCHAR DEFAULT NULL
 );

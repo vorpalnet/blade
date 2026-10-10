@@ -204,6 +204,26 @@ public final class BladeEventTypes {
 	// subscribed to by dashboards and alerting. Each names the `node` that saw it,
 	// because every engine keeps its own view.
 
+	/// What one application on one node did over the last minute, read from
+	/// its `Type=Metrics` MBean by the dashboard: events `published`, publishes
+	/// that `failures` (each a dropped event), `invites` received, `sipErrors`,
+	/// over `seconds`. Unlike the facts below it IS persisted: its whole use is
+	/// history, since the MBean resets on every deploy.
+	public static final String APPLICATION_SAMPLED = "org.vorpal.blade.application.sampled";
+
+	/// How one server stood over the last minute, read by the dashboard from
+	/// its runtime MBeans: SIP messages `received` and `rejected` by the
+	/// container, `appSessionsCreated`, and readings at the sample of active
+	/// sessions, heap and threads. Persisted, like [#APPLICATION_SAMPLED]:
+	/// `rejected` counts calls refused before any application saw them, which
+	/// nothing else records.
+	public static final String SERVER_SAMPLED = "org.vorpal.blade.server.sampled";
+
+	/// Someone looked at call data on the dashboard: `viewer`, the `reports`,
+	/// and the scope asked for. Persisted: it is the record an audit asks for,
+	/// of who saw which calls and when.
+	public static final String DASHBOARD_VIEWED = "org.vorpal.blade.dashboard.viewed";
+
 	/// A queue's length over the last minute: `queue`, `low`, `high`, `depth`
 	/// now. Published only for a minute in which the queue held somebody.
 	public static final String QUEUE_DEPTH = "org.vorpal.blade.queue.depth";
@@ -456,6 +476,13 @@ public final class BladeEventTypes {
 			return "transferDeclined";
 		case TRANSFER_ABANDONED:
 			return "transferAbandoned";
+		// Persisted as events. Their last segment, "sampled", would name both.
+		case APPLICATION_SAMPLED:
+			return "applicationSampled";
+		case SERVER_SAMPLED:
+			return "serverSampled";
+		case DASHBOARD_VIEWED:
+			return "dashboardViewed";
 		default:
 			int dot = type.lastIndexOf('.');
 			return (dot < 0 || dot == type.length() - 1) ? type : type.substring(dot + 1);

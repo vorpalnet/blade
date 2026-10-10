@@ -4,11 +4,10 @@ import java.io.Serializable;
 import java.util.Date;
 
 import javax.persistence.Column;
+import javax.persistence.Convert;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Table;
-import javax.persistence.Temporal;
-import javax.persistence.TemporalType;
 
 /// The worst a call's risk ever got, one row per call, from
 /// `v_call_risk_summary`.
@@ -32,11 +31,11 @@ public class RiskCallRow implements Serializable {
 	@Column(name = "cluster_name")
 	private String clusterName;
 
-	@Temporal(TemporalType.TIMESTAMP)
+	@Convert(converter = UtcTimestamp.class)
 	@Column(name = "first_assessed_at")
 	private Date firstAssessedAt;
 
-	@Temporal(TemporalType.TIMESTAMP)
+	@Convert(converter = UtcTimestamp.class)
 	@Column(name = "last_assessed_at")
 	private Date lastAssessedAt;
 

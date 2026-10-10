@@ -43,6 +43,7 @@ public class AnalyticsEvent implements Serializable {
 	/// selectors matched them — origin first, then destination. A consumer must
 	/// not depend on that, but a human reading a log line benefits from it.
 	private final Map<String, String> attributes = new LinkedHashMap<>();
+	private CallScope scope = CallScope.NONE;
 
 	/// @param name          the analytics event name, e.g. `callStarted`
 	/// @param vorpalId      the call correlator, or null for an event with no call
@@ -125,8 +126,18 @@ public class AnalyticsEvent implements Serializable {
 	/// [BladeEventTypes#CALL_EVENT] for a name an operator invented, carrying the
 	/// name in the payload.
 	public CloudEvent toCloudEvent(String source, String appName, String domain, String server, Date appStartedAt) {
-		return AnalyticsEventMapper.callEvent(source, name, vorpalId, callStartedAt, occurredAt, appName, domain,
-				server, appStartedAt, attributes);
+		return AnalyticsEventMapper.scoped(AnalyticsEventMapper.callEvent(source, name, vorpalId, callStartedAt,
+				occurredAt, appName, domain, server, appStartedAt, attributes), scope);
+	}
+
+	/// The call's tenant and department when the event was created; stamped on
+	/// the wire event by [#toCloudEvent].
+	public void setScope(CallScope scope) {
+		this.scope = scope;
+	}
+
+	public CallScope getScope() {
+		return scope;
 	}
 
 	@Override

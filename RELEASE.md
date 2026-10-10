@@ -1,5 +1,177 @@
 # BLADE Release Notes
 
+## Unreleased (branch analytics2)
+
+### Framework: a redeploy no longer leaves the old copy of an app in memory
+
+An application that never unregistered its settings MBean at shutdown left the bean
+registered, and the bean held that deployment's whole classloader for the life of the server.
+The container does not refuse a later registration under the same name: the new deployment
+registered without an error and the old bean stayed behind it. `SettingsManager.register()`
+now replaces a bean already registered under its name. Applications no longer need to
+unregister at all: a listener in the framework's `web-fragment.xml` unregisters every
+`SettingsManager` an application built when its context is destroyed, and `unregister()` is
+now harmless to call twice.
+
+### Events: a publisher survives a restart of the server hosting the bus
+
+A publisher opens one JMS connection and shares it. When the server hosting the event bus
+restarted, that connection died and stayed dead, so every event published through it was
+dropped until the application was redeployed. The AdminServer, whose bus lives on an engine,
+hit this on every engine restart: the dashboard's samples stopped. A failed send now closes
+the connection, and the next publish opens a new one, at most once every five seconds while
+the bus is unreachable.
+
+### Dashboard: who sees what, and a record of who looked
+
+The dashboard signs people in with the deployment's OpenID Connect provider (`OidcLoginFilter`,
+as recordings and the phone do) when `blade-oidc.properties` is deployed with it, and falls
+back to the WebLogic login otherwise. What a person then sees is set by grants in the
+dashboard's settings, one per group:
+
+- `platform`: domains whose servers, operations and data health the group sees.
+- `domains`, `tenants`, `departments`: whose calls. A department sees only its own parts of a
+  call, and a caller's account only on calls it took part in.
+- `content`: whether the group sees individual calls, transcripts, caller identities and
+  accounts. Without it, counts, durations, outcomes and risk bands only.
+
+A person's access is the union of their groups' grants, enforced inside every query on the
+server. The hosting operator, for one, can hold `platform: ["*"]` and no tenants: every
+server, no call. With no grants configured, the WebLogic admin roles see everything, as
+before, and anyone else signed in sees nothing.
+
+Every request that shows individual calls or what was said, or that is refused, publishes a
+persisted `org.vorpal.blade.dashboard.viewed` event: who, which reports, the scope and access,
+and the account searched. That is the record an audit asks for. Report pages gain an Account
+filter: one caller's calls, by the `account` key an application filed them under with
+`Analytics.sessionKey(appSession, "account", id)`.
+
+### Analytics: a call carries its tenant and department
+
+Who may see a call is now a property of the call, not of the server it ran on. X-Vorpal-ID
+gains two parameters, `tn` (tenant) and `dp` (department), carried to every later hop like
+`ts` and believed only from a trusted peer. A routing table sets them: an iRouter translation
+row whose extras name `blade.tenant` and `blade.department`, typically keyed on the dialed
+number. Code sets them with `Callflow.setTenant` and `Callflow.setDepartment`. A later hop
+may change the department, and from there on the call's events carry the new one, so each
+part of a call is filed under the department that handled it.
+
+Every call event carries the scope it was published under (`CallScope`); a producer cannot
+overwrite it. A deployment's `-Dblade.tenant` remains the fallback for calls that carry
+none.
+
+Schema change, additive and nullable: `sessions.tenant` (the tenant the call opened under),
+`events.tenant` and `events.department`, and an index on them. Upgrade an existing database
+before deploying the new analytics service:
+
+```sql
+-- Oracle
+ALTER TABLE sessions ADD (tenant VARCHAR2(64 CHAR));
+ALTER TABLE events ADD (tenant VARCHAR2(64 CHAR), department VARCHAR2(64 CHAR));
+CREATE INDEX idx_event_scope ON events(tenant, department, created);
+-- MySQL
+ALTER TABLE sessions ADD COLUMN tenant VARCHAR(64) NULL;
+ALTER TABLE events ADD COLUMN tenant VARCHAR(64) NULL, ADD COLUMN department VARCHAR(64) NULL,
+   ADD INDEX idx_event_scope (tenant, department, created);
+-- SQL Server
+ALTER TABLE sessions ADD tenant NVARCHAR(64) NULL;
+ALTER TABLE events ADD tenant NVARCHAR(64) NULL, department NVARCHAR(64) NULL;
+CREATE INDEX idx_event_scope ON events(tenant, department, created);
+```
+
+Then re-run `<Dialect>-analytics-views.sql`: every view's `tenant` is now the call's own,
+falling back to the deployment's, and every view over events gains `department`.
+
+### Dashboard: every domain on one board
+
+The data's "cluster" is now called what it is, the domain: each call row names the WebLogic
+domain that handled it, unless `analytics.json` sets `domainId`. The sample configuration no
+longer sets one, so a deployment without its own file stops filing calls under a placeholder.
+An application on an unclustered server, the AdminServer among them, now records its domain
+too; it used to record none.
+
+A picker in the board's top bar shows every domain or one. This domain's servers are read
+live; another domain's come from the minute samples its own dashboard writes, marked with
+their age. The sample views gain a `domain` column, so re-run `<Dialect>-analytics-views.sql`.
+The data endpoint's `cluster` parameter is now `domain`, and `calls.clusters` is `calls.domains`.
+
+The board's thresholds moved into the dashboard's settings, editable in the Configurator:
+when heap reads high, how long a session stays open before it counts as leaked, the
+split-call window, how long a server's last sample stands, the refresh intervals and the
+report cache.
+
+### Analytics: a call ends when its last application lets go
+
+A session is the call through the whole system: one `sessions` row per Vorpal-ID and `ts`,
+however many applications it passes through. Every application on the call sends its own
+session stop, and the row now keeps the latest of them, so `destroyed` is when the call
+ended. It used to keep the first, which ended a call when its shortest-lived application
+let go. A stop that arrives late with an earlier time does not move the end back. No schema
+change.
+
+### Analytics: UTC throughout, shown in the viewer's zone
+
+The analytics database now holds UTC wall-clock time whatever zone the servers run in. Its
+timestamp columns carry no zone, and JDBC used to write and read them in each JVM's default
+zone, so an engine on local time stored local time and engines in two zones stored two
+clocks in one column. The analytics service and the dashboard now convert to and from UTC
+themselves. On servers that already run in UTC (the usual OCCAS setup) nothing moves; rows
+written by a server on local time keep that offset.
+
+The column defaults now read the database's UTC clock as well (SQL Server's already did).
+Nothing relies on them, since the analytics service always supplies the time, so an existing
+database can change them at leisure:
+
+```sql
+-- Oracle
+ALTER TABLE applications MODIFY (created DEFAULT SYS_EXTRACT_UTC(SYSTIMESTAMP));
+ALTER TABLE sessions     MODIFY (created DEFAULT SYS_EXTRACT_UTC(SYSTIMESTAMP));
+ALTER TABLE events       MODIFY (created DEFAULT SYS_EXTRACT_UTC(SYSTIMESTAMP));
+-- MySQL 8.0.13+
+ALTER TABLE applications ALTER created SET DEFAULT (UTC_TIMESTAMP(3));
+ALTER TABLE sessions     ALTER created SET DEFAULT (UTC_TIMESTAMP(3));
+ALTER TABLE events       ALTER created SET DEFAULT (UTC_TIMESTAMP(3));
+```
+
+The dashboard cuts days and hours, and prints every time, in the viewer's zone: the
+browser's own, or one chosen beside the board's clock and on each report page,
+remembered per browser. The data endpoint takes it as `tz` (an IANA name such as
+`America/Chicago`) and answers in UTC without it. A range longer than a day is that many whole days in
+the viewer's zone, today included, so the first day is never a partial one.
+
+### Analytics: application and server history, sampled by the dashboard
+
+Once a minute the dashboard reads every application's metrics MBean and every running
+server's runtime MBeans across the domain and publishes what changed as two new persisted
+events. The MBeans reset on every deploy; these rows are their history.
+
+- `application.sampled`: events published, publishes the bus refused (each one a dropped
+  event), INVITEs received, SIP errors, the application sessions the container holds for it,
+  and every other counter and timing the application declares.
+- `server.sampled`: SIP messages the container received and refused under overload, App
+  Router requests routed, routed to the default application, and routed past an undeployed
+  application, with heap, thread and session readings at the sample.
+
+A minute in which an application counted nothing is not published. The dashboard now
+publishes its own `application.started`/`stopped`.
+
+New reporting views `v_app_samples`, `v_server_samples`, `v_app_counters`,
+`v_app_timings` and `v_call_disposition` (agent verdicts from the Agent Console). Re-run `<Dialect>-analytics-views.sql` after upgrading;
+`notes/run-oracle-schema.py` with `BLADE_VIEWS_ONLY=yes` does it on Oracle ADB. Until the
+views exist the dashboard's new reports say so and the rest work.
+
+### Dashboard: Data health and Application metrics
+
+- Data health: what each application reports about its calls and what it never sends,
+  events dropped, messages the container refused, requests routed
+  past an undeployed application, which applications share a call, and calls recorded twice.
+- Application metrics: every counter and timing each application keeps, as history.
+- Platform activity gains each server's traffic, refusals, sessions, heap and threads.
+- Call risk gains the agents' verdicts and, per worst band a call's risk reached, what the
+  agents decided: whether the score was right.
+- Calls by application counts every application a call reached; a call through two counts
+  for both. It used to credit the whole call to whichever application was heard first.
+
 ## 3.0.7 (2026-09-28)
 
 ### Event bus: an application's events need no catalog edit

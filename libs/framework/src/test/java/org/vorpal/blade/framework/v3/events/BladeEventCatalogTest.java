@@ -101,12 +101,12 @@ class BladeEventCatalogTest {
 
 		assertEquals(constants, declared.size(),
 				"BladeEventCatalog declares a type that BladeEventTypes does not name");
-		// 49 = application start/stop, session start/stop/key, the eleven call and
+		// 52 = application start/stop/sample, the server sample, the dashboard view, session start/stop/key, the eleven call and
 		// transfer types + CALL_EVENT, the risk pair, the utterance, the voice
 		// assessment, the party request, the review, the disposition, the nine
 		// service call types, the access pair, CONVERSATION_CLOSED, ROOM_MEMBER
 		// and the twelve operations types.
-		assertEquals(49, constants, "a type was added or removed without updating the taxonomy");
+		assertEquals(52, constants, "a type was added or removed without updating the taxonomy");
 	}
 
 	/// Every framework event name resolves to a type the catalog declares.
@@ -167,7 +167,7 @@ class BladeEventCatalogTest {
 	}
 
 	@Test
-	@DisplayName("call-scoped types carry the correlator; application lifecycle does not")
+	@DisplayName("call-scoped types carry the correlator; application lifecycle and the samples do not")
 	void correlatorIsOnTheRightTypes() {
 		for (EventType type : BladeEventCatalog.analyticsTypes()) {
 			boolean hasVorpalId = false;
@@ -176,7 +176,8 @@ class BladeEventCatalogTest {
 				hasVorpalId |= "vorpalId".equals(field.getName());
 				hasStartedAt |= "startedAt".equals(field.getName());
 			}
-			boolean applicationScoped = type.getType().contains(".application.");
+			boolean applicationScoped = type.getType().contains(".application.")
+					|| type.getType().contains(".server.") || type.getType().contains(".dashboard.");
 			assertEquals(!applicationScoped, hasVorpalId, type.getType() + " correlator presence");
 			assertEquals(!applicationScoped, hasStartedAt,
 					type.getType() + " must carry the call birth instant, not just the id");

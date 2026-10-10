@@ -21,7 +21,8 @@ public class AnalyticsConfigSample extends AnalyticsConfig {
 
 		this.healthCheckSql = "SELECT 1";
 		this.healthCheckInterval = 60;
-		this.domainId = "SIPREC-03";
+		// No domainId: every row is stamped with the WebLogic domain name, which
+		// is right until two domains of one name share a database.
 
 	}
 }

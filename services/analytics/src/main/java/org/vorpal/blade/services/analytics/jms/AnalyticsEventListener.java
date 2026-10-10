@@ -2,7 +2,6 @@ package org.vorpal.blade.services.analytics.jms;
 
 import java.sql.Connection;
 import java.sql.Statement;
-import java.sql.Timestamp;
 import java.util.Date;
 import java.util.UUID;
 import java.util.List;
@@ -14,6 +13,7 @@ import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
 import javax.sql.DataSource;
 
+import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v3.events.AnalyticsEventMapper;
@@ -287,7 +287,7 @@ public class AnalyticsEventListener implements EventSubscriber.Handler {
 	private void persistSessionStart(EntityManager em, CloudEvent event) {
 		JsonNode data = event.getData();
 		Long pk = SessionResolver.resolveOrCreate(em, domainId(), Wire.vorpalId(data), Wire.instant(data, "startedAt"),
-				applicationId(em, data).longValue());
+				applicationId(em, data).longValue(), scope(data, "tenant"));
 		logFine("AnalyticsEventListener: Session start id=" + pk);
 	}
 
@@ -296,7 +296,7 @@ public class AnalyticsEventListener implements EventSubscriber.Handler {
 		Date stopped = Wire.instant(data, "stoppedAt");
 		Long pk = SessionResolver.close(em, domainId(), Wire.vorpalId(data), Wire.instant(data, "startedAt"),
 				applicationId(em, data).longValue(),
-				(stopped == null) ? new Timestamp(System.currentTimeMillis()) : new Timestamp(stopped.getTime()));
+				(stopped == null) ? new Date() : stopped);
 		logFine("AnalyticsEventListener: Session stop id=" + pk);
 	}
 
@@ -311,7 +311,7 @@ public class AnalyticsEventListener implements EventSubscriber.Handler {
 	private void persistSessionKey(EntityManager em, CloudEvent event) {
 		JsonNode data = event.getData();
 		Long pk = SessionResolver.resolveOrCreate(em, domainId(), Wire.vorpalId(data), Wire.instant(data, "startedAt"),
-				applicationId(em, data).longValue());
+				applicationId(em, data).longValue(), scope(data, "tenant"));
 
 		SessionKeyPK id = new SessionKeyPK();
 		id.setSessionId(pk.longValue());
@@ -353,9 +353,13 @@ public class AnalyticsEventListener implements EventSubscriber.Handler {
 		// A sessionless event is legal: the correlator is optional on these
 		// declarations precisely so a logging gap does not become a failed
 		// publish on the SIP container thread.
+		// Who may see it: the call's scope when it was published.
+		event.setTenant(scope(data, "tenant"));
+		event.setDepartment(scope(data, "department"));
+
 		if (data.hasNonNull("vorpalId")) {
 			event.setSessionId(SessionResolver.resolveOrCreate(em, domainId(), Wire.vorpalId(data),
-					Wire.instant(data, "startedAt"), event.getApplicationId()));
+					Wire.instant(data, "startedAt"), event.getApplicationId(), event.getTenant()));
 		}
 
 		// The analytics name, not the wire type: the views and every report
@@ -541,10 +545,18 @@ public class AnalyticsEventListener implements EventSubscriber.Handler {
 		emf = null;
 	}
 
+	/// A tenant or department from the envelope, or null. The framework only
+	/// ever stamps a name; anything else (an HTTP ingress, a hand-built event)
+	/// is dropped rather than written into a column that decides who sees what.
+	private static String scope(JsonNode data, String field) {
+		String value = Wire.text(data, field);
+		return Callflow.isScopeName(value) ? value : null;
+	}
+
 	/// This analytics server's hosting-environment id, from the service config
 	/// (`analytics.json`), falling back to the WebLogic domain name. Stamped as
 	/// `cluster_name` on every session row so a shared analytics database can tell
-	/// environments apart — several clusters may all be called `SIPREC`.
+	/// environments apart, since two domains may share a name.
 	private static String domainId() {
 		// Defensive on every hop. This is read while writing a session row, and
 		// the SIP half of this application may not have initialized when the

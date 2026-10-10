@@ -13,7 +13,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// percentiles below are a convenience — they are **not** mergeable and must not
 /// be averaged across nodes.
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonPropertyOrder({ "name", "description", "count", "meanMillis", "maxMillis", "p50Millis", "p90Millis", "p99Millis",
+@JsonPropertyOrder({ "name", "description", "count", "meanMillis", "sumMillis", "maxMillis", "p50Millis", "p90Millis", "p99Millis",
 		"boundsMillis", "bucketCounts" })
 public class HistogramReport implements Serializable {
 
@@ -23,6 +23,7 @@ public class HistogramReport implements Serializable {
 	private String description;
 	private long count;
 	private long meanMillis;
+	private long sumMillis;
 	private long maxMillis;
 	private long p50Millis;
 	private long p90Millis;
@@ -60,6 +61,17 @@ public class HistogramReport implements Serializable {
 
 	public void setMeanMillis(long meanMillis) {
 		this.meanMillis = meanMillis;
+	}
+
+	/// Every recording added up. Unlike [#getMeanMillis] it never goes down
+	/// while the count goes up, so a reader that keeps a running series can
+	/// take the difference between two reports.
+	public long getSumMillis() {
+		return sumMillis;
+	}
+
+	public void setSumMillis(long sumMillis) {
+		this.sumMillis = sumMillis;
 	}
 
 	public long getMaxMillis() {

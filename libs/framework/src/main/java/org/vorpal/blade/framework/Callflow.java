@@ -170,6 +170,24 @@ public abstract class Callflow implements Serializable {
 	/// the keep-alive; the rest fire strictly later. Kept on X-Vorpal-ID (a private
 	/// header) so non-BLADE elements never interpret it, unlike `Session-Expires`.
 	public static final String SE_PARAM = "se";
+	/// Parameterable keys on X-Vorpal-ID carrying who may see this call: the
+	/// tenant (the platform's customer) and the department within it. Set where
+	/// the call's scope is decided, usually by a routing table keyed on the
+	/// dialed number ([#setTenant], [#setDepartment]), and carried to every
+	/// later hop like `ts`, so every application's events carry the same scope.
+	/// A later hop may change the department; its events, and the hops after
+	/// it, carry the new one. Read only from a trusted peer: a caller cannot
+	/// claim a scope.
+	public static final String TENANT_PARAM = "tn";
+	public static final String DEPARTMENT_PARAM = "dp";
+	private static final String VORPAL_TENANT = "VORPAL_TENANT";
+	private static final String VORPAL_DEPARTMENT = "VORPAL_DEPARTMENT";
+
+	/// What a tenant or department may be: a name, not free text. It travels as
+	/// a SIP header parameter and lands in a 64-character column.
+	private static final java.util.regex.Pattern SCOPE_NAME = java.util.regex.Pattern
+			.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,63}");
+
 	/// SipApplicationSession attribute holding this app's staggered expiration
 	/// (minutes) adopted from an upstream X-Vorpal-ID `se`, or unset when this app
 	/// originates the chain and uses its configured expiration.
@@ -612,6 +630,71 @@ public abstract class Callflow implements Serializable {
 		}
 	}
 
+	/// The call's tenant, or null if no hop set one. A deployment's
+	/// `blade.tenant` default is applied where events are written, not here.
+	///
+	/// @param appSession the SIP application session
+	/// @return the tenant, or null
+	public static String getTenant(SipApplicationSession appSession) {
+		return scopeAttribute(appSession, VORPAL_TENANT);
+	}
+
+	/// The call's department within its tenant, or null if none was set.
+	///
+	/// @param appSession the SIP application session
+	/// @return the department, or null
+	public static String getDepartment(SipApplicationSession appSession) {
+		return scopeAttribute(appSession, VORPAL_DEPARTMENT);
+	}
+
+	/// Set the call's tenant: carried on X-Vorpal-ID to every later hop and
+	/// stamped on every event this application publishes for the call.
+	///
+	/// @param appSession the SIP application session
+	/// @param tenant     a name of letters, digits, `.`, `_` or `-`, at most 64;
+	///                   null to clear
+	/// @throws IllegalArgumentException if the name is not one
+	public static void setTenant(SipApplicationSession appSession, String tenant) {
+		setScope(appSession, VORPAL_TENANT, tenant);
+	}
+
+	/// Set the call's department, as [#setTenant] sets its tenant. The call's
+	/// events from here on, and the hops after this one, carry it.
+	///
+	/// @param appSession the SIP application session
+	/// @param department a name as for [#setTenant]; null to clear
+	/// @throws IllegalArgumentException if the name is not one
+	public static void setDepartment(SipApplicationSession appSession, String department) {
+		setScope(appSession, VORPAL_DEPARTMENT, department);
+	}
+
+	/// True if `name` may be a tenant or department.
+	public static boolean isScopeName(String name) {
+		return name != null && SCOPE_NAME.matcher(name).matches();
+	}
+
+	private static void setScope(SipApplicationSession appSession, String attribute, String value) {
+		if (value == null) {
+			appSession.removeAttribute(attribute);
+			return;
+		}
+		if (!isScopeName(value)) {
+			throw new IllegalArgumentException("not a tenant or department name: '" + value + "'");
+		}
+		appSession.setAttribute(attribute, value);
+	}
+
+	private static String scopeAttribute(SipApplicationSession appSession, String attribute) {
+		if (appSession == null) {
+			return null;
+		}
+		try {
+			return (String) appSession.getAttribute(attribute);
+		} catch (IllegalStateException e) {
+			return null; // invalidated: as for getVorpalSessionId
+		}
+	}
+
 	/**
 	 * Returns the Vorpal session ID for the given request, creating one if
 	 * necessary and storing it in memory. If they exist, this method will save the
@@ -656,6 +739,16 @@ public abstract class Callflow implements Serializable {
 						String ts = xVorpalId.getParameter(TIMESTAMP_PARAM);
 						if (ts != null && !ts.isEmpty()) {
 							appSession.setAttribute(VORPAL_TIMESTAMP, ts);
+						}
+						// The call's scope, from the hop that decided it. A value
+						// that is not a name is dropped, never half-trusted.
+						String tenant = xVorpalId.getParameter(TENANT_PARAM);
+						if (isScopeName(tenant)) {
+							appSession.setAttribute(VORPAL_TENANT, tenant);
+						}
+						String department = xVorpalId.getParameter(DEPARTMENT_PARAM);
+						if (isScopeName(department)) {
+							appSession.setAttribute(VORPAL_DEPARTMENT, department);
 						}
 						// Adopt an upstream app's expiration plus one minute, so this
 						// hop's timer fires strictly after the app that stamped it.
@@ -856,6 +949,15 @@ public abstract class Callflow implements Serializable {
 			String timestamp = getVorpalTimestamp(appSession);
 			if (timestamp != null && !timestamp.isEmpty()) {
 				xVorpalId.setParameter(TIMESTAMP_PARAM, timestamp);
+			}
+
+			String tenant = getTenant(appSession);
+			if (tenant != null) {
+				xVorpalId.setParameter(TENANT_PARAM, tenant);
+			}
+			String department = getDepartment(appSession);
+			if (department != null) {
+				xVorpalId.setParameter(DEPARTMENT_PARAM, department);
 			}
 
 			// Stamp this app's expiration (minutes) so a downstream B2BUA staggers

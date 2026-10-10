@@ -18,6 +18,7 @@
 	     test runs hsqldb-schema.sql instead. -->
 	<persistence-unit name="BladeAnalyticsTest" transaction-type="RESOURCE_LOCAL">
 		<provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
+		<class>org.vorpal.blade.services.analytics.model.UtcTimestamp</class>
 		<class>org.vorpal.blade.services.analytics.model.Application</class>
 		<class>org.vorpal.blade.services.analytics.model.Event</class>
 		<class>org.vorpal.blade.services.analytics.model.Session</class>

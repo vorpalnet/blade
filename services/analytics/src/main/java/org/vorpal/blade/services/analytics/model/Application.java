@@ -4,13 +4,12 @@ import java.io.Serializable;
 import java.util.Date;
 
 import javax.persistence.Column;
+import javax.persistence.Convert;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Lob;
 import javax.persistence.NamedQuery;
 import javax.persistence.Table;
-import javax.persistence.Temporal;
-import javax.persistence.TemporalType;
 import javax.servlet.sip.SipServletContextEvent;
 
 import org.vorpal.blade.framework.v3.analytics.NaturalKey;
@@ -52,7 +51,7 @@ public class Application implements Serializable {
 	@Lob
 	private String comments;
 
-	@Temporal(TemporalType.TIMESTAMP)
+	@Convert(converter = UtcTimestamp.class)
 	@Column(updatable = false, nullable = false)
 	private Date created;
 
@@ -62,7 +61,7 @@ public class Application implements Serializable {
 	/// `application.stopped` could not be recorded through JPA at all: the merge
 	/// ran, reported success, and silently did not write the column. The SQL
 	/// column has always been nullable and writable — only the mapping disagreed.
-	@Temporal(TemporalType.TIMESTAMP)
+	@Convert(converter = UtcTimestamp.class)
 	@Column(nullable = true)
 	private Date destroyed;
 

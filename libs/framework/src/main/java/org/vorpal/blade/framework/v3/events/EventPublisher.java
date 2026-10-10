@@ -54,6 +54,17 @@ import org.vorpal.blade.framework.v3.metrics.Counter;
 /// turns out to be a problem on OCCAS, the fix is a pool size of zero — every
 /// publish creating and closing its own session — which this already degrades to
 /// naturally.
+///
+/// **A failed send discards the connection.** The connection is opened once and
+/// shared, and when the server hosting the destination restarts it is dead for
+/// good: WebLogic does not revive it. Without this a publisher on the
+/// AdminServer, whose bus lives on an engine, dropped every event from that
+/// engine's restart until the application was redeployed (rig, 2026-10-08). So
+/// a send that throws closes the connection and its pooled sessions, and the
+/// next publish opens a fresh one. While the destination stays unreachable a
+/// fresh attempt is made at most once a [#RECONNECT_INTERVAL_MS]; the publishes
+/// in between fail at once instead of each blocking a container thread on a
+/// connect.
 public class EventPublisher {
 
 	/// JMS string-property name carrying the CloudEvents `type` — the primary
@@ -86,14 +97,21 @@ public class EventPublisher {
 	/// the number of threads that exist.
 	public static final int DEFAULT_POOL_SIZE = 16;
 
+	/// How often a publisher whose connection failed tries to open a new one.
+	static final long RECONNECT_INTERVAL_MS = 5_000L;
+
 	private final String connectionFactoryJndi;
 	private final String destinationJndi;
 	private final BlockingQueue<Sender> pool;
 
-	private ConnectionFactory factory;
-	private Connection connection;
-	private Destination destination;
+	ConnectionFactory factory;
+	private volatile Connection connection;
+	Destination destination;
 	private volatile boolean closed;
+	/// When the last connection was discarded, and how long to wait after
+	/// that before opening another ([#RECONNECT_INTERVAL_MS]; tests shorten it).
+	private long discardedAt;
+	long reconnectIntervalMs = RECONNECT_INTERVAL_MS;
 
 	/// Optional publish meters — see [#meter]. Null when nobody is counting.
 	private volatile Counter.Series published;
@@ -101,10 +119,12 @@ public class EventPublisher {
 
 	/// A session and its producer, borrowed and returned as one unit.
 	private final class Sender {
+		private final Connection from;
 		private final Session jmsSession;
 		private final MessageProducer producer;
 
-		private Sender(Session jmsSession, MessageProducer producer) {
+		private Sender(Connection from, Session jmsSession, MessageProducer producer) {
+			this.from = from;
 			this.jmsSession = jmsSession;
 			this.producer = producer;
 		}
@@ -167,12 +187,75 @@ public class EventPublisher {
 	///
 	/// @throws NamingException if a JNDI lookup fails
 	/// @throws JMSException    if the connection cannot be created or started
-	public void init() throws NamingException, JMSException {
+	public synchronized void init() throws NamingException, JMSException {
+		lookup();
+		Connection opened = factory.createConnection();
+		opened.start();
+		connection = opened;
+	}
+
+	/// Find the factory and destination: again on every reconnect, since the
+	/// bus may have moved. A seam for tests, which supply their own.
+	void lookup() throws NamingException {
 		InitialContext ctx = EventBus.context();
-		factory = (ConnectionFactory) ctx.lookup(connectionFactoryJndi);
-		destination = (Destination) ctx.lookup(destinationJndi);
-		connection = factory.createConnection();
-		connection.start();
+		try {
+			factory = (ConnectionFactory) ctx.lookup(connectionFactoryJndi);
+			destination = (Destination) ctx.lookup(destinationJndi);
+		} finally {
+			ctx.close();
+		}
+	}
+
+	/// The open connection, or a new one after [#discard], at most once a
+	/// [#RECONNECT_INTERVAL_MS].
+	private Connection connection() throws JMSException {
+		Connection open = connection;
+		if (open != null) {
+			return open;
+		}
+		synchronized (this) {
+			if (connection == null) {
+				if (closed) {
+					throw new JMSException("publisher for " + destinationJndi + " is closed");
+				}
+				long now = System.currentTimeMillis();
+				if (now - discardedAt < reconnectIntervalMs) {
+					throw new JMSException("reconnecting to " + destinationJndi);
+				}
+				discardedAt = now;
+				try {
+					init();
+				} catch (NamingException e) {
+					JMSException wrapped = new JMSException("cannot find " + destinationJndi + ": " + e);
+					wrapped.initCause(e);
+					throw wrapped;
+				}
+			}
+			return connection;
+		}
+	}
+
+	/// Close a connection a send failed on, and every pooled session on it, so
+	/// the next publish opens a fresh one. A connection already replaced is
+	/// left alone: another thread discarded it first.
+	private synchronized void discard(Connection failed) {
+		if (failed == null || connection != failed) {
+			return;
+		}
+		connection = null;
+		discardedAt = System.currentTimeMillis();
+		if (pool != null) {
+			Sender sender = pool.poll();
+			while (sender != null) {
+				sender.close();
+				sender = pool.poll();
+			}
+		}
+		try {
+			failed.close();
+		} catch (JMSException e) {
+			// It is already broken; closing is only to release what it holds.
+		}
 	}
 
 	private Sender borrow() throws JMSException {
@@ -182,15 +265,22 @@ public class EventPublisher {
 				return pooled;
 			}
 		}
-		Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
-		return new Sender(session, session.createProducer(destination));
+		Connection open = connection();
+		try {
+			Session session = open.createSession(false, Session.AUTO_ACKNOWLEDGE);
+			return new Sender(open, session, session.createProducer(destination));
+		} catch (JMSException e) {
+			discard(open);
+			throw e;
+		}
 	}
 
-	/// Return a sender to the pool, or close it when the pool is full or the
-	/// publisher has since shut down. Never throws — a failure to recycle must
-	/// not turn a successful publish into an error.
+	/// Return a sender to the pool, or close it when the pool is full, the
+	/// publisher has since shut down, or its connection has been discarded.
+	/// Never throws — a failure to recycle must not turn a successful publish
+	/// into an error.
 	private void release(Sender sender) {
-		if (closed || pool == null || !pool.offer(sender)) {
+		if (closed || pool == null || sender.from != connection || !pool.offer(sender)) {
 			sender.close();
 		}
 	}
@@ -225,6 +315,9 @@ public class EventPublisher {
 					message.setBooleanProperty(PROP_CALL, true);
 				}
 				sender.producer.send(message);
+			} catch (JMSException e) {
+				discard(sender.from);
+				throw e;
 			} finally {
 				release(sender);
 			}
@@ -255,7 +348,7 @@ public class EventPublisher {
 	/// Close every pooled session and the shared connection. Senders currently
 	/// borrowed by an in-flight publish close themselves on release, because
 	/// [#release] sees `closed`.
-	public void close() {
+	public synchronized void close() {
 		closed = true;
 		if (pool != null) {
 			Sender sender = pool.poll();
@@ -264,9 +357,11 @@ public class EventPublisher {
 				sender = pool.poll();
 			}
 		}
+		Connection open = connection;
+		connection = null;
 		try {
-			if (connection != null) {
-				connection.close();
+			if (open != null) {
+				open.close();
 			}
 		} catch (JMSException e) {
 			// Shutting down regardless.
