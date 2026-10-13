@@ -684,6 +684,7 @@ public final class BladeEventCatalog {
 		types.add(callRouted());
 		types.add(callResponded());
 		types.add(branchFailed());
+		types.add(callDropped());
 		types.add(callOriginated());
 		types.add(callHeld());
 		types.add(callHoldEnded());
@@ -692,6 +693,18 @@ public final class BladeEventCatalog {
 		types.add(queueAbandoned());
 		types.add(mediaPlayed());
 		return types;
+	}
+
+	private static EventType callDropped() {
+		EventType declaration = callScopedBase(BladeEventTypes.CALL_DROPPED, "Call Dropped",
+				"A call whose signaling was dropped: its application session expired with its legs in no state an ordinary ending leaves, such as an INVITE still without a final response, or one leg up after the other hung up. No callflow ended it.",
+				"CallDropped");
+		List<EventField> fields = callScopedFields();
+		fields.add(field("legs", EventFieldType.ARRAY, true,
+				"Each leg as it stood at expiry: {role (caller, callee, or gone for a partner no longer there), state (INITIAL, EARLY, CONFIRMED, TERMINATED or GONE), inviteOpen (an INVITE on it has no final response)}."));
+		fields.add(field("ageSeconds", EventFieldType.LONG, true, "How long the call had existed when it expired."));
+		declaration.setFields(fields);
+		return declaration;
 	}
 
 	private static EventType callRouted() {

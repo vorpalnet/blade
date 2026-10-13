@@ -215,11 +215,16 @@ public class AnalyticsReports {
 			"call.connected", "connected");
 	static final List<String> COMPLETED = Arrays.asList("callcompleted", "call.completed", "completed");
 	static final List<String> LOST = Arrays.asList("calldeclined", "call.declined", "declined", "callabandoned",
-			"call.abandoned", "abandoned");
+			"call.abandoned", "abandoned", "calldropped", "call.dropped", "dropped");
 	/// The callee refused the call.
 	static final List<String> DECLINED = Arrays.asList("calldeclined", "call.declined", "declined");
 	/// The caller hung up before anyone answered.
 	static final List<String> ABANDONED = Arrays.asList("callabandoned", "call.abandoned", "abandoned");
+	/// The call expired with its legs in no state an ordinary ending leaves:
+	/// its signaling was dropped (the framework's `DroppedCalls`).
+	static final List<String> DROPPED = Arrays.asList("calldropped", "call.dropped", "dropped");
+	/// A leg a server refused, with its status and who answered.
+	static final String BRANCH_FAILED = "branchFailed";
 	/// A proxy's one call event: it chose where the call goes, then left it.
 	static final List<String> ROUTED = Arrays.asList("callrouted", "call.routed", "routed");
 
@@ -538,7 +543,7 @@ public class AnalyticsReports {
 	}
 
 	/// Calls per hour (a week or less) or per day, by how each ended, good to
-	/// bad: completed, abandoned, declined.
+	/// bad, in [#ENDINGS]' order.
 	///
 	/// Bucketed by when the call started. A call still up, or one no
 	/// application reported an end for, is in no part.
@@ -565,16 +570,15 @@ public class AnalyticsReports {
 		} else {
 			buckets.addAll(fillDays(new TreeMap<String, Long>(), f).keySet());
 		}
-		Table t = new Table(hourly ? "hour" : "day", "completed", "abandoned", "declined");
+		Table t = new Table(endingColumns(hourly ? "hour" : "day"));
 		for (String b : buckets) {
-			long[] n = byBucket.getOrDefault(b, new long[ENDINGS.length]);
-			t.row(b, n[0], n[2], n[1]);
+			t.row(endingRow(b, byBucket.getOrDefault(b, new long[ENDINGS.length])));
 		}
 		return t;
 	}
 
-	/// Calls by where the caller is, and how each ended, good to bad:
-	/// completed, abandoned, declined. Most calls first.
+	/// Calls by where the caller is, and how each ended, good to bad in
+	/// [#ENDINGS]' order. Most calls first.
 	///
 	/// `area` is what the board's map places: a North American area code, or
 	/// `+` and the first three digits of any other number. The framework
@@ -609,10 +613,9 @@ public class AnalyticsReports {
 		List<Map.Entry<String, long[]>> rows = new ArrayList<>(byArea.entrySet());
 		rows.sort(Comparator.comparing((Map.Entry<String, long[]> e) -> -Arrays.stream(e.getValue()).sum())
 				.thenComparing(Map.Entry::getKey));
-		Table t = new Table("area", "completed", "abandoned", "declined");
+		Table t = new Table(endingColumns("area"));
 		for (Map.Entry<String, long[]> e : rows) {
-			long[] n = e.getValue();
-			t.row(e.getKey().isEmpty() ? null : e.getKey(), n[0], n[2], n[1]);
+			t.row(endingRow(e.getKey().isEmpty() ? null : e.getKey(), e.getValue()));
 		}
 		return t;
 	}
@@ -830,9 +833,8 @@ public class AnalyticsReports {
 		return new ArrayList<>(callsPerApplication(em, f, ANSWERED).keySet());
 	}
 
-	/// How calls ended, the three ways a B2BUA reports: completed after an
-	/// answer, declined by the callee, abandoned by the caller. Every
-	/// application counts; each call once.
+	/// How calls ended, in [#ENDINGS]' order. Every application counts; each
+	/// call once.
 	private Table outcomesEnded(EntityManager em, Filter f) {
 		long[] n = new long[ENDINGS.length];
 		for (Object[] end : endings(em, f).values()) {
@@ -845,72 +847,234 @@ public class AnalyticsReports {
 		return t;
 	}
 
-	/// Completed, declined and abandoned calls per day, each call once, on the
-	/// day it ended.
+	/// Calls per day by how each ended, each call once, on the day it ended.
 	private Table outcomesDaily(EntityManager em, Filter f) {
 		Map<String, long[]> byDay = new TreeMap<>();
 		for (Object[] end : endings(em, f).values()) {
 			byDay.computeIfAbsent(day(((Date) end[1]).toInstant(), f), k -> new long[ENDINGS.length])[(Integer) end[0]]++;
 		}
-		Table t = new Table("day", "completed", "declined", "abandoned");
+		Table t = new Table(endingColumns("day"));
 		for (String day : fillDays(new TreeMap<String, Long>(), f).keySet()) {
-			long[] n = byDay.getOrDefault(day, new long[ENDINGS.length]);
-			t.row(day, n[0], n[1], n[2]);
+			t.row(endingRow(day, byDay.getOrDefault(day, new long[ENDINGS.length])));
 		}
 		return t;
 	}
 
-	/// The outcome names, in [#outcomesEnded]'s order.
-	static final String[] ENDINGS = { "completed", "declined", "abandoned" };
+	/// The outcome names, good to bad: the order of every outcome report's
+	/// columns.
+	///
+	/// - `completed`: answered, then hung up.
+	/// - `abandoned`: the caller hung up before an answer.
+	/// - `declined`: the callee refused: busy, unavailable, not found, no answer.
+	/// - `failed`: the call could not be put through: nothing answered the
+	///   INVITE (the container's own 408 or 503, an INVITE never sent), a server
+	///   error (5xx), or a refusal on credentials (401, 403, 407).
+	/// - `dropped`: signaling a bug stopped relaying: the call expired with its
+	///   legs out of step, or the caller gave up on an answer that never reached
+	///   them.
+	static final String[] ENDINGS = { "completed", "abandoned", "declined", "failed", "dropped" };
+	static final int COMPLETED_AT = 0, ABANDONED_AT = 1, DECLINED_AT = 2, FAILED_AT = 3, DROPPED_AT = 4;
+
+	/// A first column, then one per outcome.
+	private static String[] endingColumns(String first) {
+		String[] c = new String[ENDINGS.length + 1];
+		c[0] = first;
+		System.arraycopy(ENDINGS, 0, c, 1, ENDINGS.length);
+		return c;
+	}
+
+	private static Object[] endingRow(Object first, long[] n) {
+		Object[] r = new Object[n.length + 1];
+		r[0] = first;
+		for (int i = 0; i < n.length; i++) {
+			r[i + 1] = n[i];
+		}
+		return r;
+	}
 
 	/// Each call that ended in the window, by call id: the index of its
 	/// outcome in [#ENDINGS] and when it ended.
 	///
 	/// **One outcome per call.** A call through two applications reports its
 	/// end from each, and not always the same end: the caller hangs up on a
-	/// call one leg had answered. Completed wins, then abandoned, then
-	/// declined, so a call that was answered somewhere reads as completed.
+	/// call one leg had answered. Dropped wins, since any application that lost
+	/// a call's signaling broke it for the caller; then completed, so a call
+	/// answered somewhere reads as completed; then abandoned, then a refusal.
+	///
+	/// **A refusal is declined or failed by its status.** The framework records
+	/// every leg a server refused (`branchFailed`, with the status and the
+	/// address that answered). A call's refusal is judged by the last such leg:
+	/// see [#failure]. A call from before those records reads as declined.
+	///
+	/// **An abandon can be a drop.** The caller cancels a call that is still
+	/// ringing. One application cannot both see the callee answer or refuse and
+	/// then see the caller give up waiting, unless that answer never reached the
+	/// caller. So an abandon after the same application's `callAnswered`, or
+	/// after a leg it sent was refused with anything but the 487 a cancel
+	/// itself causes, is dropped. An application that tries a second
+	/// destination after a refusal would read as dropped too; no BLADE B2BUA
+	/// does.
 	private Map<String, Object[]> endings(EntityManager em, Filter f) {
-		List<String> types = new ArrayList<>(COMPLETED);
-		types.addAll(DECLINED);
-		types.addAll(ABANDONED);
-		TypedQuery<Object[]> q = em.createQuery("SELECT e.callId, e.eventType, MIN(e.occurredAt) FROM EventRow e"
-				+ where("e", "e.occurredAt", f) + " AND e.callId IS NOT NULL AND LOWER(e.eventType) IN :types"
-				+ " GROUP BY e.callId, e.eventType", Object[].class);
-		bind(q, f, true);
-		q.setParameter("types", types);
 		Map<String, Object[]> byCall = new HashMap<>();
-		for (Object[] r : q.getResultList()) {
-			String type = String.valueOf(r[1]).toLowerCase(Locale.ROOT);
-			int outcome = COMPLETED.contains(type) ? 0 : ABANDONED.contains(type) ? 2 : 1;
-			Object[] seen = byCall.get((String) r[0]);
-			if (seen == null || rank(outcome) > rank((Integer) seen[0])) {
-				byCall.put((String) r[0], new Object[] { outcome, instant(r[2]) });
+		for (Object[] end : applicationEndings(em, f)) {
+			Object[] seen = byCall.get((String) end[0]);
+			if (seen == null || rank((Integer) end[2]) > rank((Integer) seen[0])) {
+				byCall.put((String) end[0], new Object[] { end[2], end[3] });
 			}
 		}
 		return byCall;
 	}
 
-	/// Precedence among a call's outcomes: completed, then abandoned, then declined.
-	private static int rank(int outcome) {
-		return outcome == 0 ? 3 : outcome == 2 ? 2 : 1;
+	/// Every end an application reported in the window, judged as
+	/// [#endings] describes: {call, application, outcome index, when}.
+	private List<Object[]> applicationEndings(EntityManager em, Filter f) {
+		List<String> types = new ArrayList<>(COMPLETED);
+		types.addAll(DECLINED);
+		types.addAll(ABANDONED);
+		types.addAll(DROPPED);
+		types.addAll(ANSWERED);
+		TypedQuery<Object[]> q = em.createQuery("SELECT e.callId, e.eventType, e.application, MIN(e.occurredAt)"
+				+ " FROM EventRow e" + where("e", "e.occurredAt", f)
+				+ " AND e.callId IS NOT NULL AND LOWER(e.eventType) IN :types"
+				+ " GROUP BY e.callId, e.eventType, e.application", Object[].class);
+		bind(q, f, true);
+		q.setParameter("types", types);
+
+		// Per call: [end type index or -1, when], plus what an abandon is judged by.
+		Map<String, Map<String, Date>> answeredBy = new HashMap<>();
+		Map<String, List<Object[]>> ends = new HashMap<>();
+		for (Object[] r : q.getResultList()) {
+			String type = String.valueOf(r[1]).toLowerCase(Locale.ROOT);
+			String call = (String) r[0];
+			Date at = instant(r[3]);
+			if (ANSWERED.contains(type)) {
+				answeredBy.computeIfAbsent(call, k -> new HashMap<>()).merge(label(r[2]), at,
+						(a, b) -> a.before(b) ? a : b);
+			} else {
+				ends.computeIfAbsent(call, k -> new ArrayList<>()).add(new Object[] { type, label(r[2]), at });
+			}
+		}
+		Map<String, List<Object[]>> refusals = refusals(em, f);
+
+		List<Object[]> out = new ArrayList<>();
+		for (Map.Entry<String, List<Object[]>> e : ends.entrySet()) {
+			String call = e.getKey();
+			for (Object[] end : e.getValue()) {
+				String type = (String) end[0];
+				String app = (String) end[1];
+				Date at = (Date) end[2];
+				int outcome;
+				if (DROPPED.contains(type)) {
+					outcome = DROPPED_AT;
+				} else if (COMPLETED.contains(type)) {
+					outcome = COMPLETED_AT;
+				} else if (ABANDONED.contains(type)) {
+					outcome = droppedBeforeAbandon(answeredBy.get(call), refusals.get(call), app, at) ? DROPPED_AT
+							: ABANDONED_AT;
+				} else {
+					outcome = failure(refusals.get(call), at) ? FAILED_AT : DECLINED_AT;
+				}
+				out.add(new Object[] { call, app, outcome, at });
+			}
+		}
+		return out;
 	}
 
-	/// Completed, declined and abandoned calls per application, most first. A
-	/// call through two applications counts for each that reported its end.
-	private Table outcomesByApplication(EntityManager em, Filter f) {
-		Map<String, Long> completed = callsPerApplication(em, f, COMPLETED);
-		Map<String, Long> declined = callsPerApplication(em, f, DECLINED);
-		Map<String, Long> abandoned = callsPerApplication(em, f, ABANDONED);
-		Map<String, Long> total = new HashMap<>();
-		for (Map<String, Long> m : Arrays.asList(completed, declined, abandoned)) {
-			m.forEach((app, n) -> total.merge(app, n, Long::sum));
+	/// Each call's refused legs in the window, oldest first: {application,
+	/// when, status, responder}.
+	private Map<String, List<Object[]>> refusals(EntityManager em, Filter f) {
+		Map<String, List<Object[]>> byCall = new HashMap<>();
+		for (Object[] r : list(em, "SELECT r.callId, r.application, r.occurredAt, r.status, r.responder FROM RoutingRow r"
+				+ where("r", "r.occurredAt", f) + " AND r.callId IS NOT NULL AND r.eventType = '" + BRANCH_FAILED
+				+ "' ORDER BY r.occurredAt", f, true)) {
+			byCall.computeIfAbsent((String) r[0], k -> new ArrayList<>())
+					.add(new Object[] { label(r[1]), instant(r[2]), r[3] == null ? 0 : ((Number) r[3]).intValue(), r[4] });
 		}
-		List<String> apps = new ArrayList<>(total.keySet());
-		apps.sort(Comparator.comparing((String a) -> -total.get(a)).thenComparing(a -> a));
-		Table t = new Table("application", "completed", "declined", "abandoned");
+		return byCall;
+	}
+
+	/// Whether a refused call failed rather than being declined, by the last
+	/// leg refused at or before the refusal reached the caller.
+	///
+	/// Failed: nothing answered the INVITE (no `responder`: the container's own
+	/// 408 or 503, or an INVITE never sent), a server error (5xx), or a refusal
+	/// on credentials (401, 403, 407), which is configuration, not the callee
+	/// saying no. Everything else of 400 and up is the callee declining:
+	/// busy, unavailable, not found, a 408 the callee's side sent for no answer.
+	static boolean failure(List<Object[]> refused, Date at) {
+		Object[] last = null;
+		if (refused != null) {
+			for (Object[] r : refused) {
+				if (at == null || !((Date) r[1]).after(at)) {
+					last = r;
+				}
+			}
+		}
+		if (last == null) {
+			return false;
+		}
+		int status = (Integer) last[2];
+		return last[3] == null || (status >= 500 && status < 600) || status == 401 || status == 403
+				|| status == 407;
+	}
+
+	/// Whether the application that saw the caller abandon had already seen
+	/// the callee answer, or seen a leg it sent refused (other than the 487 the
+	/// cancel itself causes): an answer the caller never got.
+	private static boolean droppedBeforeAbandon(Map<String, Date> answered, List<Object[]> refused, String app,
+			Date at) {
+		Date answeredAt = answered == null ? null : answered.get(app);
+		if (answeredAt != null && at != null && answeredAt.before(at)) {
+			return true;
+		}
+		if (refused != null && at != null) {
+			for (Object[] r : refused) {
+				if (app.equals(r[0]) && ((Date) r[1]).before(at) && (Integer) r[2] != 487) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/// Precedence among a call's outcomes: dropped, completed, abandoned, then
+	/// a refusal (failed before declined).
+	private static int rank(int outcome) {
+		switch (outcome) {
+		case DROPPED_AT:
+			return 5;
+		case COMPLETED_AT:
+			return 4;
+		case ABANDONED_AT:
+			return 3;
+		case FAILED_AT:
+			return 2;
+		default:
+			return 1;
+		}
+	}
+
+	/// Calls per application by how each ended, in [#ENDINGS]' order, most
+	/// first. A call through two applications counts for each that reported its
+	/// end, each by its own end: one application's refusal of a call another
+	/// completed still counts as that application's refusal.
+	private Table outcomesByApplication(EntityManager em, Filter f) {
+		Map<String, Map<String, Integer>> perApp = new HashMap<>();
+		for (Object[] end : applicationEndings(em, f)) {
+			perApp.computeIfAbsent((String) end[1], k -> new HashMap<>()).merge((String) end[0], (Integer) end[2],
+					(a, b) -> rank(a) >= rank(b) ? a : b);
+		}
+		Map<String, long[]> counts = new HashMap<>();
+		perApp.forEach((app, calls) -> {
+			long[] n = new long[ENDINGS.length];
+			calls.values().forEach(o -> n[o]++);
+			counts.put(app, n);
+		});
+		List<String> apps = new ArrayList<>(counts.keySet());
+		apps.sort(Comparator.comparing((String a) -> -Arrays.stream(counts.get(a)).sum()).thenComparing(a -> a));
+		Table t = new Table(endingColumns("application"));
 		for (String app : apps) {
-			t.row(app, completed.getOrDefault(app, 0L), declined.getOrDefault(app, 0L), abandoned.getOrDefault(app, 0L));
+			t.row(endingRow(app, counts.get(app)));
 		}
 		return t;
 	}

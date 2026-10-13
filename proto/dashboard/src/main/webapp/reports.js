@@ -80,11 +80,11 @@
 		},
 		outcomes: {
 			title: 'Call outcomes',
-			lede: 'How calls ended: completed after an answer, declined by the callee, or abandoned by the caller. Each call counts once; a call through several applications counts for each in the per-application table.',
+			lede: 'How calls ended: completed after an answer; abandoned by the caller; declined by the callee (busy, unavailable, not found, no answer); failed, when nothing answered, a server erred or credentials were refused; or dropped, when a bug stopped relaying the signaling. Each call counts once; a call through several applications counts for each in the per-application table.',
 			sections: [
 				{ r: 'outcomes.summary', kind: 'tiles' },
 				{ r: 'outcomes.ended', title: 'How calls ended', kind: 'hbar' },
-				{ r: 'outcomes.daily', title: 'Calls per day by how they ended', kind: 'lines', series: ['completed', 'abandoned', 'declined'], colors: ['--ok', '--warn', '--bad'], wide: true },
+				{ r: 'outcomes.daily', title: 'Calls per day by how they ended', kind: 'lines', series: ['completed', 'abandoned', 'declined', 'failed', 'dropped'], colors: ['--ok', '--warn', '--warn', '--bad', '--bad'], wide: true },
 				{ r: 'outcomes.by-application', title: 'How each application\'s calls ended', kind: 'table' }
 			]
 		},
@@ -269,14 +269,14 @@
 		var byState = {}, elsewhere = {};
 		result.rows.forEach(function (r) {
 			var where = placeOf(r[0]), into = where.state ? byState : elsewhere, key = where.state || where.name;
-			var n = into[key] = into[key] || [0, 0, 0];
-			n[0] += +r[1] || 0; n[1] += +r[2] || 0; n[2] += +r[3] || 0;
+			var n = into[key] = into[key] || result.columns.slice(1).map(function () { return 0; });
+			for (var i = 1; i < r.length; i++) n[i - 1] += +r[i] || 0;
 		});
-		function total(n) { return n[0] + n[1] + n[2]; }
+		function total(n) { return n.reduce(function (a, b) { return a + b; }, 0); }
 		var other = Object.keys(elsewhere).sort(function (a, b) { return total(elsewhere[b]) - total(elsewhere[a]); })
 			.map(function (k) { return k + ' ' + C.fmt(total(elsewhere[k])); });
 		C.statesMap(body, usAtlas, byState, {
-			healthy: AREA.healthy, unhealthy: AREA.unhealthy, minCalls: AREA.minCalls,
+			healthy: AREA.healthy, unhealthy: AREA.unhealthy, minCalls: AREA.minCalls, names: result.columns.slice(1),
 			foot: other.length ? 'Not on the map: ' + other.join(' · ') : ''
 		});
 	}

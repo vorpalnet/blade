@@ -180,6 +180,13 @@ public final class BladeEventTypes {
 	/// `retryAfter`.
 	public static final String CALL_BRANCH_FAILED = "org.vorpal.blade.call.branch.failed";
 
+	/// A call whose signaling was dropped: its application session expired with
+	/// its legs in no state an ordinary ending leaves, such as an INVITE still
+	/// without a final response, or one leg up after the other hung up. No
+	/// callflow ended it. Carries `legs` (each `{role, state, inviteOpen}`) and
+	/// `ageSeconds`. See [org.vorpal.blade.framework.v3.net.DroppedCalls].
+	public static final String CALL_DROPPED = "org.vorpal.blade.call.dropped";
+
 	/// An application placed a call on someone's behalf (third-party call
 	/// control) and it was answered or refused. Carries `party`, `status`.
 	public static final String CALL_ORIGINATED = "org.vorpal.blade.call.originated";
@@ -403,6 +410,8 @@ public final class BladeEventTypes {
 			return CALL_RESPONDED;
 		case "branchFailed":
 			return CALL_BRANCH_FAILED;
+		case "callDropped":
+			return CALL_DROPPED;
 		case "callOriginated":
 			return CALL_ORIGINATED;
 		case "callHeld":
@@ -477,6 +486,8 @@ public final class BladeEventTypes {
 			return "callResponded";
 		case CALL_BRANCH_FAILED:
 			return "branchFailed";
+		case CALL_DROPPED:
+			return "callDropped";
 		case CALL_ORIGINATED:
 			return "callOriginated";
 		case CALL_HELD:

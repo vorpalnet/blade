@@ -20,7 +20,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /// endpoint is down until its `endpoint.up`, a trunk is failing until its
 /// `trunk.registered`, and a queue's depth is its last minute's report, per node
 /// because every node keeps its own view. **What just happened** is the last
-/// [#RECENT] events of every operations type, newest first. A service cut off
+/// [#RECENT] events, newest first, leaving out a queue's minute-by-minute depth,
+/// which the queues view shows already and which would push every change out of
+/// the list on a busy system. A service cut off
 /// by a breaker (`remote.down`) is in the feed only: [OpsServlet] reads which
 /// breakers are open now from the applications themselves.
 ///
@@ -52,12 +54,15 @@ final class OpsFeed implements EventSubscriber.Handler {
 
 	private final ArrayDeque<ObjectNode> recent = new ArrayDeque<>();
 
+	/// The events the panel shows. A phone registering or publishing presence is
+	/// not among them: each is routine, one per phone every few minutes, and on a
+	/// system with thousands of phones they would be the whole feed. A dropped
+	/// call is: each one is a bug's footprint, and rare.
 	static final List<String> TYPES = java.util.Arrays.asList(BladeEventTypes.QUEUE_DEPTH,
 			BladeEventTypes.ENDPOINT_DOWN, BladeEventTypes.ENDPOINT_UP, BladeEventTypes.REMOTE_DOWN,
-			BladeEventTypes.REMOTE_UP, BladeEventTypes.REGISTRATION_ADDED,
-			BladeEventTypes.REGISTRATION_REMOVED, BladeEventTypes.TRUNK_REGISTERED, BladeEventTypes.TRUNK_FAILED,
-			BladeEventTypes.TRUNK_UNREGISTERED, BladeEventTypes.PRESENCE_PUBLISHED, BladeEventTypes.SIP_DENIED,
-			BladeEventTypes.CONFIG_SAVED, BladeEventTypes.CONFIG_PUBLISHED);
+			BladeEventTypes.REMOTE_UP, BladeEventTypes.TRUNK_REGISTERED, BladeEventTypes.TRUNK_FAILED,
+			BladeEventTypes.TRUNK_UNREGISTERED, BladeEventTypes.SIP_DENIED, BladeEventTypes.CONFIG_SAVED,
+			BladeEventTypes.CONFIG_PUBLISHED, BladeEventTypes.CALL_DROPPED);
 
 	@Override
 	public void handle(List<CloudEvent> batch) {
@@ -90,7 +95,7 @@ final class OpsFeed implements EventSubscriber.Handler {
 			break;
 		case BladeEventTypes.QUEUE_DEPTH:
 			queues.put(data.path("queue").asText() + "|" + node, stamped(event, data));
-			break;
+			return;
 		default:
 			break;
 		}

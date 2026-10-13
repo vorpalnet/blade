@@ -342,7 +342,8 @@
 	   tooltip says the word (healthy, fair, unhealthy) and the numbers, and
 	   the legend under the map names both ends of the scale.
 	   atlas: us-atlas states-albers-10m, already projected, so geoPath() takes
-	   no projection. byState: { 'Texas': [completed, abandoned, declined] }.
+	   no projection. byState: { 'Texas': [completed, ...] }, one count per
+	   opts.names (the outcomes, completed first).
 	   opts.foot: a line under the legend (calls the map cannot place). */
 	function statesMap(el, atlas, byState, opts) {
 		el.textContent = '';
@@ -351,14 +352,14 @@
 		var colors = [token('--geo-bad'), token('--geo-fair'), token('--geo-good')];
 		var color = d3.scaleLinear().domain([opts.unhealthy, (opts.unhealthy + opts.healthy) / 2, opts.healthy])
 			.range(colors).interpolate(d3.interpolateRgb).clamp(true);
-		function total(n) { return n ? n[0] + n[1] + n[2] : 0; }
+		function total(n) { return n ? n.reduce(function (a, b) { return a + b; }, 0) : 0; }
 		function judged(n) { return total(n) >= opts.minCalls; }
 		function word(share) { return share >= opts.healthy ? 'healthy' : share <= opts.unhealthy ? 'unhealthy' : 'fair'; }
 		function pct(v, t) { return Math.round(100 * v / t) + '%'; }
 		function tip(d) {
 			var name = d.properties.name, n = byState[name], t = total(n);
 			if (!t) return name + ': no calls';
-			var parts = pct(n[0], t) + ' completed, ' + pct(n[1], t) + ' abandoned, ' + pct(n[2], t) + ' declined';
+			var parts = n.map(function (v, i) { return v ? pct(v, t) + ' ' + opts.names[i] : null; }).filter(Boolean).join(', ');
 			if (!judged(n)) return name + ': ' + fmt(t) + (t === 1 ? ' call' : ' calls') + ', too few to judge · ' + parts;
 			return name + ': ' + word(n[0] / t) + ' · ' + fmt(t) + ' calls · ' + parts;
 		}

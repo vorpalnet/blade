@@ -12,6 +12,29 @@ on the same server, every earlier instance's open calls end at the earlier one's
 the new start if it never sent one. A call a later application still holds is corrected
 when that application sends its own stop.
 
+### Outcomes: declined, failed, and dropped calls
+
+A call now ends one of five ways on the dashboard, good to bad: completed, abandoned, declined,
+failed or dropped.
+
+- **Declined and failed are told apart** by the leg the call was refused on, which the framework
+  already records (`branchFailed`, with the status and the address that answered). Failed is a call
+  that could not be put through: nothing answered the INVITE (the container's own 408 or 503, or an
+  INVITE never sent), a server error (5xx), or a refusal on credentials (401, 403, 407). Every other
+  refusal is the callee declining. A call from before those records reads as declined.
+- **Dropped is a call whose signaling a bug stopped relaying.** A new framework event,
+  `org.vorpal.blade.call.dropped` (`callDropped`), is published when a B2BUA's application session
+  expires with its legs in a state no ordinary ending leaves: an INVITE still without a final
+  response, or one leg up after the other hung up. It carries each leg's role, dialog state and
+  whether an INVITE on it is still open, so the event names what went missing. No timer is added:
+  the container's own expiry is the clock, so a dropped call is reported when its session expires.
+  A call the caller abandoned after the same application had seen the callee answer, or refuse
+  with anything but the 487 a cancel causes, is dropped too: the answer never reached the caller.
+- **Operations "Recent" lists each dropped call** with its legs as they stood.
+
+Applications publish `callDropped` once they are rebuilt with this framework; the analytics service
+persists it once it is redeployed with it.
+
 ### Listener: a refused call reaches the caller
 
 A call the listener anchored that the callee refused (busy, not found, no answer) never
@@ -84,8 +107,12 @@ The network map now shows the equipment a call depends on besides SIP:
   row, the last failure). Each application exposes it as the MBean
   `vorpal.blade:Type=Remotes,Name=<application>`; a site claims a remote by its host or its
   datasource. A circuit breaker opening or closing publishes `remote.down` / `remote.up`;
-  Operations "Wrong now" lists the breakers open now, read live from the applications so a
+  Operations "Issues" lists the breakers open now, read live from the applications so a
   redeploy cannot leave one listed for good.
+
+Every dashboard panel that reads the analytics database (Traffic, Outcomes, Applications, Call
+risk) names the range it covers beside its title, such as `last 7 days`. The range buttons in the
+top bar set it for the whole board. Live views (Servers, Operations, the network map) carry none.
 
 ### Network agent: failures in code that does not use the framework
 
@@ -93,7 +120,7 @@ The network map now shows the equipment a call depends on besides SIP:
 `-javaagent` in a managed server's start arguments. It records the TCP connects and HTTP
 exchanges an application's own code makes, whichever library it uses, credits each to the
 application, and serves them through the framework's `Remotes` MBean beside what the framework
-records, so they reach the network map and "Wrong now". The container's own connections are
+records, so they reach the network map and Operations "Issues". The container's own connections are
 left out. Connections that Vorpal code makes for no application, such as the media driver's
 control channel to each media server, are shown once per server as `platform`'s. ByteBuddy is shaded inside it. See its README for how to run it. Applications need this
 framework (their `RemotesControl` registers with the agent); a server without the agent is
@@ -113,7 +140,7 @@ or day over the board's range. Applying it means re-creating `v_server_samples`,
 Two live tiles, refreshed every five seconds. **Calls now** counts the calls some
 application still holds (a Vorpal-ID whose call row has not ended), with the last hour's
 peak. **Queued now** sums the queue application's new `queued` gauge across nodes, with
-the longest wait from `queuedLongestMs`; it replaces "Wrong now", whose endpoints and
+the longest wait from `queuedLongestMs`; it replaces the old "Wrong now" tile, whose endpoints and
 trunks remain on the Operations panel. The queue's once-a-minute `queue.depth` event is
 now also published for the first empty minute after a busy one, so a drained queue no
 longer reads as still holding its last depth.

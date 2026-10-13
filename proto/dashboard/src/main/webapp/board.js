@@ -23,6 +23,9 @@
 	   defaultDays (/settings) when the board opens. */
 	var RANGES = ['1', '7', '30'], DEFAULT_DAYS = '7';
 	function rangeLabel(d) { return d === '1' ? 'Last day' : d + ' days'; }
+	/* The range as a phrase on a tile or panel. One day is a rolling 24 hours;
+	   longer ranges are whole days, today's included (AnalyticsReports.since). */
+	function rangePhrase(d) { return d === '1' ? 'last 24 hours' : 'last ' + d + ' days'; }
 	/* Lines that are peers (servers, applications) take colours that rank
 	   nothing; the good/fair/bad tokens are kept for outcomes. Each line is
 	   named at its end, so the colour is never the only channel. */
@@ -99,8 +102,9 @@
 	}
 
 	function labelRanges() {
-		var word = rangeLabel(days).toLowerCase();
+		var word = rangePhrase(days);
 		KPI.forEach(function (k) { if (k.rangeEl) k.rangeEl.textContent = ' · ' + word; });
+		Object.keys(P).forEach(function (k) { P[k].showRange(); });
 	}
 
 	/* A viewer without the platform grant gets no server tiles at all, rather
@@ -133,16 +137,21 @@
 
 	/* ── panels ────────────────────────────────────────────────────────── */
 
-	/* views: [{ key, label, draw(body) }]. The chosen tab is remembered per panel. */
-	function Panel(name, title, family, sub) {
+	/* views: [{ key, label, sub, live, draw(body) }]. The chosen tab is
+	   remembered per panel. A panel built with ranged reads the database, so its
+	   head names the range in the top bar; a view marked live does not. */
+	function Panel(name, title, family, ranged) {
 		this.name = name;
 		this.host = document.querySelector('[data-panel="' + name + '"]');
 		var head = el('div', 'panel__head');
 		var t = family ? el('a', 'panel__title', title) : el('span', 'panel__title', title);
 		if (family) { t.href = 'report.html?r=' + family + '&days=' + days + scopeQuery(); t.title = 'Open the full report'; this.link = t; this.family = family; }
-		this.sub = el('span', 'panel__sub', sub || '');
+		this.ranged = !!ranged;
+		this.range = el('span', 'panel__range');
+		this.range.title = 'The range chosen in the top bar';
+		this.sub = el('span', 'panel__sub', '');
 		this.tabs = el('div', 'tabs');
-		head.appendChild(t); head.appendChild(this.sub); head.appendChild(this.tabs);
+		head.appendChild(t); head.appendChild(this.range); head.appendChild(this.sub); head.appendChild(this.tabs);
 		this.body = el('div', 'panel__body');
 		this.host.appendChild(head); this.host.appendChild(this.body);
 		this.views = [];
@@ -175,7 +184,16 @@
 		if (!view) return;
 		this.body.textContent = '';
 		this.sub.textContent = view.sub || '';
+		this.showRange();
 		try { view.draw(this.body); } catch (e) { C.message(this.body, 'error', String(e.message || e)); }
+	};
+
+	Panel.prototype.showRange = function () {
+		var self = this;
+		var view = this.views.filter(function (v) { return v.key === self.current; })[0];
+		var on = this.ranged && view && !view.live;
+		this.range.textContent = on ? rangePhrase(days) : '';
+		this.range.hidden = !on;
 	};
 
 	Panel.prototype.relink = function () {
@@ -331,13 +349,33 @@
 	var OPS_WORDS = {
 		'org.vorpal.blade.endpoint.down': 'down', 'org.vorpal.blade.endpoint.up': 'up',
 		'org.vorpal.blade.remote.down': 'cut off', 'org.vorpal.blade.remote.up': 'back',
-		'org.vorpal.blade.trunk.failed': 'failing', 'org.vorpal.blade.trunk.registered': 'registered',
-		'org.vorpal.blade.trunk.unregistered': 'unregistered', 'org.vorpal.blade.queue.depth': 'queue',
-		'org.vorpal.blade.registration.added': 'registered', 'org.vorpal.blade.registration.removed': 'removed',
-		'org.vorpal.blade.presence.published': 'presence', 'org.vorpal.blade.sip.denied': 'refused',
-		'org.vorpal.blade.config.saved': 'config', 'org.vorpal.blade.config.published': 'pushed'
+		'org.vorpal.blade.trunk.failed': 'trunk down', 'org.vorpal.blade.trunk.registered': 'trunk up',
+		'org.vorpal.blade.trunk.unregistered': 'trunk off', 'org.vorpal.blade.queue.depth': 'queue',
+		'org.vorpal.blade.sip.denied': 'refused',
+		'org.vorpal.blade.config.saved': 'config', 'org.vorpal.blade.config.published': 'pushed',
+		'org.vorpal.blade.call.dropped': 'dropped'
 	};
-	var OPS_BAD = { down: 1, failing: 1, refused: 1, 'cut off': 1 };
+	var OPS_BAD = { down: 1, 'trunk down': 1, refused: 1, 'cut off': 1, dropped: 1 };
+
+	/* When an event happened, in the viewer's zone: the clock time today, the
+	   date as well before today. */
+	function opsWhen(ms) {
+		var day = function (t) { return new Date(t).toLocaleDateString([], { timeZone: R.zone() }); };
+		var clock = R.time(ms, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+		if (day(ms) === day(Date.now())) return clock;
+		return new Date(ms).toLocaleDateString([], { timeZone: R.zone(), month: 'short', day: 'numeric' }) + ' ' + clock;
+	}
+
+	/* How long something has been so: "40 s", "6 min", "2 h 5 min", "3 d 4 h". */
+	function opsFor(ms) {
+		var s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+		if (s < 60) return s + ' s';
+		var m = Math.floor(s / 60);
+		if (m < 60) return m + ' min';
+		var h = Math.floor(m / 60);
+		if (h < 24) return h + ' h' + (m % 60 ? ' ' + (m % 60) + ' min' : '');
+		return Math.floor(h / 24) + ' d' + (h % 24 ? ' ' + (h % 24) + ' h' : '');
+	}
 
 	function opsSummary(e) {
 		switch (e.type) {
@@ -349,18 +387,21 @@
 		case 'org.vorpal.blade.trunk.registered':
 		case 'org.vorpal.blade.trunk.unregistered': return e.gateway + ' · ' + e.registrar;
 		case 'org.vorpal.blade.queue.depth': return e.queue + ' · ' + e.depth + ' waiting (low ' + e.low + ', high ' + e.high + ')';
-		case 'org.vorpal.blade.registration.added':
-		case 'org.vorpal.blade.registration.removed': return e.aor + ' · ' + e.contact + (e.reason ? ' · ' + e.reason : '');
-		case 'org.vorpal.blade.presence.published': return e.entity + (e.basic ? ' · ' + e.basic : '');
 		case 'org.vorpal.blade.sip.denied': return e.method + ' from ' + e.sourceAddress;
 		case 'org.vorpal.blade.config.saved': return e.file + ' ' + e.change + ' by ' + e.actor + ' (' + e.editor + ')';
 		case 'org.vorpal.blade.config.published': return e.file + ' → ' + (e.pushedTo || []).join(', ') + ((e.failed && e.failed.length) ? ' · FAILED on ' + e.failed.join(', ') : '');
+		/* Each leg as it stood when the call expired: "caller EARLY, waiting". */
+		case 'org.vorpal.blade.call.dropped': return (e.appName || 'call') + ' · ' + (e.legs || []).map(function (l) {
+			return l.role + ' ' + l.state + (l.inviteOpen ? ', waiting' : '');
+		}).join(' · ') + (e.vorpalId ? ' · call ' + e.vorpalId : '');
 		default: return e.type;
 		}
 	}
 
-	/* Rows that fit, newest first, then a count of the rest. */
-	function opsRows(body, items, word, empty) {
+	/* Rows that fit, newest first, then a count of the rest. With `open`, the
+	   right column says how long each has been so, not when it began; the full
+	   line and the full date are on hover either way. */
+	function opsRows(body, items, word, empty, open) {
 		if (localOnly(body, 'Operations events')) return;
 		if (!lastOps) return C.message(body, 'empty', 'Listening to the event bus…');
 		if (!items.length) return C.message(body, 'empty', empty);
@@ -369,10 +410,13 @@
 		var shown = 0;
 		for (var i = 0; i < items.length; i++) {
 			var e = items[i], w = word(e);
-			var row = el('div', 'ops-row');
+			var row = el('div', 'ops-row'), main = opsSummary(e) + (e.node ? ' · ' + e.node : '');
+			var at = e.time ? new Date(e.time).getTime() : null;
 			row.appendChild(el('span', 'ops-row__what' + (OPS_BAD[w] ? ' bad' : ''), w));
-			row.appendChild(el('span', 'ops-row__main', opsSummary(e) + (e.node ? ' · ' + e.node : '')));
-			row.appendChild(el('span', 'ops-row__when', e.time ? R.time(new Date(e.time).getTime()) : ''));
+			row.appendChild(el('span', 'ops-row__main', main));
+			row.appendChild(el('span', 'ops-row__when', at == null ? '' : open ? 'for ' + opsFor(at) : opsWhen(at)));
+			row.title = w + ' · ' + main + (at == null ? '' : '\n' + (open ? 'since ' : '')
+				+ new Date(at).toLocaleString([], { timeZone: R.zone(), dateStyle: 'medium', timeStyle: 'medium' }));
 			box.appendChild(row);
 			if (box.scrollHeight > body.clientHeight - 20) { box.removeChild(row); break; }
 			shown++;
@@ -380,7 +424,7 @@
 		if (shown < items.length) body.appendChild(el('div', 'panel__more', (items.length - shown) + ' more'));
 	}
 
-	function wrongNow() {
+	function issues() {
 		if (!lastOps) return [];
 		return lastOps.endpointsDown.map(function (e) { e.type = 'org.vorpal.blade.endpoint.down'; return e; })
 			.concat(lastOps.trunksFailing.map(function (e) { e.type = 'org.vorpal.blade.trunk.failed'; return e; }))
@@ -393,11 +437,16 @@
 
 	/* How calls ended, good to bad, bottom up: the stoplight order, so position
 	   says what the colour says. */
+	/* Good to bad, the order of every outcome report's columns. Declined is
+	   ordinary traffic, fair like an abandon; failed and dropped are faults. */
 	var OUTCOME_PARTS = [
 		{ name: 'Completed', color: '--ok', explain: 'answered, then hung up normally' },
 		{ name: 'Abandoned', color: '--warn', explain: 'the caller hung up before anyone answered' },
-		{ name: 'Declined', color: '--bad', explain: 'the callee refused the call: busy, not found, or no answer' }
+		{ name: 'Declined', color: '--warn', explain: 'the callee said no: busy, unavailable, not found, or no answer' },
+		{ name: 'Failed', color: '--bad', explain: 'the call could not be put through: nothing answered, a server error (5xx), or refused on credentials (401, 403, 407)' },
+		{ name: 'Dropped', color: '--bad', explain: 'a bug stopped relaying the signaling: the call was left half set up or half hung up until it expired, or the caller gave up on an answer that never reached them' }
 	];
+	var OUTCOME_NAMES = OUTCOME_PARTS.map(function (p) { return p.name.toLowerCase(); });
 
 	/* One line per server for a per-minute sample reading (platform.heap,
 	   platform.cpu), drawn on the call charts' own buckets so every Traffic
@@ -540,7 +589,7 @@
 			{ key: 'jdbc', label: 'JDBC', sub: 'live', draw: drawJdbc }
 		]);
 
-		P.traffic = new Panel('traffic', 'Traffic', 'calls');
+		P.traffic = new Panel('traffic', 'Traffic', 'calls', true);
 		P.traffic.setViews([
 			{ key: 'calls', label: 'Calls', sub: 'per hour, or per day past a week', draw: function (body) {
 				guard(A['calls.by-outcome'], body, function (res) {
@@ -562,15 +611,15 @@
 			{ key: 'when', label: 'When', sub: 'weekday × hour of day', draw: function (body) {
 				guard(A['calls.heatmap'], body, function (res) { C.heatmap(body, res.rows); });
 			} },
-			{ key: 'network', label: 'Network', sub: 'sites, and the routes between them', draw: drawNetwork,
+			{ key: 'network', label: 'Network', sub: 'sites, and the routes between them', live: true, draw: drawNetwork,
 				fetch: function () { loadNetwork().catch(function () {}); } }
 		]);
 
 		P.ops = new Panel('ops', 'Operations', null);
 		P.ops.setViews([
-			{ key: 'wrong', label: 'Wrong now', sub: 'until the event that clears it', draw: function (body) {
-				opsRows(body, wrongNow(), function (e) { return OPS_WORDS[e.type]; },
-					'Nothing down. An endpoint or trunk shows here from the event that reports it until the one that clears it.');
+			{ key: 'issues', label: 'Issues', sub: 'until cleared', draw: function (body) {
+				opsRows(body, issues(), function (e) { return OPS_WORDS[e.type]; },
+					'No open issues. An endpoint, trunk or cut-off service shows here from the event that reports it until the one that clears it.', true);
 			} },
 			{ key: 'queues', label: 'Queues', sub: 'last minute · per node', draw: function (body) {
 				var q = lastOps ? lastOps.queues.map(function (e) { e.type = 'org.vorpal.blade.queue.depth'; return e; }) : [];
@@ -581,9 +630,9 @@
 			} }
 		]);
 
-		P.outcomes = new Panel('outcomes', 'Outcomes', 'outcomes');
+		P.outcomes = new Panel('outcomes', 'Outcomes', 'outcomes', true);
 		P.outcomes.setViews([
-			{ key: 'ended', label: 'Ended', sub: 'how calls ended · each call once', draw: function (body) {
+			{ key: 'ended', label: 'Ended', sub: 'each call counted once', draw: function (body) {
 				guard(A['outcomes.ended'], body, function (res) {
 					var by = {};
 					res.rows.forEach(function (r) { by[r[0]] = r[1] || 0; });
@@ -596,18 +645,18 @@
 						title: function (r) { return r[0] + ': ' + C.fmt(r[1]) + '\n' + r[2].explain; } });
 				});
 			} },
-			{ key: 'daily', label: 'Per day', draw: function (body) {
+			{ key: 'daily', label: 'Per day', sub: 'how calls ended, by day', draw: function (body) {
 				guard(A['outcomes.daily'], body, function (res) {
-					C.multiLine(body, seriesOf(res, ['completed', 'abandoned', 'declined']),
+					C.multiLine(body, seriesOf(res, OUTCOME_NAMES),
 						{ colors: OUTCOME_PARTS.map(function (p) { return C.token(p.color); }) });
 				});
 			} },
-			{ key: 'apps', label: 'By application', sub: 'how each application\'s calls ended', draw: function (body) {
+			{ key: 'apps', label: 'By application', sub: 'per application', draw: function (body) {
 				guard(A['outcomes.by-application'], body, function (res) { fitTable(body, res); });
 			} }
 		]);
 
-		P.apps = new Panel('apps', 'Applications', 'health');
+		P.apps = new Panel('apps', 'Applications', 'health', true);
 		P.apps.setViews([
 			{ key: 'calls', label: 'Calls', sub: 'a call through two applications counts for each', draw: function (body) {
 				guard(A['calls.by-application'], body, function (res) { C.hbar(body, res.rows, { limit: 8 }); });
@@ -622,7 +671,7 @@
 			} }
 		]);
 
-		P.risk = new Panel('risk', 'Call risk', 'risk');
+		P.risk = new Panel('risk', 'Call risk', 'risk', true);
 		P.risk.setViews([
 			{ key: 'bands', label: 'Bands', sub: 'calls by worst band reached', draw: function (body) {
 				guard(A['highrisk.by-band'], body, function (res) { R.bandList(body, res.rows); });

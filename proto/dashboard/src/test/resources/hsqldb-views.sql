@@ -38,6 +38,9 @@ INSERT INTO v_call_routing VALUES ('r3', 'c2', TIMESTAMP '2026-10-03 11:56:00', 
 INSERT INTO v_call_routing VALUES ('r4', 'c1', TIMESTAMP '2026-10-03 11:57:00', 'branchFailed', NULL, NULL, 'transfer', 'east-1', '000000C1', 'sip:bob@pbx.example.net', NULL, NULL, NULL, 486, 'Busy Here', '198.51.100.20', NULL);
 INSERT INTO v_call_routing VALUES ('r5', 'c1', TIMESTAMP '2026-10-03 09:00:00', 'branchFailed', NULL, NULL, 'transfer', 'east-1', '000000C1', 'sip:bob@pbx.example.net', NULL, NULL, NULL, 503, 'Service Unavailable', '198.51.100.20', NULL);
 INSERT INTO v_call_routing VALUES ('r7', 'c2', TIMESTAMP '2026-10-03 11:59:00', 'branchFailed', NULL, NULL, 'listener', 'east-1', '000000C2', 'sip:bob@pbx.example.net:5999', NULL, NULL, NULL, 500, 'not sent: Failed to send request', NULL, NULL);
+INSERT INTO v_call_routing VALUES ('r20', 'c30', TIMESTAMP '2026-10-03 09:00:29', 'branchFailed', NULL, NULL, 'transfer', 'sample', '000000D0', 'sip:bob@10.0.0.9', NULL, NULL, NULL, 408, 'Request Timeout', NULL, NULL);
+INSERT INTO v_call_routing VALUES ('r21', 'c31', TIMESTAMP '2026-10-03 09:10:29', 'branchFailed', NULL, NULL, 'transfer', 'sample', '000000D1', 'sip:bob@pbx.example.net', NULL, NULL, NULL, 486, 'Busy Here', '198.51.100.20', NULL);
+INSERT INTO v_call_routing VALUES ('r22', 'c34', TIMESTAMP '2026-10-03 09:40:01', 'branchFailed', NULL, NULL, 'agent', 'sample', '000000D4', 'sip:bob@pbx.example.net', NULL, NULL, NULL, 487, 'Request Terminated', '198.51.100.20', NULL);
 INSERT INTO v_call_routing VALUES ('r6', 'c1', TIMESTAMP '2026-10-03 11:58:00', 'callDeclined', NULL, NULL, 'transfer', 'east-1', '000000C1', 'sip:bob@pbx.example.net', NULL, NULL, NULL, 503, NULL, NULL, NULL);
 
 CREATE TABLE v_events (
@@ -164,6 +167,18 @@ INSERT INTO v_events VALUES ('e21', 'callCompleted', TIMESTAMP '2026-10-02 10:01
 -- never answered, and owing no answer (not a gap).
 INSERT INTO v_events VALUES ('e23', 'callStarted',   TIMESTAMP '2026-10-02 08:59:58', 'u23', 'c3', 'a7', 'transfer',   NULL, 'east-1', '000000C3', NULL);
 INSERT INTO v_events VALUES ('e24', 'callDeclined',  TIMESTAMP '2026-10-02 08:59:59', 'u24', 'c3', 'a7', 'transfer',   NULL, 'east-1', '000000C3', NULL);
+-- Ends judged by what came before them, on the sample cluster so no other
+-- report counts them. transfer refused c30 after a 408 nobody answered (r20:
+-- the container's own), so it failed, and c31 after a callee's 486 (r21), so
+-- declined. agent saw c32 answered, then the caller abandon it: the answer
+-- never reached them, so dropped. c33 expired with its legs out of step. c34
+-- the caller simply gave up on, after a 487 the cancel itself caused.
+INSERT INTO v_events VALUES ('e30', 'callDeclined',  TIMESTAMP '2026-10-03 09:00:30', 'u30', 'c30', 'a7', 'transfer', NULL, 'sample', '000000D0', NULL);
+INSERT INTO v_events VALUES ('e31', 'callDeclined',  TIMESTAMP '2026-10-03 09:10:30', 'u31', 'c31', 'a7', 'transfer', NULL, 'sample', '000000D1', NULL);
+INSERT INTO v_events VALUES ('e32', 'callAnswered',  TIMESTAMP '2026-10-03 09:20:00', 'u32', 'c32', 'a2', 'agent',    NULL, 'sample', '000000D2', NULL);
+INSERT INTO v_events VALUES ('e33', 'callAbandoned', TIMESTAMP '2026-10-03 09:20:40', 'u33', 'c32', 'a2', 'agent',    NULL, 'sample', '000000D2', NULL);
+INSERT INTO v_events VALUES ('e34', 'callDropped',   TIMESTAMP '2026-10-03 09:30:00', 'u34', 'c33', 'a2', 'agent',    NULL, 'sample', '000000D3', NULL);
+INSERT INTO v_events VALUES ('e35', 'callAbandoned', TIMESTAMP '2026-10-03 09:40:00', 'u35', 'c34', 'a2', 'agent',    NULL, 'sample', '000000D4', NULL);
 -- Per-application session facts: agent opened and closed c3; meetings opened
 -- c4 on Sep 29 and never closed it (a leak, older than a day); agent opened c6
 -- at 11:30 today and it is still up (not a leak yet).

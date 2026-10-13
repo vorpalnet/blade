@@ -1,6 +1,7 @@
 package org.vorpal.blade.applications.dashboard;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 import org.vorpal.blade.framework.v3.events.BladeEventTypes;
@@ -65,5 +66,28 @@ class OpsFeedTest {
 		assertEquals("10.0.0." + (OpsFeed.RECENT + 4),
 				snapshot.path("recent").get(0).path("sourceAddress").asText());
 		assertEquals(BladeEventTypes.SIP_DENIED, snapshot.path("recent").get(0).path("type").asText());
+	}
+
+	@Test
+	public void aQueuesDepthIsStateNotNews() {
+		OpsFeed feed = new OpsFeed();
+		com.fasterxml.jackson.databind.node.ObjectNode data = new ObjectMapper()
+				.createObjectNode().put("queue", "sales").put("depth", 3).put("node", "engine0");
+		feed.apply(CloudEvent.create(BladeEventTypes.QUEUE_DEPTH, "test", "sales",
+				data));
+		assertEquals(1, feed.snapshot().path("queues").size());
+		assertEquals(0, feed.snapshot().path("recent").size(), "the queues view shows it; the feed would drown in it");
+	}
+
+	@Test
+	public void aDroppedCallIsNews() {
+		assertTrue(OpsFeed.TYPES.contains(BladeEventTypes.CALL_DROPPED), "subscribed");
+		OpsFeed feed = new OpsFeed();
+		com.fasterxml.jackson.databind.node.ObjectNode data = new ObjectMapper().createObjectNode()
+				.put("vorpalId", "0000ABCD").put("ageSeconds", 3600);
+		data.putArray("legs").addObject().put("role", "caller").put("state", "EARLY").put("inviteOpen", true);
+		feed.apply(CloudEvent.create(BladeEventTypes.CALL_DROPPED, "test", "0000ABCD", data));
+		assertEquals(1, feed.snapshot().path("recent").size(), "listed in Recent");
+		assertEquals("EARLY", feed.snapshot().path("recent").get(0).path("legs").get(0).path("state").asText());
 	}
 }

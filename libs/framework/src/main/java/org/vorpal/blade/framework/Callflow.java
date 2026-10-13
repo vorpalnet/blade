@@ -119,7 +119,7 @@ public abstract class Callflow implements Serializable {
 	protected static final String REQUEST_CALLBACK_ = "REQUEST_CALLBACK_";
 	protected static final String RESPONSE_CALLBACK_ = "RESPONSE_CALLBACK_";
 	protected static final String PROXY_CALLBACK_ = "PROXY_CALLBACK_";
-	protected static final String LINKED_SESSION = "LINKED_SESSION";
+	public static final String LINKED_SESSION = "LINKED_SESSION";
 	protected static final String WITHHOLD_RESPONSE = "WITHHOLD_RESPONSE";
 
 	private static final String VORPAL_SESSION = "VORPAL_SESSION";

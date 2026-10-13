@@ -141,10 +141,12 @@ class AnalyticsReportsTest {
 	@Test
 	void callsByOutcomeAreGoodToBad() {
 		AnalyticsReports.Table t = run("calls.by-outcome");
-		assertEquals(Arrays.asList("hour", "completed", "abandoned", "declined"), t.columns);
+		assertEquals(Arrays.asList("hour", "completed", "abandoned", "declined", "failed", "dropped"), t.columns);
 		long ended = 0, completed = 0;
 		for (List<Object> row : t.rows) {
-			ended += n(row.get(1)) + n(row.get(2)) + n(row.get(3));
+			for (int i = 1; i < row.size(); i++) {
+				ended += n(row.get(i));
+			}
 			completed += n(row.get(1));
 		}
 		assertEquals(1, ended, "only c3 has an end and a call row; a call with no end is in no part");
@@ -155,8 +157,8 @@ class AnalyticsReportsTest {
 	@Test
 	void callsByAreaPlaceTheCallerWithoutTheNumber() {
 		AnalyticsReports.Table t = run("calls.by-area");
-		assertEquals(Arrays.asList("area", "completed", "abandoned", "declined"), t.columns);
-		assertEquals(Arrays.asList(Arrays.asList("312", 1L, 0L, 0L)), t.rows,
+		assertEquals(Arrays.asList("area", "completed", "abandoned", "declined", "failed", "dropped"), t.columns);
+		assertEquals(Arrays.asList(Arrays.asList("312", 1L, 0L, 0L, 0L, 0L)), t.rows,
 				"c3, completed, placed by the area the framework recorded, not by parsing its caller key");
 	}
 
@@ -300,15 +302,31 @@ class AnalyticsReportsTest {
 
 	@Test
 	void outcomesAreHowCallsEndedEachCallOnce() {
-		assertEquals(Arrays.asList(Arrays.asList("completed", 2L), Arrays.asList("declined", 0L),
-				Arrays.asList("abandoned", 0L)), run("outcomes.ended").rows,
+		assertEquals(Arrays.asList(Arrays.asList("completed", 2L), Arrays.asList("abandoned", 0L),
+				Arrays.asList("declined", 0L), Arrays.asList("failed", 0L), Arrays.asList("dropped", 0L)),
+				run("outcomes.ended").rows,
 				"c3 and c9 completed; transfer declined c3 before agent took it, and completed wins");
 		AnalyticsReports.Table byApp = run("outcomes.by-application");
-		assertEquals(Arrays.asList("application", "completed", "declined", "abandoned"), byApp.columns);
-		assertEquals(Arrays.asList("agent", 2L, 0L, 0L), byApp.rows.get(0));
-		assertEquals(Arrays.asList("transfer", 0L, 1L, 0L), byApp.rows.get(1),
+		assertEquals(Arrays.asList("application", "completed", "abandoned", "declined", "failed", "dropped"),
+				byApp.columns);
+		assertEquals(Arrays.asList("agent", 2L, 0L, 0L, 0L, 0L), byApp.rows.get(0));
+		assertEquals(Arrays.asList("transfer", 0L, 0L, 1L, 0L, 0L), byApp.rows.get(1),
 				"per application, transfer's refusal of c3 still counts");
 		assertEquals(2L, run("outcomes.daily").rows.stream().mapToLong(row -> n(row.get(1))).sum());
+	}
+
+	@Test
+	void anEndIsJudgedByWhatCameBeforeIt() {
+		AnalyticsReports.Filter sample = filter(7, true, "sample");
+		assertEquals(Arrays.asList(Arrays.asList("completed", 0L), Arrays.asList("abandoned", 1L),
+				Arrays.asList("declined", 1L), Arrays.asList("failed", 1L), Arrays.asList("dropped", 2L)),
+				reports.run("outcomes.ended", sample).rows,
+				"c34 abandoned (its 487 came from the cancel); c31 declined after a callee's 486; c30 failed"
+						+ " after a 408 nobody answered; c32 abandoned after its answer and c33 expired out of"
+						+ " step, both dropped");
+		AnalyticsReports.Table byApp = reports.run("outcomes.by-application", sample);
+		assertEquals(Arrays.asList("agent", 0L, 1L, 0L, 0L, 2L), byApp.rows.get(0));
+		assertEquals(Arrays.asList("transfer", 0L, 0L, 1L, 1L, 0L), byApp.rows.get(1));
 	}
 
 	@Test

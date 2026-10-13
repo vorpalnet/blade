@@ -288,6 +288,8 @@ body.board { height: 100vh; overflow: hidden; display: flex; flex-direction: col
 a.panel__title::after { content: " ↗"; color: var(--accent); font-size: 12px; }
 a.panel__title:hover { text-decoration: none; color: var(--accent); }
 .panel__sub { flex: 1 1 auto; min-width: 0; font-size: 11px; color: var(--ink-3); font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The range a database panel covers: never truncated, unlike the line after it. */
+.panel__range { flex: none; font-size: 11px; font-weight: 600; color: var(--ink-2); font-family: var(--mono); white-space: nowrap; border: 1px solid var(--line-2); border-radius: 4px; padding: 0 5px; }
 .panel__body { flex: 1 1 auto; min-height: 0; position: relative; overflow: hidden; }
 .panel__body svg { display: block; width: 100%; height: 100%; }
 .panel__more { position: absolute; left: 0; right: 0; bottom: 0; font-size: 11px; color: var(--ink-3); font-family: var(--mono); text-align: right; background: var(--bg); padding-top: 2px; }

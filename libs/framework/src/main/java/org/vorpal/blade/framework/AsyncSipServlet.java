@@ -49,6 +49,7 @@ import org.vorpal.blade.framework.v3.events.EventPublisher;
 import org.vorpal.blade.framework.v3.metrics.Counter;
 import org.vorpal.blade.framework.v3.net.CallOrigin;
 import org.vorpal.blade.framework.v3.net.Legs;
+import org.vorpal.blade.framework.v3.net.DroppedCalls;
 import org.vorpal.blade.framework.v3.metrics.Histogram;
 import org.vorpal.blade.framework.v3.metrics.MetricsRegistry;
 import org.vorpal.blade.framework.v2.b2bua.Terminate;
@@ -917,12 +918,14 @@ public abstract class AsyncSipServlet extends SipServlet
 		doRequest(glareRequest);
 	}
 
-	/// Container callback when a SipApplicationSession expires. Final: it runs the
+	/// Container callback when a SipApplicationSession expires. Final: it reports
+	/// a call whose signaling was dropped ([DroppedCalls#expiring]), runs the
 	/// framework's last-chance keep-alive probe (which cannot be suppressed), then
 	/// delegates to the overridable [#onSessionExpired] hook. Applications override
 	/// the hook, never this method.
 	@Override
 	public final void sessionExpired(SipApplicationSessionEvent event) {
+		DroppedCalls.expiring((event != null) ? event.getApplicationSession() : null);
 		onSessionExpired(event);
 		runExpirationProbe((event != null) ? event.getApplicationSession() : null);
 	}
