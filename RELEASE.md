@@ -2,6 +2,146 @@
 
 ## Unreleased (branch analytics2)
 
+### Analytics: a call ends when the application holding it is gone
+
+A call row ended only when an application sent its stop, so an application that was
+undeployed, crashed, or went down with its server left its calls open for good, and every
+"never closed" count carried them. The analytics service now ends them itself: when an
+application instance stops, at its stop; when a new instance of the same application starts
+on the same server, every earlier instance's open calls end at the earlier one's stop, or at
+the new start if it never sent one. A call a later application still holds is corrected
+when that application sends its own stop.
+
+### Listener: a refused call reaches the caller
+
+A call the listener anchored that the callee refused (busy, not found, no answer) never
+reached the caller: the listener holds its callflow while the media server prepares an offer,
+and the hold was still in place when the refusal came back, so the caller kept its 100 Trying
+and every application upstream waited too. The listener now sends the refusal itself.
+
+### Player: the call lifecycle
+
+The player now publishes `call.started`, `call.answered` and one end (`call.completed`,
+`call.abandoned`, `call.declined`). It answers calls itself rather than through the B2BUA
+callflow, so it never had them, and analytics counted its calls without a start, an answer
+or an end.
+
+### Dashboard: the network map
+
+Traffic has a **Network** tab: the sites in the new `sites` setting placed where they are,
+with a line from every inbound site (an SBC or carrier edge calls arrive from) to the
+cluster, and from the cluster to every downstream site (servers calls are sent to). Each
+site and line takes green, amber or red, and a shape that says the same:
+- a downstream site's health is the proxy balancer's OPTIONS pings to its endpoints (live,
+  from every engine), a gateway's trunk registration failing, and the legs its servers
+  refused within `networkWindowMinutes` (15), sorted by who has to act: equipment failing
+  (408, 500, 502, 503, 504; amber, red at `networkFailingCalls`, 3), configuration refused
+  (404, 403, 484, 488, routing loops, identity and STIR/SHAKEN refusals, 607 and 608; amber),
+  and callees saying no (480, 486, 600, 603; shown, never coloured). Challenges, cancels,
+  glare and session-timer renegotiation are part of a working call and left out;
+- an inbound site's is when it last sent a call; with `quietMinutes` set, a site silent that
+  long turns amber;
+- this domain's servers are read live, as on the Servers panel.
+
+A site's addresses are host names, IPv4 addresses or CIDR blocks; a host name also matches
+what it resolves to. Sites that overlap on the map share one mark, and clicking it zooms in
+on every server there. A balancer site with coordinates is added for it. Addresses no site
+claims are listed under the map, so an unknown peer shows up.
+
+Two facts are new in the framework. The first application a call reaches records the
+address its INVITE came from as an `origin` call key, beside the caller's area code as an
+`area` key (never the number, `P-Asserted-Identity` first, then the From). A new event,
+`branchFailed`, records every final failure on a leg a call was sent down, whatever sent it:
+a proxy's branch, an endpoint the balancer tried, a B2BUA's callee leg, or the response the
+container gives for a server that never answered. It carries `status`, `reason`,
+`destination`, `responder` and `retryAfter`; an INVITE the transport could not send at all
+(a refused TCP connection) is recorded too, as the 500 the framework answers, with the reason
+`not sent`, and the map reads it as the server unreachable. `v_call_routing` gains `reason`,
+`responder` and `retry_after` for it: re-create that view before upgrading the dashboard.
+Calls reach the map once the applications they pass through run this framework. It is all v3:
+`v3.net.CallOrigin` (the two keys), `v3.net.Legs` (the failed legs), `v3.net.Remotes`.
+
+The area-code map moved off the board to the Call volume report ("Where callers are"),
+coloured by `healthyPercent` (90) and `unhealthyPercent` (60). The area-code table
+(`vorpal/geo.js`) moved from the agent console into the framework JAR, which serves it to
+every application at `<context-root>/vorpal/geo.js`.
+
+### Dashboard: databases, the event bus and outbound services on the network map
+
+The network map now shows the equipment a call depends on besides SIP:
+- **Connection pools.** A site can name the datasources whose database is there
+  (`datasources`; a datasource whose JDBC URL names a host is matched by address). Each pool
+  is read live from every server: down when suspended, unhealthy or shut down; amber when
+  overloaded, when requests wait for a connection, or when a reserve or reconnect failed in
+  the last `networkWindowMinutes`. The Servers panel's JDBC tab gains the pool's state,
+  failures and last failure.
+- **The event bus,** as the broker sees it: a durable subscription with no consumer
+  (receiving nothing) is down, a backlog of a thousand or anything on the error queue is
+  amber. Shown on the cluster site.
+- **Outbound services.** A new framework class, `Remotes`, records every call an application
+  makes off the SIP path: the iRouter REST, JDBC and LDAP connectors, OAuth token fetches,
+  the sign-in provider and a lost media session, per remote (calls, failures, failures in a
+  row, the last failure). Each application exposes it as the MBean
+  `vorpal.blade:Type=Remotes,Name=<application>`; a site claims a remote by its host or its
+  datasource. A circuit breaker opening or closing publishes `remote.down` / `remote.up`;
+  Operations "Wrong now" lists the breakers open now, read live from the applications so a
+  redeploy cannot leave one listed for good.
+
+### Network agent: failures in code that does not use the framework
+
+`blade-agent.jar` (`libs/network-agent`, in `dist/lib`) is a Java agent, loaded with
+`-javaagent` in a managed server's start arguments. It records the TCP connects and HTTP
+exchanges an application's own code makes, whichever library it uses, credits each to the
+application, and serves them through the framework's `Remotes` MBean beside what the framework
+records, so they reach the network map and "Wrong now". The container's own connections are
+left out. ByteBuddy is shaded inside it. See its README for how to run it. Applications need this
+framework (their `RemotesControl` registers with the agent); a server without the agent is
+unaffected.
+
+### Dashboard: CPU beside heap
+
+Each server's per-minute sample now carries `cpuPct`: the CPU its JVM used over the minute,
+as a share of all its processors, from the change in `ProcessCpuTime` (the JVM's platform
+MBeans, which WebLogic federates into the domain runtime). The Servers panel shows it live
+beside heap, and Traffic has a CPU tab beside Heap, each server's busiest minute per hour
+or day over the board's range. Applying it means re-creating `v_server_samples`, which gains
+`cpu_pct`, before the dashboard is upgraded.
+
+### Dashboard: calls now, and calls queued now
+
+Two live tiles, refreshed every five seconds. **Calls now** counts the calls some
+application still holds (a Vorpal-ID whose call row has not ended), with the last hour's
+peak. **Queued now** sums the queue application's new `queued` gauge across nodes, with
+the longest wait from `queuedLongestMs`; it replaces "Wrong now", whose endpoints and
+trunks remain on the Operations panel. The queue's once-a-minute `queue.depth` event is
+now also published for the first empty minute after a busy one, so a drained queue no
+longer reads as still holding its last depth.
+
+The Data gaps tile is gone from the top row: a count of applications that never send some
+lifecycle event is for whoever owns the code, and it stays on the Applications panel's Gaps
+tab. **Outcomes** now shows how calls ended, the three ways a B2BUA reports it (completed,
+declined, abandoned), each call once, with its share; per day and per application likewise.
+The started/answered funnel is gone. A missing answer is now a gap
+only where one was owed: an application whose calls were all declined or abandoned had none
+to send.
+
+### Dashboard: the date ranges are a setting
+
+The board's range buttons and the report pages' range list come from two settings in
+`blade-dashboard.json`: `ranges`, the choices in days (default `[1, 7, 30]`), and
+`defaultDays`, the one a viewer starts on (default 7). `defaultDays` replaces
+`historyDays`; an old `historyDays` in a deployed file is ignored. A viewer's last choice is
+still remembered in their browser while it remains one of the ranges.
+
+### Framework: Sign out works behind a proxy
+
+Signing out of an OpenID application left the browser on the identity domain's
+"Invalid logout request" page. The return address was built from the request,
+which behind a proxy names the server, not the address registered on the client.
+It now comes from the configured `redirectUrl`, and the sign-in's ID token goes
+with it as `id_token_hint`, which an identity domain requires. Every OpenID
+application gets the fix when rebuilt against this framework.
+
 ### Framework: a redeploy no longer leaves the old copy of an app in memory
 
 An application that never unregistered its settings MBean at shutdown left the bean

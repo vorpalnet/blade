@@ -11,7 +11,7 @@
 
 	<header class="topbar">
 		<a class="brand" href="/blade/portal/">
-			<img class="brand__logo" src="/blade/portal/brand/vorpal_logo_lightpurple.svg" alt="Vorpal">
+			<img class="brand__logo" src="/blade/portal/brand/VorpalBoy_lightpurple.svg" alt="Vorpal">
 			<span class="brand__name">Dashboard<small>OCCAS &middot; BLADE</small></span>
 		</a>
 		<div class="spacer"></div>
@@ -30,12 +30,7 @@
 
 		<form class="toolbar" onsubmit="return false">
 			<label>Range
-				<select id="f-days">
-					<option value="1">last day</option>
-					<option value="7">last 7 days</option>
-					<option value="30">last 30 days</option>
-					<option value="90">last 90 days</option>
-				</select>
+				<select id="f-days"></select>
 			</label>
 			<label>Domain
 				<select id="f-domain"><option value="">all domains</option></select>
@@ -58,6 +53,8 @@
 	</main>
 
 	<script src="vendor/d3.min.js"></script>
+	<script src="vendor/topojson-client.min.js"></script>
+	<script src="vorpal/geo.js"></script>
 	<script src="charts.js"></script>
 	<script src="reports.js"></script>
 </body>

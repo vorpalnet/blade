@@ -7,6 +7,7 @@ import javax.servlet.sip.SipServletRequest;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v2.snmp.Snmp;
+import org.vorpal.blade.framework.v3.net.Remotes;
 
 /// Node-local circuit breaker shared by the IO-bound connectors
 /// ([RestConnector], [LdapConnector], [JdbcConnector]). When the remote
@@ -24,6 +25,9 @@ import org.vorpal.blade.framework.v2.snmp.Snmp;
 /// transition (logs a WARNING and, if enabled, emits ONE SNMP trap), and
 /// exactly one observes open→healthy on recovery. So an outage produces one
 /// "down" notification and one "up" — never a trap per failed call.
+///
+/// Each edge also reaches [Remotes], which publishes it as a `remote.down` or
+/// `remote.up` event, so an outage shows on the dashboard as well as in the log.
 ///
 /// Transient and node-local: each cluster node tracks the endpoint's health as
 /// IT sees it. No cross-node coordination, no singleton, no background timer
@@ -45,9 +49,11 @@ final class CircuitBreaker {
 	/// failure). Arms or re-arms suppression for `cooldownSeconds`. Only on the
 	/// healthy→open EDGE does it log a WARNING and (if `trap`) emit one SNMP
 	/// trap — so concurrent failures collapse to a single notice. Never throws.
-	void recordFailure(int cooldownSeconds, boolean trap, SipServletRequest req, String tag, String reason) {
+	void recordFailure(int cooldownSeconds, boolean trap, SipServletRequest req, String tag, String reason,
+			String kind, String remote) {
 		long prev = state.getAndSet(System.currentTimeMillis() + cooldownSeconds * 1000L);
 		if (prev == 0L) {
+			Remotes.breaker(kind, remote, true, reason);
 			Logger log = SettingsManager.getSipLogger();
 			if (log != null) {
 				log.warning(req, tag + " circuit OPEN — " + reason
@@ -63,9 +69,10 @@ final class CircuitBreaker {
 	/// Record a successful call. Closes the breaker. Only on the open→healthy
 	/// EDGE does it log INFO and (if `trap`) emit one SNMP trap. A cheap no-op
 	/// on every normal healthy call. Never throws.
-	void recordSuccess(boolean trap, SipServletRequest req, String tag) {
+	void recordSuccess(boolean trap, SipServletRequest req, String tag, String kind, String remote) {
 		long prev = state.getAndSet(0L);
 		if (prev != 0L) {
+			Remotes.breaker(kind, remote, false, null);
 			Logger log = SettingsManager.getSipLogger();
 			if (log != null) {
 				log.info(req, tag + " circuit CLOSED — endpoint recovered");

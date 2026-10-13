@@ -40,6 +40,7 @@ import org.vorpal.blade.framework.v3.B2buaServlet;
 import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.framework.v2.config.Translation;
 import org.vorpal.blade.framework.v2.logging.Color;
+import org.vorpal.blade.framework.v3.metrics.MetricsRegistry;
 import org.vorpal.blade.services.queue.config.QueueAttributes;
 import org.vorpal.blade.services.queue.config.QueueConfig;
 import org.vorpal.blade.services.queue.config.QueueConfigSample;
@@ -60,11 +61,23 @@ public class QueueServlet extends B2buaServlet {
 	public static Map<String, Queue> queues = new HashMap<>();
 	public static QueueSettingsManager settingsManager;
 
+	/// The gauges a dashboard reads for calls waiting now. Named here because
+	/// the dashboard selects on them by name.
+	public static final String GAUGE_QUEUED = "queued";
+	public static final String GAUGE_LONGEST = "queuedLongestMs";
+
 	@Override
 	public void servletCreated(SipServletContextEvent event) {
 
 		try {
 			settingsManager = new QueueSettingsManager(event, new QueueConfigSample());
+			// Read live by the dashboard's "Queued now" tile, summed over nodes.
+			MetricsRegistry metrics = MetricsRegistry.from(event.getServletContext());
+			metrics.gauge(GAUGE_QUEUED, "Calls waiting in every queue on this node",
+					() -> queues.values().stream().mapToLong(q -> q.callflows.size()).sum());
+			metrics.gauge(GAUGE_LONGEST, "How long the longest-waiting caller on this node has waited, in ms; 0 when none",
+					() -> queues.values().stream().flatMap(q -> q.callflows.stream())
+							.mapToLong(QueueCallflow::waited).max().orElse(0));
 		} catch (Exception e) {
 			if (sipLogger != null) {
 				sipLogger.severe(e);

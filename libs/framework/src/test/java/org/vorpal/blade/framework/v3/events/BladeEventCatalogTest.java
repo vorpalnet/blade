@@ -101,12 +101,13 @@ class BladeEventCatalogTest {
 
 		assertEquals(constants, declared.size(),
 				"BladeEventCatalog declares a type that BladeEventTypes does not name");
-		// 52 = application start/stop/sample, the server sample, the dashboard view, session start/stop/key, the eleven call and
+		// 55 = application start/stop/sample, the server sample, the dashboard view, session start/stop/key, the eleven call and
 		// transfer types + CALL_EVENT, the risk pair, the utterance, the voice
-		// assessment, the party request, the review, the disposition, the nine
-		// service call types, the access pair, CONVERSATION_CLOSED, ROOM_MEMBER
-		// and the twelve operations types.
-		assertEquals(52, constants, "a type was added or removed without updating the taxonomy");
+		// assessment, the party request, the review, the disposition, the ten
+		// service call types (with the branch failure), the access pair,
+		// CONVERSATION_CLOSED, ROOM_MEMBER and the fourteen operations types
+		// (with the remote down/up pair).
+		assertEquals(55, constants, "a type was added or removed without updating the taxonomy");
 	}
 
 	/// Every framework event name resolves to a type the catalog declares.

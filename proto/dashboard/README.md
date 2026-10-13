@@ -12,11 +12,31 @@ in an EAR.
 ## What it shows
 
 **The board** (`/blade/dashboard/`) fits one screen and never scrolls. A row of
-headline numbers (servers running, SIP sessions now, calls, answered, median call,
-calls flagged, what is wrong now, data gaps), then six panels: servers, traffic,
-operations, outcomes, applications and call risk. Each panel switches between views
-with the tabs in its header instead of stacking more charts below. A tile that needs
-attention is outlined and says what is wrong in words.
+headline numbers (servers running, calls now, calls, answered, median call, calls
+flagged, queued now), then six panels: servers, traffic, operations, outcomes,
+applications and call risk. Each panel switches between views with the tabs in its
+header instead of stacking more charts below. A tile that needs attention is
+outlined and says what is wrong in words.
+
+Traffic's **Network** tab is a map of the sites in the settings' `sites` list: where this
+domain's servers run (`cluster`), where calls arrive from (`inbound`) and where they are
+sent (`downstream`), with a line for each route. A site and each line take the stoplight
+colour of their health and a shape that says the same (circle working, diamond trouble,
+square down, hollow no data):
+- a downstream site from the balancer's OPTIONS pings to its endpoints, a gateway's failing
+  trunk registration, and the legs its servers refused in the last `networkWindowMinutes`:
+  equipment failing (408, 5xx) is amber and red at `networkFailingCalls`, configuration
+  refused (404, 403, 488 and the like) amber, a callee's busy or decline shown uncoloured;
+- an inbound site from when it last sent a call, with a warning after `quietMinutes`;
+- this domain's servers from their live state;
+- the connection pools whose database is at a site (`datasources`), read live;
+- the services applications call there (REST lookups, token endpoints, directories),
+  from each application's `Remotes` MBean, with circuit breakers that are open;
+- the event bus, on the cluster site, as the JMS broker sees it.
+
+Sites close enough to overlap share one mark; clicking it zooms in on every server there.
+A balancer site with coordinates joins the map without being entered twice. Addresses no
+site claims are listed under the map.
 
 - One domain or all of them, chosen in the top bar. This domain's servers and
   operations are live: runtime MBeans and the event bus, every 5 seconds. Another

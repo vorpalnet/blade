@@ -19,8 +19,14 @@
 	/* What this viewer's grants show, from /settings. The server enforces it;
 	   the board only says so instead of showing empty panels. */
 	var RIGHTS = { platform: true, content: true };
-	var RANGES = [['1', 'Last day'], ['7', '7 days'], ['30', '30 days']];
-	var LINE_COLORS = function () { return [C.token('--accent'), C.token('--ok'), C.token('--warn'), C.token('--info')]; };
+	/* The range buttons, in days; replaced by the settings' ranges and
+	   defaultDays (/settings) when the board opens. */
+	var RANGES = ['1', '7', '30'], DEFAULT_DAYS = '7';
+	function rangeLabel(d) { return d === '1' ? 'Last day' : d + ' days'; }
+	/* Lines that are peers (servers, applications) take colours that rank
+	   nothing; the good/fair/bad tokens are kept for outcomes. Each line is
+	   named at its end, so the colour is never the only channel. */
+	var LINE_COLORS = function () { return [C.token('--accent'), C.token('--info'), C.token('--ink-2')]; };
 
 	function store(key, value) {
 		try {
@@ -30,8 +36,8 @@
 		return null;
 	}
 
-	var days = store('days') || '7';
-	if (!RANGES.some(function (r) { return r[0] === days; })) days = '7';
+	var days = store('days') || DEFAULT_DAYS;
+	if (RANGES.indexOf(days) < 0) days = DEFAULT_DAYS;
 
 	/* The domain shown: '' is every domain. localDomain is the one this board
 	   runs in, the only one it can read live. */
@@ -66,14 +72,13 @@
 	/* Each tile: a label, the number, and a line in words. The word carries any
 	   state ("all running", "2 down"), never the colour alone. */
 	var KPI = [
-		{ id: 'nodes', label: 'Servers running' },
-		{ id: 'sessions', label: 'SIP sessions now' },
+		{ id: 'nodes', label: 'Servers running', platform: true },
+		{ id: 'now', label: 'Calls now' },
 		{ id: 'calls', label: 'Calls', ranged: true },
 		{ id: 'answered', label: 'Answered', ranged: true },
 		{ id: 'duration', label: 'Median call', ranged: true },
 		{ id: 'flagged', label: 'Calls flagged', ranged: true },
-		{ id: 'trouble', label: 'Wrong now' },
-		{ id: 'gaps', label: 'Data gaps', ranged: true }
+		{ id: 'queued', label: 'Queued now', platform: true }
 	];
 	var kpiEls = {};
 
@@ -89,12 +94,33 @@
 			host.appendChild(t);
 			kpiEls[k.id] = { tile: t, v: v, s: s, k: k };
 		});
+		host.style.setProperty('--kpis', KPI.length);
 		labelRanges();
 	}
 
 	function labelRanges() {
-		var word = RANGES.filter(function (r) { return r[0] === days; })[0][1].toLowerCase();
+		var word = rangeLabel(days).toLowerCase();
 		KPI.forEach(function (k) { if (k.rangeEl) k.rangeEl.textContent = ' · ' + word; });
+	}
+
+	/* A viewer without the platform grant gets no server tiles at all, rather
+	   than tiles that say so: the strip closes up around the call numbers. */
+	function hidePlatformKpis() {
+		var shown = 0;
+		KPI.forEach(function (k) {
+			var hide = k.platform === true;
+			kpiEls[k.id].tile.style.display = hide ? 'none' : '';
+			if (!hide) shown++;
+		});
+		document.getElementById('kpis').style.setProperty('--kpis', shown);
+	}
+
+	/* 65 -> "1:05", 3725 -> "1:02:05": a call length as people read one. */
+	function clock(seconds) {
+		if (seconds == null) return null;
+		var t = Math.round(seconds), h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, sec = t % 60;
+		var mm = h ? (m < 10 ? '0' : '') + m : String(m);
+		return (h ? h + ':' : '') + mm + ':' + (sec < 10 ? '0' : '') + sec;
 	}
 
 	/* alert: the tile is outlined and its line says what is wrong. */
@@ -188,27 +214,7 @@
 
 	/* ── live: cluster health and operations ───────────────────────────── */
 
-	var HIST = {}, HIST_MS = 3600000, lastNodes = [], lastOps = null;
-
-	function pushHistory(nodes, now) {
-		nodes.forEach(function (n) {
-			var a = HIST[n.server] || (HIST[n.server] = []);
-			a.push({ t: now, sip: n.sipSessions, heap: n.heapUsedPct, thru: n.sipThroughput });
-			while (a.length && a[0].t < now - HIST_MS) a.shift();
-		});
-	}
-
-	function liveSeries(key) {
-		var times = [];
-		Object.keys(HIST).forEach(function (s) { HIST[s].forEach(function (p) { if (times.indexOf(p.t) < 0) times.push(p.t); }); });
-		times.sort(function (a, b) { return a - b; });
-		var label = function (t) { return R.time(t, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }); };
-		return Object.keys(HIST).sort().map(function (s) {
-			var byT = {};
-			HIST[s].forEach(function (p) { if (p[key] != null && p[key] >= 0) byT[p.t] = p[key]; });
-			return { name: s, values: times.map(function (t) { return [label(t), byT[t] == null ? null : byT[t]]; }) };
-		}).filter(function (s) { return s.values.some(function (v) { return v[1] != null; }); });
-	}
+	var lastNodes = [], lastOps = null;
 
 	function stateWord(n) {
 		if (n.drained) return 'DRAINING';
@@ -236,7 +242,7 @@
 			var domain = r[0];
 			if (domain === localDomain || (scope && domain !== scope)) return;
 			out.push({ domain: domain, server: r[1], cluster: r[2], state: r[3], heapUsedPct: r[4], appSessions: r[5],
-				sipSessions: r[6], threadsStuck: r[7], threadsHogging: r[8], sampled: r[9] });
+				sipSessions: r[6], threadsStuck: r[7], threadsHogging: r[8], sampled: r[9], cpuPct: r[10] });
 		});
 		return out;
 	}
@@ -257,7 +263,7 @@
 		});
 		var domains = nodes.map(function (n) { return n.domain; }).filter(function (d, i, a) { return a.indexOf(d) === i; });
 		var head = el('div', 'srv__row srv__row--head');
-		['state', 'server', 'heap', 'SIP sessions', 'threads'].forEach(function (h) { head.appendChild(el('span', '', h)); });
+		['state', 'server', 'heap', 'cpu', 'SIP sessions', 'threads'].forEach(function (h) { head.appendChild(el('span', '', h)); });
 		list.appendChild(head);
 		var shownDomain;
 		nodes.forEach(function (n) {
@@ -273,6 +279,11 @@
 			var name = el('span', 'srv__name', n.server);
 			name.title = n.cluster || 'standalone';
 			row.appendChild(name);
+			if (n.up === false) {
+				['', '', '', ''].forEach(function () { row.appendChild(el('span', 'srv__n', '—')); });
+				list.appendChild(row);
+				return;
+			}
 			var heap = el('span', 'srv__heap' + (n.heapUsedPct >= HEAP_HIGH ? ' hot' : ''));
 			if (n.heapUsedPct != null) {
 				var bar = el('span', 'srv__bar'); var fill = el('span', 'srv__fill'); fill.style.width = Math.min(100, n.heapUsedPct) + '%';
@@ -280,6 +291,7 @@
 				heap.appendChild(el('b', '', n.heapUsedPct + '%' + (n.heapUsedPct >= HEAP_HIGH ? ' high' : '')));
 			} else heap.appendChild(el('b', '', 'n/a'));
 			row.appendChild(heap);
+			row.appendChild(el('span', 'srv__n', n.cpuPct == null ? '—' : n.cpuPct + '%'));
 			row.appendChild(el('span', 'srv__n', num(n.sipSessions)));
 			var threads = n.sampled ? '' : num(n.threadsTotal);
 			if (n.threadsStuck > 0) threads += (threads ? ' · ' : '') + n.threadsStuck + ' stuck';
@@ -307,26 +319,32 @@
 		if (localOnly(body, 'Connection pools')) return;
 		var rows = [];
 		lastNodes.forEach(function (n) {
-			(n.jdbc || []).forEach(function (d) { rows.push([n.server, d.name, d.active, d.capacity, d.waiting]); });
+			(n.jdbc || []).forEach(function (d) {
+				rows.push([n.server, d.name, d.state || '—', d.active, d.capacity, d.waiting, d.failures,
+					d.failuresAt ? R.time(d.failuresAt) : '—']);
+			});
 		});
 		if (!rows.length) return C.message(body, 'empty', 'No JDBC pools reported.');
-		fitTable(body, { columns: ['server', 'pool', 'active', 'capacity', 'waiting'], rows: rows });
+		fitTable(body, { columns: ['server', 'pool', 'state', 'active', 'capacity', 'waiting', 'failures', 'last failure'], rows: rows });
 	}
 
 	var OPS_WORDS = {
 		'org.vorpal.blade.endpoint.down': 'down', 'org.vorpal.blade.endpoint.up': 'up',
+		'org.vorpal.blade.remote.down': 'cut off', 'org.vorpal.blade.remote.up': 'back',
 		'org.vorpal.blade.trunk.failed': 'failing', 'org.vorpal.blade.trunk.registered': 'registered',
 		'org.vorpal.blade.trunk.unregistered': 'unregistered', 'org.vorpal.blade.queue.depth': 'queue',
 		'org.vorpal.blade.registration.added': 'registered', 'org.vorpal.blade.registration.removed': 'removed',
 		'org.vorpal.blade.presence.published': 'presence', 'org.vorpal.blade.sip.denied': 'refused',
 		'org.vorpal.blade.config.saved': 'config', 'org.vorpal.blade.config.published': 'pushed'
 	};
-	var OPS_BAD = { down: 1, failing: 1, refused: 1 };
+	var OPS_BAD = { down: 1, failing: 1, refused: 1, 'cut off': 1 };
 
 	function opsSummary(e) {
 		switch (e.type) {
 		case 'org.vorpal.blade.endpoint.down':
 		case 'org.vorpal.blade.endpoint.up': return e.endpoint + (e.note ? ' · ' + e.note : '');
+		case 'org.vorpal.blade.remote.down':
+		case 'org.vorpal.blade.remote.up': return e.kind + ' ' + e.remote + ' · ' + e.application + (e.reason ? ' · ' + e.reason : '');
 		case 'org.vorpal.blade.trunk.failed': return e.gateway + ' · ' + (e.status || '') + ' ' + (e.reason || '');
 		case 'org.vorpal.blade.trunk.registered':
 		case 'org.vorpal.blade.trunk.unregistered': return e.gateway + ' · ' + e.registrar;
@@ -365,25 +383,149 @@
 	function wrongNow() {
 		if (!lastOps) return [];
 		return lastOps.endpointsDown.map(function (e) { e.type = 'org.vorpal.blade.endpoint.down'; return e; })
-			.concat(lastOps.trunksFailing.map(function (e) { e.type = 'org.vorpal.blade.trunk.failed'; return e; }));
+			.concat(lastOps.trunksFailing.map(function (e) { e.type = 'org.vorpal.blade.trunk.failed'; return e; }))
+			.concat((lastOps.remotesDown || []).map(function (e) { e.type = 'org.vorpal.blade.remote.down'; return e; }));
 	}
 
 	/* ── analytics ─────────────────────────────────────────────────────── */
 
 	var A = {};   // report name → result
 
-	function hourly() { return +days <= 7; }
+	/* How calls ended, good to bad, bottom up: the stoplight order, so position
+	   says what the colour says. */
+	var OUTCOME_PARTS = [
+		{ name: 'Completed', color: '--ok', explain: 'answered, then hung up normally' },
+		{ name: 'Abandoned', color: '--warn', explain: 'the caller hung up before anyone answered' },
+		{ name: 'Declined', color: '--bad', explain: 'the callee refused the call: busy, not found, or no answer' }
+	];
+
+	/* One line per server for a per-minute sample reading (platform.heap,
+	   platform.cpu), drawn on the call charts' own buckets so every Traffic
+	   tab shares a time axis. A gap is an hour with no sample, not a zero. */
+	function perServer(report, what) {
+		return function (body) {
+			if (!RIGHTS.platform) return C.message(body, 'empty', what + ' are not in your grant.');
+			guard(A[report], body, function (res) {
+				var buckets = rowsOf(A['calls.by-outcome']).map(function (r) { return r[0]; });
+				var byServer = {};
+				res.rows.forEach(function (r) { (byServer[r[1]] = byServer[r[1]] || {})[r[0]] = r[2]; });
+				var series = Object.keys(byServer).sort().map(function (server) {
+					return { name: server, values: buckets.map(function (b) { return [b, b in byServer[server] ? byServer[server][b] : null]; }) };
+				});
+				if (!series.length) return C.message(body, 'empty', 'No server samples in this range.');
+				C.multiLine(body, series, { pct: true, colors: LINE_COLORS() });
+			});
+		};
+	}
+
+	/* "busiest: Thu 00:00 · 28 calls", the hour (or day) with the most calls
+	   started, in the viewer's zone, as the report's buckets already are. */
+	function busiest(res) {
+		var best = null, most = 0;
+		res.rows.forEach(function (r) {
+			var n = (r[1] || 0) + (r[2] || 0) + (r[3] || 0);
+			if (n > most) { most = n; best = r[0]; }
+		});
+		if (!best) return 'no calls in this range';
+		return 'busiest: ' + when(best) + ' · ' + C.fmt(most) + (most === 1 ? ' call' : ' calls');
+	}
+
+	/* "Thu 10/08 00:00" for an hour bucket, "Thu 10/08" for a day: buckets are
+	   already in the viewer's zone. */
+	function when(bucket) {
+		var m = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):00)?$/.exec(bucket);
+		if (!m) return bucket;
+		return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(+m[1], +m[2] - 1, +m[3]).getDay()] + ' ' + m[2] + '/'
+			+ m[3] + (m[4] ? ' ' + m[4] + ':00' : '');
+	}
+
+	/* Peak concurrent calls per hour (calls.concurrent), or per day past a
+	   week: a day's peak is its highest hour. This is the number a per-session
+	   price is metered on. */
+	function peaks(rows) {
+		if (+days <= 7) return rows;
+		var byDay = {}, order = [];
+		rows.forEach(function (r) {
+			var d = String(r[0]).slice(0, 10);
+			if (!(d in byDay)) { byDay[d] = 0; order.push(d); }
+			byDay[d] = Math.max(byDay[d], +r[1] || 0);
+		});
+		return order.map(function (d) { return [d, byDay[d]]; });
+	}
+
+	/* ── the network map ── */
+
+	/* /network, read on the live cycle while its tab shows; the zoomed place
+	   is kept across refreshes so a refresh does not throw the viewer out. */
+	var lastNetwork = null, netAtlases = { us: null, world: null }, netAtlasLoading = false, netZoomed = null;
+
+	function loadNetwork() {
+		if (!RIGHTS.platform || remoteScope()) return Promise.resolve();
+		return getJson('network').then(function (n) {
+			lastNetwork = n;
+			if (P.traffic.current === 'network') P.traffic.draw();
+		});
+	}
+
+	function drawNetwork(body) {
+		if (!RIGHTS.platform) return C.message(body, 'empty', 'The network map is not in your grant.');
+		if (remoteScope()) return C.message(body, 'empty', 'The network map shows this domain. Choose it in the top bar.');
+		if (!lastNetwork) { C.message(body, 'empty', 'Loading…'); loadNetwork().catch(function () {}); return; }
+		if (lastNetwork.error) return C.message(body, 'error', lastNetwork.error);
+		if (!lastNetwork.sites || !lastNetwork.sites.length) {
+			return C.message(body, 'empty', 'No sites yet: add them under "sites" in the dashboard settings.');
+		}
+		if (!window.topojson) return C.message(body, 'error', 'Map files missing (vendor/topojson-client.min.js).');
+		if (!netAtlases.us || !netAtlases.world) {
+			C.message(body, 'empty', 'Loading map…');
+			if (!netAtlasLoading) {
+				netAtlasLoading = true;
+				Promise.all([getJson('vendor/states-albers-10m.json'), getJson('vendor/land-110m.json')]).then(function (a) {
+					netAtlases = { us: a[0], world: a[1] };
+					if (P.traffic.current === 'network') P.traffic.draw();
+				}).catch(function (e) { netAtlasLoading = false; C.message(body, 'error', 'Map atlas: ' + (e.message || e)); });
+			}
+			return;
+		}
+		var model = window.BladeNetwork.model(lastNetwork, lastNodes, Date.now());
+		var trouble = model.sites.filter(function (s) { return s.state === 'down' || s.state === 'warn'; })
+			.sort(function (a, b) { return window.BladeNetwork.rank(b.state) - window.BladeNetwork.rank(a.state); });
+		P.traffic.sub.textContent = trouble.length
+			? (trouble[0].state === 'down' ? 'down: ' : 'trouble: ') + trouble[0].name + ' · ' + trouble[0].summary
+			: 'every site working · refusals over the last ' + lastNetwork.windowMinutes + ' min';
+		var foot = [];
+		var unplaced = lastNetwork.unplaced || {};
+		if (unplaced.origins && unplaced.origins.length) {
+			foot.push('Calls from addresses no site claims: ' + unplaced.origins.map(function (o) { return o.origin + ' (' + o.calls + ')'; }).join(', '));
+		}
+		if (unplaced.failures && unplaced.failures.length) {
+			foot.push('Refused by servers no site claims: ' + unplaced.failures.map(function (f) {
+				return f.server + ' ' + f.calls + ' × ' + f.status + ' ' + f.meaning;
+			}).join(', '));
+		}
+		if (unplaced.remotes && unplaced.remotes.length) {
+			foot.push('Services failing that no site claims: ' + unplaced.remotes.map(function (r) {
+				return r.kind + ' ' + r.remote + ' (' + r.failures + ' of ' + r.calls + ')';
+			}).join(', '));
+		}
+		var noCoords = model.sites.filter(function (s) { return s.lat == null || s.lon == null; });
+		if (noCoords.length) foot.push('No coordinates: ' + noCoords.map(function (s) { return s.name + ' (' + s.state + ')'; }).join(', '));
+		if (lastNetwork.analyticsError) foot.push('Call data unavailable: ' + lastNetwork.analyticsError);
+		C.networkMap(body, netAtlases, model, {
+			zoomed: netZoomed, onZoom: function (k) { netZoomed = k; }, foot: foot.join(' · ')
+		});
+	}
 
 	function analyticsReports() {
-		var r = ['calls.domains', 'platform.latest', 'calls.summary', 'calls.daily', 'calls.heatmap', 'calls.by-application',
-			'outcomes.summary', 'outcomes.daily', 'outcomes.funnel', 'outcomes.by-application',
+		var r = ['calls.domains', 'platform.latest', 'calls.summary', 'calls.by-outcome', 'calls.heatmap', 'calls.by-application',
+			'outcomes.summary', 'outcomes.daily', 'outcomes.ended', 'outcomes.by-application',
 			'duration.summary', 'duration.bands',
-			'health.summary', 'health.coverage',
-			'risk.summary', 'highrisk.by-band', 'risk.daily'];
+			'health.coverage',
+			'risk.summary', 'highrisk.by-band', 'risk.daily', 'calls.concurrent'];
+		if (RIGHTS.platform) r.push('platform.heap', 'platform.cpu');
 		// Individual calls only while their tab is open: a request for them is
 		// audited as someone looking at calls, which a hidden tab is not.
 		if (P.risk && P.risk.current === 'calls') r.push('highrisk.calls');
-		if (hourly()) r.push('calls.hourly');
 		return r;
 	}
 
@@ -399,24 +541,29 @@
 		]);
 
 		P.traffic = new Panel('traffic', 'Traffic', 'calls');
-		var live = function (key, pct, what) {
-			return function (body) {
-				if (localOnly(body, 'Live lines')) return;
-				C.multiLine(body, liveSeries(key), { pct: pct, colors: LINE_COLORS(),
-					empty: 'Collecting… the line fills in as the 5-second samples arrive.',
-					tickFormat: function (s) { return String(s).slice(0, 5); } });
-			};
-		};
 		P.traffic.setViews([
-			{ key: 'sip', label: 'SIP sessions', sub: 'per server · last hour, live', draw: live('sip', false) },
-			{ key: 'heap', label: 'Heap', sub: 'per server · last hour, live', draw: live('heap', true) },
 			{ key: 'calls', label: 'Calls', sub: 'per hour, or per day past a week', draw: function (body) {
-				var r = hourly() ? A['calls.hourly'] : A['calls.daily'];
-				guard(r, body, function (res) { C.bar(body, res.rows); });
+				guard(A['calls.by-outcome'], body, function (res) {
+					P.traffic.sub.textContent = busiest(res);
+					C.stackBar(body, res.rows, { parts: OUTCOME_PARTS, empty: 'No calls ended in this range.' });
+				});
 			} },
+			{ key: 'sessions', label: 'Sessions', sub: 'peak concurrent calls', draw: function (body) {
+				guard(A['calls.concurrent'], body, function (res) {
+					var rows = peaks(res.rows);
+					var best = rows.reduce(function (b, r) { return r[1] > b[1] ? r : b; }, ['', 0]);
+					P.traffic.sub.textContent = best[1] ? 'peak ' + C.fmt(best[1]) + ' · ' + when(best[0]) : 'no calls in this range';
+					if (!best[1]) return C.message(body, 'empty', 'No calls in this range.');
+					C.line(body, rows, { name: 'peak', endLabel: false });
+				});
+			} },
+			{ key: 'heap', label: 'Heap', sub: 'per server · highest reading', draw: perServer('platform.heap', 'Heap readings') },
+			{ key: 'cpu', label: 'CPU', sub: 'per server · busiest minute', draw: perServer('platform.cpu', 'CPU readings') },
 			{ key: 'when', label: 'When', sub: 'weekday × hour of day', draw: function (body) {
 				guard(A['calls.heatmap'], body, function (res) { C.heatmap(body, res.rows); });
-			} }
+			} },
+			{ key: 'network', label: 'Network', sub: 'sites, and the routes between them', draw: drawNetwork,
+				fetch: function () { loadNetwork().catch(function () {}); } }
 		]);
 
 		P.ops = new Panel('ops', 'Operations', null);
@@ -436,15 +583,26 @@
 
 		P.outcomes = new Panel('outcomes', 'Outcomes', 'outcomes');
 		P.outcomes.setViews([
-			{ key: 'funnel', label: 'Funnel', sub: 'applications that report answering', draw: function (body) {
-				guard(A['outcomes.funnel'], body, function (res) { C.funnel(body, res.rows); });
+			{ key: 'ended', label: 'Ended', sub: 'how calls ended · each call once', draw: function (body) {
+				guard(A['outcomes.ended'], body, function (res) {
+					var by = {};
+					res.rows.forEach(function (r) { by[r[0]] = r[1] || 0; });
+					var total = Object.keys(by).reduce(function (n, k) { return n + by[k]; }, 0);
+					if (!total) return C.message(body, 'empty', 'No call ended in this range.');
+					var rows = OUTCOME_PARTS.map(function (p) { return [p.name, by[p.name.toLowerCase()] || 0, p]; });
+					C.hbar(body, rows, { valueWidth: 90,
+						value: function (r) { return C.fmt(r[1]) + ' · ' + Math.round(100 * r[1] / total) + '%'; },
+						color: function (r) { return r[2].color; },
+						title: function (r) { return r[0] + ': ' + C.fmt(r[1]) + '\n' + r[2].explain; } });
+				});
 			} },
 			{ key: 'daily', label: 'Per day', draw: function (body) {
 				guard(A['outcomes.daily'], body, function (res) {
-					C.multiLine(body, seriesOf(res, ['started', 'answered', 'lost']), { colors: LINE_COLORS() });
+					C.multiLine(body, seriesOf(res, ['completed', 'abandoned', 'declined']),
+						{ colors: OUTCOME_PARTS.map(function (p) { return C.token(p.color); }) });
 				});
 			} },
-			{ key: 'apps', label: 'By application', draw: function (body) {
+			{ key: 'apps', label: 'By application', sub: 'how each application\'s calls ended', draw: function (body) {
 				guard(A['outcomes.by-application'], body, function (res) { fitTable(body, res); });
 			} }
 		]);
@@ -483,6 +641,46 @@
 
 	function drawAll() { Object.keys(P).forEach(function (k) { P[k].draw(); }); }
 
+	/* ── who is signed in ──────────────────────────────────────────────── */
+
+	/* The account menu: the person's initials and name; opened, what their
+	   grant shows them and Sign out. Built from /settings, so it says what the
+	   server will actually enforce. */
+	function buildAccount(cfg) {
+		var host = document.getElementById('acct');
+		var name = cfg && (cfg.displayName || cfg.user);
+		if (!name) return;
+		var initials = name.split(/[\s._@-]+/).filter(Boolean).slice(0, 2)
+			.map(function (w) { return w.charAt(0).toUpperCase(); }).join('');
+		var btn = el('button', 'acct__btn');
+		btn.type = 'button';
+		btn.setAttribute('aria-haspopup', 'true');
+		btn.setAttribute('aria-expanded', 'false');
+		btn.appendChild(el('span', 'acct__badge', initials || '?'));
+		btn.appendChild(el('span', 'acct__name', name));
+		var menu = el('div', 'acct__menu');
+		menu.hidden = true;
+		menu.appendChild(el('div', 'acct__who', name));
+		var how = (cfg.user && cfg.user !== name ? cfg.user + ' · ' : '') + 'signed in with ' + (cfg.signedInWith || 'WebLogic');
+		menu.appendChild(el('div', 'acct__how', how));
+		if (cfg.sees && cfg.sees.length) {
+			menu.appendChild(el('div', 'acct__h', 'What you see'));
+			var list = el('ul', 'acct__sees');
+			cfg.sees.forEach(function (line) { list.appendChild(el('li', '', line)); });
+			menu.appendChild(list);
+		}
+		var out = el('a', 'acct__out', 'Sign out');
+		out.href = 'signout';
+		menu.appendChild(out);
+		var open = function (yes) { menu.hidden = !yes; btn.setAttribute('aria-expanded', String(yes)); };
+		btn.addEventListener('click', function (e) { e.stopPropagation(); open(menu.hidden); });
+		document.addEventListener('click', function (e) { if (!host.contains(e.target)) open(false); });
+		document.addEventListener('keydown', function (e) { if (e.key === 'Escape') open(false); });
+		host.appendChild(btn);
+		host.appendChild(menu);
+		host.hidden = false;
+	}
+
 	/* ── loading ───────────────────────────────────────────────────────── */
 
 	var statusEl = document.getElementById('status'), statusText = document.getElementById('statusText');
@@ -492,26 +690,31 @@
 		return getJson('health').then(function (r) {
 			if (!r || r.error) { kpi('nodes', null, (r && r.error) || 'health failed', true); return; }
 			var nodes = r.nodes || [];
-			pushHistory(nodes, Date.now());
 			lastNodes = nodes;
 			if (r.domain && r.domain !== localDomain) { localDomain = r.domain; fillScope(); }
 			serverKpis();
 			P.cluster.draw();
-			if (P.traffic.current === 'sip' || P.traffic.current === 'heap') P.traffic.draw();
 		});
 	}
 
 	/* Servers running and SIP sessions, over the servers in scope. */
 	function serverKpis() {
-		var nodes = visibleServers(), running = 0, sip = 0, app = 0, notRunning = [];
+		if (!RIGHTS.platform) return;
+		var nodes = visibleServers(), running = 0, trouble = false, byState = {};
 		nodes.forEach(function (n) {
-			if (stateWord(n) === 'RUNNING') running++; else notRunning.push(n.server + ' ' + stateWord(n).toLowerCase());
-			if (n.sipSessions > 0) sip += n.sipSessions;
-			if (n.appSessions > 0) app += n.appSessions;
+			var w = stateWord(n);
+			if (w === 'RUNNING') running++;
+			else {
+				var word = w === 'SHUTDOWN' ? 'shut down' : w.toLowerCase().replace(/_/g, ' ');
+				(byState[word] = byState[word] || []).push(n.server);
+				/* Shut down is a choice; anything else that is not running is not. */
+				if (w !== 'SHUTDOWN') trouble = true;
+			}
 		});
-		if (!nodes.length) { kpi('nodes', null, remoteScope() ? 'no recent sample' : ''); kpi('sessions', null, ''); return; }
-		kpi('nodes', running + ' / ' + nodes.length, notRunning.length ? notRunning.join(', ') : 'all running', notRunning.length > 0);
-		kpi('sessions', sip, C.fmt(app) + ' application sessions' + (remoteScope() ? ' · a minute behind' : ''));
+		if (!nodes.length) { kpi('nodes', null, remoteScope() ? 'no recent sample' : ''); return; }
+		/* "engine1, engine2 shut down": one phrase per state, so it fits the tile. */
+		var down = Object.keys(byState).map(function (word) { return byState[word].join(', ') + ' ' + word; });
+		kpi('nodes', running + ' / ' + nodes.length, down.length ? down.join(' · ') : 'all running', trouble);
 	}
 
 	/* The domain picker: every domain with calls in the last month or a recent
@@ -539,18 +742,32 @@
 		serverKpis();
 		drawAll();
 		loadOps().catch(function () {});
+		loadNow().catch(function () {});
 		loadAnalytics();
+	}
+
+	/* Calls up now: Vorpal-IDs some application still holds, from the call
+	   rows (calls.now), on the live cycle. The line is the last hour's peak. */
+	function loadNow() {
+		return getJson('data?r=calls.now' + scopeQuery() + '&tz=' + encodeURIComponent(R.zone())).then(function (d) {
+			var n = d && d['calls.now'];
+			if (!n || n.error) { kpi('now', null, (n && n.error) ? 'analytics unavailable' : '', true); return; }
+			var peak = cell(n, 'peak last hour'), at = cell(n, 'peak at');
+			kpi('now', cell(n, 'now'), peak ? 'peak ' + C.fmt(peak) + ' at ' + String(at).substring(11, 16) + ' · last hour'
+				: 'none in the last hour');
+		});
 	}
 
 	function loadOps() {
 		return getJson('ops').then(function (o) {
 			if (!o || o.error) return;
 			lastOps = o;
-			if (remoteScope()) { kpi('trouble', null, 'read live in ' + localDomain + ' only'); P.ops.draw(); return; }
-			var wrong = wrongNow().length;
-			var queued = o.queues.reduce(function (n, q) { return n + (q.depth || 0); }, 0);
-			kpi('trouble', wrong, wrong ? o.endpointsDown.length + ' endpoints down · ' + o.trunksFailing.length + ' trunks failing'
-				: 'nothing down · ' + C.fmt(queued) + ' queued', wrong > 0);
+			if (remoteScope()) { kpi('queued', null, 'read live in ' + localDomain + ' only'); P.ops.draw(); return; }
+			/* Calls waiting in a queue, live from the queue application's gauges;
+			   the line is how long the longest of them has waited. */
+			var q = o.queuedNow || {};
+			if (q.calls == null) kpi('queued', null, q.error ? 'queue reading failed' : 'no queue application running', !!q.error);
+			else kpi('queued', q.calls, q.calls ? 'longest waiting ' + clock(q.longestMs / 1000) : 'none waiting');
 			P.ops.draw();
 		});
 	}
@@ -562,17 +779,15 @@
 			serverKpis();
 			P.cluster.draw();
 			var cs = d['calls.summary'], os = d['outcomes.summary'], ds = d['duration.summary'],
-				rs = d['risk.summary'], hs = d['health.summary'];
-			kpi('calls', cell(cs, 'calls'), C.fmt(cell(cs, 'today')) + ' today · ' + C.fmt(cell(cs, 'open')) + ' open');
-			kpi('answered', cell(os, 'answered'), C.fmt(cell(os, 'started')) + ' started · ' + C.fmt(cell(os, 'lost')) + ' lost');
+				rs = d['risk.summary'];
+			kpi('calls', cell(cs, 'calls'), C.fmt(cell(cs, 'today')) + ' today');
+			var started = cell(os, 'started'), answered = cell(os, 'answered');
+			kpi('answered', answered, (started ? Math.round(100 * answered / started) + '% of ' + C.fmt(started) + ' started'
+				: 'none started') + ' · ' + C.fmt(cell(os, 'lost')) + ' lost');
 			var med = cell(ds, 'median');
-			kpi('duration', med == null ? null : Math.round(med) + ' s', 'average ' + Math.round(cell(ds, 'average') || 0) + ' s');
+			kpi('duration', clock(med), med == null ? '' : 'average ' + clock(cell(ds, 'average')) + ' · longest ' + clock(cell(ds, 'longest')));
 			var flagged = cell(rs, 'calls flagged');
 			kpi('flagged', flagged, C.fmt(cell(rs, 'calls assessed')) + ' assessed', flagged > 0);
-			var gaps = cell(hs, 'with gaps'), dropped = cell(hs, 'dropped events'), leaked = cell(cs, 'leaked');
-			kpi('gaps', gaps, gaps == null ? '' : (gaps === 1 ? 'application' : 'applications') + ' with gaps'
-				+ (dropped ? ' · ' + C.fmt(dropped) + ' events dropped' : '')
-				+ (leaked ? ' · ' + C.fmt(leaked) + ' never closed' : ''), gaps > 0 || dropped > 0 || leaked > 0);
 			['traffic', 'outcomes', 'apps', 'risk'].forEach(function (k) { P[k].draw(); });
 			setStatus('', 'live · ' + R.time(Date.now(), { hour: '2-digit', minute: '2-digit' }));
 		}).catch(function (e) { if (e.message !== 'auth') setStatus('err', 'analytics failed'); });
@@ -580,11 +795,12 @@
 
 	function buildRange() {
 		var host = document.getElementById('range');
+		host.textContent = '';
 		RANGES.forEach(function (r) {
-			var b = el('button', r[0] === days ? 'on' : '', r[1]);
+			var b = el('button', r === days ? 'on' : '', rangeLabel(r));
 			b.type = 'button';
 			b.addEventListener('click', function () {
-				days = r[0]; store('days', days);
+				days = r; store('days', days);
 				Array.prototype.forEach.call(host.children, function (c) { c.className = c === b ? 'on' : ''; });
 				labelRanges();
 				Object.keys(P).forEach(function (k) { P[k].relink(); });
@@ -605,6 +821,7 @@
 	/* A new zone: the live chart's times and every analytics bucket move. */
 	function zoneChanged() {
 		tick();
+		loadNow().catch(function () {});
 		A = {};
 		drawAll();
 		loadAnalytics();
@@ -619,17 +836,32 @@
 	drawAll();
 	tick();
 	setStatus('', 'loading…');
-	var live = function () { loadHealth().catch(function () {}); loadOps().catch(function () {}); };
+	var live = function () {
+		loadHealth().catch(function () {}); loadOps().catch(function () {}); loadNow().catch(function () {});
+		if (P.traffic.current === 'network') loadNetwork().catch(function () {});
+	};
 	getJson('settings').catch(function () { return null; }).then(function (cfg) {
 		if (cfg) {
 			LIVE_MS = (cfg.liveRefreshSeconds || 5) * 1000;
 			ANALYTICS_MS = (cfg.analyticsRefreshSeconds || 60) * 1000;
 			HEAP_HIGH = cfg.heapHighPercent || HEAP_HIGH;
 			RIGHTS = { platform: cfg.platform !== false, content: cfg.content !== false };
+			/* The deployment's ranges. A viewer's remembered choice stands while it
+			   is still one of them; otherwise they start on the default. */
+			if (cfg.ranges && cfg.ranges.length) {
+				RANGES = cfg.ranges.map(String);
+				DEFAULT_DAYS = String(cfg.defaultDays || RANGES[0]);
+				var remembered = store('days');
+				days = (remembered && RANGES.indexOf(remembered) >= 0) ? remembered : DEFAULT_DAYS;
+				buildRange();
+				labelRanges();
+				Object.keys(P).forEach(function (k) { P[k].relink(); });
+			}
+			buildAccount(cfg);
 		}
 		if (!RIGHTS.platform) {
-			live = function () {};
-			['nodes', 'sessions', 'trouble'].forEach(function (k) { kpi(k, null, 'not in your grant'); });
+			live = function () { loadNow().catch(function () {}); };
+			hidePlatformKpis();
 			drawAll();
 		}
 		live();

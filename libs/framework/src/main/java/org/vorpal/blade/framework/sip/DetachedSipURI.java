@@ -60,14 +60,9 @@ public class DetachedSipURI implements SipURI {
 			rest = rest.substring(0, question);
 		}
 
-		int semi = rest.indexOf(';');
-		if (semi >= 0) {
-			for (String param : rest.substring(semi + 1).split(";")) {
-				putPair(parameters, param);
-			}
-			rest = rest.substring(0, semi);
-		}
-
+		// The user info first: it may hold a ';' of its own (RFC 3261 allows
+		// user parameters, as in `+16465550100;verstat=TN-Validation-Passed`),
+		// so the URI's parameters are only those after the host.
 		int at = rest.lastIndexOf('@');
 		if (at >= 0) {
 			String userInfo = rest.substring(0, at);
@@ -79,6 +74,14 @@ public class DetachedSipURI implements SipURI {
 			} else {
 				this.user = userInfo;
 			}
+		}
+
+		int semi = rest.indexOf(';');
+		if (semi >= 0) {
+			for (String param : rest.substring(semi + 1).split(";")) {
+				putPair(parameters, param);
+			}
+			rest = rest.substring(0, semi);
 		}
 
 		int portColon = rest.lastIndexOf(':');

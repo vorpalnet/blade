@@ -64,7 +64,8 @@
 				{ r: 'calls.weekday', title: 'By weekday', kind: 'bar' },
 				{ r: 'calls.by-application', title: 'By application', sub: 'a call through two applications counts for each', kind: 'hbar' },
 				{ r: 'calls.by-engine', title: 'By engine', kind: 'hbar' },
-				{ r: 'calls.by-tenant', title: 'By tenant', kind: 'hbar' }
+				{ r: 'calls.by-tenant', title: 'By tenant', kind: 'hbar' },
+				{ r: 'calls.by-area', title: 'Where callers are', sub: 'how their calls ended, by state; from the caller\'s area code, never the number', kind: 'areamap', wide: true, tall: true }
 			]
 		},
 		duration: {
@@ -79,12 +80,12 @@
 		},
 		outcomes: {
 			title: 'Call outcomes',
-			lede: 'Started, answered, completed and lost calls. Answer rate is per application only: some applications never publish "answered", and a pooled rate would count their calls as unanswered.',
+			lede: 'How calls ended: completed after an answer, declined by the callee, or abandoned by the caller. Each call counts once; a call through several applications counts for each in the per-application table.',
 			sections: [
 				{ r: 'outcomes.summary', kind: 'tiles' },
-				{ r: 'outcomes.daily', title: 'Calls per day by outcome', kind: 'lines', series: ['started', 'answered', 'lost'], wide: true },
-				{ r: 'outcomes.funnel', title: 'From started to completed', sub: 'applications that report answering', kind: 'funnel' },
-				{ r: 'outcomes.by-application', title: 'Outcomes by application', kind: 'table' }
+				{ r: 'outcomes.ended', title: 'How calls ended', kind: 'hbar' },
+				{ r: 'outcomes.daily', title: 'Calls per day by how they ended', kind: 'lines', series: ['completed', 'abandoned', 'declined'], colors: ['--ok', '--warn', '--bad'], wide: true },
+				{ r: 'outcomes.by-application', title: 'How each application\'s calls ended', kind: 'table' }
 			]
 		},
 		sessions: {
@@ -209,7 +210,7 @@
 
 	function renderSection(body, sec, result, days) {
 		if (sec.maxDays && days > sec.maxDays) {
-			return C.message(body, 'empty', 'Hour by hour reads best over a week or less. Choose "last 7 days" or "last day".');
+			return C.message(body, 'empty', 'Hour by hour reads best over a week or less. Choose a shorter range.');
 		}
 		if (!result) return C.message(body, 'error', 'no data');
 		if (result.error) return C.message(body, 'error', result.error);
@@ -220,13 +221,64 @@
 		case 'hbar': return C.hbar(body, rows, { labelWidth: sec.labelWidth });
 		case 'line': return C.line(body, rows, { name: sec.name });
 		case 'lines': return C.multiLine(body, seriesOf(result, sec.series),
-			{ colors: [C.token('--accent'), C.token('--ok'), C.token('--warn')] });
+			{ colors: (sec.colors || ['--accent', '--ok', '--warn']).map(C.token) });
 		case 'heatmap': return C.heatmap(body, rows);
-		case 'funnel': return C.funnel(body, rows);
 		case 'bands': return bandList(body, rows);
 		case 'table': return C.table(body, result);
+		case 'areamap': return areaMap(body, result);
 		default: return C.message(body, 'error', 'unknown section kind ' + sec.kind);
 		}
+	}
+
+	/* ── where callers are (calls.by-area) ── */
+
+	/* A state judged on fewer calls than this is left uncoloured: one declined
+	   call is not a red state. The health thresholds come from the settings
+	   (healthyPercent, unhealthyPercent) when the page loads them. */
+	var AREA = { healthy: 0.9, unhealthy: 0.6, minCalls: 5 };
+	var PROVINCES = /^(AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT)$/;
+	var usAtlas = null;
+
+	/* Where an area from calls.by-area is: a US state the map draws, or a
+	   name for the line under it. The table is the framework's vorpal/geo.js,
+	   the one the agent console names callers with. */
+	function placeOf(area) {
+		var geo = global.GEO || { area: {}, country: {}, state: {} };
+		if (!area) return { name: 'caller not recorded' };
+		if (area.charAt(0) === '+') {
+			for (var i = Math.min(3, area.length - 1); i > 0; i--) {
+				var country = geo.country[area.substr(1, i)];
+				if (country) return { name: country };
+			}
+			return { name: 'international' };
+		}
+		var city = geo.area[area];
+		if (!city) return { name: 'unlisted area codes' };
+		var st = city.split(', ')[1];
+		if (st && geo.state[st]) return { state: geo.state[st] };
+		if (st && PROVINCES.test(st)) return { name: 'Canada' };
+		return { name: st === 'PR' ? 'Puerto Rico' : city };
+	}
+
+	function areaMap(body, result) {
+		if (!global.topojson || !global.GEO) return C.message(body, 'error', 'Map files missing (vendor/topojson-client.min.js, vorpal/geo.js).');
+		if (!usAtlas) {
+			C.message(body, 'empty', 'Loading map…');
+			return getJson('vendor/states-albers-10m.json').then(function (a) { usAtlas = a; areaMap(body, result); });
+		}
+		var byState = {}, elsewhere = {};
+		result.rows.forEach(function (r) {
+			var where = placeOf(r[0]), into = where.state ? byState : elsewhere, key = where.state || where.name;
+			var n = into[key] = into[key] || [0, 0, 0];
+			n[0] += +r[1] || 0; n[1] += +r[2] || 0; n[2] += +r[3] || 0;
+		});
+		function total(n) { return n[0] + n[1] + n[2]; }
+		var other = Object.keys(elsewhere).sort(function (a, b) { return total(elsewhere[b]) - total(elsewhere[a]); })
+			.map(function (k) { return k + ' ' + C.fmt(total(elsewhere[k])); });
+		C.statesMap(body, usAtlas, byState, {
+			healthy: AREA.healthy, unhealthy: AREA.unhealthy, minCalls: AREA.minCalls,
+			foot: other.length ? 'Not on the map: ' + other.join(' · ') : ''
+		});
 	}
 
 	/* A single-row report as tiles: one tile per column. */
@@ -266,7 +318,7 @@
 
 	function params() {
 		var p = new URLSearchParams(window.location.search);
-		return { r: p.get('r') || 'calls', days: p.get('days') || '30', sample: p.get('sample') === 'include', domain: p.get('domain') || '', account: p.get('account') || '' };
+		return { r: p.get('r') || 'calls', days: p.get('days') || '', sample: p.get('sample') === 'include', domain: p.get('domain') || '', account: p.get('account') || '' };
 	}
 
 	function setParams(p) {
@@ -296,7 +348,7 @@
 		var days = document.getElementById('f-days'), sample = document.getElementById('f-sample'),
 			domain = document.getElementById('f-domain'), refresh = document.getElementById('f-refresh'),
 			status = document.getElementById('f-asof'), account = document.getElementById('f-account');
-		days.value = p.days; sample.checked = p.sample; account.value = p.account;
+		sample.checked = p.sample; account.value = p.account;
 
 		// Build the section frames once; each load fills them.
 		host.textContent = '';
@@ -363,7 +415,31 @@
 		refresh.addEventListener('click', load);
 		var rz;
 		window.addEventListener('resize', function () { clearTimeout(rz); rz = setTimeout(draw, 200); });
-		loadDomains().then(load);
+		getJson('settings').catch(function () { return null; }).then(function (cfg) {
+			fillDays(days, cfg, p.days);
+			return loadDomains();
+		}).then(load);
+	}
+
+	/* The range choices: the deployment's ranges (/settings), starting on the
+	   one the link asked for, else the default. A link naming a range the
+	   settings no longer list still opens on it, added as a choice. */
+	function fillDays(select, cfg, asked) {
+		if (cfg && cfg.healthyPercent) AREA.healthy = cfg.healthyPercent / 100;
+		if (cfg && cfg.unhealthyPercent != null) AREA.unhealthy = cfg.unhealthyPercent / 100;
+		var ranges = ((cfg && cfg.ranges) || [1, 7, 30]).map(String);
+		var start = asked || String((cfg && cfg.defaultDays) || 7);
+		if (ranges.indexOf(start) < 0) {
+			ranges.push(start);
+			ranges.sort(function (a, b) { return a - b; });
+		}
+		select.textContent = '';
+		ranges.forEach(function (d) {
+			var o = document.createElement('option');
+			o.value = d; o.textContent = d === '1' ? 'last day' : 'last ' + d + ' days';
+			select.appendChild(o);
+		});
+		select.value = start;
 	}
 
 	global.BladeReports = { FAMILIES: FAMILIES, ORDER: ORDER, getJson: getJson, bandList: bandList, renderDetail: renderDetail,

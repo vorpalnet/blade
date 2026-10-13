@@ -11,7 +11,7 @@
 
 	<header class="topbar topbar--board">
 		<a class="brand" href="/blade/portal/">
-			<img class="brand__logo" src="/blade/portal/brand/vorpal_logo_lightpurple.svg" alt="Vorpal">
+			<img class="brand__logo" src="/blade/portal/brand/VorpalBoy_lightpurple.svg" alt="Vorpal">
 			<span class="brand__name">Dashboard<small>OCCAS &middot; BLADE</small></span>
 		</a>
 		<div class="seg" id="range" title="Range for the call analytics. Server health and operations are always live."></div>
@@ -25,6 +25,7 @@
 			<a href="/blade/balancer/">Balancer</a>
 		</nav>
 		<span class="status" id="status"><span class="dot"></span><span id="statusText">loading…</span></span>
+		<div class="acct" id="acct" hidden></div>
 	</header>
 
 	<main class="board__grid">
@@ -40,8 +41,10 @@
 	</main>
 
 	<script src="vendor/d3.min.js"></script>
+	<script src="vendor/topojson-client.min.js"></script>
 	<script src="charts.js"></script>
 	<script src="reports.js"></script>
+	<script src="net-model.js"></script>
 	<script src="board.js"></script>
 </body>
 </html>

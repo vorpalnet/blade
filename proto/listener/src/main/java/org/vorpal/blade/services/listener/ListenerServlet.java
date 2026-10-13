@@ -318,14 +318,7 @@ public class ListenerServlet extends B2buaServlet implements B2buaListener {
 		// inbound INVITE, and clearing the attribute on that one changes nothing
 		// the callflow ever reads. Cost a live call to see: the flag looked
 		// cleared, and the caller still never heard the answer.
-		InitialInvite callflow = HALTED.remove(app.getId());
-		if (callflow != null) {
-			callflow.setDoNotProcess(false);
-			SipServletRequest outboundRequest = callflow.getOutboundRequest();
-			if (outboundRequest != null) {
-				outboundRequest.removeAttribute("doNotProcess");
-			}
-		}
+		liftHalt(app);
 
 		ListenerAnchor.Anchor anchor = ListenerAnchor.LIVE.get(app.getId());
 		if (anchor == null) {
@@ -363,10 +356,47 @@ public class ListenerServlet extends B2buaServlet implements B2buaListener {
 		finish(outboundRequest.getApplicationSession());
 	}
 
+	/// The callee refused (busy, not found, no answer by the transaction's
+	/// timeout). This application sends the refusal to the caller itself.
+	///
+	/// **The callflow will not.** `callStarted` halted it so the outbound
+	/// INVITE could wait for the media server's offer, and the halt is read
+	/// again before any final response is relayed. Clearing it, as
+	/// [#callAnswered] does, works only while the response handler runs on the
+	/// callflow instance saved in [#HALTED]. A call that rang for a while came
+	/// back on a copy restored from the call's stored state, still halted: the
+	/// 408 stopped here, the caller kept its 100 Trying, and every application
+	/// upstream waited with it. Found on the rig, an unreachable agent phone;
+	/// the two instances differed by identity in the log.
+	///
+	/// Sent through the saved callflow, so it gets the framework's response
+	/// handling; the halt stays set, so the callflow does not send it twice.
 	@Override
 	public void callDeclined(SipServletResponse outboundResponse) throws ServletException, IOException {
-		HALTED.remove(outboundResponse.getApplicationSession().getId());
-		finish(outboundResponse.getApplicationSession());
+		SipApplicationSession app = outboundResponse.getApplicationSession();
+		InitialInvite halted = HALTED.remove(app.getId());
+		// DIAGNOSTIC (2026-10-12): remove once a declined call is seen reaching the caller.
+		sipLogger.info(outboundResponse, "ListenerServlet DIAG callDeclined status=" + outboundResponse.getStatus()
+				+ " halted=" + (halted == null ? "none" : System.identityHashCode(halted))
+				+ " committed=" + outboundResponse.isCommitted());
+		if (halted != null && !outboundResponse.isCommitted()) {
+			halted.sendResponse(outboundResponse, null);
+		}
+		finish(app);
+	}
+
+	/// Clear the halt `callStarted` set, so the callflow relays the callee's
+	/// final response to the caller. See [#resume] on why the flag lives on the
+	/// outbound request and is cleared only once the callee has answered.
+	private static void liftHalt(SipApplicationSession app) {
+		InitialInvite callflow = HALTED.remove(app.getId());
+		if (callflow != null) {
+			callflow.setDoNotProcess(false);
+			SipServletRequest outboundRequest = callflow.getOutboundRequest();
+			if (outboundRequest != null) {
+				outboundRequest.removeAttribute("doNotProcess");
+			}
+		}
 	}
 
 	@Override

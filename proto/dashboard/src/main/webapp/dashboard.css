@@ -21,6 +21,11 @@
 	--warn:      #dcb877;
 	--bad:       #e79ab0;
 	--info:      #7fb0e0;
+	/* The map's health scale: saturated stoplight colours, so a state reads
+	   green, amber or red at a glance from across the room. */
+	--geo-good:  #2fbf71;
+	--geo-fair:  #f2b233;
+	--geo-bad:   #f0483e;
 
 	--font: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 	--mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
@@ -130,7 +135,6 @@ h1 { font-size: clamp(26px, 3.4vw, 40px); line-height: 1.08; letter-spacing: -.0
 .linepath { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .heat { fill: var(--accent); }
 .heat-n { fill: var(--ink); font-size: 10px; font-family: var(--mono); pointer-events: none; }
-.funnel-label { fill: var(--ink); font-size: 12px; font-weight: 600; }
 .y-axis line { stroke: var(--line); stroke-dasharray: 2 5; }
 .y-axis text, .x-axis text { fill: var(--ink-3); font-size: 10.5px; font-family: var(--mono); }
 .x-axis .baseline { stroke: var(--line-2); }
@@ -188,7 +192,56 @@ table.report th {
 }
 table.report td { padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 table.report td.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+table.report th.num { text-align: right; }
+/* Stacked bars: each part in its own colour; a thin line where two meet. */
+.seg-edge { stroke: var(--ink); stroke-width: 1; }
+.legend-label { fill: var(--ink-2); font-size: 11px; }
 table.report tr:hover td { background: var(--panel-2); }
+
+/* The map (Traffic: Where). States filled on the health scale; a dark line
+   between states; the one under the pointer outlined in ink. */
+.geo { display: flex; flex-direction: column; height: 100%; }
+.geo__map { flex: 1 1 auto; min-height: 0; }
+.geo-state { stroke: var(--bg); stroke-width: .8; transition: fill .4s; }
+.geo-state--none { fill: var(--panel-2); }
+.geo-state:hover { stroke: var(--ink); stroke-width: 1.8; }
+.geo-calls { fill: rgba(255,255,255,.42); stroke: var(--ink); stroke-width: 1.2; pointer-events: none; }
+.geo__legend, .geo__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 11px; color: var(--ink-2); }
+.geo__legend { padding-top: 4px; }
+.geo__scale { width: 120px; height: 8px; border-radius: 4px; }
+.geo__end { color: var(--ink); }
+.geo__note { display: inline-flex; align-items: center; gap: 5px; }
+.geo__key { display: inline-block; width: 10px; height: 10px; }
+.geo__key--none { background: var(--panel-2); border-radius: 2px; }
+.geo__key--dot { border-radius: 50%; background: rgba(255,255,255,.42); border: 1px solid var(--ink); }
+.geo__foot { color: var(--ink-3); padding-top: 2px; }
+
+/* The network map (Traffic: Network). Land and borders quiet; marks and
+   lines in the stoplight colours, each mark's shape saying the same. */
+.net { display: flex; flex-direction: column; height: 100%; position: relative; }
+.net__map { flex: 1 1 auto; min-height: 0; cursor: default; }
+.net-land { fill: var(--panel-2); }
+.net-borders { fill: none; stroke: var(--line-2); stroke-width: .7; }
+.net-link { fill: none; stroke-width: 2.5; stroke-linecap: round; opacity: .9; }
+.net-place { cursor: pointer; }
+.net-hit { fill: transparent; pointer-events: all; }
+.net-mark { stroke: var(--bg); stroke-width: 1.5; }
+.net-mark--none { fill: var(--bg); stroke: var(--ink-3); stroke-width: 2; }
+.net-place:hover .net-mark { stroke: var(--ink); }
+.net-count { fill: var(--bg); font-size: 13px; font-weight: 700; text-anchor: middle; pointer-events: none; }
+.net-name { fill: var(--ink); font-size: 16px; text-anchor: middle; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
+.net-name--center { font-size: 18px; }
+.net-backdrop { fill: var(--bg); opacity: .88; }
+.net-spoke { stroke-width: 2; opacity: .8; }
+.net-member { fill: var(--ink); font-size: 16px; }
+.net-member-note { fill: var(--ink-2); font-size: 13px; }
+.net__back { position: absolute; top: 4px; left: 4px; background: var(--panel-2); color: var(--ink); border: 1px solid var(--line-2); border-radius: 8px; padding: 3px 9px; font: inherit; font-size: 12px; cursor: pointer; }
+.net__legend, .net__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 11px; color: var(--ink-2); }
+.net__legend { padding-top: 4px; }
+.net__key { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.panel__body .net__key svg { width: 12px; height: 12px; flex: none; }
+.net__key .net-mark { stroke-width: 1; }
+.net__foot { color: var(--ink-3); padding-top: 2px; }
 
 /* ---- the board (index.html): one screen, nothing below the fold --------
    The page is exactly the window. A row of headline numbers, then two rows of
@@ -207,7 +260,7 @@ body.board { height: 100vh; overflow: hidden; display: flex; flex-direction: col
 	grid-template-columns: repeat(12, minmax(0, 1fr));
 	grid-template-rows: auto minmax(0, 1.15fr) minmax(0, 1fr);
 }
-.kpis { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 10px; }
+.kpis { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(var(--kpis, 7), minmax(0, 1fr)); gap: 10px; }
 .kpi {
 	background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
 	padding: 8px 12px 9px; min-width: 0;
@@ -270,7 +323,7 @@ a.panel__title:hover { text-decoration: none; color: var(--accent); }
 /* servers: one line each, the state as a word */
 .srv { display: flex; flex-direction: column; font-size: 12px; }
 .srv__row {
-	display: grid; grid-template-columns: 10ch minmax(0, 1fr) minmax(70px, 1.1fr) 7ch 9ch;
+	display: grid; grid-template-columns: 10ch minmax(0, 1fr) minmax(64px, 1fr) 4.5ch 7ch 8ch;
 	gap: 8px; align-items: center; padding: 5px 2px; border-bottom: 1px solid var(--line);
 }
 .srv__row--head { font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); font-weight: 700; padding-top: 0; }
@@ -295,6 +348,34 @@ a.panel__title:hover { text-decoration: none; color: var(--accent); }
 	.topbar--board { flex-wrap: wrap; }
 	.topbar--board .nav { display: none; }
 }
+/* The account menu, far right of the board's top bar. */
+.acct { position: relative; }
+.acct__btn {
+	display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 13px; font-weight: 600;
+	color: var(--ink-2); background: transparent; border: 1px solid transparent; border-radius: 9px;
+	padding: 4px 10px 4px 4px; cursor: pointer;
+}
+.acct__btn:hover, .acct__btn[aria-expanded="true"] { color: var(--ink); border-color: var(--line-2); }
+.acct__badge {
+	display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+	background: var(--accent-3); color: var(--ink); font-size: 11px; font-weight: 800; letter-spacing: .02em;
+}
+.acct__name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct__menu {
+	position: absolute; right: 0; top: calc(100% + 8px); z-index: 20; min-width: 260px; max-width: 340px;
+	background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 12px; padding: 14px 16px;
+	box-shadow: var(--shadow);
+}
+.acct__who { font-weight: 700; color: var(--ink); }
+.acct__how { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+.acct__h { margin-top: 12px; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); font-weight: 700; }
+.acct__sees { list-style: none; margin: 6px 0 0; padding: 0; font-size: 12.5px; color: var(--ink-2); line-height: 1.6; }
+.acct__out {
+	display: block; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line);
+	font-size: 13px; font-weight: 700; color: var(--accent);
+}
+@media (max-width: 760px) { .acct__name { display: none; } }
+
 .tz {
 	font: inherit; font-size: 12px; color: var(--ink-2); background: var(--bg-2);
 	border: 1px solid var(--line-2); border-radius: 8px; padding: 4px 6px; max-width: 220px;

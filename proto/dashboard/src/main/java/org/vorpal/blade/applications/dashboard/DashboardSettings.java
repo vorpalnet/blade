@@ -20,9 +20,12 @@ public class DashboardSettings extends Configuration implements Serializable {
 
 	private static final long serialVersionUID = 1L;
 
-	private int historyDays = 30;
+	private int defaultDays = 7;
+	private java.util.List<Integer> ranges = new java.util.ArrayList<>(java.util.Arrays.asList(1, 7, 30));
 	private String analyticsDataSource = "jdbc/BladeAnalytics";
 	private int heapHighPercent = 85;
+	private int healthyPercent = 90;
+	private int unhealthyPercent = 60;
 	private int leakHours = 24;
 	private int splitCallSeconds = 60;
 	private int sampleFreshMinutes = 3;
@@ -30,14 +33,38 @@ public class DashboardSettings extends Configuration implements Serializable {
 	private int analyticsRefreshSeconds = 60;
 	private int cacheMinutes = 5;
 	private java.util.List<DashboardGrant> grants = new java.util.ArrayList<>();
+	private java.util.List<NetworkSite> sites = new java.util.ArrayList<>();
+	private int networkWindowMinutes = 15;
+	private int networkFailingCalls = 3;
 
-	@JsonPropertyDescription("Days of history a data request covers when it names none. The board and the report pages always name their own range.")
-	public int getHistoryDays() {
-		return historyDays;
+	/// The longest range a request may ask for, in days.
+	static final int MAX_RANGE_DAYS = 400;
+
+	@JsonPropertyDescription("The range, in days, a viewer starts on: the board's first range button, the report pages' first choice, and what a data request covers when it names none. A viewer's own last choice, kept in their browser, overrides it while it is still one of the ranges. Default 7.")
+	public int getDefaultDays() {
+		return defaultDays;
 	}
 
-	public void setHistoryDays(int historyDays) {
-		this.historyDays = (historyDays < 1) ? 1 : historyDays;
+	public void setDefaultDays(int defaultDays) {
+		this.defaultDays = Math.max(1, Math.min(MAX_RANGE_DAYS, defaultDays));
+	}
+
+	@JsonPropertyDescription("The ranges a viewer can choose, in days, shortest first: one button each on the board, labelled \"Last day\" for 1 and \"N days\" otherwise. The default range is always among them. Default [1, 7, 30].")
+	public java.util.List<Integer> getRanges() {
+		java.util.TreeSet<Integer> set = new java.util.TreeSet<>();
+		if (ranges != null) {
+			for (Integer d : ranges) {
+				if (d != null && d >= 1 && d <= MAX_RANGE_DAYS) {
+					set.add(d);
+				}
+			}
+		}
+		set.add(defaultDays);
+		return new java.util.ArrayList<>(set);
+	}
+
+	public void setRanges(java.util.List<Integer> ranges) {
+		this.ranges = ranges;
 	}
 
 	@JsonPropertyDescription("JNDI name of the analytics datasource the charts query. Must be targeted at the AdminServer as well as the engine tier so this admin app can look it up.")
@@ -57,6 +84,24 @@ public class DashboardSettings extends Configuration implements Serializable {
 
 	public void setHeapHighPercent(int heapHighPercent) {
 		this.heapHighPercent = clamp(heapHighPercent, 1, 100);
+	}
+
+	@JsonPropertyDescription("Share of calls, in percent, that must end completed for a place on the map to read healthy. Between this and unhealthyPercent the colour runs from healthy to unhealthy.")
+	public int getHealthyPercent() {
+		return healthyPercent;
+	}
+
+	public void setHealthyPercent(int healthyPercent) {
+		this.healthyPercent = clamp(healthyPercent, 1, 100);
+	}
+
+	@JsonPropertyDescription("Share of calls, in percent, ending completed at or below which a place on the map reads unhealthy.")
+	public int getUnhealthyPercent() {
+		return unhealthyPercent;
+	}
+
+	public void setUnhealthyPercent(int unhealthyPercent) {
+		this.unhealthyPercent = clamp(unhealthyPercent, 0, 99);
 	}
 
 	@JsonPropertyDescription("Hours a session may stay open before it counts as leaked rather than as a call in progress.")
@@ -120,6 +165,33 @@ public class DashboardSettings extends Configuration implements Serializable {
 
 	public void setGrants(java.util.List<DashboardGrant> grants) {
 		this.grants = grants;
+	}
+
+	@JsonPropertyDescription("The places on the network map: where this domain's servers run, where calls arrive from, and where they are sent. A balancer site with coordinates is added for it.")
+	public java.util.List<NetworkSite> getSites() {
+		return sites;
+	}
+
+	public void setSites(java.util.List<NetworkSite> sites) {
+		this.sites = sites == null ? new java.util.ArrayList<>() : sites;
+	}
+
+	@JsonPropertyDescription("Minutes of refused calls the network map counts against a downstream site.")
+	public int getNetworkWindowMinutes() {
+		return networkWindowMinutes;
+	}
+
+	public void setNetworkWindowMinutes(int networkWindowMinutes) {
+		this.networkWindowMinutes = clamp(networkWindowMinutes, 1, 24 * 60);
+	}
+
+	@JsonPropertyDescription("Calls a site's servers failed (408, 5xx) within networkWindowMinutes at which the site reads down rather than in trouble.")
+	public int getNetworkFailingCalls() {
+		return networkFailingCalls;
+	}
+
+	public void setNetworkFailingCalls(int networkFailingCalls) {
+		this.networkFailingCalls = clamp(networkFailingCalls, 1, 100000);
 	}
 
 	private static int clamp(int v, int min, int max) {

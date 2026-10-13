@@ -271,17 +271,46 @@ public class AnalyticsEventListener implements EventSubscriber.Handler {
 
 	private void persistApplicationStart(EntityManager em, CloudEvent event) {
 		JsonNode data = event.getData();
-		Long id = ApplicationResolver.resolveOrCreate(em, Wire.text(data, "appName"), Wire.text(data, "domain"),
-				Wire.text(data, "server"), Wire.instant(data, "appStartedAt"), Wire.text(data, "host"),
+		String name = Wire.text(data, "appName"), domain = Wire.text(data, "domain"), server = Wire.text(data, "server");
+		Date started = Wire.instant(data, "appStartedAt");
+		Long id = ApplicationResolver.resolveOrCreate(em, name, domain, server, started, Wire.text(data, "host"),
 				Wire.text(data, "tenant"), Wire.text(data, "version"));
-		logFine("AnalyticsEventListener: Application start id=" + id + " " + Wire.text(data, "appName"));
+		logFine("AnalyticsEventListener: Application start id=" + id + " " + name);
+		if (started != null) {
+			endEarlierInstances(em, name, domain, server, started);
+		}
+	}
+
+	/// A new instance of an application on a server replaces every earlier
+	/// one, and the calls those held are over: at the instance's own stop if
+	/// it sent one, else now, at this start, since it died without saying so.
+	/// An earlier instance that never stopped is closed here too.
+	private void endEarlierInstances(EntityManager em, String name, String domain, String server, Date started) {
+		for (org.vorpal.blade.services.analytics.model.Application earlier : ApplicationResolver.earlier(em, name,
+				domain, server, started)) {
+			Date end = (earlier.getDestroyed() != null) ? earlier.getDestroyed() : started;
+			if (earlier.getDestroyed() == null) {
+				// The row in hand, not a key recomputed from its stored start:
+				// see SessionResolver#openSessionId on why that misses.
+				earlier.setDestroyed(started);
+				em.merge(earlier);
+			}
+			int ended = SessionResolver.endHeldBy(em, earlier.getId(), end);
+			if (ended > 0) {
+				logFine("AnalyticsEventListener: " + ended + " calls ended with " + name + " on " + server
+						+ " instance " + earlier.getId());
+			}
+		}
 	}
 
 	private void persistApplicationStop(EntityManager em, CloudEvent event) {
 		JsonNode data = event.getData();
+		Date stopped = Wire.instant(data, "stoppedAt");
 		Long id = ApplicationResolver.close(em, Wire.text(data, "appName"), Wire.text(data, "domain"), Wire.text(data, "server"),
-				Wire.instant(data, "appStartedAt"), Wire.instant(data, "stoppedAt"));
+				Wire.instant(data, "appStartedAt"), stopped);
 		logFine("AnalyticsEventListener: Application stop id=" + id);
+		// The instance is gone, and so is every session it held.
+		SessionResolver.endHeldBy(em, id.longValue(), (stopped == null) ? new Date() : stopped);
 	}
 
 	private void persistSessionStart(EntityManager em, CloudEvent event) {

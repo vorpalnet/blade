@@ -1,6 +1,7 @@
 package org.vorpal.blade.applications.dashboard;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -130,11 +131,98 @@ class AnalyticsReportsTest {
 		assertEquals(3, n(r.get(1)), "c1, c2, c6 started today");
 		assertEquals(1, n(r.get(2)), "c6 is still up");
 		assertEquals(1, n(r.get(3)), "c4 never closed");
-		assertEquals(3, n(r.get(4)), "conference, agent, meetings");
+		assertEquals(4, n(r.get(4)), "conference, agent, meetings, transfer");
 		List<Object> strict = only(reports.run("calls.summary", filter(7, false, null).tuned(10 * 60_000L,
 				AnalyticsReports.SPLIT_MS, AnalyticsReports.SAMPLE_FRESH_MS)));
 		assertEquals(Arrays.asList(0L, 2L), Arrays.asList(n(strict.get(2)), n(strict.get(3))),
 				"leakHours from the settings: with a 10-minute limit c6, up 30 minutes, is a leak too");
+	}
+
+	@Test
+	void callsByOutcomeAreGoodToBad() {
+		AnalyticsReports.Table t = run("calls.by-outcome");
+		assertEquals(Arrays.asList("hour", "completed", "abandoned", "declined"), t.columns);
+		long ended = 0, completed = 0;
+		for (List<Object> row : t.rows) {
+			ended += n(row.get(1)) + n(row.get(2)) + n(row.get(3));
+			completed += n(row.get(1));
+		}
+		assertEquals(1, ended, "only c3 has an end and a call row; a call with no end is in no part");
+		assertEquals(1, completed, "c3, completed (its decline by transfer gives way)");
+		assertEquals("day", month("calls.by-outcome").columns.get(0), "past a week, per day");
+	}
+
+	@Test
+	void callsByAreaPlaceTheCallerWithoutTheNumber() {
+		AnalyticsReports.Table t = run("calls.by-area");
+		assertEquals(Arrays.asList("area", "completed", "abandoned", "declined"), t.columns);
+		assertEquals(Arrays.asList(Arrays.asList("312", 1L, 0L, 0L)), t.rows,
+				"c3, completed, placed by the area the framework recorded, not by parsing its caller key");
+	}
+
+	@Test
+	void originsAreCountedPerAddressWithTheLastCall() {
+		AnalyticsReports.Table t = reports.origins(filter(7, false, null), Date.from(Instant.parse("2026-10-03T00:00:00Z")));
+		assertEquals(Arrays.asList("origin", "calls", "last call"), t.columns);
+		assertEquals(2, t.rows.size(), "c1 and c2 started since the 3rd; c3 on the 2nd is before it");
+		for (List<Object> r : t.rows) {
+			assertEquals(1L, r.get(1));
+			assertTrue(r.get(2) instanceof Date);
+		}
+	}
+
+	@Test
+	void failuresAreTheLegsServersRefusedInTheWindow() {
+		AnalyticsReports.Table t = reports.failures(filter(7, false, null), Date.from(Instant.parse("2026-10-03T11:00:00Z")));
+		assertEquals(Arrays.asList("destination", "responder", "status", "not sent", "calls", "last", "retry after"),
+				t.columns);
+		long refused = 0;
+		for (List<Object> r : t.rows) {
+			refused += (Long) r.get(4);
+			if (Long.valueOf(503).equals(r.get(2))) {
+				assertEquals(2L, r.get(4), "two 503s from one server in the window; the 09:00 one is before it");
+				assertEquals(60L, r.get(6), "the longest Retry-After asked");
+			}
+			if (Long.valueOf(500).equals(r.get(2))) {
+				assertEquals(Boolean.TRUE, r.get(3), "an INVITE the transport refused");
+			}
+		}
+		assertEquals(5, refused, "503 twice, 408, 486, the unsent 500: every branch failure, not the call's callDeclined");
+	}
+
+	@Test
+	void anAreaIsTheAreaCodeOrTheCountryPrefix() {
+		assertEquals("646", AnalyticsReports.area("sip:+16465550100@carrier.example"));
+		assertEquals("646", AnalyticsReports.area("sip:16465550100@carrier.example"));
+		assertEquals("646", AnalyticsReports.area("tel:6465550100"));
+		assertEquals("646", AnalyticsReports.area("sips:6465550100;user=phone@x"));
+		assertEquals("+442", AnalyticsReports.area("sip:+442071234567@carrier.example"));
+		assertNull(AnalyticsReports.area("sip:1234@pbx"), "an extension");
+		assertNull(AnalyticsReports.area("sip:anonymous@anonymous.invalid"));
+		assertNull(AnalyticsReports.area("sip:0465550100@x"), "no area code starts 0 or 1");
+		assertNull(AnalyticsReports.area(null));
+	}
+
+	@Test
+	void heapIsEachServersPeakPerHour() {
+		AnalyticsReports.Table t = run("platform.heap");
+		assertEquals(Arrays.asList("hour", "server", "peak heap %"), t.columns);
+		assertEquals(Arrays.asList(Arrays.asList("2026-10-03 10:00", "east-1/AdminServer", 40L),
+				Arrays.asList("2026-10-03 10:00", "east-1/engine0", 78L),
+				Arrays.asList("2026-10-03 11:00", "west-1/engine0", 44L)), t.rows,
+				"engine0's 10:00 hour peaks at its 78, not its 61; two domains, so each server is named with its own");
+		AnalyticsReports.Table east = reports.run("platform.heap", filter(7, false, "east-1"));
+		assertEquals(Arrays.asList("2026-10-03 10:00", "engine0", 78L), east.rows.get(1), "one domain: the server alone");
+		AnalyticsReports.Table cpu = reports.run("platform.cpu", filter(7, false, "east-1"));
+		assertEquals(Arrays.asList("hour", "server", "peak cpu %"), cpu.columns);
+		assertEquals(Arrays.asList("2026-10-03 10:00", "engine0", 82L), cpu.rows.get(1), "the busy minute, 82%, not 35%");
+	}
+
+	@Test
+	void callsNowCountsWhatIsUpAndNotTheLeak() {
+		assertEquals(Arrays.asList("now", "peak last hour", "peak at"), run("calls.now").columns);
+		assertEquals(Arrays.asList(1L, 1L, "2026-10-03 11:30:00"), only(run("calls.now")),
+				"c6, up since 11:30; c4 has been open since Sep 29, a leak, not a call");
 	}
 
 	@Test
@@ -211,28 +299,16 @@ class AnalyticsReportsTest {
 	}
 
 	@Test
-	void outcomesArePerApplicationAndCountCallsOnce() {
-		AnalyticsReports.Table t = run("outcomes.by-application");
-		assertEquals(2, t.rows.size(), "meetings started nothing and is absent");
-		assertEquals(Arrays.asList("agent", 3L, 2L, 2L, 0L, 66.67), t.rows.get(0),
-				"c3 answered AND connected, counted once; c9 never answered");
-		assertEquals(Arrays.asList("conference", 1L, 0L, 0L, 0L, 0.0), t.rows.get(1));
-		AnalyticsReports.Table funnel = run("outcomes.funnel");
-		assertEquals(Arrays.asList("Started", 3L), funnel.rows.get(0),
-				"only applications that report answering: agent's c3, c6 and c9, not conference's c1");
-		assertEquals(Arrays.asList("Answered", 2L), funnel.rows.get(1));
-		assertEquals(Arrays.asList("Completed", 1L), funnel.rows.get(2));
-	}
-
-	/// c9 completed without ever being answered (an application that began
-	/// publishing `callAnswered` part-way through the window): it counts as
-	/// completed for its application, yet never past the funnel's answered stage.
-	@Test
-	void eachFunnelStageIsWithinTheOneBefore() {
-		AnalyticsReports.Table funnel = run("outcomes.funnel");
-		long answered = n(funnel.rows.get(1).get(1)), completed = n(funnel.rows.get(2).get(1));
-		assertTrue(completed <= answered, "completed " + completed + " > answered " + answered);
-		assertEquals(Arrays.asList("agent", 3L, 2L, 2L, 0L, 66.67), run("outcomes.by-application").rows.get(0));
+	void outcomesAreHowCallsEndedEachCallOnce() {
+		assertEquals(Arrays.asList(Arrays.asList("completed", 2L), Arrays.asList("declined", 0L),
+				Arrays.asList("abandoned", 0L)), run("outcomes.ended").rows,
+				"c3 and c9 completed; transfer declined c3 before agent took it, and completed wins");
+		AnalyticsReports.Table byApp = run("outcomes.by-application");
+		assertEquals(Arrays.asList("application", "completed", "declined", "abandoned"), byApp.columns);
+		assertEquals(Arrays.asList("agent", 2L, 0L, 0L), byApp.rows.get(0));
+		assertEquals(Arrays.asList("transfer", 0L, 1L, 0L), byApp.rows.get(1),
+				"per application, transfer's refusal of c3 still counts");
+		assertEquals(2L, run("outcomes.daily").rows.stream().mapToLong(row -> n(row.get(1))).sum());
 	}
 
 	@Test
@@ -296,9 +372,13 @@ class AnalyticsReportsTest {
 		assertEquals(Arrays.asList("agent", 3L, 3L, 3L, 2L, "2026-10-03 11:30:01", "none"), t.rows.get(0));
 		assertEquals(Arrays.asList("conference", 3L, 2L, 0L, 0L), t.rows.get(1).subList(0, 5));
 		assertEquals("never sends answered; never sends an end", t.rows.get(1).get(6));
-		assertEquals(Arrays.asList("meetings", 1L, 0L, 0L, 0L), t.rows.get(3).subList(0, 5),
+		assertEquals(Arrays.asList("irouter", 1L, 0L, 0L, 0L), t.rows.get(2).subList(0, 5));
+		assertEquals("none (routes only)", t.rows.get(2).get(6), "a proxy that routed and left is not a gap");
+		assertEquals(Arrays.asList("meetings", 1L, 0L, 0L, 0L), t.rows.get(4).subList(0, 5),
 				"a call row naming meetings counts, though meetings sent nothing about it");
-		assertEquals("never sends started; never sends answered; never sends an end", t.rows.get(3).get(6));
+		assertEquals("never sends started; never sends answered; never sends an end", t.rows.get(4).get(6));
+		List<Object> transfer = t.rows.stream().filter(row -> "transfer".equals(row.get(0))).findFirst().get();
+		assertEquals("none", transfer.get(6), "transfer only declined: it owed no answer");
 	}
 
 	@Test
@@ -309,8 +389,8 @@ class AnalyticsReportsTest {
 		assertEquals(1, split.rows.size());
 		assertEquals(Arrays.asList("000000C7", "2026-09-20 10:00:00", "2026-09-20 10:00:03", 3.0, "conference",
 				"listener"), split.rows.get(0));
-		assertEquals(Arrays.asList(4L, 3L, 1L, 1L, 3L, 4L, 1L), only(month("health.summary")),
-				"3 dropped (the Sep 1 sample is outside the window), 4 refused by engine0's container, 1 routed past "
+		assertEquals(Arrays.asList(6L, 3L, 1L, 3L, 3L, 4L, 1L), only(month("health.summary")),
+				"irouter and transfer are not gaps; c3 reached transfer, c8 irouter and listener; 3 dropped (the Sep 1 sample is outside the window), 4 refused by engine0's container, 1 routed past "
 						+ "an undeployed application");
 		assertTrue(run("health.split-calls").rows.isEmpty(), "outside the 7-day window");
 	}

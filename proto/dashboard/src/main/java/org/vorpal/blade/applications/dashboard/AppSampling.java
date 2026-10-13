@@ -297,15 +297,48 @@ final class AppSampling implements Runnable {
 					logger.fine("server sample skipped, a read failed: " + name);
 					continue;
 				}
+				Long cpu = cpuPct(dr, name, now);
 				AppSampler.Delta d = servers.observe("", name, null, now, now - started, totals);
 				if (d != null) {
-					publishServer(dr, sr, sip, router != null, d);
+					publishServer(dr, sr, sip, router != null, d, cpu);
 				}
 			} catch (Throwable t) {
 				logger.log(Level.WARNING, "could not sample server " + sr, t);
 			}
 		}
 	}
+
+	/// The CPU this server's JVM used since the last look, as a percentage of
+	/// all its processors: the change in `ProcessCpuTime` over the wall time
+	/// between looks. An average over the minute, where the instant
+	/// `ProcessCpuLoad` is one moment's reading and often 0 or 1 on the first
+	/// call. Null on the first look, after a restart (the counter went back),
+	/// or when the server's `java.lang` MBean is not reachable.
+	///
+	/// The JVM's platform MBeans are federated into the domain runtime as
+	/// `java.lang:Location=<server>,type=OperatingSystem`.
+	private Long cpuPct(MBeanServer dr, String server, long now) {
+		try {
+			ObjectName os = new ObjectName("java.lang:Location=" + server + ",type=OperatingSystem");
+			long cpuNs = HealthServlet.lng(dr, os, "ProcessCpuTime");
+			long processors = HealthServlet.lng(dr, os, "AvailableProcessors");
+			if (cpuNs < 0 || processors <= 0) {
+				cpuLast.remove(server);
+				return null;
+			}
+			long[] last = cpuLast.put(server, new long[] { cpuNs, now });
+			if (last == null || cpuNs < last[0] || now <= last[1]) {
+				return null;
+			}
+			double usedMs = (cpuNs - last[0]) / 1_000_000.0;
+			return Math.round(Math.min(100.0, 100.0 * usedMs / ((now - last[1]) * (double) processors)));
+		} catch (Exception e) {
+			return null;
+		}
+	}
+
+	/// Server name to its last `ProcessCpuTime` (ns) and when it was read (ms).
+	private final Map<String, long[]> cpuLast = new java.util.concurrent.ConcurrentHashMap<>();
 
 	/// A counter's reading: 0 when the MBean is absent (the server has no such
 	/// thing), -1 when it is there and the read failed.
@@ -314,7 +347,7 @@ final class AppSampling implements Runnable {
 	}
 
 	private static boolean publishServer(MBeanServer dr, ObjectName sr, ObjectName sip, boolean routes,
-			AppSampler.Delta d) {
+			AppSampler.Delta d, Long cpuPct) {
 		ObjectName cr = HealthServlet.obj(dr, sr, "ClusterRuntime");
 		ObjectName jvm = HealthServlet.obj(dr, sr, "JVMRuntime");
 		ObjectName tp = HealthServlet.obj(dr, sr, "ThreadPoolRuntime");
@@ -343,6 +376,7 @@ final class AppSampling implements Runnable {
 			putReading(data, "activeSipSessions", reading(dr, sip, "ActiveServerSipSessionCount"), sip != null);
 			long free = (jvm == null) ? -1 : HealthServlet.lng(dr, jvm, "HeapFreePercent");
 			putReading(data, "heapUsedPct", 100 - free, free >= 0);
+			putReading(data, "cpuPct", cpuPct == null ? -1 : cpuPct, cpuPct != null);
 			putReading(data, "threadsStuck", HealthServlet.lng(dr, tp, "StuckThreadCount"), tp != null);
 			putReading(data, "threadsHogging", HealthServlet.lng(dr, tp, "HoggingThreadCount"), tp != null);
 			putReading(data, "threadsPending", HealthServlet.lng(dr, tp, "PendingUserRequestCount"), tp != null);

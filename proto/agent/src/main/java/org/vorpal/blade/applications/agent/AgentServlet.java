@@ -17,6 +17,7 @@ import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v3.B2buaServlet;
 import org.vorpal.blade.framework.v3.events.AccessEvent;
+import org.vorpal.blade.framework.v3.events.CallScope;
 import org.vorpal.blade.framework.v3.events.Events;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -170,7 +171,8 @@ public class AgentServlet extends B2buaServlet {
 		try {
 			SipApplicationSession app = request.getApplicationSession();
 			AgentConsoleRegistry.rememberCall(pop.vorpalId,
-					new AgentConsoleRegistry.CallRef(Analytics.getVorpalId(app), Analytics.getCallStartedAt(app), pop.ani));
+					new AgentConsoleRegistry.CallRef(Analytics.getVorpalId(app), Analytics.getCallStartedAt(app), pop.ani,
+							CallScope.of(app)));
 		} catch (Throwable t) {
 			// No analytics identity: a disposition still publishes, just not by session.
 		}

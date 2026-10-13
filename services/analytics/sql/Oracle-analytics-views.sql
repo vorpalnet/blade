@@ -232,7 +232,9 @@ WHERE e.type IN ('queueEntered', 'queueReleased', 'queueAbandoned');
 -- Where each call was sent. `callRouted` is a proxy's choice (iRouter's
 -- destination, or the balancer's endpoint and tier after `failovers` tiers
 -- failed); `callResponded` and `callDeclined` are answers the router or the
--- balancer gave itself, with the `status` it sent.
+-- balancer gave itself, with the `status` it sent; `branchFailed` is a server
+-- the call was sent to answering that leg with a failure (`status`, `reason`,
+-- the `responder` address, and `retry_after` from a 503's Retry-After).
 CREATE OR REPLACE VIEW v_call_routing AS
 SELECT
    CAST(e.id AS VARCHAR2(20)) AS event_id,
@@ -248,11 +250,14 @@ SELECT
    JSON_VALUE(e.payload, '$."endpoint"') AS endpoint,
    JSON_VALUE(e.payload, '$."tier"') AS tier,
    JSON_VALUE(e.payload, '$."failovers"' RETURNING NUMBER) AS failovers,
-   JSON_VALUE(e.payload, '$."status"' RETURNING NUMBER) AS status
+   JSON_VALUE(e.payload, '$."status"' RETURNING NUMBER) AS status,
+   JSON_VALUE(e.payload, '$."reason"') AS reason,
+   JSON_VALUE(e.payload, '$."responder"') AS responder,
+   JSON_VALUE(e.payload, '$."retryAfter"' RETURNING NUMBER) AS retry_after
 FROM events e
 JOIN applications a ON a.id = e.application_id
 LEFT JOIN sessions s ON s.id = e.session_id
-WHERE e.type IN ('callRouted', 'callResponded', 'callDeclined');
+WHERE e.type IN ('callRouted', 'callResponded', 'callDeclined', 'branchFailed');
 
 -- Parked calls: one row when a call is put on hold, one when it leaves, with
 -- how long it was held.
@@ -363,6 +368,7 @@ SELECT
    JSON_VALUE(e.payload, '$."activeAppSessions"' RETURNING NUMBER) AS active_app_sessions,
    JSON_VALUE(e.payload, '$."activeSipSessions"' RETURNING NUMBER) AS active_sip_sessions,
    JSON_VALUE(e.payload, '$."heapUsedPct"' RETURNING NUMBER) AS heap_used_pct,
+   JSON_VALUE(e.payload, '$."cpuPct"' RETURNING NUMBER) AS cpu_pct,
    JSON_VALUE(e.payload, '$."threadsStuck"' RETURNING NUMBER) AS threads_stuck,
    JSON_VALUE(e.payload, '$."threadsHogging"' RETURNING NUMBER) AS threads_hogging,
    JSON_VALUE(e.payload, '$."threadsPending"' RETURNING NUMBER) AS threads_pending,

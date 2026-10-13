@@ -1,5 +1,6 @@
 package org.vorpal.blade.framework.v3.configuration.connectors;
 
+import org.vorpal.blade.framework.v3.net.Remotes;
 import java.io.IOException;
 import java.io.Serializable;
 import java.net.URI;
@@ -109,6 +110,9 @@ import com.fasterxml.jackson.core.io.JsonStringEncoder;
 @FormLayoutGroup({ "id", "method", "timeoutSeconds" })
 @FormLayoutGroup({ "circuitBreakerCooldownSeconds", "circuitBreakerTrap" })
 public class RestConnector extends Connector implements Serializable {
+
+	/// What [Remotes] files this connector's calls under.
+	static final String KIND = "rest";
 	private static final long serialVersionUID = 1L;
 
 	private static final String TEMPLATES_DIR = "./config/custom/vorpal/_templates/";
@@ -260,8 +264,11 @@ public class RestConnector extends Connector implements Serializable {
 				sipLogger.finest(sipReq, formatHttpRequest(connectorId, method, resolvedUrl, httpReq, resolvedBody));
 			}
 
+			String remote = Remotes.hostOf(resolvedUrl);
+			long started = System.nanoTime();
 			return httpClient.sendAsync(httpReq, HttpResponse.BodyHandlers.ofString())
 					.thenAccept(httpResp -> {
+						long ms = (System.nanoTime() - started) / 1_000_000L;
 						try {
 							if (sipLogger.isLoggable(Level.FINEST)) {
 								sipLogger.finest(sipReq, formatHttpResponse(connectorId, httpResp));
@@ -269,12 +276,14 @@ public class RestConnector extends Connector implements Serializable {
 							if (httpResp.statusCode() < 200 || httpResp.statusCode() >= 300) {
 								sipLogger.warning(sipReq, "RestConnector[" + connectorId + "] HTTP "
 										+ httpResp.statusCode());
+								Remotes.failed(KIND, remote, "HTTP " + httpResp.statusCode(), ms);
 								if (breakerEnabled) breaker.recordFailure(circuitBreakerCooldownSeconds,
 										Boolean.TRUE.equals(circuitBreakerTrap), sipReq, tag(),
-										"HTTP " + httpResp.statusCode());
+										"HTTP " + httpResp.statusCode(), KIND, remote);
 								return;
 							}
-							if (breakerEnabled) breaker.recordSuccess(Boolean.TRUE.equals(circuitBreakerTrap), sipReq, tag());
+							Remotes.succeeded(KIND, remote, ms);
+							if (breakerEnabled) breaker.recordSuccess(Boolean.TRUE.equals(circuitBreakerTrap), sipReq, tag(), KIND, remote);
 							runSelectors(ctx, httpResp.body());
 						} catch (Exception e) {
 							sipLogger.warning(sipReq, "RestConnector[" + connectorId + "] response handling failed: "
@@ -284,8 +293,9 @@ public class RestConnector extends Connector implements Serializable {
 					.exceptionally(t -> {
 						sipLogger.warning(sipReq, "RestConnector[" + connectorId + "] request failed: "
 								+ t.getMessage());
+						Remotes.failed(KIND, remote, Remotes.reason(t), (System.nanoTime() - started) / 1_000_000L);
 						if (breakerEnabled) breaker.recordFailure(circuitBreakerCooldownSeconds,
-								Boolean.TRUE.equals(circuitBreakerTrap), sipReq, tag(), t.getMessage());
+								Boolean.TRUE.equals(circuitBreakerTrap), sipReq, tag(), t.getMessage(), KIND, remote);
 						return null;
 					});
 

@@ -1,8 +1,12 @@
-// Where a number is from, for the card header: the North American area code's
-// principal city and state or province, and the country for everything else.
-// Data, not code: refresh it occasionally (new area codes appear a few times a
-// year; the NANPA list is the source). Snapshot 2026-09-23. An unknown code
-// shows the country only, never a guess.
+// Where a number is from: the North American area code's principal city and
+// state or province, and the country for everything else. The agent console
+// names a caller with it; the dashboard's map places calls by it.
+//
+// Shipped in the framework JAR under META-INF/resources, so every BLADE web
+// application serves it at <context-root>/vorpal/geo.js and there is one copy
+// to refresh. Data, not code: refresh it occasionally (new area codes appear a
+// few times a year; the NANPA list is the source). Snapshot 2026-09-23. An
+// unknown code shows the country only, never a guess.
 window.GEO = {
   // NANP area codes -> "City, ST". US and Canada. Where a code covers a region
   // the largest city is named.
@@ -47,6 +51,17 @@ window.GEO = {
     "934":"Brentwood, NY","936":"Conroe, TX","937":"Dayton, OH","938":"Huntsville, AL","940":"Denton, TX","941":"Sarasota, FL","947":"Troy, MI","949":"Irvine, CA","951":"Riverside, CA","952":"Bloomington, MN",
     "954":"Fort Lauderdale, FL","956":"Laredo, TX","959":"Hartford, CT","970":"Fort Collins, CO","971":"Portland, OR","972":"Dallas, TX","973":"Newark, NJ","978":"Lowell, MA","979":"College Station, TX","980":"Charlotte, NC",
     "984":"Raleigh, NC","985":"Houma, LA","986":"Boise, ID","989":"Saginaw, MI"
+  },
+  // US state and DC postal codes -> the name the US atlas files a state under.
+  // A two-letter code not here (ON, BC, ...) is a Canadian province.
+  state: {
+    "AL":"Alabama","AK":"Alaska","AZ":"Arizona","AR":"Arkansas","CA":"California","CO":"Colorado","CT":"Connecticut","DE":"Delaware",
+    "DC":"District of Columbia","FL":"Florida","GA":"Georgia","HI":"Hawaii","ID":"Idaho","IL":"Illinois","IN":"Indiana","IA":"Iowa",
+    "KS":"Kansas","KY":"Kentucky","LA":"Louisiana","ME":"Maine","MD":"Maryland","MA":"Massachusetts","MI":"Michigan","MN":"Minnesota",
+    "MS":"Mississippi","MO":"Missouri","MT":"Montana","NE":"Nebraska","NV":"Nevada","NH":"New Hampshire","NJ":"New Jersey","NM":"New Mexico",
+    "NY":"New York","NC":"North Carolina","ND":"North Dakota","OH":"Ohio","OK":"Oklahoma","OR":"Oregon","PA":"Pennsylvania","RI":"Rhode Island",
+    "SC":"South Carolina","SD":"South Dakota","TN":"Tennessee","TX":"Texas","UT":"Utah","VT":"Vermont","VA":"Virginia","WA":"Washington",
+    "WV":"West Virginia","WI":"Wisconsin","WY":"Wyoming"
   },
   // Country calling codes -> country, longest prefix wins. Caribbean and
   // Pacific NANP members are in the area table above under 1.

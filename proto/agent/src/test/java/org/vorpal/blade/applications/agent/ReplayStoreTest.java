@@ -11,6 +11,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.vorpal.blade.framework.v3.events.CallScope;
 
 class ReplayStoreTest {
 
@@ -23,7 +24,8 @@ class ReplayStoreTest {
 			AgentConsoleRegistry.recordPop("AB12CD34", "reviewer1", "{\"t\":\"pop\"}");
 			AgentConsoleRegistry.recordFrame("AB12CD34", "{\"t\":\"update\",\"n\":1}");
 			AgentConsoleRegistry.rememberCall("AB12CD34",
-					new AgentConsoleRegistry.CallRef(0xAB12CD34L, new Date(1_790_000_000_000L), "3055550123"));
+					new AgentConsoleRegistry.CallRef(0xAB12CD34L, new Date(1_790_000_000_000L), "3055550123",
+							new CallScope("tenant_001", "radiology")));
 			ReplayStore.save();
 
 			assertTrue(Files.isRegularFile(ReplayStore.file()), "saved under the server's data directory");
@@ -36,6 +38,8 @@ class ReplayStoreTest {
 			assertEquals(2, call.frames.size(), "the pop and the frame after it");
 			assertNotNull(AgentConsoleRegistry.callRef("AB12CD34"));
 			assertEquals("3055550123", AgentConsoleRegistry.callRef("AB12CD34").ani);
+			assertEquals("tenant_001", AgentConsoleRegistry.callRef("AB12CD34").scope.getTenant());
+			assertEquals("radiology", AgentConsoleRegistry.callRef("AB12CD34").scope.getDepartment());
 		} finally {
 			System.setProperty("user.dir", dir);
 			System.clearProperty("weblogic.Name");

@@ -1,5 +1,6 @@
 package org.vorpal.blade.framework.v3.configuration.connectors;
 
+import org.vorpal.blade.framework.v3.net.Remotes;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.file.Files;
@@ -64,6 +65,9 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 @JsonPropertyOrder({ "type", "id", "description", "dataSource", "queryTemplate", "queryTimeoutSeconds",
 		"circuitBreakerCooldownSeconds", "circuitBreakerTrap", "selectors" })
 public class JdbcConnector extends Connector implements Serializable {
+
+	/// What [Remotes] files this connector's calls under.
+	static final String KIND = "jdbc";
 	private static final long serialVersionUID = 1L;
 
 	private static final String TEMPLATES_DIR = "./config/custom/vorpal/_templates/";
@@ -152,6 +156,7 @@ public class JdbcConnector extends Connector implements Serializable {
 		}
 
 		return CompletableFuture.supplyAsync(() -> {
+			long started = System.nanoTime();
 			try {
 				if (cachedDataSource == null) {
 					cachedDataSource = (DataSource) new InitialContext().lookup(dataSource);
@@ -161,7 +166,8 @@ public class JdbcConnector extends Connector implements Serializable {
 						ResultSet rs = stmt.executeQuery()) {
 					// The datasource was reachable and the query ran — that's a
 					// success regardless of whether any row came back.
-					if (breakerEnabled) breaker.recordSuccess(Boolean.TRUE.equals(circuitBreakerTrap), sipReq, tag());
+					Remotes.succeeded(KIND, dataSource, (System.nanoTime() - started) / 1_000_000L);
+					if (breakerEnabled) breaker.recordSuccess(Boolean.TRUE.equals(circuitBreakerTrap), sipReq, tag(), KIND, dataSource);
 					if (rs.next()) {
 						Map<String, String> row = new LinkedHashMap<>();
 						ResultSetMetaData md = rs.getMetaData();
@@ -175,8 +181,9 @@ public class JdbcConnector extends Connector implements Serializable {
 				}
 			} catch (Exception e) {
 				sipLogger.warning(sipReq, "JdbcConnector[" + connectorId + "] query failed: " + e.getMessage());
+				Remotes.failed(KIND, dataSource, Remotes.reason(e), (System.nanoTime() - started) / 1_000_000L);
 				if (breakerEnabled) breaker.recordFailure(circuitBreakerCooldownSeconds,
-						Boolean.TRUE.equals(circuitBreakerTrap), sipReq, tag(), e.getMessage());
+						Boolean.TRUE.equals(circuitBreakerTrap), sipReq, tag(), e.getMessage(), KIND, dataSource);
 			}
 			return null;
 		}, Executors.DB).thenAccept(row -> {

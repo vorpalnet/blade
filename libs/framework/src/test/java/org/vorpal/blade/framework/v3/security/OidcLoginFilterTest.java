@@ -409,6 +409,7 @@ class OidcLoginFilterTest {
 			assertNotNull(id);
 			assertEquals("reviewer1", id.getName());
 			assertEquals(Collections.singleton("Reviewer"), id.groups());
+			assertEquals(idToken, session.attributes.get(OidcLoginFilter.ID_TOKEN_ATTR), "kept for sign-out");
 			assertNull(session.attributes.get(OidcLoginFilter.STATE_ATTR), "one-time values are gone");
 			assertNull(session.attributes.get(OidcLoginFilter.VERIFIER_ATTR));
 		}
@@ -501,7 +502,19 @@ class OidcLoginFilterTest {
 			f.doFilter(req.proxy(), res.proxy(), new Chain());
 			assertTrue(req.session.invalidated);
 			assertTrue(res.redirect.startsWith(ISSUER + "/oauth2/v1/userlogout?"), res.redirect);
-			assertEquals(HOST + CONTEXT + "/", query(res.redirect).get("post_logout_redirect_uri"));
+			assertEquals(HOST + ":443" + CONTEXT + "/", query(res.redirect).get("post_logout_redirect_uri"),
+					"the registered address, from the redirect URL, not the request's host (a proxy's)");
+		}
+
+		@Test
+		void signOutCarriesTheSignInsIdToken() throws Exception {
+			OidcLoginFilter f = filter(config(), providerKeys(), null);
+			Request req = signedIn(Arrays.asList("Reviewer"));
+			req.session.attributes.put(OidcLoginFilter.ID_TOKEN_ATTR, "header.payload.signature");
+			req.uri = CONTEXT + OidcLoginFilter.LOGOUT_PATH;
+			Response res = new Response();
+			f.doFilter(req.proxy(), res.proxy(), new Chain());
+			assertEquals("header.payload.signature", query(res.redirect).get("id_token_hint"));
 		}
 	}
 

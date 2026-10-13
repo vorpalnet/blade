@@ -127,4 +127,13 @@ public class JvmSettingsMergeTest {
 		assertFalse(JvmSettings.argumentKey("-Xms1g").equals(JvmSettings.argumentKey("-Xmx1g")));
 		assertFalse(JvmSettings.argumentKey("-Dwls.home=/a").equals(JvmSettings.argumentKey("-Dweblogic.home=/a")));
 	}
+	@Test
+	public void eachJavaAgentIsItsOwnKnob() {
+		String existing = BASELINE + " -javaagent:/opt/oracle/blade-agent/blade-agent.jar";
+		String merged = jvm.mergeArguments(existing,
+				"-javaagent:/opt/oracle/occas/current/wlserver/server/lib/debugpatch-agent.jar", new ArrayList<>());
+		assertTrue(merged.contains("-javaagent:/opt/oracle/blade-agent/blade-agent.jar"));
+		assertTrue(merged.contains("-javaagent:/opt/oracle/occas/current/wlserver/server/lib/debugpatch-agent.jar"));
+		assertFalse(merged.contains("/occas/8.3/wlserver/server/lib/debugpatch-agent.jar"));
+	}
 }

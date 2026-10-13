@@ -66,4 +66,15 @@ class AccessTest {
 		assertTrue(Access.set(null).isEmpty());
 		assertEquals(2, Access.set(Arrays.asList("a", "b", "")).size());
 	}
+
+	@Test
+	void theAccountMenuSaysWhatAGrantShows() {
+		DashboardGrant radiology = grant("uhg-radiology", Arrays.asList(), Arrays.asList("uhg"));
+		radiology.setDepartments(Arrays.asList("radiology"));
+		assertEquals(Arrays.asList("Calls: tenant uhg \u00b7 department radiology", "Servers: none",
+				"Transcripts and callers: no"), Access.describe(Access.of(Arrays.asList(radiology))));
+		assertEquals(Arrays.asList("Calls: none", "Servers: none", "Transcripts and callers: no"),
+				Access.describe(Access.of(Arrays.<DashboardGrant>asList())));
+		assertEquals("Calls: all", Access.describe(null).get(0), "the no-grants administrator");
+	}
 }

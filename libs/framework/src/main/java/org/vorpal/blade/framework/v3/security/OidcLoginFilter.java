@@ -97,6 +97,9 @@ public class OidcLoginFilter implements Filter {
 
 	/// When the identity in this session signed in, epoch milliseconds.
 	static final String SIGNED_IN_ATTR = "org.vorpal.blade.oidc.signedIn";
+	/// The raw ID token of the sign-in, sent back as `id_token_hint` at
+	/// sign-out: an identity domain refuses a logout request without it.
+	static final String ID_TOKEN_ATTR = "org.vorpal.blade.oidc.idToken";
 
 	private static final String BEARER_PREFIX = "Bearer ";
 	private static final Logger logger = Logger.getLogger(OidcLoginFilter.class.getName());
@@ -382,9 +385,11 @@ public class OidcLoginFilter implements Filter {
 		}
 
 		JwtIdentity identity;
+		String idToken;
 		try {
 			OidcProvider p = provider(cfg);
 			OidcProvider.Tokens tokens = exchange.exchange(p, cfg, code, verifier);
+			idToken = tokens.idToken;
 			JwtValidator validator = idTokenValidator(cfg);
 			identity = validator.validate(tokens.idToken);
 			if (identity.groups().isEmpty()) {
@@ -412,6 +417,7 @@ public class OidcLoginFilter implements Filter {
 		}
 		session.setAttribute(IDENTITY_ATTR, identity);
 		session.setAttribute(SIGNED_IN_ATTR, System.currentTimeMillis());
+		session.setAttribute(ID_TOKEN_ATTR, idToken);
 		// One line per sign-in, with the groups as the token carried them: the
 		// first thing to look at when a rule that names a group does not match.
 		logger.info("signed in " + identity + " from " + req.getRemoteAddr());
@@ -460,13 +466,23 @@ public class OidcLoginFilter implements Filter {
 		return names;
 	}
 
+	/// Sign out here and at the provider.
+	///
+	/// The address the provider returns the browser to must be one registered
+	/// on the client, so it is built from the configured redirect URL's
+	/// scheme, host and port, never from the request's: behind a proxy those
+	/// are the server's, the provider rejects them, and the browser is left on
+	/// the provider's "Invalid logout request" page. The sign-in's ID token
+	/// goes with it as `id_token_hint` (OpenID Connect RP-Initiated Logout
+	/// 1.0), which an identity domain also requires.
 	private void logout(HttpServletRequest req, HttpServletResponse res, OidcLoginConfig cfg) throws IOException {
 		HttpSession session = req.getSession(false);
+		String idToken = null;
 		if (session != null) {
+			idToken = (String) session.getAttribute(ID_TOKEN_ATTR);
 			session.invalidate();
 		}
-		String home = req.getRequestURL().toString();
-		home = home.substring(0, home.length() - LOGOUT_PATH.length()) + "/";
+		String home = origin(cfg.redirectUrl()) + req.getContextPath() + "/";
 		OidcProvider p = null;
 		try {
 			p = provider(cfg);
@@ -475,11 +491,19 @@ public class OidcLoginFilter implements Filter {
 		}
 		if (p != null && p.endSessionEndpoint() != null) {
 			String url = p.endSessionEndpoint() + (p.endSessionEndpoint().getQuery() == null ? "?" : "&")
-					+ "post_logout_redirect_uri=" + encode(home) + "&client_id=" + encode(cfg.clientId());
+					+ "post_logout_redirect_uri=" + encode(home) + "&client_id=" + encode(cfg.clientId())
+					+ (idToken == null ? "" : "&id_token_hint=" + encode(idToken));
 			res.sendRedirect(url);
 		} else {
 			res.sendRedirect(home);
 		}
+	}
+
+	/// `https://host:port` of an absolute URL: everything before its path.
+	static String origin(String url) {
+		int scheme = url.indexOf("://");
+		int path = url.indexOf('/', scheme < 0 ? 0 : scheme + 3);
+		return (path < 0) ? url : url.substring(0, path);
 	}
 
 	/// Where to send the browser after a login: the address it asked for, or

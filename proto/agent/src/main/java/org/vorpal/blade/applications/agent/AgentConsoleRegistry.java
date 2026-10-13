@@ -12,6 +12,8 @@ import java.util.logging.Logger;
 
 import javax.websocket.Session;
 
+import org.vorpal.blade.framework.v3.events.CallScope;
+
 /// The consoles currently watching, and how to push to them.
 ///
 /// v1 pushes every screen-pop to every open console: for a single-agent demo
@@ -49,18 +51,23 @@ public final class AgentConsoleRegistry {
 	/// A popped call's analytics identity, so a disposition sent from a console
 	/// minutes after the call ended can still be filed against the call's
 	/// session: the Vorpal-ID as the number the framework assigned, and when the
-	/// call started, the two the sink hashes a session from.
+	/// call started, the two the sink hashes a session from. The call's scope
+	/// rides along, so a disposition is shown to the tenant and department the
+	/// call belongs to.
 	public static final class CallRef {
 		public final Long vorpalId;
 		public final Date startedAt;
 		public final String ani;
+		/// The call's tenant and department when it was popped; never null.
+		public final CallScope scope;
 		/// When the agent answered, on this server's clock; 0 until then.
 		public volatile long answeredAt;
 
-		public CallRef(Long vorpalId, Date startedAt, String ani) {
+		public CallRef(Long vorpalId, Date startedAt, String ani, CallScope scope) {
 			this.vorpalId = vorpalId;
 			this.startedAt = startedAt;
 			this.ani = ani;
+			this.scope = (scope == null) ? CallScope.NONE : scope;
 		}
 	}
 

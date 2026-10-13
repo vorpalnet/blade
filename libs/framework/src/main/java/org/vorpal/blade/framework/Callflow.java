@@ -58,6 +58,8 @@ import javax.servlet.sip.UAMode;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v2.analytics.Analytics;
+import org.vorpal.blade.framework.v3.net.CallOrigin;
+import org.vorpal.blade.framework.v3.net.Legs;
 import org.vorpal.blade.framework.v2.callflow.Expectation;
 import org.vorpal.blade.framework.v2.config.KeepAliveParameters;
 import org.vorpal.blade.framework.v2.config.KeepAliveParameters.KeepAlive;
@@ -809,6 +811,11 @@ public abstract class Callflow implements Serializable {
 				if (remote != null && !remote.isEmpty()) {
 					appSession.setAttribute(VORPAL_ORIGIN, remote);
 				}
+				// The call enters BLADE here, so this is the one application
+				// that records where it came from and where its caller is.
+				if (INVITE.equals(request.getMethod())) {
+					CallOrigin.note(request);
+				}
 			}
 			// else: appSession already has VORPAL_SESSION — preserve it.
 			// Skipping this branch used to clobber it with a fresh random
@@ -1088,6 +1095,8 @@ public abstract class Callflow implements Serializable {
 		} catch (Exception ex300) {
 			sipLogger.warning(request, "#1.5 Callflow.sendRequest - catch Exception ex300");
 			sipLogger.severe(request, ex300);
+			// The server is unreachable: no response will pass doResponse to say so.
+			Legs.notSent(request, ex300);
 
 			if (!request.getMethod().equals(ACK) && !request.getMethod().equals(PRACK)) {
 

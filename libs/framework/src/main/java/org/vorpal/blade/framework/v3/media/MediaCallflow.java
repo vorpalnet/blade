@@ -1591,6 +1591,8 @@ public abstract class MediaCallflow extends Callflow {
 
 	/// Report a lost media session to the application, if it registered.
 	private static void mediaSessionLost(String appId, String msUri) {
+		org.vorpal.blade.framework.v3.net.Remotes.failed("media",
+				org.vorpal.blade.framework.v3.net.Remotes.hostOf(msUri), "media session lost", 0);
 		MediaLostListener listener = mediaLostListener;
 		if (listener != null && appId != null) {
 			listener.mediaSessionLost(appId, msUri);

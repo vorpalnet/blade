@@ -14,6 +14,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.vorpal.blade.framework.v3.events.CallScope;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -87,6 +89,12 @@ final class ReplayStore {
 					if (ref.ani != null) {
 						r.put("ani", ref.ani);
 					}
+					if (ref.scope.getTenant() != null) {
+						r.put("tenant", ref.scope.getTenant());
+					}
+					if (ref.scope.getDepartment() != null) {
+						r.put("department", ref.scope.getDepartment());
+					}
 					r.put("answeredAt", ref.answeredAt);
 				}
 			}
@@ -122,7 +130,8 @@ final class ReplayStore {
 				JsonNode r = call.path("ref");
 				if (r.isObject()) {
 					ref = new AgentConsoleRegistry.CallRef(r.has("id") ? r.path("id").asLong() : null,
-							r.has("startedAt") ? new Date(r.path("startedAt").asLong()) : null, r.path("ani").asText(null));
+							r.has("startedAt") ? new Date(r.path("startedAt").asLong()) : null, r.path("ani").asText(null),
+							new CallScope(r.path("tenant").asText(null), r.path("department").asText(null)));
 					ref.answeredAt = r.path("answeredAt").asLong(0);
 				}
 				back.add(new AgentConsoleRegistry.Kept(vorpalId, call.path("agent").asText(null), frames, ref));

@@ -31,6 +31,12 @@
     <listener>
         <listener-class>org.vorpal.blade.framework.v3.events.EventDeclarations</listener-class>
     </listener>
+    <!-- Exposes the services this application calls, and how they answer
+         (Remotes), as an MBean for the dashboard's network map; unregistered
+         when the application stops. -->
+    <listener>
+        <listener-class>org.vorpal.blade.framework.v3.net.RemotesControl</listener-class>
+    </listener>
 
     <!-- Cross-origin filter for REST endpoints. No-op until an operator sets
          -Dblade.cors.allowedOrigins=<origin>[,<origin>...]; then it grants

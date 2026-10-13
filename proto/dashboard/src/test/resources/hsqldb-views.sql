@@ -19,6 +19,26 @@ CREATE TABLE v_call_keys (
 INSERT INTO v_call_keys VALUES ('c3', 'account', 'jeff', 'uhg');
 INSERT INTO v_call_keys VALUES ('c6', 'account', 'jeff', 'uhg');
 INSERT INTO v_call_keys VALUES ('c3', 'account', 'pat', 'uhg');
+INSERT INTO v_call_keys VALUES ('c3', 'caller', 'sip:+16465550100@carrier.example', 'uhg');
+INSERT INTO v_call_keys VALUES ('c3', 'area', '312', 'uhg');
+INSERT INTO v_call_keys VALUES ('c1', 'origin', '192.0.2.10', NULL);
+INSERT INTO v_call_keys VALUES ('c2', 'origin', '192.0.2.11', NULL);
+INSERT INTO v_call_keys VALUES ('c3', 'origin', '198.51.100.7', 'uhg');
+
+-- Where calls were sent, and the legs servers refused: two 503s and a 408 in
+-- the window, a callee's 486, a 407 challenge, and a 503 from before it.
+CREATE TABLE v_call_routing (
+   event_id VARCHAR(20) PRIMARY KEY, call_id VARCHAR(20), occurred_at TIMESTAMP, event_type VARCHAR(64),
+   tenant VARCHAR(64), department VARCHAR(64), application VARCHAR(32), cluster_name VARCHAR(64),
+   vorpal_id VARCHAR(32), destination VARCHAR(256), endpoint VARCHAR(256), tier VARCHAR(64),
+   failovers INTEGER, status INTEGER, reason VARCHAR(128), responder VARCHAR(64), retry_after INTEGER);
+INSERT INTO v_call_routing VALUES ('r1', 'c1', TIMESTAMP '2026-10-03 11:50:00', 'branchFailed', NULL, NULL, 'transfer', 'east-1', '000000C1', 'sip:+15550100@pbx.example.net', NULL, NULL, NULL, 503, 'Service Unavailable', '198.51.100.20', 30);
+INSERT INTO v_call_routing VALUES ('r2', 'c2', TIMESTAMP '2026-10-03 11:55:00', 'branchFailed', NULL, NULL, 'transfer', 'east-1', '000000C2', 'sip:+15550100@pbx.example.net', NULL, NULL, NULL, 503, 'Service Unavailable', '198.51.100.20', 60);
+INSERT INTO v_call_routing VALUES ('r3', 'c2', TIMESTAMP '2026-10-03 11:56:00', 'branchFailed', NULL, NULL, 'transfer', 'east-1', '000000C2', 'sip:bob@10.0.0.9', NULL, NULL, NULL, 408, 'Request Timeout', NULL, NULL);
+INSERT INTO v_call_routing VALUES ('r4', 'c1', TIMESTAMP '2026-10-03 11:57:00', 'branchFailed', NULL, NULL, 'transfer', 'east-1', '000000C1', 'sip:bob@pbx.example.net', NULL, NULL, NULL, 486, 'Busy Here', '198.51.100.20', NULL);
+INSERT INTO v_call_routing VALUES ('r5', 'c1', TIMESTAMP '2026-10-03 09:00:00', 'branchFailed', NULL, NULL, 'transfer', 'east-1', '000000C1', 'sip:bob@pbx.example.net', NULL, NULL, NULL, 503, 'Service Unavailable', '198.51.100.20', NULL);
+INSERT INTO v_call_routing VALUES ('r7', 'c2', TIMESTAMP '2026-10-03 11:59:00', 'branchFailed', NULL, NULL, 'listener', 'east-1', '000000C2', 'sip:bob@pbx.example.net:5999', NULL, NULL, NULL, 500, 'not sent: Failed to send request', NULL, NULL);
+INSERT INTO v_call_routing VALUES ('r6', 'c1', TIMESTAMP '2026-10-03 11:58:00', 'callDeclined', NULL, NULL, 'transfer', 'east-1', '000000C1', 'sip:bob@pbx.example.net', NULL, NULL, NULL, 503, NULL, NULL, NULL);
 
 CREATE TABLE v_events (
    event_id VARCHAR(20) PRIMARY KEY, event_type VARCHAR(64), occurred_at TIMESTAMP, event_uid VARCHAR(36),
@@ -62,16 +82,16 @@ CREATE TABLE v_server_samples (
    state VARCHAR(32), restarted VARCHAR(5), seconds BIGINT, received BIGINT, rejected BIGINT,
    app_sessions_created BIGINT, routed BIGINT, routing_fallbacks BIGINT, undeployed_bypasses BIGINT,
    routing_cycles BIGINT, active_app_sessions BIGINT, active_sip_sessions BIGINT, heap_used_pct BIGINT,
-   threads_stuck BIGINT, threads_hogging BIGINT, threads_pending BIGINT, domain VARCHAR(64));
+   threads_stuck BIGINT, threads_hogging BIGINT, threads_pending BIGINT, domain VARCHAR(64), cpu_pct BIGINT);
 
--- engine0 refused 4 messages at 10:01 under load, and FSMAR routed one
+-- engine0 refused 4 messages at 10:01 under load (CPU 82% that minute), and FSMAR routed one
 -- request past an undeployed application; its app sessions stayed up
 -- after the SIP sessions went (9 against 0 at the last sample: a leak).
 -- AdminServer has no SIP container, so its SIP readings are absent.
-INSERT INTO v_server_samples VALUES ('v1', TIMESTAMP '2026-10-03 10:00:00', 'engine0', 'BEA_ENGINE_TIER_CLUST', 'RUNNING', 'false', 60, 300, 0, 5, 100, 0, 0, 0, 12, 20, 61, 0, 1, 0, 'east-1');
-INSERT INTO v_server_samples VALUES ('v2', TIMESTAMP '2026-10-03 10:01:00', 'engine0', 'BEA_ENGINE_TIER_CLUST', 'RUNNING', 'false', 60, 500, 4, 6, 150, 2, 1, 0, 9, 0, 78, 1, 3, 2, 'east-1');
-INSERT INTO v_server_samples VALUES ('v4', TIMESTAMP '2026-10-03 11:59:00', 'engine0', 'BEA_ENGINE_TIER_CLUST', 'RUNNING', 'false', 60, 10, 0, 1, 10, 0, 0, 0, 2, 2, 44, 0, 0, 0, 'west-1');
-INSERT INTO v_server_samples VALUES ('v3', TIMESTAMP '2026-10-03 10:00:30', 'AdminServer', NULL, 'RUNNING', 'false', 60, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, 40, 0, 0, 0, 'east-1');
+INSERT INTO v_server_samples VALUES ('v1', TIMESTAMP '2026-10-03 10:00:00', 'engine0', 'BEA_ENGINE_TIER_CLUST', 'RUNNING', 'false', 60, 300, 0, 5, 100, 0, 0, 0, 12, 20, 61, 0, 1, 0, 'east-1', 35);
+INSERT INTO v_server_samples VALUES ('v2', TIMESTAMP '2026-10-03 10:01:00', 'engine0', 'BEA_ENGINE_TIER_CLUST', 'RUNNING', 'false', 60, 500, 4, 6, 150, 2, 1, 0, 9, 0, 78, 1, 3, 2, 'east-1', 82);
+INSERT INTO v_server_samples VALUES ('v4', TIMESTAMP '2026-10-03 11:59:00', 'engine0', 'BEA_ENGINE_TIER_CLUST', 'RUNNING', 'false', 60, 10, 0, 1, 10, 0, 0, 0, 2, 2, 44, 0, 0, 0, 'west-1', 12);
+INSERT INTO v_server_samples VALUES ('v3', TIMESTAMP '2026-10-03 10:00:30', 'AdminServer', NULL, 'RUNNING', 'false', 60, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, 40, 0, 0, 0, 'east-1', 4);
 
 CREATE TABLE v_app_counters (
    row_id VARCHAR(240) PRIMARY KEY, sampled_at TIMESTAMP, application VARCHAR(32), node VARCHAR(64),
@@ -136,8 +156,14 @@ INSERT INTO v_events VALUES ('e11', 'stop',          TIMESTAMP '2026-10-03 05:59
 INSERT INTO v_events VALUES ('e12', 'callStarted',   TIMESTAMP '2026-09-20 10:00:00', 'u12', 'c7', 'a1', 'conference', NULL, 'east-1', '000000C7', NULL);
 INSERT INTO v_events VALUES ('e13', 'callAnswered',  TIMESTAMP '2026-09-20 10:00:01', 'u13', 'c7', 'a2', 'agent',      NULL, 'east-1', '000000C7', NULL);
 INSERT INTO v_events VALUES ('e14', 'callStarted',   TIMESTAMP '2026-09-20 10:00:03', 'u14', 'c8', 'a4', 'listener',   NULL, 'east-1', '000000C7', NULL);
+-- A proxy on c8: routed it and left, so it sends no lifecycle (not a gap).
+INSERT INTO v_events VALUES ('e22', 'callRouted',    TIMESTAMP '2026-09-20 10:00:02', 'u22', 'c8', 'a6', 'irouter',    NULL, 'east-1', '000000C7', NULL);
 INSERT INTO v_events VALUES ('e20', 'callStarted',   TIMESTAMP '2026-10-02 10:00:00', 'u20', 'c9', 'a2', 'agent',      NULL, 'east-1', '000000C9', NULL);
 INSERT INTO v_events VALUES ('e21', 'callCompleted', TIMESTAMP '2026-10-02 10:01:00', 'u21', 'c9', 'a2', 'agent',      NULL, 'east-1', '000000C9', NULL);
+-- c3 was offered to transfer first, which refused it: started and declined,
+-- never answered, and owing no answer (not a gap).
+INSERT INTO v_events VALUES ('e23', 'callStarted',   TIMESTAMP '2026-10-02 08:59:58', 'u23', 'c3', 'a7', 'transfer',   NULL, 'east-1', '000000C3', NULL);
+INSERT INTO v_events VALUES ('e24', 'callDeclined',  TIMESTAMP '2026-10-02 08:59:59', 'u24', 'c3', 'a7', 'transfer',   NULL, 'east-1', '000000C3', NULL);
 -- Per-application session facts: agent opened and closed c3; meetings opened
 -- c4 on Sep 29 and never closed it (a leak, older than a day); agent opened c6
 -- at 11:30 today and it is still up (not a leak yet).

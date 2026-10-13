@@ -1,5 +1,6 @@
 package org.vorpal.blade.framework.v3.security;
 
+import org.vorpal.blade.framework.v3.net.Remotes;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -63,6 +64,18 @@ public final class OidcProvider {
 
 	/// Fetch and parse the provider's discovery document.
 	public static OidcProvider discover(String discoveryUrl) throws IOException {
+		long started = System.nanoTime();
+		try {
+			OidcProvider p = fetchDiscovery(discoveryUrl);
+			Remotes.succeeded("oidc", Remotes.hostOf(discoveryUrl), (System.nanoTime() - started) / 1_000_000L);
+			return p;
+		} catch (IOException e) {
+			Remotes.failed("oidc", Remotes.hostOf(discoveryUrl), Remotes.reason(e), (System.nanoTime() - started) / 1_000_000L);
+			throw e;
+		}
+	}
+
+	private static OidcProvider fetchDiscovery(String discoveryUrl) throws IOException {
 		HttpURLConnection c = (HttpURLConnection) new URL(discoveryUrl).openConnection();
 		c.setConnectTimeout(10_000);
 		c.setReadTimeout(10_000);
@@ -133,6 +146,19 @@ public final class OidcProvider {
 	/// identity domain with an empty body ("Request body is required"), and a
 	/// token request is four fields and one header.
 	public Tokens exchange(OidcLoginConfig cfg, String code, String codeVerifier) throws IOException {
+		long started = System.nanoTime();
+		String remote = Remotes.hostOf(String.valueOf(tokenEndpoint));
+		try {
+			Tokens t = exchangeCode(cfg, code, codeVerifier);
+			Remotes.succeeded("oidc", remote, (System.nanoTime() - started) / 1_000_000L);
+			return t;
+		} catch (IOException e) {
+			Remotes.failed("oidc", remote, Remotes.reason(e), (System.nanoTime() - started) / 1_000_000L);
+			throw e;
+		}
+	}
+
+	private Tokens exchangeCode(OidcLoginConfig cfg, String code, String codeVerifier) throws IOException {
 		String form = "grant_type=authorization_code" + "&code=" + encode(code) + "&redirect_uri="
 				+ encode(cfg.redirectUrl()) + "&code_verifier=" + encode(codeVerifier);
 		String basic = Base64.getEncoder().encodeToString(

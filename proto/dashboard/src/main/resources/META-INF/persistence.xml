@@ -31,6 +31,7 @@
 		<class>org.vorpal.blade.applications.dashboard.model.CounterRow</class>
 		<class>org.vorpal.blade.applications.dashboard.model.TimingRow</class>
 		<class>org.vorpal.blade.applications.dashboard.model.DispositionRow</class>
+		<class>org.vorpal.blade.applications.dashboard.model.RoutingRow</class>
 		<exclude-unlisted-classes>true</exclude-unlisted-classes>
 		<properties>
 			<property name="eclipselink.target-server" value="WebLogic" />

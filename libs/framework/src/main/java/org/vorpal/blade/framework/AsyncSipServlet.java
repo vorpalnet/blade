@@ -47,6 +47,8 @@ import org.vorpal.blade.framework.v3.events.EventBus;
 import org.vorpal.blade.framework.v3.events.EventBusSettings;
 import org.vorpal.blade.framework.v3.events.EventPublisher;
 import org.vorpal.blade.framework.v3.metrics.Counter;
+import org.vorpal.blade.framework.v3.net.CallOrigin;
+import org.vorpal.blade.framework.v3.net.Legs;
 import org.vorpal.blade.framework.v3.metrics.Histogram;
 import org.vorpal.blade.framework.v3.metrics.MetricsRegistry;
 import org.vorpal.blade.framework.v2.b2bua.Terminate;
@@ -686,6 +688,7 @@ public abstract class AsyncSipServlet extends SipServlet
 					// Analytics.SESSION_STATE for how it is closed.
 					if (INVITE.equals(method)) {
 						Analytics.sessionStart(request);
+						CallOrigin.publish(appSession);
 					}
 					break;
 				}
@@ -1350,6 +1353,11 @@ public abstract class AsyncSipServlet extends SipServlet
 			SipSession linkedSession = Callflow.getLinkedSession(response.getSession());
 
 			logResponseDiagnostics(response, isProxy, sipSession, linkedSession);
+
+			// Which server refused a leg, whatever kind of application sent it.
+			if (response.getStatus() >= 400 && INVITE.equals(method)) {
+				Legs.failed(response);
+			}
 
 			// For GLARE: a received final response ends the transaction we opened as the UAC,
 			// so the dialog is clear again — for a 2xx INVITE too. Do NOT special-case 2xx out

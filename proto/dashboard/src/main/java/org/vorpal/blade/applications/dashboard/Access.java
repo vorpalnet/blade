@@ -230,6 +230,34 @@ public final class Access {
 		}
 	}
 
+	/// What this viewer sees, in words, one line per kind of seeing, for the
+	/// board's account menu. `access` null is the no-grants administrator.
+	public static List<String> describe(Access access) {
+		List<String> lines = new ArrayList<>();
+		if (access == null) {
+			lines.add("Calls: all");
+			lines.add("Servers: all domains");
+			lines.add("Transcripts and callers: yes");
+			return lines;
+		}
+		if (access.rules.isEmpty()) {
+			lines.add("Calls: none");
+		}
+		for (Rule r : access.rules) {
+			List<String> parts = new ArrayList<>();
+			parts.add(r.tenants == null ? "every tenant" : "tenant " + String.join(", ", r.tenants));
+			parts.add(r.departments == null ? "every department" : "department " + String.join(", ", r.departments));
+			if (r.domains != null) {
+				parts.add("in " + String.join(", ", r.domains));
+			}
+			lines.add("Calls: " + String.join(" \u00b7 ", parts));
+		}
+		lines.add("Servers: " + (access.platform == null ? "all domains"
+				: access.platform.isEmpty() ? "none" : String.join(", ", access.platform)));
+		lines.add("Transcripts and callers: " + (access.content ? "yes" : "no"));
+		return lines;
+	}
+
 	/// A stable description, for the report cache's key and the audit record.
 	public String key() {
 		return rules + "|" + show(platform) + "|" + content;

@@ -823,8 +823,19 @@ public class JvmSettings {
 	/// `-Xmx512m` and `-Xmx4g` are the same knob; so are `-XX:+AlwaysPreTouch` and
 	/// `-XX:-AlwaysPreTouch`, and `-Dwlss.replication=on` and `=off`. Anything unrecognised is
 	/// its own key, so it is never silently displaced.
+	///
+	/// A JVM loads every `-javaagent` it is given, so each agent is its own knob, keyed by its
+	/// JAR's file name: the debugpatch agent and the BLADE network agent live side by side, and
+	/// a profile naming one never drops the other. The same JAR at a new path still replaces
+	/// the old entry.
 	static String argumentKey(String token) {
-		for (String prefix : new String[]{"-Xms", "-Xmx", "-Xss", "-Xlog", "-javaagent", "-agentlib"}) {
+		if (token.startsWith("-javaagent:")) {
+			String jar = token.substring("-javaagent:".length());
+			int options = jar.indexOf('=');
+			if (options >= 0) jar = jar.substring(0, options);
+			return "-javaagent:" + jar.substring(jar.lastIndexOf('/') + 1);
+		}
+		for (String prefix : new String[]{"-Xms", "-Xmx", "-Xss", "-Xlog", "-agentlib"}) {
 			if (token.startsWith(prefix)) return prefix;
 		}
 		if (token.startsWith("-XX:+") || token.startsWith("-XX:-")) {

@@ -719,6 +719,11 @@ fi
 			<activation><property><name>!skip.fsmar</name></property></activation>
 			<modules><module>libs/fsmar</module></modules>
 		</profile>
+		<profile>
+			<id>network-agent</id>
+			<activation><property><name>!skip.network-agent</name></property></activation>
+			<modules><module>libs/network-agent</module></modules>
+		</profile>
 
 		<!-- Service/test module profiles. Active by default; exclude with -Dskip.<name> -->
 		<profile>

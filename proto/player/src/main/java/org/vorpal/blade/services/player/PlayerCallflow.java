@@ -38,6 +38,7 @@ public class PlayerCallflow extends MediaCallflow {
 	@Override
 	public void process(SipServletRequest invite) throws ServletException, IOException {
 		final SipApplicationSession app = invite.getApplicationSession();
+		PlayerEvents.started(invite);
 		try {
 			final MediaSession ms;
 			final Room room;
@@ -75,6 +76,7 @@ public class PlayerCallflow extends MediaCallflow {
 
 				// Start media once the dialog is confirmed (ACK).
 				sendResponse(ok, ack -> {
+					PlayerEvents.answered(ack.getApplicationSession());
 					if (conference) {
 						joinRoom(appId, invite);
 					} else {
@@ -86,6 +88,7 @@ public class PlayerCallflow extends MediaCallflow {
 			sipLogger.severe(invite, "PlayerCallflow: media anchor failed: " + e.getMessage());
 			PlayerBye.teardown(app.getId());
 			invite.createResponse(500, "Media server unavailable").send();
+			PlayerEvents.ended(app, BladeEventTypes.CALL_DECLINED);
 		}
 	}
 
@@ -194,6 +197,7 @@ public class PlayerCallflow extends MediaCallflow {
 	private void hangup(SipServletRequest invite) {
 		SipApplicationSession app = invite.getApplicationSession();
 		PlayerBye.teardown(app.getId());
+		PlayerEvents.ended(app, BladeEventTypes.CALL_COMPLETED);
 		try {
 			SipServletRequest bye = invite.getSession().createRequest("BYE");
 			sendRequest(bye, resp -> {

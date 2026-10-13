@@ -17,17 +17,22 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.TypedQuery;
 
 import org.vorpal.blade.applications.dashboard.model.UtcTimestamp;
+import org.vorpal.blade.framework.v3.net.CallOrigin;
+import org.vorpal.blade.framework.v3.net.Legs;
 
 /// Every chart and table the dashboard draws, as a JPQL query over the
 /// reporting views ([org.vorpal.blade.applications.dashboard.model]).
@@ -184,9 +189,11 @@ public class AnalyticsReports {
 	/// The report names the servlet accepts, in the order a reader meets them.
 	public static final List<String> NAMES = Collections.unmodifiableList(Arrays.asList(
 			"calls.summary", "calls.daily", "calls.hourly", "calls.hour-of-day", "calls.weekday", "calls.heatmap",
-			"calls.by-application", "calls.by-engine", "calls.by-tenant", "calls.concurrent", "calls.domains",
+			"calls.by-application", "calls.by-engine", "calls.by-tenant", "calls.concurrent", "calls.now", "calls.by-outcome",
+			"calls.by-area",
+			"calls.domains",
 			"duration.summary", "duration.bands", "duration.daily", "duration.by-application",
-			"outcomes.summary", "outcomes.daily", "outcomes.funnel", "outcomes.by-application",
+			"outcomes.summary", "outcomes.daily", "outcomes.ended", "outcomes.by-application",
 			"sessions.summary", "sessions.open", "sessions.by-application",
 			"platform.summary", "platform.daily", "platform.by-application", "platform.versions",
 			"events.summary", "events.daily", "events.by-type", "events.by-type-application",
@@ -195,19 +202,26 @@ public class AnalyticsReports {
 			"conversation.summary", "conversation.daily", "conversation.by-intent", "conversation.by-addressed",
 			"conversation.intents",
 			"health.summary", "health.coverage", "health.chains", "health.split-calls", "health.publishing",
-			"health.publishing-daily", "platform.servers", "platform.latest", "platform.servers-hourly", "metrics.summary",
+			"health.publishing-daily", "platform.servers", "platform.latest", "platform.servers-hourly", "platform.heap", "platform.cpu",
+			"metrics.summary",
 			"metrics.counters", "metrics.timings", "risk.verdicts", "risk.calibration"));
 
 	// Lifecycle names as the views carry them: the short names, plus the camelCase
 	// and dotted forms older writers used. Compared lower-cased.
 	static final List<String> STARTED = Arrays.asList("callstarted", "call.started", "started");
-	/// Connected counts as answered, in every report, so the funnel and the
-	/// daily answer counts agree.
+	/// Connected counts as answered, in every report, so every answer count
+	/// agrees.
 	static final List<String> ANSWERED = Arrays.asList("callanswered", "call.answered", "answered", "callconnected",
 			"call.connected", "connected");
 	static final List<String> COMPLETED = Arrays.asList("callcompleted", "call.completed", "completed");
 	static final List<String> LOST = Arrays.asList("calldeclined", "call.declined", "declined", "callabandoned",
 			"call.abandoned", "abandoned");
+	/// The callee refused the call.
+	static final List<String> DECLINED = Arrays.asList("calldeclined", "call.declined", "declined");
+	/// The caller hung up before anyone answered.
+	static final List<String> ABANDONED = Arrays.asList("callabandoned", "call.abandoned", "abandoned");
+	/// A proxy's one call event: it chose where the call goes, then left it.
+	static final List<String> ROUTED = Arrays.asList("callrouted", "call.routed", "routed");
 
 	/// Band order: worst first, top to bottom, so position carries the ranking as
 	/// well as the word and the colour do.
@@ -245,6 +259,9 @@ public class AnalyticsReports {
 		try {
 			switch (name) {
 			case "calls.summary": return callsSummary(em, f);
+			case "calls.now": return callsNow(em, f);
+			case "calls.by-outcome": return callsByOutcome(em, f);
+			case "calls.by-area": return callsByArea(em, f);
 			case "calls.daily": return callsDaily(em, f);
 			case "calls.hourly": return callsHourly(em, f);
 			case "calls.hour-of-day": return callsHourOfDay(em, f);
@@ -261,7 +278,7 @@ public class AnalyticsReports {
 			case "duration.by-application": return durationByApplication(em, f);
 			case "outcomes.summary": return outcomesSummary(em, f);
 			case "outcomes.daily": return outcomesDaily(em, f);
-			case "outcomes.funnel": return outcomesFunnel(em, f);
+			case "outcomes.ended": return outcomesEnded(em, f);
 			case "outcomes.by-application": return outcomesByApplication(em, f);
 			case "sessions.summary": return sessionsSummary(em, f);
 			case "sessions.open": return sessionsOpen(em, f);
@@ -295,6 +312,8 @@ public class AnalyticsReports {
 			case "platform.servers": return platformServers(em, f);
 			case "platform.latest": return platformLatest(em, f);
 			case "platform.servers-hourly": return platformServersHourly(em, f);
+			case "platform.heap": return platformPeak(em, f, "heapUsedPct", "peak heap %");
+			case "platform.cpu": return platformPeak(em, f, "cpuPct", "peak cpu %");
 			case "metrics.summary": return metricsSummary(em, f);
 			case "metrics.counters": return metricsCounters(em, f);
 			case "metrics.timings": return metricsTimings(em, f);
@@ -419,7 +438,7 @@ public class AnalyticsReports {
 	private Map<String, Long> callsPerHandler(EntityManager em, Filter f) {
 		Map<String, Long> byApp = new HashMap<>();
 		for (Object[] r : list(em, "SELECT e.application, COUNT(DISTINCT e.callId) FROM EventRow e, CallRow c"
-				+ where("c", "c.startedAt", f) + " AND c.callId = e.callId GROUP BY e.application", f, true)) {
+				+ where("c", "c.startedAt", f, "e") + " AND c.callId = e.callId GROUP BY e.application", f, true)) {
 			byApp.merge(label(r[0]), num(r[1]), Long::sum);
 		}
 		for (Object[] r : list(em, "SELECT c.application, COUNT(c) FROM CallRow c" + where("c", "c.startedAt", f)
@@ -427,7 +446,7 @@ public class AnalyticsReports {
 			byApp.merge(label(r[0]), num(r[1]), Long::sum);
 		}
 		for (Object[] r : list(em, "SELECT c.application, COUNT(DISTINCT c.callId) FROM CallRow c, EventRow e"
-				+ where("c", "c.startedAt", f) + " AND c.callId = e.callId AND e.application = c.application"
+				+ where("c", "c.startedAt", f, "e") + " AND c.callId = e.callId AND e.application = c.application"
 				+ " GROUP BY c.application", f, true)) {
 			byApp.merge(label(r[0]), -num(r[1]), Long::sum);
 		}
@@ -444,7 +463,7 @@ public class AnalyticsReports {
 			appsByCall.computeIfAbsent((String) r[0], k -> new TreeSet<>()).add(label(r[1]));
 		}
 		for (Object[] r : list(em, "SELECT DISTINCT e.callId, e.application FROM EventRow e, CallRow c"
-				+ where("c", "c.startedAt", f) + " AND c.callId = e.callId", f, true)) {
+				+ where("c", "c.startedAt", f, "e") + " AND c.callId = e.callId", f, true)) {
 			appsByCall.computeIfAbsent((String) r[0], k -> new TreeSet<>()).add(label(r[1]));
 		}
 		return appsByCall;
@@ -454,7 +473,7 @@ public class AnalyticsReports {
 	/// an application other than the one the row names published about them.
 	/// A join, not a correlated subquery, for the reason [#callsPerHandler] gives.
 	private long multiApplicationCalls(EntityManager em, Filter f) {
-		return single(em, "SELECT COUNT(DISTINCT c.callId) FROM CallRow c, EventRow e" + where("c", "c.startedAt", f)
+		return single(em, "SELECT COUNT(DISTINCT c.callId) FROM CallRow c, EventRow e" + where("c", "c.startedAt", f, "e")
 				+ " AND c.callId = e.callId AND e.application <> c.application", f, true);
 	}
 
@@ -477,6 +496,203 @@ public class AnalyticsReports {
 	/// would otherwise hold the count up forever.
 	private Table callsConcurrent(EntityManager em, Filter f) {
 		Date since = f.since();
+		List<long[]> deltas = upDeltas(em, f, since);
+		Table t = new Table("hour", "peak");
+		LocalDateTime h = LocalDateTime.ofInstant(since.toInstant(), f.zone).withMinute(0).withSecond(0).withNano(0);
+		LocalDateTime end = LocalDateTime.ofInstant(f.now.toInstant(), f.zone);
+		long running = 0;
+		int i = 0;
+		for (; !h.isAfter(end); h = h.plusHours(1)) {
+			long hourEnd = h.plusHours(1).atZone(f.zone).toInstant().toEpochMilli();
+			// The hour starts with whatever was already up, then sees every change in it.
+			long peak = running;
+			for (; i < deltas.size() && deltas.get(i)[0] < hourEnd; i++) {
+				running += deltas.get(i)[1];
+				peak = Math.max(peak, running);
+			}
+			t.row(h.format(HOUR), peak);
+		}
+		return t;
+	}
+
+	/// Calls up right now: Vorpal-IDs some application still holds. A call row
+	/// ends only when the last application on it lets go, so a call whose first
+	/// application dropped out early (a proxy) still counts while a later one
+	/// holds it. With it, the most up at once in the last hour and when.
+	///
+	/// As current as the analytics sink: a call counts once its session's
+	/// start has crossed the bus and been written. The servlet caches this one
+	/// for seconds, not minutes ([AnalyticsServlet#LIVE]).
+	private Table callsNow(EntityManager em, Filter f) {
+		Date since = new Date(f.now.getTime() - 3_600_000L);
+		long running = 0, peak = 0, peakAt = since.getTime();
+		for (long[] d : upDeltas(em, f, since)) {
+			running += d[1];
+			if (running > peak) {
+				peak = running;
+				peakAt = d[0];
+			}
+		}
+		return new Table("now", "peak last hour", "peak at").row(running, peak,
+				peak == 0 ? null : stamp(new Date(peakAt), f));
+	}
+
+	/// Calls per hour (a week or less) or per day, by how each ended, good to
+	/// bad: completed, abandoned, declined.
+	///
+	/// Bucketed by when the call started. A call still up, or one no
+	/// application reported an end for, is in no part.
+	private Table callsByOutcome(EntityManager em, Filter f) {
+		boolean hourly = f.days <= 7;
+		Map<String, Object[]> ends = endings(em, f);
+		Map<String, long[]> byBucket = new HashMap<>();
+		for (Object[] r : list(em, "SELECT c.callId, c.startedAt FROM CallRow c" + where("c", "c.startedAt", f), f,
+				true)) {
+			Object[] end = ends.get((String) r[0]);
+			if (end != null) {
+				Instant at = instant(r[1]).toInstant();
+				String key = hourly ? hour(at, f).format(HOUR) : day(at, f);
+				byBucket.computeIfAbsent(key, k -> new long[ENDINGS.length])[(Integer) end[0]]++;
+			}
+		}
+		List<String> buckets = new ArrayList<>();
+		if (hourly) {
+			LocalDateTime h = LocalDateTime.ofInstant(f.since().toInstant(), f.zone).withMinute(0).withSecond(0).withNano(0);
+			LocalDateTime last = LocalDateTime.ofInstant(f.now.toInstant(), f.zone);
+			for (; !h.isAfter(last); h = h.plusHours(1)) {
+				buckets.add(h.format(HOUR));
+			}
+		} else {
+			buckets.addAll(fillDays(new TreeMap<String, Long>(), f).keySet());
+		}
+		Table t = new Table(hourly ? "hour" : "day", "completed", "abandoned", "declined");
+		for (String b : buckets) {
+			long[] n = byBucket.getOrDefault(b, new long[ENDINGS.length]);
+			t.row(b, n[0], n[2], n[1]);
+		}
+		return t;
+	}
+
+	/// Calls by where the caller is, and how each ended, good to bad:
+	/// completed, abandoned, declined. Most calls first.
+	///
+	/// `area` is what the board's map places: a North American area code, or
+	/// `+` and the first three digits of any other number. The framework
+	/// records it as the call's `area` key where the call enters BLADE
+	/// ([CallOrigin#AREA_KEY]); a call from before that, or one an application
+	/// filed under a `caller` key of its own configuration, is placed from that
+	/// key. The browser turns an area into a place, and this report never
+	/// returns a caller's number, so a grant without content sees it. A call
+	/// with neither key, or a caller no map can place, is in the row with no
+	/// area. As [#callsByOutcome], calls that started in the window and ended.
+	private Table callsByArea(EntityManager em, Filter f) {
+		Map<String, Object[]> ends = endings(em, f);
+		Map<String, String> areas = new HashMap<>();
+		for (Object[] r : list(em, "SELECT k.callId, k.keyName, k.keyValue FROM KeyRow k, CallRow c"
+				+ where("c", "c.startedAt", f) + " AND k.callId = c.callId AND k.keyName IN ('area', 'caller')", f,
+				true)) {
+			String area = "area".equals(r[1]) ? (String) r[2] : area((String) r[2]);
+			if (area != null && ("area".equals(r[1]) || !areas.containsKey((String) r[0]))) {
+				areas.put((String) r[0], area);
+			}
+		}
+		Map<String, long[]> byArea = new HashMap<>();
+		TypedQuery<String> calls = em.createQuery("SELECT c.callId FROM CallRow c" + where("c", "c.startedAt", f),
+				String.class);
+		bind(calls, f, true);
+		for (String call : calls.getResultList()) {
+			Object[] end = ends.get(call);
+			if (end != null) {
+				byArea.computeIfAbsent(areas.getOrDefault(call, ""), k -> new long[ENDINGS.length])[(Integer) end[0]]++;
+			}
+		}
+		List<Map.Entry<String, long[]>> rows = new ArrayList<>(byArea.entrySet());
+		rows.sort(Comparator.comparing((Map.Entry<String, long[]> e) -> -Arrays.stream(e.getValue()).sum())
+				.thenComparing(Map.Entry::getKey));
+		Table t = new Table("area", "completed", "abandoned", "declined");
+		for (Map.Entry<String, long[]> e : rows) {
+			long[] n = e.getValue();
+			t.row(e.getKey().isEmpty() ? null : e.getKey(), n[0], n[2], n[1]);
+		}
+		return t;
+	}
+
+	/// The number in a `sip:`, `sips:` or `tel:` address: an optional `+`,
+	/// then the digits up to the host or a parameter.
+	private static final Pattern CALLER = Pattern.compile("^(?:sips?|tel):(\\+?[0-9]+)(?:[@;]|$)",
+			Pattern.CASE_INSENSITIVE);
+
+	/// The area of a caller's address, as [CallOrigin#area] finds it in the
+	/// address's number; null for an address with none (an extension, an
+	/// anonymous caller).
+	static String area(String caller) {
+		Matcher m = caller == null ? null : CALLER.matcher(caller.trim());
+		return m != null && m.find() ? CallOrigin.area(m.group(1)) : null;
+	}
+
+	/// Calls per address their first INVITE came from ([CallOrigin#ORIGIN_KEY]),
+	/// started at or after `from`: `origin`, `calls`, `last call` (a [Date]).
+	/// The network map matches each address to an inbound site and says when
+	/// that site last sent a call.
+	public Table origins(Filter f, Date from) {
+		EntityManager em = factory.createEntityManager();
+		try {
+			TypedQuery<Object[]> q = em.createQuery("SELECT k.keyValue, COUNT(c.callId), MAX(c.startedAt)"
+					+ " FROM KeyRow k, CallRow c" + where("c", null, f) + " AND k.callId = c.callId"
+					+ " AND k.keyName = 'origin' AND c.startedAt >= :from GROUP BY k.keyValue", Object[].class);
+			bind(q, f, false);
+			q.setParameter("from", from);
+			Table t = new Table("origin", "calls", "last call");
+			for (Object[] r : q.getResultList()) {
+				t.row(r[0], ((Number) r[1]).longValue(), instant(r[2]));
+			}
+			return t;
+		} finally {
+			em.close();
+		}
+	}
+
+	/// Legs servers refused at or after `from` (`branchFailed`), by where they
+	/// were sent, who answered and how: `destination`, `responder`, `status`,
+	/// `not sent` (the INVITE never left: no connection), `calls`, `last` (a
+	/// [Date]), `retry after` (the longest asked). Every final response of 400
+	/// or above; [SipStatus] says what each means.
+	public Table failures(Filter f, Date from) {
+		EntityManager em = factory.createEntityManager();
+		try {
+			TypedQuery<Object[]> q = em.createQuery("SELECT r.destination, r.responder, r.status, r.reason,"
+					+ " COUNT(r.eventId), MAX(r.occurredAt), MAX(r.retryAfter) FROM RoutingRow r" + where("r", null, f)
+					+ " AND r.eventType = 'branchFailed' AND r.status >= 400 AND r.occurredAt >= :from"
+					+ " GROUP BY r.destination, r.responder, r.status, r.reason", Object[].class);
+			bind(q, f, false);
+			q.setParameter("from", from);
+			Map<List<Object>, Object[]> merged = new LinkedHashMap<>();
+			for (Object[] r : q.getResultList()) {
+				boolean notSent = r[3] != null && ((String) r[3]).startsWith(Legs.NOT_SENT);
+				List<Object> key = Arrays.asList(r[0], r[1], r[2] == null ? null : ((Number) r[2]).longValue(), notSent);
+				Object[] m = merged.computeIfAbsent(key, k -> new Object[] { 0L, null, null });
+				m[0] = (Long) m[0] + ((Number) r[4]).longValue();
+				Date last = instant(r[5]);
+				if (m[1] == null || last != null && last.after((Date) m[1])) {
+					m[1] = last;
+				}
+				if (r[6] != null && (m[2] == null || ((Number) r[6]).longValue() > (Long) m[2])) {
+					m[2] = ((Number) r[6]).longValue();
+				}
+			}
+			Table t = new Table("destination", "responder", "status", "not sent", "calls", "last", "retry after");
+			merged.forEach((k, m) -> t.row(k.get(0), k.get(1), k.get(2), k.get(3), m[0], m[1], m[2]));
+			return t;
+		} finally {
+			em.close();
+		}
+	}
+
+	/// +1 at each call's start and −1 at each end, for every call up at some
+	/// point from `since` to now, in time order. A call already up at `since`
+	/// starts there; a session open longer than [#LEAK_MS] is a leak, not a
+	/// call, and is left out, or it would hold every count up forever.
+	private List<long[]> upDeltas(EntityManager em, Filter f, Date since) {
 		TypedQuery<Object[]> q = em.createQuery("SELECT c.startedAt, c.endedAt FROM CallRow c" + where("c", null, f)
 				+ " AND c.startedAt <= :now AND (c.endedAt IS NULL OR c.endedAt >= :since)", Object[].class);
 		bind(q, f, false);
@@ -497,22 +713,7 @@ public class AnalyticsReports {
 		// Ends before starts at the same instant: a call that ends as another
 		// begins was not up alongside it.
 		deltas.sort(Comparator.<long[]>comparingLong(d -> d[0]).thenComparingLong(d -> d[1]));
-		Table t = new Table("hour", "peak");
-		LocalDateTime h = LocalDateTime.ofInstant(since.toInstant(), f.zone).withMinute(0).withSecond(0).withNano(0);
-		LocalDateTime end = LocalDateTime.ofInstant(f.now.toInstant(), f.zone);
-		long running = 0;
-		int i = 0;
-		for (; !h.isAfter(end); h = h.plusHours(1)) {
-			long hourEnd = h.plusHours(1).atZone(f.zone).toInstant().toEpochMilli();
-			// The hour starts with whatever was already up, then sees every change in it.
-			long peak = running;
-			for (; i < deltas.size() && deltas.get(i)[0] < hourEnd; i++) {
-				running += deltas.get(i)[1];
-				peak = Math.max(peak, running);
-			}
-			t.row(h.format(HOUR), peak);
-		}
-		return t;
+		return deltas;
 	}
 
 	/// The domains the data holds, for the domain selectors. Ignores the domain
@@ -612,9 +813,8 @@ public class AnalyticsReports {
 
 	// ── outcomes ─────────────────────────────────────────────────────────────
 
-	/// Over the applications that report answering, as the funnel is: a
-	/// conference bridge's calls would otherwise count as started and never
-	/// answered.
+	/// Over the applications that report answering: a conference bridge's
+	/// calls would otherwise count as started and never answered.
 	private Table outcomesSummary(EntityManager em, Filter f) {
 		Table t = new Table("started", "answered", "completed", "lost");
 		List<String> answering = answering(em, f);
@@ -625,77 +825,92 @@ public class AnalyticsReports {
 				distinctCalls(em, f, COMPLETED, answering), distinctCalls(em, f, LOST, answering));
 	}
 
-	/// Started, answered and lost calls per day, over the applications that
-	/// report answering ([#outcomesSummary]).
-	private Table outcomesDaily(EntityManager em, Filter f) {
-		List<String> answering = answering(em, f);
-		Map<String, Long> started = callsPerDay(em, f, STARTED, answering);
-		Map<String, Long> answered = callsPerDay(em, f, ANSWERED, answering);
-		Map<String, Long> lost = callsPerDay(em, f, LOST, answering);
-		Table t = new Table("day", "started", "answered", "lost");
-		for (String day : fillDays(new TreeMap<String, Long>(), f).keySet()) {
-			t.row(day, started.getOrDefault(day, 0L), answered.getOrDefault(day, 0L), lost.getOrDefault(day, 0L));
-		}
-		return t;
-	}
-
 	/// The applications that published an answer in the window.
 	private List<String> answering(EntityManager em, Filter f) {
 		return new ArrayList<>(callsPerApplication(em, f, ANSWERED).keySet());
 	}
 
-	/// Started → answered → completed, over the applications that report
-	/// answering at all. Pooling every application would repeat the pooled
-	/// answer rate's mistake: a conference bridge's calls would sit in
-	/// "started" forever and drag every later stage down.
-	///
-	/// **Each stage counts only calls that reached the one before**, so no
-	/// stage can outgrow its predecessor. An application that began publishing
-	/// `callAnswered` part-way through the window would otherwise show more
-	/// calls completed than answered.
-	private Table outcomesFunnel(EntityManager em, Filter f) {
-		List<String> answering = answering(em, f);
-		Table t = new Table("stage", "calls");
-		if (answering.isEmpty()) {
-			return t;
+	/// How calls ended, the three ways a B2BUA reports: completed after an
+	/// answer, declined by the callee, abandoned by the caller. Every
+	/// application counts; each call once.
+	private Table outcomesEnded(EntityManager em, Filter f) {
+		long[] n = new long[ENDINGS.length];
+		for (Object[] end : endings(em, f).values()) {
+			n[(Integer) end[0]]++;
 		}
-		return t.row("Started", distinctCalls(em, f, STARTED, answering))
-				.row("Answered", reachedBoth(em, f, ANSWERED, STARTED, answering))
-				.row("Completed", reachedBoth(em, f, COMPLETED, ANSWERED, answering));
+		Table t = new Table("outcome", "calls");
+		for (int i = 0; i < ENDINGS.length; i++) {
+			t.row(ENDINGS[i], n[i]);
+		}
+		return t;
 	}
 
-	/// Distinct calls with any of `types` in the window, by `applications`,
-	/// that also have any of `prior` at any time. A join, not a correlated
-	/// subquery, for the reason [#callsPerHandler] gives.
-	private long reachedBoth(EntityManager em, Filter f, List<String> types, List<String> prior,
-			List<String> applications) {
-		TypedQuery<Long> q = em.createQuery("SELECT COUNT(DISTINCT e.callId) FROM EventRow e, EventRow p"
-				+ where("e", "e.occurredAt", f) + " AND LOWER(e.eventType) IN :types AND e.application IN :apps"
-				+ " AND p.callId = e.callId AND LOWER(p.eventType) IN :prior AND p.application IN :apps", Long.class);
+	/// Completed, declined and abandoned calls per day, each call once, on the
+	/// day it ended.
+	private Table outcomesDaily(EntityManager em, Filter f) {
+		Map<String, long[]> byDay = new TreeMap<>();
+		for (Object[] end : endings(em, f).values()) {
+			byDay.computeIfAbsent(day(((Date) end[1]).toInstant(), f), k -> new long[ENDINGS.length])[(Integer) end[0]]++;
+		}
+		Table t = new Table("day", "completed", "declined", "abandoned");
+		for (String day : fillDays(new TreeMap<String, Long>(), f).keySet()) {
+			long[] n = byDay.getOrDefault(day, new long[ENDINGS.length]);
+			t.row(day, n[0], n[1], n[2]);
+		}
+		return t;
+	}
+
+	/// The outcome names, in [#outcomesEnded]'s order.
+	static final String[] ENDINGS = { "completed", "declined", "abandoned" };
+
+	/// Each call that ended in the window, by call id: the index of its
+	/// outcome in [#ENDINGS] and when it ended.
+	///
+	/// **One outcome per call.** A call through two applications reports its
+	/// end from each, and not always the same end: the caller hangs up on a
+	/// call one leg had answered. Completed wins, then abandoned, then
+	/// declined, so a call that was answered somewhere reads as completed.
+	private Map<String, Object[]> endings(EntityManager em, Filter f) {
+		List<String> types = new ArrayList<>(COMPLETED);
+		types.addAll(DECLINED);
+		types.addAll(ABANDONED);
+		TypedQuery<Object[]> q = em.createQuery("SELECT e.callId, e.eventType, MIN(e.occurredAt) FROM EventRow e"
+				+ where("e", "e.occurredAt", f) + " AND e.callId IS NOT NULL AND LOWER(e.eventType) IN :types"
+				+ " GROUP BY e.callId, e.eventType", Object[].class);
 		bind(q, f, true);
 		q.setParameter("types", types);
-		q.setParameter("prior", prior);
-		q.setParameter("apps", applications);
-		Long n = q.getSingleResult();
-		return n == null ? 0 : n;
+		Map<String, Object[]> byCall = new HashMap<>();
+		for (Object[] r : q.getResultList()) {
+			String type = String.valueOf(r[1]).toLowerCase(Locale.ROOT);
+			int outcome = COMPLETED.contains(type) ? 0 : ABANDONED.contains(type) ? 2 : 1;
+			Object[] seen = byCall.get((String) r[0]);
+			if (seen == null || rank(outcome) > rank((Integer) seen[0])) {
+				byCall.put((String) r[0], new Object[] { outcome, instant(r[2]) });
+			}
+		}
+		return byCall;
 	}
 
-	/// Started, answered, completed and lost calls per application, with each
-	/// application's own answer rate. Only applications that started a call
-	/// appear: the rest publish no lifecycle at all.
+	/// Precedence among a call's outcomes: completed, then abandoned, then declined.
+	private static int rank(int outcome) {
+		return outcome == 0 ? 3 : outcome == 2 ? 2 : 1;
+	}
+
+	/// Completed, declined and abandoned calls per application, most first. A
+	/// call through two applications counts for each that reported its end.
 	private Table outcomesByApplication(EntityManager em, Filter f) {
-		Map<String, Long> started = callsPerApplication(em, f, STARTED);
-		Map<String, Long> answered = callsPerApplication(em, f, ANSWERED);
 		Map<String, Long> completed = callsPerApplication(em, f, COMPLETED);
-		Map<String, Long> lost = callsPerApplication(em, f, LOST);
-		List<String> apps = new ArrayList<>(started.keySet());
-		apps.sort(Comparator.comparing((String a) -> -started.get(a)).thenComparing(a -> a));
-		Table t = new Table("application", "started", "answered", "completed", "lost", "answer rate %");
+		Map<String, Long> declined = callsPerApplication(em, f, DECLINED);
+		Map<String, Long> abandoned = callsPerApplication(em, f, ABANDONED);
+		Map<String, Long> total = new HashMap<>();
+		for (Map<String, Long> m : Arrays.asList(completed, declined, abandoned)) {
+			m.forEach((app, n) -> total.merge(app, n, Long::sum));
+		}
+		List<String> apps = new ArrayList<>(total.keySet());
+		apps.sort(Comparator.comparing((String a) -> -total.get(a)).thenComparing(a -> a));
+		Table t = new Table("application", "completed", "declined", "abandoned");
 		for (String app : apps) {
-			long s = started.get(app);
-			long a = answered.getOrDefault(app, 0L);
-			t.row(app, s, a, completed.getOrDefault(app, 0L), lost.getOrDefault(app, 0L),
-					s == 0 ? null : round(100.0 * a / s));
+			t.row(app, completed.getOrDefault(app, 0L), declined.getOrDefault(app, 0L), abandoned.getOrDefault(app, 0L));
 		}
 		return t;
 	}
@@ -1042,7 +1257,7 @@ public class AnalyticsReports {
 
 	private Table healthSummary(EntityManager em, Filter f) {
 		Table coverage = healthCoverage(em, f);
-		long gaps = coverage.rows.stream().filter(r -> !"none".equals(r.get(6))).count();
+		long gaps = coverage.rows.stream().filter(r -> !String.valueOf(r.get(6)).startsWith("none")).count();
 		long split = splitCalls(em, f).size();
 		long multi = multiApplicationCalls(em, f);
 		Long dropped = sampleSum(em, f, "SELECT SUM(s.failures) FROM SampleRow s WHERE " + sampled("s", f));
@@ -1078,6 +1293,15 @@ public class AnalyticsReports {
 	/// A gap is a fact, not always a fault. An application that only listens to
 	/// a call may have nothing to answer; the report says what is missing and
 	/// leaves the judgement to whoever owns the application.
+	///
+	/// "Never sends answered" is claimed only where an answer is owed: the
+	/// application completed calls, or sends no end at all. One whose calls in
+	/// the window were all declined or abandoned had nothing to answer.
+	///
+	/// One case is settled here: an application that sent `callRouted` and no
+	/// lifecycle at all is a proxy. It picks the next hop and drops out of the
+	/// call, so it has nothing to start, answer or end. It reads "none (routes
+	/// only)" and is not counted as a gap.
 	private Table healthCoverage(EntityManager em, Filter f) {
 		Map<String, Long> calls = callsPerHandler(em, f);
 		Map<String, Long> started = callsPerApplication(em, f, STARTED);
@@ -1085,6 +1309,8 @@ public class AnalyticsReports {
 		List<String> ending = new ArrayList<>(COMPLETED);
 		ending.addAll(LOST);
 		Map<String, Long> ended = callsPerApplication(em, f, ending);
+		Map<String, Long> completed = callsPerApplication(em, f, COMPLETED);
+		Map<String, Long> routed = callsPerApplication(em, f, ROUTED);
 		Map<String, Object> last = new HashMap<>();
 		for (Object[] r : list(em, "SELECT e.application, MAX(e.occurredAt) FROM EventRow e"
 				+ where("e", "e.occurredAt", f) + " AND e.callId IS NOT NULL GROUP BY e.application", f, true)) {
@@ -1101,14 +1327,19 @@ public class AnalyticsReports {
 			if (s == 0) {
 				gaps.add("never sends started");
 			}
-			if (a == 0) {
+			// A missing answer shows only where one is owed: calls it completed,
+			// which were answered, or no end at all, so nothing can be known. An
+			// application whose calls were all refused or abandoned in the window
+			// had nothing to answer.
+			if (a == 0 && (completed.getOrDefault(app, 0L) > 0 || e == 0)) {
 				gaps.add("never sends answered");
 			}
 			if (e == 0) {
 				gaps.add("never sends an end");
 			}
+			boolean routesOnly = s == 0 && a == 0 && e == 0 && routed.getOrDefault(app, 0L) > 0;
 			t.row(app, calls.get(app), s, a, e, stamp(last.get(app), f),
-					gaps.isEmpty() ? "none" : String.join("; ", gaps));
+					routesOnly ? "none (routes only)" : gaps.isEmpty() ? "none" : String.join("; ", gaps));
 		}
 		return t;
 	}
@@ -1235,7 +1466,7 @@ public class AnalyticsReports {
 	private Table platformLatest(EntityManager em, Filter f) {
 		javax.persistence.Query q = em.createQuery("SELECT s.domain, s.node, s.weblogicCluster, s.state, "
 				+ "s.heapUsedPct, s.activeAppSessions, s.activeSipSessions, s.threadsStuck, s.threadsHogging, "
-				+ "s.sampledAt FROM ServerSampleRow s WHERE s.sampledAt >= :fresh"
+				+ "s.sampledAt, s.cpuPct FROM ServerSampleRow s WHERE s.sampledAt >= :fresh"
 				+ (f.domain == null ? "" : " AND s.domain = :domain")
 				+ (f.access == null ? "" : f.access.samplePredicate("s")) + " ORDER BY s.sampledAt");
 		q.setParameter("fresh", new Date(f.now.getTime() - f.freshMs));
@@ -1251,9 +1482,9 @@ public class AnalyticsReports {
 			latest.put(label(row[0]) + '/' + label(row[1]), row);
 		}
 		Table t = new Table("domain", "server", "weblogic cluster", "state", "heap %", "app sessions",
-				"sip sessions", "stuck threads", "hogging threads", "sampled");
+				"sip sessions", "stuck threads", "hogging threads", "sampled", "cpu %");
 		for (Object[] r : latest.values()) {
-			t.row(label(r[0]), label(r[1]), r[2], r[3], r[4], r[5], r[6], r[7], r[8], instant(r[9]).getTime());
+			t.row(label(r[0]), label(r[1]), r[2], r[3], r[4], r[5], r[6], r[7], r[8], instant(r[9]).getTime(), r[10]);
 		}
 		return t;
 	}
@@ -1278,6 +1509,49 @@ public class AnalyticsReports {
 			Object[] r = e.getValue();
 			t.row(e.getKey().format(HOUR), r[0], r[1], r[2], r[3]);
 		}
+		return t;
+	}
+
+	/// Each server's highest reading of one per-minute sample field (heap in
+	/// use, CPU used) per hour (a week or less) or per day, so it reads over
+	/// the same range as the call charts beside it. One row per server and
+	/// hour or day that has a sample; a server named with its domain when the
+	/// scope holds several.
+	///
+	/// Grouped by the UTC quarter-hour in the database, as [#quarters] does
+	/// and for its reason, then folded into the viewer's hours or days here.
+	///
+	/// @param field  a [ServerSampleRow] reading, e.g. `heapUsedPct`
+	/// @param column the result's value column
+	private Table platformPeak(EntityManager em, Filter f, String field, String column) {
+		boolean hourly = f.days <= 7;
+		String parts = "EXTRACT(YEAR FROM s.sampledAt), EXTRACT(MONTH FROM s.sampledAt), EXTRACT(DAY FROM s.sampledAt),"
+				+ " EXTRACT(HOUR FROM s.sampledAt), FUNCTION('FLOOR', EXTRACT(MINUTE FROM s.sampledAt) / 15)";
+		List<Object[]> rows;
+		try {
+			TypedQuery<Object[]> q = em.createQuery("SELECT s.domain, s.node, " + parts + ", MAX(s." + field + ")"
+					+ " FROM ServerSampleRow s WHERE " + sampled("s", f) + " GROUP BY s.domain, s.node, " + parts,
+					Object[].class);
+			bindSampled(q, f);
+			rows = q.getResultList();
+		} catch (javax.persistence.PersistenceException noView) {
+			rows = Collections.emptyList();
+		}
+		boolean domains = rows.stream().map(r -> label(r[0])).distinct().count() > 1;
+		Map<String, Map<String, Long>> byServer = new TreeMap<>();
+		for (Object[] r : rows) {
+			if (r[7] == null) {
+				continue;
+			}
+			Instant start = LocalDateTime.of((int) num(r[2]), (int) num(r[3]), (int) num(r[4]), (int) num(r[5]),
+					(int) num(r[6]) * 15).toInstant(ZoneOffset.UTC);
+			String bucket = hourly ? hour(start, f).format(HOUR) : day(start, f);
+			String server = domains ? label(r[0]) + "/" + label(r[1]) : label(r[1]);
+			byServer.computeIfAbsent(server, k -> new TreeMap<>()).merge(bucket, Math.round(((Number) r[7]).doubleValue()),
+					Math::max);
+		}
+		Table t = new Table(hourly ? "hour" : "day", "server", column);
+		byServer.forEach((server, buckets) -> buckets.forEach((bucket, pct) -> t.row(bucket, server, pct)));
 		return t;
 	}
 
@@ -1492,6 +1766,20 @@ public class AnalyticsReports {
 	/// given), the sample exclusion, the domain. Always starts " WHERE", so
 	/// callers append further conditions with " AND".
 	static String where(String alias, String timePath, Filter f) {
+		return where(alias, timePath, f, alias);
+	}
+
+	/// [#where] for a call joined to its events, with the viewer's access
+	/// applied to `accessAlias`, the event row, rather than to the call.
+	///
+	/// A whole call has no department, so its access rule is a subquery over
+	/// `v_events`. Beside a join to `v_events` in the same query, Oracle ADB
+	/// estimated that subquery at one row and planned a Cartesian product of
+	/// it with every event and every application (rig, 2026-10-11: past an
+	/// hour, for a viewer with a department rule). The event row carries its
+	/// own department, so the rule needs no subquery there, and it counts
+	/// what a department viewer may see: their own part of each call.
+	static String where(String alias, String timePath, Filter f, String accessAlias) {
 		StringBuilder w = new StringBuilder(" WHERE 1 = 1");
 		if (timePath != null) {
 			w.append(" AND ").append(timePath).append(" >= :since");
@@ -1504,7 +1792,7 @@ public class AnalyticsReports {
 			w.append(" AND ").append(alias).append(".clusterName = :domain");
 		}
 		if (f.access != null) {
-			w.append(f.access.predicate(alias, !WHOLE_CALLS.contains(alias)));
+			w.append(f.access.predicate(accessAlias, !WHOLE_CALLS.contains(accessAlias)));
 		}
 		if (f.account != null) {
 			w.append(" AND ").append(alias).append(".callId IN (SELECT k.callId FROM KeyRow k")

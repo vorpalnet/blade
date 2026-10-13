@@ -170,6 +170,16 @@ public final class BladeEventTypes {
 	/// redirect server's 302. Carries `status`.
 	public static final String CALL_RESPONDED = "org.vorpal.blade.call.responded";
 
+	/// A server the call was sent to answered that leg with a final failure:
+	/// one INVITE branch of a proxy, one endpoint a balancer tried, the callee
+	/// leg of a B2BUA, or the 408 or 503 the container answers itself when
+	/// nothing came back. The call may still go on through another branch, so
+	/// this says which equipment refused, not how the call ended
+	/// ([#CALL_DECLINED] says that). Carries `status`, `reason`, `destination`
+	/// (the Request-URI sent), `responder` (the address that answered) and
+	/// `retryAfter`.
+	public static final String CALL_BRANCH_FAILED = "org.vorpal.blade.call.branch.failed";
+
 	/// An application placed a call on someone's behalf (third-party call
 	/// control) and it was answered or refused. Carries `party`, `status`.
 	public static final String CALL_ORIGINATED = "org.vorpal.blade.call.originated";
@@ -225,7 +235,8 @@ public final class BladeEventTypes {
 	public static final String DASHBOARD_VIEWED = "org.vorpal.blade.dashboard.viewed";
 
 	/// A queue's length over the last minute: `queue`, `low`, `high`, `depth`
-	/// now. Published only for a minute in which the queue held somebody.
+	/// now. Published for a minute in which the queue held somebody, and for the
+	/// first empty minute after one, so a reader sees the queue drain.
 	public static final String QUEUE_DEPTH = "org.vorpal.blade.queue.depth";
 
 	/// The balancer stopped offering calls to an endpoint: an OPTIONS ping
@@ -236,6 +247,16 @@ public final class BladeEventTypes {
 
 	/// An endpoint the balancer had marked down answered again.
 	public static final String ENDPOINT_UP = "org.vorpal.blade.endpoint.up";
+
+	/// A service an application calls (a REST lookup, a database or directory,
+	/// a token endpoint) failed often enough that its circuit breaker cut it
+	/// off: calls skip it until a retry succeeds. Published on the change, by
+	/// each application and node that saw it. Carries `kind`, `remote`,
+	/// `reason`, `application`, `node`.
+	public static final String REMOTE_DOWN = "org.vorpal.blade.remote.down";
+
+	/// A service whose breaker had cut it off answered again.
+	public static final String REMOTE_UP = "org.vorpal.blade.remote.up";
 
 	/// A device registered a contact it did not already have: `aor`, `contact`,
 	/// `expires`. A refresh of a known contact is not published.
@@ -380,6 +401,8 @@ public final class BladeEventTypes {
 			return CALL_ROUTED;
 		case "callResponded":
 			return CALL_RESPONDED;
+		case "branchFailed":
+			return CALL_BRANCH_FAILED;
 		case "callOriginated":
 			return CALL_ORIGINATED;
 		case "callHeld":
@@ -452,6 +475,8 @@ public final class BladeEventTypes {
 			return "callRouted";
 		case CALL_RESPONDED:
 			return "callResponded";
+		case CALL_BRANCH_FAILED:
+			return "branchFailed";
 		case CALL_ORIGINATED:
 			return "callOriginated";
 		case CALL_HELD:

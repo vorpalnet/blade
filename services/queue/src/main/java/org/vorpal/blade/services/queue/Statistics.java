@@ -61,6 +61,8 @@ public class Statistics {
 	public Queue queue;
 
 	final Watermark minute = new Watermark();
+	/// The depth last published; 0 once an empty minute has been.
+	private volatile int lastDepth;
 	final Watermark hour = new Watermark();
 	final Watermark day = new Watermark();
 
@@ -109,10 +111,14 @@ public class Statistics {
 	public TimerTask minuteTask = new TimerTask() {
 		public void run() {
 			hour.fold(minute);
-			if (minute.occupied()) {
+			// The first empty minute after a busy one is published too: without
+			// it, the last busy minute's depth stood as the queue's depth until
+			// the queue next held someone.
+			if (minute.occupied() || lastDepth > 0) {
 				int low = minute.low();
 				int high = minute.high();
 				int depth = queue.callflows.size();
+				lastDepth = depth;
 				sipLogger.info("minute report:\t queue=" + queue.id + ", low=" + low + ", high=" + high);
 				Events.publish(BladeEventTypes.QUEUE_DEPTH, queue.id, data -> data
 						.put("queue", queue.id).put("low", low).put("high", high).put("depth", depth)

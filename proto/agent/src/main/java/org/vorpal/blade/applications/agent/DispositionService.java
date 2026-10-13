@@ -3,6 +3,7 @@ package org.vorpal.blade.applications.agent;
 import java.util.Locale;
 
 import org.vorpal.blade.framework.v3.events.BladeEventTypes;
+import org.vorpal.blade.framework.v3.events.CallScope;
 import org.vorpal.blade.framework.v3.events.Events;
 
 
@@ -106,7 +107,8 @@ public final class DispositionService {
 		AgentConsoleRegistry.CallRef call = AgentConsoleRegistry.callRef(d.vorpalId);
 		Long vorpalId = (call != null) ? call.vorpalId : parseHex(d.vorpalId);
 		java.util.Date startedAt = (call != null) ? call.startedAt : null;
-		return Events.publish(vorpalId, startedAt, BladeEventTypes.CALL_DISPOSITIONED, data -> data
+		CallScope scope = (call != null) ? call.scope : null;
+		return Events.publish(vorpalId, startedAt, scope, BladeEventTypes.CALL_DISPOSITIONED, data -> data
 				.put("outcome", outcome)
 				.put("treatment", treatment)
 				.put("blocked", blocked)

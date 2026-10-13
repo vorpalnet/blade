@@ -130,6 +130,37 @@ public final class SessionResolver {
 		return id;
 	}
 
+	/// End, at `at`, every call still open that `applicationId` opened: the
+	/// application instance is gone, and nothing it held survived it.
+	///
+	/// **Why the sink has to.** A call row ends when an application sends its
+	/// stop. An instance that is undeployed, or a server that is killed, takes
+	/// its sessions with it, and nothing is left to send one: the row would read
+	/// as open for ever, and every "never closed" count would carry it. The
+	/// instance's own stop, or the next instance's start, is the last word
+	/// about it there will ever be.
+	///
+	/// A call the instance opened that a later application still holds is ended
+	/// too, early, and comes right when that application sends its own stop
+	/// (the latest stop wins, [#close]). Only a redeploy in the middle of a call
+	/// does that.
+	///
+	/// Flushes first and clears after: a bulk update goes around the
+	/// persistence context, so a row read earlier in the batch would otherwise
+	/// be merged back over it with no end.
+	///
+	/// @return how many calls were ended
+	public static int endHeldBy(EntityManager em, long applicationId, Date at) {
+		em.flush();
+		int ended = em.createQuery("UPDATE Session s SET s.destroyed = :at WHERE s.applicationId = :app"
+				+ " AND s.destroyed IS NULL AND s.created <= :at")
+				.setParameter("at", at)
+				.setParameter("app", applicationId)
+				.executeUpdate();
+		em.clear();
+		return ended;
+	}
+
 	/// File a session under `tenant` if it has none. Never moves a call from
 	/// one tenant to another: the first one heard stands.
 	private static void adoptTenant(EntityManager em, Session row, String tenant) {

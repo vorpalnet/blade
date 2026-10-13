@@ -34,6 +34,18 @@ class OpsFeedTest {
 	}
 
 	@Test
+	void aRemoteCutOffIsInTheFeedNotKeptAsState() {
+		OpsFeed feed = new OpsFeed();
+		ObjectNode down = MAPPER.createObjectNode();
+		down.put("kind", "rest").put("remote", "api.example.com").put("application", "irouter").put("node", "engine0")
+				.put("reason", "HTTP 503");
+		feed.apply(CloudEvent.create(BladeEventTypes.REMOTE_DOWN, "/blade/test", "api.example.com", down));
+		assertEquals(BladeEventTypes.REMOTE_DOWN, feed.snapshot().path("recent").get(0).path("type").asText());
+		assertEquals(true, feed.snapshot().path("remotesDown").isMissingNode(),
+				"which breakers are open is read live from the applications, never kept from events");
+	}
+
+	@Test
 	void aTrunkIsFailingUntilItRegisters() {
 		OpsFeed feed = new OpsFeed();
 		feed.apply(event(BladeEventTypes.TRUNK_FAILED, "gateway", "carrier-a", "engine0"));

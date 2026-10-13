@@ -72,6 +72,10 @@ public class ServerSampleRow implements Serializable {
 	@Column(name = "heap_used_pct")
 	private Long heapUsedPct;
 
+	/// CPU the server's JVM used over the minute, percent of all its processors.
+	@Column(name = "cpu_pct")
+	private Long cpuPct;
+
 	@Column(name = "threads_stuck")
 	private Long threadsStuck;
 

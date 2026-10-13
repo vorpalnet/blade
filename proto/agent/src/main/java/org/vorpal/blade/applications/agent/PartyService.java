@@ -26,7 +26,7 @@ final class PartyService {
 		if (call == null) {
 			return "the call is not on this node's record";
 		}
-		boolean sent = Events.publish(call.vorpalId, call.startedAt, BladeEventTypes.CALL_PARTY_REQUESTED,
+		boolean sent = Events.publish(call.vorpalId, call.startedAt, call.scope, BladeEventTypes.CALL_PARTY_REQUESTED,
 				data -> data.put("target", target).put("label", label).put("requestedBy", agent));
 		if (!sent) {
 			return "the event bus is not up on this node, so the request cannot be sent";

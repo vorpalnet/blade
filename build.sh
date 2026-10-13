@@ -436,6 +436,8 @@ write_deployment_manifest() {
         case "$1" in
             blade-fsmar.jar)
                 echo "fsmar|approuter/|SIP application router (reboot engine tier)" ;;
+            blade-agent.jar)
+                echo "agent|-javaagent|Network agent: loaded by each managed server's start arguments (restart)" ;;
             blade-shared.war)
                 echo "shared-lib|admin+cluster|WebLogic shared library (3rd-party JARs)" ;;
             blade-framework.jar)

@@ -221,7 +221,9 @@ GO
 -- Where each call was sent. `callRouted` is a proxy's choice (iRouter's
 -- destination, or the balancer's endpoint and tier after `failovers` tiers
 -- failed); `callResponded` and `callDeclined` are answers the router or the
--- balancer gave itself, with the `status` it sent.
+-- balancer gave itself, with the `status` it sent; `branchFailed` is a server
+-- the call was sent to answering that leg with a failure (`status`, `reason`,
+-- the `responder` address, and `retry_after` from a 503's Retry-After).
 CREATE OR ALTER VIEW v_call_routing AS
 SELECT
    CAST(e.id AS VARCHAR(20)) AS event_id,
@@ -237,11 +239,14 @@ SELECT
    JSON_VALUE(e.payload, '$."endpoint"') AS endpoint,
    JSON_VALUE(e.payload, '$."tier"') AS tier,
    TRY_CAST(JSON_VALUE(e.payload, '$."failovers"') AS INT) AS failovers,
-   TRY_CAST(JSON_VALUE(e.payload, '$."status"') AS INT) AS status
+   TRY_CAST(JSON_VALUE(e.payload, '$."status"') AS INT) AS status,
+   JSON_VALUE(e.payload, '$."reason"') AS reason,
+   JSON_VALUE(e.payload, '$."responder"') AS responder,
+   TRY_CAST(JSON_VALUE(e.payload, '$."retryAfter"') AS INT) AS retry_after
 FROM events e
 JOIN applications a ON a.id = e.application_id
 LEFT JOIN sessions s ON s.id = e.session_id
-WHERE e.type IN ('callRouted', 'callResponded', 'callDeclined');
+WHERE e.type IN ('callRouted', 'callResponded', 'callDeclined', 'branchFailed');
 GO
 
 -- Parked calls: one row when a call is put on hold, one when it leaves, with
@@ -357,6 +362,7 @@ SELECT
    TRY_CAST(JSON_VALUE(e.payload, '$."activeAppSessions"') AS BIGINT) AS active_app_sessions,
    TRY_CAST(JSON_VALUE(e.payload, '$."activeSipSessions"') AS BIGINT) AS active_sip_sessions,
    TRY_CAST(JSON_VALUE(e.payload, '$."heapUsedPct"') AS BIGINT) AS heap_used_pct,
+   TRY_CAST(JSON_VALUE(e.payload, '$."cpuPct"') AS BIGINT) AS cpu_pct,
    TRY_CAST(JSON_VALUE(e.payload, '$."threadsStuck"') AS BIGINT) AS threads_stuck,
    TRY_CAST(JSON_VALUE(e.payload, '$."threadsHogging"') AS BIGINT) AS threads_hogging,
    TRY_CAST(JSON_VALUE(e.payload, '$."threadsPending"') AS BIGINT) AS threads_pending,

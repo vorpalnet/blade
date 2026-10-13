@@ -321,7 +321,66 @@ class AnalyticsWritePathTest {
 		assertFalse(payload.has("appName"), "the publisher's identity is the row's, not the payload's");
 	}
 
+	@Test
+	@DisplayName("an instance that stops ends the calls it still held")
+	void anInstanceStoppingEndsItsCalls() throws Exception {
+		long birth = 1_787_780_167_411L;
+		listener.handle(Collections.singletonList(session("meetings", 0x0A0A0A0AL, birth, null)));
+		listener.handle(Collections.singletonList(lifecycle(BladeEventTypes.APPLICATION_STOPPED, "meetings", "engine1",
+				birth - 3_600_000L, birth + 60_000L)));
+		assertEquals(birth + 60_000L, destroyed(), "ended when the instance that held it stopped");
+	}
+
+	@Test
+	@DisplayName("a new instance ends the calls a crashed one left open, and only those")
+	void aNewInstanceEndsWhatACrashLeft() throws Exception {
+		long birth = 1_787_780_167_411L;
+		listener.handle(Collections.singletonList(session("meetings", 0x0B0B0B0BL, birth, null)));
+		listener.handle(Collections.singletonList(session("meetings", 0x0C0C0C0CL, birth, birth + 10_000L)));
+		// Another server's instance of the same application starts: not this one's replacement.
+		listener.handle(Collections.singletonList(lifecycle(BladeEventTypes.APPLICATION_STARTED, "meetings", "engine2",
+				birth + 100_000L, null)));
+		assertEquals(1, count("sessions WHERE destroyed IS NULL"), "engine2 starting says nothing about engine1");
+
+		// engine1's instance never sent a stop (it crashed); its replacement starts.
+		listener.handle(Collections.singletonList(lifecycle(BladeEventTypes.APPLICATION_STARTED, "meetings", "engine1",
+				birth + 120_000L, null)));
+		assertEquals(0, count("sessions WHERE destroyed IS NULL"));
+		assertEquals(birth + 120_000L, millis("SELECT destroyed FROM sessions WHERE vorpal_id = " + 0x0B0B0B0BL),
+				"the open call ends when the replacement started");
+		assertEquals(birth + 10_000L, millis("SELECT destroyed FROM sessions WHERE vorpal_id = " + 0x0C0C0C0CL),
+				"a call that had ended keeps its end");
+		assertEquals(1, count("applications WHERE server = 'engine1' AND destroyed IS NULL"),
+				"the crashed instance is closed; its replacement is open");
+	}
+
 	// ─────────────────────────────────────────────────────────────── fixtures
+
+	/// A UTC timestamp column as epoch millis.
+	private long millis(String sql) throws Exception {
+		try (Statement statement = keepAlive.createStatement(); ResultSet rs = statement.executeQuery(sql)) {
+			rs.next();
+			return rs.getTimestamp(1).toLocalDateTime().toInstant(java.time.ZoneOffset.UTC).toEpochMilli();
+		}
+	}
+
+	/// An `application.started` or `application.stopped` for one instance.
+	private CloudEvent lifecycle(String type, String app, String server, long started, Long stopped) {
+		ObjectNode data = MAPPER.createObjectNode();
+		data.put("appName", app);
+		data.put("domain", CLUSTER);
+		data.put("server", server);
+		data.put("appStartedAt", iso(started));
+		if (stopped != null) {
+			data.put("stoppedAt", iso(stopped));
+		}
+		CloudEvent event = new CloudEvent();
+		event.setType(type);
+		event.setId(UUID.randomUUID().toString());
+		event.setSource("//blade/" + app + "/test");
+		event.setData(data);
+		return event;
+	}
 
 	/// The call row's end, epoch millis. The column holds UTC wall-clock time.
 	private long destroyed() throws Exception {

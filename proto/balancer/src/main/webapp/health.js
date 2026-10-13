@@ -251,7 +251,8 @@
 
 		// projection choice: Albers USA composites AK/HI insets and returns
 		// null for points outside the US — which makes it the US test too
-		var usProj = d3.geoAlbersUsa();
+		// the pre-projected atlas is Albers USA at scale 1300 in 975 x 610 (us-atlas)
+		var usProj = d3.geoAlbersUsa().scale(1300).translate([487.5, 305]);
 		var isUS = placed.length > 0 && placed.every(function (k) {
 			return usProj([roll[k].lon, roll[k].lat]) != null;
 		});

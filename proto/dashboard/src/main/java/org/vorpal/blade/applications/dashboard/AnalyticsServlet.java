@@ -41,6 +41,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /// minute on every open browser; the database sees each query at most once per
 /// five minutes per node. `fresh=1` (the detail pages) bypasses the cache and
 /// refills it. `asOf` says when the numbers were read, so a card can show its age.
+/// The live reports ([#LIVE]) are the exception: cached for seconds.
 ///
 /// No JAX-RS: a plain servlet, as the rest of this application.
 @WebServlet("/data")
@@ -51,7 +52,11 @@ public class AnalyticsServlet extends HttpServlet {
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
 	static final long TTL_MS = 5 * 60_000L;
-	static final int MAX_DAYS = 400;
+	/// Reports the board polls on its live cycle, cached for seconds: still one
+	/// query per few seconds per node however many boards are open.
+	static final java.util.Set<String> LIVE = java.util.Collections.singleton("calls.now");
+	static final long LIVE_TTL_MS = 4_000L;
+	static final int MAX_DAYS = DashboardSettings.MAX_RANGE_DAYS;
 
 	/// Report results by [AnalyticsReports.Filter#key]. Per node, per application
 	/// instance; nothing is shared across the cluster.
@@ -81,7 +86,7 @@ public class AnalyticsServlet extends HttpServlet {
 		}
 
 		DashboardSettings settings = settings();
-		int days = clamp(intParam(req, "days", settings == null ? 30 : settings.getHistoryDays()), 1, MAX_DAYS);
+		int days = clamp(intParam(req, "days", settings == null ? 7 : settings.getDefaultDays()), 1, MAX_DAYS);
 		boolean includeSample = "include".equals(req.getParameter("sample"));
 		boolean fresh = "1".equals(req.getParameter("fresh"));
 		AnalyticsReports.Filter filter = new AnalyticsReports.Filter(days, includeSample, req.getParameter("domain"),
@@ -109,7 +114,7 @@ public class AnalyticsServlet extends HttpServlet {
 			}
 			String key = filter.key(name);
 			Cached hit = fresh ? null : cache.get(key);
-			if (hit == null || System.currentTimeMillis() - hit.asOf > ttl) {
+			if (hit == null || System.currentTimeMillis() - hit.asOf > (LIVE.contains(name) ? Math.min(ttl, LIVE_TTL_MS) : ttl)) {
 				if (reports == null && unavailable == null) {
 					try {
 						reports = store().reports(dataSource(settings));

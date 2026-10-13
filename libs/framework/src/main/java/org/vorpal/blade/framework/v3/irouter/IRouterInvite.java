@@ -220,18 +220,42 @@ public class IRouterInvite extends Callflow {
 	/// to the call, before the INVITE goes on, so the next hop receives them
 	/// on X-Vorpal-ID. A value that is not a name is refused with a warning
 	/// rather than half-applied.
+	///
+	/// A proxy forwards the INVITE it received, whose X-Vorpal-ID the hop
+	/// before stamped without this scope. Setting the scope on this
+	/// application's session alone would file iRouter's own events under it
+	/// and leave every hop after it unscoped, so the header is rewritten here.
 	static void applyScope(SipServletRequest request, Context ctx) {
 		String tenant = ctx.get(TENANT_VAR);
 		String department = ctx.get(DEPARTMENT_VAR);
+		boolean hasTenant = tenant != null && !tenant.isEmpty();
+		boolean hasDepartment = department != null && !department.isEmpty();
+		if (!hasTenant && !hasDepartment) {
+			return;
+		}
 		try {
-			if (tenant != null && !tenant.isEmpty()) {
+			if (hasTenant) {
 				Callflow.setTenant(request.getApplicationSession(), tenant);
 			}
-			if (department != null && !department.isEmpty()) {
+			if (hasDepartment) {
 				Callflow.setDepartment(request.getApplicationSession(), department);
+			}
+			Parameterable xVorpalId = request.getParameterableHeader(X_VORPAL_ID);
+			if (xVorpalId == null) {
+				stampVorpalIdHeaders(request, request.getApplicationSession(), request.getSession());
+			} else {
+				if (hasTenant) {
+					xVorpalId.setParameter(TENANT_PARAM, tenant);
+				}
+				if (hasDepartment) {
+					xVorpalId.setParameter(DEPARTMENT_PARAM, department);
+				}
+				request.setHeader(X_VORPAL_ID, xVorpalId.toString());
 			}
 		} catch (IllegalArgumentException e) {
 			sipLogger.warning(request, "iRouter: call scope not applied: " + e.getMessage());
+		} catch (javax.servlet.sip.ServletParseException e) {
+			sipLogger.warning(request, "iRouter: call scope not forwarded: " + e.getMessage());
 		}
 	}
 

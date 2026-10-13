@@ -20,7 +20,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /// endpoint is down until its `endpoint.up`, a trunk is failing until its
 /// `trunk.registered`, and a queue's depth is its last minute's report, per node
 /// because every node keeps its own view. **What just happened** is the last
-/// [#RECENT] events of every operations type, newest first.
+/// [#RECENT] events of every operations type, newest first. A service cut off
+/// by a breaker (`remote.down`) is in the feed only: [OpsServlet] reads which
+/// breakers are open now from the applications themselves.
 ///
 /// Held in memory on this server only, fed by a subscription
 /// `DashboardSettingsStartup` opens once the settings exist. Live, not durable:
@@ -51,7 +53,8 @@ final class OpsFeed implements EventSubscriber.Handler {
 	private final ArrayDeque<ObjectNode> recent = new ArrayDeque<>();
 
 	static final List<String> TYPES = java.util.Arrays.asList(BladeEventTypes.QUEUE_DEPTH,
-			BladeEventTypes.ENDPOINT_DOWN, BladeEventTypes.ENDPOINT_UP, BladeEventTypes.REGISTRATION_ADDED,
+			BladeEventTypes.ENDPOINT_DOWN, BladeEventTypes.ENDPOINT_UP, BladeEventTypes.REMOTE_DOWN,
+			BladeEventTypes.REMOTE_UP, BladeEventTypes.REGISTRATION_ADDED,
 			BladeEventTypes.REGISTRATION_REMOVED, BladeEventTypes.TRUNK_REGISTERED, BladeEventTypes.TRUNK_FAILED,
 			BladeEventTypes.TRUNK_UNREGISTERED, BladeEventTypes.PRESENCE_PUBLISHED, BladeEventTypes.SIP_DENIED,
 			BladeEventTypes.CONFIG_SAVED, BladeEventTypes.CONFIG_PUBLISHED);

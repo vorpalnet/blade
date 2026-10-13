@@ -365,7 +365,7 @@ public class QueueCallflow extends Callflow {
 				data -> data.put("queue", queueId).put("waitedMs", waited()).put("reason", reason));
 	}
 
-	private long waited() {
+	long waited() {
 		return (enteredAt == 0) ? 0 : System.currentTimeMillis() - enteredAt;
 	}
 

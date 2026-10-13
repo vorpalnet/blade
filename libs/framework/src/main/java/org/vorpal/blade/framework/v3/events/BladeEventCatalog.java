@@ -683,6 +683,7 @@ public final class BladeEventCatalog {
 		List<EventType> types = new ArrayList<>();
 		types.add(callRouted());
 		types.add(callResponded());
+		types.add(branchFailed());
 		types.add(callOriginated());
 		types.add(callHeld());
 		types.add(callHoldEnded());
@@ -712,6 +713,22 @@ public final class BladeEventCatalog {
 				"CallResponded");
 		List<EventField> fields = callScopedFields();
 		fields.add(field("status", EventFieldType.INTEGER, false, "The response code sent."));
+		declaration.setFields(fields);
+		return declaration;
+	}
+
+	private static EventType branchFailed() {
+		EventType declaration = callScopedBase(BladeEventTypes.CALL_BRANCH_FAILED, "Branch Failed",
+				"A server the call was sent to answered that leg with a final failure: a proxy branch, an endpoint a balancer tried, a B2BUA's callee leg, or the 408 or 503 the container answers itself when nothing came back. The call may still be connected another way; this says which server refused.",
+				"BranchFailed");
+		List<EventField> fields = callScopedFields();
+		fields.add(field("status", EventFieldType.INTEGER, true, "The final response code."));
+		fields.add(field("reason", EventFieldType.STRING, false, "The reason phrase, as the server wrote it."));
+		fields.add(field("destination", EventFieldType.STRING, false, "The Request-URI the leg was sent to."));
+		fields.add(field("responder", EventFieldType.STRING, false,
+				"The address the response came from; none when the container answered for a server that never did."));
+		fields.add(field("retryAfter", EventFieldType.INTEGER, false,
+				"Seconds from the Retry-After header: a server shedding load asks to be left alone this long."));
 		declaration.setFields(fields);
 		return declaration;
 	}
@@ -802,6 +819,8 @@ public final class BladeEventCatalog {
 		types.add(queueDepth());
 		types.add(endpointDown());
 		types.add(endpointUp());
+		types.add(remoteDown());
+		types.add(remoteUp());
 		types.add(registrationAdded());
 		types.add(registrationRemoved());
 		types.add(trunkRegistered());
@@ -845,7 +864,7 @@ public final class BladeEventCatalog {
 	/// See [#applicationSampled]; this is the server's side of the same minute.
 	private static EventType serverSampled() {
 		EventType declaration = base(BladeEventTypes.SERVER_SAMPLED, "Server Sampled",
-				"How one server stood over the last minute: SIP messages its container received and rejected (a rejected message never reached an application, so nothing else records it), application sessions created, and at the sample its active sessions, heap and threads. Published once a minute by the dashboard.",
+				"How one server stood over the last minute: SIP messages its container received and rejected (a rejected message never reached an application, so nothing else records it), application sessions created, and at the sample its active sessions, heap and threads, and the CPU it used over the minute. Published once a minute by the dashboard.",
 				"ServerSampled");
 		List<EventField> fields = applicationIdentity();
 		fields.add(field("node", EventFieldType.STRING, true, "The server sampled."));
@@ -866,6 +885,8 @@ public final class BladeEventCatalog {
 		fields.add(field("activeAppSessions", EventFieldType.LONG, false, "Application sessions alive at the sample."));
 		fields.add(field("activeSipSessions", EventFieldType.LONG, false, "SIP sessions alive at the sample."));
 		fields.add(field("heapUsedPct", EventFieldType.LONG, false, "Heap in use at the sample, percent."));
+		fields.add(field("cpuPct", EventFieldType.LONG, false,
+				"CPU the server's JVM used over the minute, percent of all its processors."));
 		fields.add(field("threadsStuck", EventFieldType.LONG, false, "Stuck execute threads at the sample."));
 		fields.add(field("threadsHogging", EventFieldType.LONG, false, "Hogging execute threads at the sample."));
 		fields.add(field("threadsPending", EventFieldType.LONG, false, "Requests waiting for a thread at the sample."));
@@ -931,6 +952,33 @@ public final class BladeEventCatalog {
 		fields.add(field("node", EventFieldType.STRING, true, "The server that saw it."));
 		declaration.setFields(fields);
 		return declaration;
+	}
+
+	private static EventType remoteDown() {
+		EventType declaration = base(BladeEventTypes.REMOTE_DOWN, "Remote Down",
+				"A service an application calls failed often enough that its circuit breaker cut it off; calls skip it until a retry succeeds. Published on the change, by each application and node that saw it.",
+				"RemoteDown");
+		declaration.setPersist(false);
+		declaration.setFields(remoteFields());
+		return declaration;
+	}
+
+	private static EventType remoteUp() {
+		EventType declaration = base(BladeEventTypes.REMOTE_UP, "Remote Up",
+				"A service whose circuit breaker had cut it off answered again.", "RemoteUp");
+		declaration.setPersist(false);
+		declaration.setFields(remoteFields());
+		return declaration;
+	}
+
+	private static List<EventField> remoteFields() {
+		List<EventField> fields = new ArrayList<>();
+		fields.add(field("kind", EventFieldType.STRING, true, "What sort of service: rest, jdbc, ldap, oauth, oidc, media."));
+		fields.add(field("remote", EventFieldType.STRING, true, "The service: a host and port, or a datasource's JNDI name."));
+		fields.add(field("reason", EventFieldType.STRING, false, "The failure that opened the breaker."));
+		fields.add(field("application", EventFieldType.STRING, false, "The application that calls it."));
+		fields.add(field("node", EventFieldType.STRING, true, "The server that saw it."));
+		return fields;
 	}
 
 	private static EventType registrationAdded() {

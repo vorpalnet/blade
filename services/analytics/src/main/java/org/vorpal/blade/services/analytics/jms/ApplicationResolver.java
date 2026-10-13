@@ -1,8 +1,10 @@
 package org.vorpal.blade.services.analytics.jms;
 
 import java.util.Date;
+import java.util.List;
 
 import javax.persistence.EntityManager;
+import javax.persistence.TypedQuery;
 
 import org.vorpal.blade.services.analytics.model.Application;
 
@@ -129,6 +131,27 @@ public final class ApplicationResolver {
 			em.merge(existing);
 		}
 		return Long.valueOf(id);
+	}
+
+	/// The earlier instances of an application on one server: what a new
+	/// instance replaces. Each was either stopped (it has an end) or died
+	/// without saying so, a crash or a server killed.
+	///
+	/// @return the instances started before `before`, oldest first
+	public static List<Application> earlier(EntityManager em, String name, String domain, String server, Date before) {
+		String jpql = "SELECT a FROM Application a WHERE a.name = :name AND a.created < :before"
+				+ (domain == null ? " AND a.domain IS NULL" : " AND a.domain = :domain")
+				+ (server == null ? " AND a.server IS NULL" : " AND a.server = :server") + " ORDER BY a.created";
+		TypedQuery<Application> q = em.createQuery(jpql, Application.class)
+				.setParameter("name", name)
+				.setParameter("before", before);
+		if (domain != null) {
+			q.setParameter("domain", domain);
+		}
+		if (server != null) {
+			q.setParameter("server", server);
+		}
+		return q.getResultList();
 	}
 
 	/// Insert a row whose key is already known. A duplicate-key failure means

@@ -7,6 +7,7 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v3.events.BladeEventTypes;
 import org.vorpal.blade.framework.v3.media.MediaCallflow;
 
 /// Handle a caller-initiated BYE/CANCEL: release the call's media anchor on the media server, then
@@ -19,6 +20,8 @@ public class PlayerBye extends Callflow {
 	public void process(SipServletRequest request) throws ServletException, IOException {
 		teardown(request.getApplicationSession().getId());
 		request.createResponse(200).send();
+		PlayerEvents.ended(request.getApplicationSession(),
+				"CANCEL".equals(request.getMethod()) ? BladeEventTypes.CALL_ABANDONED : BladeEventTypes.CALL_COMPLETED);
 	}
 
 	/// Release the live media anchor for `appId` (stop the group so any recording is flushed, then

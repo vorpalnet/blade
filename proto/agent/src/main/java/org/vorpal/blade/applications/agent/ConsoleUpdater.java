@@ -6,6 +6,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.vorpal.blade.framework.v3.events.BladeEventTypes;
+import org.vorpal.blade.framework.v3.events.CallScope;
 import org.vorpal.blade.framework.v3.events.CloudEvent;
 import org.vorpal.blade.framework.v3.events.EventSubscriber;
 
@@ -122,7 +123,8 @@ public class ConsoleUpdater implements EventSubscriber.Handler {
 					? java.util.Date.from(java.time.Instant.parse(data.get("startedAt").asText()))
 					: null;
 			AgentConsoleRegistry.rememberCall(pop.vorpalId,
-					new AgentConsoleRegistry.CallRef(Long.parseLong(pop.vorpalId, 16), startedAt, pop.ani));
+					new AgentConsoleRegistry.CallRef(Long.parseLong(pop.vorpalId, 16), startedAt, pop.ani,
+							new CallScope(text(data, "tenant"), text(data, "department"))));
 		} catch (RuntimeException e) {
 			// No session identity: a disposition still publishes, just not by session.
 		}

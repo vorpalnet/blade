@@ -196,7 +196,9 @@ WHERE e.type IN ('queueEntered', 'queueReleased', 'queueAbandoned');
 -- Where each call was sent. `callRouted` is a proxy's choice (iRouter's
 -- destination, or the balancer's endpoint and tier after `failovers` tiers
 -- failed); `callResponded` and `callDeclined` are answers the router or the
--- balancer gave itself, with the `status` it sent.
+-- balancer gave itself, with the `status` it sent; `branchFailed` is a server
+-- the call was sent to answering that leg with a failure (`status`, `reason`,
+-- the `responder` address, and `retry_after` from a 503's Retry-After).
 CREATE OR REPLACE VIEW v_call_routing AS
 SELECT
    CAST(e.id AS CHAR(20)) AS event_id,
@@ -212,11 +214,14 @@ SELECT
    JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."endpoint"')) AS endpoint,
    JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."tier"')) AS tier,
    CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."failovers"')) AS SIGNED) AS failovers,
-   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."status"')) AS SIGNED) AS status
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."status"')) AS SIGNED) AS status,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."reason"')) AS reason,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."responder"')) AS responder,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."retryAfter"')) AS SIGNED) AS retry_after
 FROM events e
 JOIN applications a ON a.id = e.application_id
 LEFT JOIN sessions s ON s.id = e.session_id
-WHERE e.type IN ('callRouted', 'callResponded', 'callDeclined');
+WHERE e.type IN ('callRouted', 'callResponded', 'callDeclined', 'branchFailed');
 
 -- Parked calls: one row when a call is put on hold, one when it leaves, with
 -- how long it was held.
@@ -327,6 +332,7 @@ SELECT
    CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."activeAppSessions"')) AS SIGNED) AS active_app_sessions,
    CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."activeSipSessions"')) AS SIGNED) AS active_sip_sessions,
    CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."heapUsedPct"')) AS SIGNED) AS heap_used_pct,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."cpuPct"')) AS SIGNED) AS cpu_pct,
    CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."threadsStuck"')) AS SIGNED) AS threads_stuck,
    CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."threadsHogging"')) AS SIGNED) AS threads_hogging,
    CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."threadsPending"')) AS SIGNED) AS threads_pending,

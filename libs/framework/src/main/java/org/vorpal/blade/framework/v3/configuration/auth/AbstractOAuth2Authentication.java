@@ -1,5 +1,6 @@
 package org.vorpal.blade.framework.v3.configuration.auth;
 
+import org.vorpal.blade.framework.v3.net.Remotes;
 import java.net.URI;
 import java.net.http.HttpRequest;
 
@@ -89,8 +90,11 @@ public abstract class AbstractOAuth2Authentication extends Authentication {
 			return accessToken;
 		}
 		Logger sipLogger = SettingsManager.getSipLogger();
+		long started = System.nanoTime();
+		String remote = null;
 		try {
 			TokenRequest req = buildTokenRequest(ctx);
+			remote = Remotes.hostOf(String.valueOf(req.getEndpointURI()));
 			com.nimbusds.oauth2.sdk.http.HTTPRequest httpRequest = req.toHTTPRequest();
 			javax.net.ssl.SSLContext ssl = getSslContext();
 			if (ssl != null) {
@@ -103,8 +107,10 @@ public abstract class AbstractOAuth2Authentication extends Authentication {
 					sipLogger.warning("OAuth2 token fetch failed: " + err.getCode()
 							+ " - " + err.getDescription());
 				}
+				Remotes.failed("oauth", remote, "token refused: " + err.getCode(), (System.nanoTime() - started) / 1_000_000L);
 				return null;
 			}
+			Remotes.succeeded("oauth", remote, (System.nanoTime() - started) / 1_000_000L);
 			AccessTokenResponse success = response.toSuccessResponse();
 			AccessToken at = success.getTokens().getAccessToken();
 			accessToken = at.getValue();
@@ -115,6 +121,7 @@ public abstract class AbstractOAuth2Authentication extends Authentication {
 			if (sipLogger != null) {
 				sipLogger.warning("OAuth2 token fetch failed: " + e.getMessage());
 			}
+			Remotes.failed("oauth", remote, Remotes.reason(e), (System.nanoTime() - started) / 1_000_000L);
 			return null;
 		}
 	}

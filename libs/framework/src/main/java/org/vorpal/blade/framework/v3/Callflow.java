@@ -340,6 +340,8 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 		} catch (Exception ex300) {
 			sipLogger.warning(request, "#1.5 Callflow.sendRequest - catch Exception ex300");
 			sipLogger.severe(request, ex300);
+			// The server is unreachable: no response will pass doResponse to say so.
+			org.vorpal.blade.framework.v3.net.Legs.notSent(request, ex300);
 
 			if (!request.getMethod().equals(ACK) && !request.getMethod().equals(PRACK)) {
 
