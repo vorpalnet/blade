@@ -222,9 +222,6 @@ public class InitialInvite extends org.vorpal.blade.framework.v3.Callflow {
 			// If either the callflow or the request are marked as 'doNotProcess', we won't
 			boolean _doNotProcess = Boolean.TRUE.equals((Boolean)bobRequest.getAttribute(ATTR_DO_NOT_PROCESS));
 			this.doNotProcess = (this.doNotProcess || _doNotProcess);
-			// DIAGNOSTIC (2026-10-12, a declined call never reached the caller): remove once confirmed.
-			sipLogger.info(aliceResponse, "InitialInvite DIAG status=" + bobResponse.getStatus() + " this.doNotProcess=" + this.doNotProcess
-					+ " request.doNotProcess=" + _doNotProcess + " callflow=" + System.identityHashCode(this));
 			if (!this.doNotProcess) {
 
 				sendResponse(aliceResponse, (aliceAck) -> {

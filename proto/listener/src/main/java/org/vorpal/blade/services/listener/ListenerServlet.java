@@ -375,10 +375,6 @@ public class ListenerServlet extends B2buaServlet implements B2buaListener {
 	public void callDeclined(SipServletResponse outboundResponse) throws ServletException, IOException {
 		SipApplicationSession app = outboundResponse.getApplicationSession();
 		InitialInvite halted = HALTED.remove(app.getId());
-		// DIAGNOSTIC (2026-10-12): remove once a declined call is seen reaching the caller.
-		sipLogger.info(outboundResponse, "ListenerServlet DIAG callDeclined status=" + outboundResponse.getStatus()
-				+ " halted=" + (halted == null ? "none" : System.identityHashCode(halted))
-				+ " committed=" + outboundResponse.isCommitted());
 		if (halted != null && !outboundResponse.isCommitted()) {
 			halted.sendResponse(outboundResponse, null);
 		}
