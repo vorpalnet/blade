@@ -33,6 +33,10 @@
 #   --library        deploy/undeploy <file> as a WebLogic shared library
 #   --approuter      copy <file> into approuter.dir on THIS host (the FSMAR
 #                    mechanic) instead of a WebLogic deploy — no target, no WLS
+#   --agent          copy <file> (blade-agent.jar) into agent.dir on THIS host,
+#                    default <domain>/agent beside approuter.dir. install.sh's
+#                    domain copy carries it to each engine host it provisions;
+#                    servers load it from their start arguments (-javaagent)
 #   --name NAME      deployment name (default: filename without extension)
 #   --build VER      take <file> from dist/<VER>/ instead of the newest build
 #   --dry-run        print what would run; change nothing
@@ -59,6 +63,7 @@
 #   ./deploy.sh production blade-services.ear cluster1
 #   ./deploy.sh production blade-shared.war cluster1 --library
 #   ./deploy.sh production blade-fsmar.jar --approuter
+#   ./deploy.sh production blade-agent.jar --agent
 #   ./deploy.sh production gateway.war cluster1 undeploy
 #   ./deploy.sh production ./dist/3.0.6-908/admin/blade-portal.war AdminServer --dry-run
 # ============================================================================
@@ -111,7 +116,7 @@ ENV_ARG=""
 FILE_ARG=""
 TARGET_ARG=""
 ACTION="deploy"
-MODE="app"          # app | library | approuter
+MODE="app"          # app | library | approuter | agent
 NAME_OVERRIDE=""
 BUILD_VER=""
 DRY_RUN=false
@@ -124,6 +129,7 @@ while [ $# -gt 0 ]; do
         -h|--help)   show_usage 0 ;;
         --library)   MODE="library" ;;
         --approuter) MODE="approuter" ;;
+        --agent)     MODE="agent" ;;
         --name)      shift; NAME_OVERRIDE="${1:-}"; [ -n "$NAME_OVERRIDE" ] || die "--name requires an argument" ;;
         --name=*)    NAME_OVERRIDE="${1#--name=}" ;;
         --build)     shift; BUILD_VER="${1:-}"; [ -n "$BUILD_VER" ] || die "--build requires a version argument" ;;
@@ -292,13 +298,16 @@ WLS_TRUSTSTORE_TYPE=$(read_prop "$CONF_FILE" "wls.truststore.type"); WLS_TRUSTST
 WLS_USER=$(read_prop       "$CONF_FILE" "wls.user")
 WLS_TARGET_DEFAULT=$(read_prop "$CONF_FILE" "wls.target")
 APPROUTER_DIR=$(read_prop  "$CONF_FILE" "approuter.dir")
+AGENT_DIR=$(read_prop      "$CONF_FILE" "agent.dir")
+[ -z "$AGENT_DIR" ] && [ -n "$APPROUTER_DIR" ] && AGENT_DIR="$(dirname "$APPROUTER_DIR")/agent"
 WLS_PLUGIN_VERSION=$(read_prop "$CONF_FILE" "wls.plugin.version")
 WLS_INSECURE=$(read_prop "$CONF_FILE" "wls.insecure")          # rest engine: skip TLS verify
 WLS_CACERT=$(read_prop "$CONF_FILE" "wls.cacert"); WLS_CACERT="${WLS_CACERT/#\~/$HOME}"  # rest engine: PEM to verify against
 
-# Does this run talk to WebLogic? (approuter is a plain file copy — it does not.)
+# Does this run talk to WebLogic? (approuter and agent are plain file copies — they do not.)
 NEEDS_WLS=true
 [ "$MODE" = "approuter" ] && NEEDS_WLS=false
+[ "$MODE" = "agent" ] && NEEDS_WLS=false
 
 if [ "$NEEDS_WLS" = true ]; then
     [ -n "$WLS_ADMINURL" ] || die "${CONF_FILE}: missing wls.adminurl"
@@ -638,6 +647,7 @@ case "$MODE" in
     app)       log "  mode:         WebLogic application"; log "  target:       ${TARGET:-<none>}" ;;
     library)   log "  mode:         WebLogic shared library"; log "  target:       ${TARGET:-<none>}" ;;
     approuter) log "  mode:         approuter copy (FSMAR)"; log "  approuter:    ${APPROUTER_DIR:-<unset>}" ;;
+    agent)     log "  mode:         agent copy (network agent)"; log "  agent dir:    ${AGENT_DIR:-<unset>}" ;;
 esac
 [ "$NEEDS_WLS" = true ] && log "  WebLogic:     ${WLS_USER}@${WLS_ADMINURL}  (engine: ${ENGINE})"
 [ "$NEEDS_WLS" = true ] && [ "$ENGINE" = maven ] && log "  WLS plugin:   ${WLS_PLUGIN_VERSION} (${WLS_PLUGIN_VERSION_SOURCE})"
@@ -763,6 +773,25 @@ case "$MODE" in
             undeploy)
                 if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] rm -f ${dest}${C_RESET}"; else rm -f "$dest" || rc=$?; fi
                 warn "Restart the engine tier so the removed App Router is cleared." ;;
+            status)
+                if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] ls -l ${dest}${C_RESET}"; else ls -l "$dest" 2>&1 || warn "${ART_BASE} not present at ${dest}"; fi ;;
+        esac ;;
+
+    agent)
+        [ -n "$AGENT_DIR" ] || die "${CONF_FILE}: missing agent.dir (or approuter.dir to derive it from)"
+        dest="${AGENT_DIR}/${ART_BASE}"
+        info "agent ${ACTION}: ${dest}"
+        case "$ACTION" in
+            deploy)
+                if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] cp ${ART} ${dest}${C_RESET}"
+                else mkdir -p "$AGENT_DIR" && cp "$ART" "$dest" || rc=$?; fi
+                warn "Each engine host needs this file at ${dest} before its start arguments name it:"
+                warn "  install.sh copies the domain to the hosts it provisions; then add"
+                warn "  -javaagent:${dest} to the engine template (and engine0) and restart." ;;
+            undeploy)
+                warn "Remove -javaagent:${dest} from every server's start arguments and restart them FIRST:"
+                warn "  a JVM whose -javaagent JAR is missing does not start."
+                if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] rm -f ${dest}${C_RESET}"; else rm -f "$dest" || rc=$?; fi ;;
             status)
                 if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] ls -l ${dest}${C_RESET}"; else ls -l "$dest" 2>&1 || warn "${ART_BASE} not present at ${dest}"; fi ;;
         esac ;;

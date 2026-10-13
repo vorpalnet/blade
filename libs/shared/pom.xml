@@ -125,10 +125,6 @@
 			<groupId>com.nimbusds</groupId>
 			<artifactId>oauth2-oidc-sdk</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>com.anthropic</groupId>
-			<artifactId>anthropic-java</artifactId>
-		</dependency>
 	</dependencies>
 
 	<build>
@@ -272,7 +268,7 @@ fi
 							     this by hand only when the bundled 3rd-party JARs change, so
 							     a framework-only build doesn't look like a shared-library
 							     change users must redeploy. -->
-							<Implementation-Version>3.0.5</Implementation-Version>
+							<Implementation-Version>3.0.6</Implementation-Version>
 							<Implementation-Vendor>Vorpal Networks, LLC</Implementation-Vendor>
 							<Extension-Name>blade-shared</Extension-Name>
 							<Copyright>${blade.copyright}</Copyright>

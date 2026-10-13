@@ -21,7 +21,8 @@
 	     <library-ref> in weblogic.xml. Common 3rd-party deps (jackson,
 	     swagger, slf4j, ipaddress, json-path, commons-*) are inherited
 	     provided-scope from the parent; only the Configurator-specific
-	     extras are declared here — they're bundled in libs/shared for it. -->
+	     extras are declared here. The exception is the Anthropic SDK, which
+	     rides in this WAR's own WEB-INF/lib (see the packagingExcludes below). -->
 	<dependencies>
 		<!-- CredentialEncryption for {CLEARTEXT} → {AES} on save. -->
 		<dependency>
@@ -33,10 +34,18 @@
 			<artifactId>json-schema-validator</artifactId>
 			<scope>provided</scope>
 		</dependency>
-		<!-- AI config assistant (AiConfigService); runtime copy in blade-shared. -->
+		<!-- AI config assistant (AiConfigService). Bundled in this WAR, not in
+		     blade-shared; OkHttp, Okio and kotlin-stdlib, which it also needs,
+		     still come from blade-shared. -->
 		<dependency>
 			<groupId>com.anthropic</groupId>
 			<artifactId>anthropic-java</artifactId>
+		</dependency>
+		<!-- Named so it stays on the compile class path: the SDK's runtime-scoped
+		     Jackson dependencies would otherwise win Maven's mediation. -->
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-annotations</artifactId>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
@@ -58,6 +67,13 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-war-plugin</artifactId>
 				<configuration>
+					<!-- Skinny-WAR exception: the Anthropic SDK and what it alone
+					     needs ride here, not in blade-shared. Every JAR on a SIP
+					     application's class path has all its classes loaded by the
+					     container's annotation scan, so ~10,000 classes in the shared
+					     library cost every SIP application on the engines for an API
+					     only this admin application calls. -->
+					<packagingExcludes>%regex[WEB-INF/lib/(?!vorpal-blade-library-framework|anthropic-java|kotlin-reflect|jackson-module-kotlin|jackson-datatype-jdk8|jsonschema-module-swagger-2|standardwebhooks|error_prone_annotations).*\.jar]</packagingExcludes>
 					<!-- The login page is the portal master, injected at build time:
 					     one source file, no per-app copies to drift. Edit
 					     admin/portal/src/main/webapp/login.jsp, never add a per-app

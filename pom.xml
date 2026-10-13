@@ -253,8 +253,12 @@
 
 			<!-- Anthropic Java SDK — the Configurator's "Use AI" config
 			     authoring (structured outputs constrained to the app's own
-			     JSON Schema). Ships in blade-shared like every 3rd-party JAR;
-			     the feature is config-gated and off by default. -->
+			     JSON Schema). Rides in the Configurator's own WEB-INF/lib, NOT
+			     blade-shared: the SIP container's annotation scan loads every
+			     class of every JAR on a SIP application's class path, and this
+			     SDK's ~10,000 classes (with Kotlin reflection) cost each SIP
+			     application about half its metaspace for an API only the
+			     Configurator calls. The feature is config-gated and off by default. -->
 			<dependency>
 				<groupId>com.anthropic</groupId>
 				<artifactId>anthropic-java</artifactId>

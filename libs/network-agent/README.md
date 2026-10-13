@@ -15,14 +15,21 @@ appear on the dashboard's network map and under Operations, "Wrong now".
 
 ## Running it
 
-Copy `dist/lib/blade-agent.jar` to each engine host and add it to the managed server's start
-arguments, then restart the server:
+Put the JAR in the domain on the admin host, where `install.sh` copies it to every engine host it
+provisions:
 
 ```
--javaagent:/opt/oracle/blade-agent/blade-agent.jar
+./deploy.sh <env> blade-agent.jar --agent        # to <domain>/agent/blade-agent.jar
+```
+
+Then add it to the managed servers' start arguments (the engine template, and engine0 if it has its
+own) and restart them:
+
+```
+-javaagent:/opt/oracle/domains/<domain>/agent/blade-agent.jar
 ```
 
 A server with the agent logs `BLADE agent: recording the connections and HTTP calls applications
 make` at start. Without the flag nothing changes: applications run as before and report only what
 the framework records. The JAR must exist on the host before the flag is added, or the JVM will not
-start.
+start: an engine host provisioned before the JAR was placed needs re-provisioning first.

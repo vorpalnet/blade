@@ -172,7 +172,7 @@ public class PlayerCallflow extends MediaCallflow {
 					sipLogger.severe(invite, "PlayerCallflow: recording could not be started: " + e);
 				}
 			}
-			playOnce(mg, invite);
+			playOnce(appId, invite);
 		} catch (MsControlException e) {
 			sipLogger.severe(invite, "PlayerCallflow: startMedia failed: " + e.getMessage());
 			hangup(invite);
@@ -180,11 +180,21 @@ public class PlayerCallflow extends MediaCallflow {
 	}
 
 	/// Play the configured media once; on completion, loop (music) or hang up.
-	private void playOnce(MediaGroup mg, SipServletRequest invite) throws MsControlException {
-		play(mg, new URI[] { URI.create(cfg.getMediaUri()) }, done -> {
+	///
+	/// The completion is a continuation, stored on the replicated call state like the ACK's, so
+	/// it carries the app-session id and finds the media group on the node-local anchor each
+	/// time round. Capturing the group itself put a live 309 object in the call state, and
+	/// every replication of a looping call failed on it (BEA-331004).
+	private void playOnce(String appId, SipServletRequest invite) throws MsControlException {
+		PlayerServlet.Anchor anchor = PlayerServlet.LIVE.get(appId);
+		if (anchor == null || anchor.mg == null) {
+			sipLogger.warning(invite, "PlayerCallflow: no live media group to play on (hung up already?)");
+			return;
+		}
+		play(anchor.mg, new URI[] { URI.create(cfg.getMediaUri()) }, done -> {
 			if (cfg.isLoop()) {
 				// Music on a loop is not news each time round.
-				playOnce(mg, invite);
+				playOnce(appId, invite);
 			} else {
 				Events.publish(invite.getApplicationSession(), BladeEventTypes.MEDIA_PLAYED,
 						data -> data.put("media", cfg.getMediaUri()));
