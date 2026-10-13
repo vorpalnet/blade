@@ -94,7 +94,8 @@ The network map now shows the equipment a call depends on besides SIP:
 exchanges an application's own code makes, whichever library it uses, credits each to the
 application, and serves them through the framework's `Remotes` MBean beside what the framework
 records, so they reach the network map and "Wrong now". The container's own connections are
-left out. ByteBuddy is shaded inside it. See its README for how to run it. Applications need this
+left out. Connections that Vorpal code makes for no application, such as the media driver's
+control channel to each media server, are shown once per server as `platform`'s. ByteBuddy is shaded inside it. See its README for how to run it. Applications need this
 framework (their `RemotesControl` registers with the agent); a server without the agent is
 unaffected.
 

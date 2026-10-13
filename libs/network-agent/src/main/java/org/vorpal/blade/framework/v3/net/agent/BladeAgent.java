@@ -24,8 +24,9 @@ import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 /// own code makes, whatever library it makes them with.
 ///
 /// Loaded with the server, `-javaagent:/path/to/blade-agent.jar`. It adds a
-/// report to four JDK methods ([Advices]): every TCP connect through
-/// `java.net.Socket` or an NIO `SocketChannel`, which covers any library's
+/// report to JDK network methods ([Advices]): every TCP connect through
+/// `java.net.Socket`, an NIO `SocketChannel` or an NIO.2
+/// `AsynchronousSocketChannel` (on Unix), which covers any library's
 /// "connection refused" and "timed out", and every HTTP exchange through the
 /// JDK's two clients, `HttpURLConnection` and `java.net.http.HttpClient`, which
 /// gives the status. What it finds goes to [org.vorpal.blade.framework.v3.net.agent.boot.NetEvents],
@@ -45,7 +46,8 @@ public final class BladeAgent {
 
 	/// The JDK classes rewritten ([Advices]).
 	static final String[] TARGETS = { "java.net.Socket", "sun.nio.ch.SocketChannelImpl",
-			"sun.net.www.protocol.http.HttpURLConnection", "jdk.internal.net.http.HttpClientImpl" };
+			"sun.nio.ch.UnixAsynchronousSocketChannelImpl", "sun.net.www.protocol.http.HttpURLConnection",
+			"jdk.internal.net.http.HttpClientImpl" };
 
 	private static volatile boolean installed;
 
@@ -92,6 +94,11 @@ public final class BladeAgent {
 					.transform((b, type, loader, module, domain) -> b
 							.visit(Advice.to(Advices.ChannelConnect.class).on(named("connect").and(takesArguments(1))))
 							.visit(Advice.to(Advices.ChannelFinish.class).on(named("finishConnect").and(takesArguments(0)))))
+					.type(named("sun.nio.ch.UnixAsynchronousSocketChannelImpl"))
+					.transform((b, type, loader, module, domain) -> b
+							.visit(Advice.to(Advices.AsyncConnect.class).on(named("implConnect").and(takesArguments(3))))
+							.visit(Advice.to(Advices.AsyncFinish.class).on(named("finishConnect").and(takesArguments(1))))
+							.visit(Advice.to(Advices.AsyncClose.class).on(named("implClose").and(takesArguments(0)))))
 					.type(named("sun.net.www.protocol.http.HttpURLConnection"))
 					.transform((b, type, loader, module, domain) -> b.visit(Advice.to(Advices.HttpUrlConnectionInput.class)
 							.on(named("getInputStream").and(takesArguments(0)).and(not(isConstructor())))))

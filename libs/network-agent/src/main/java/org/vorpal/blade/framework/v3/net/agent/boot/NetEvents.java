@@ -28,7 +28,17 @@ import java.util.function.BiConsumer;
 /// SIP transport, JMS, the JDBC pools), and calls the BLADE framework already
 /// records, are left out by looking at who is on the stack, which is done only
 /// for a connect or an HTTP exchange, never per byte.
+///
+/// **The platform's own.** Vorpal code that no application owns, such as the
+/// media driver on the domain class path, opens connections every
+/// application depends on: the media server's control channel is one. Those
+/// are recorded once per server as [#PLATFORM_NAME]'s, and served beside
+/// every application's own, marked `"platform":true`, for the reader to count
+/// once per server.
 public final class NetEvents {
+
+	/// The name the platform's connections are recorded under.
+	public static final String PLATFORM_NAME = "platform";
 
 	/// At most this many remotes per application, so a URL built per call
 	/// cannot grow the map without end.
@@ -46,7 +56,12 @@ public final class NetEvents {
 	/// inside one is not reported twice.
 	private static final String[] HTTP_CLIENT = { "jdk.internal.net.http.", "java.net.http." };
 
+	/// Code that is Vorpal's, so a connection it makes for no application is
+	/// the platform's.
+	private static final String VORPAL = "org.vorpal.";
+
 	private static final Map<ClassLoader, App> APPS = new WeakHashMap<>();
+	private static final App PLATFORM = new App(PLATFORM_NAME);
 	private static final Map<Object, Pending> PENDING = new WeakHashMap<>();
 	private static final Map<Object, Boolean> REPORTED = new WeakHashMap<>();
 
@@ -140,17 +155,21 @@ public final class NetEvents {
 		}
 	}
 
-	/// What `loader`'s application has recorded, as a JSON array in the shape
-	/// of the framework's `Remotes`, each entry marked `"agent":true`.
+	/// What `loader`'s application has recorded, then what the platform has,
+	/// as a JSON array in the shape of the framework's `Remotes`, each entry
+	/// marked `"agent":true` and the platform's `"platform":true`.
 	public static String json(ClassLoader loader) {
 		App app;
 		synchronized (APPS) {
 			app = loader == null ? null : APPS.get(loader);
 		}
 		StringBuilder out = new StringBuilder("[");
-		if (app != null) {
-			boolean first = true;
-			for (Rec r : app.recs.values()) {
+		boolean first = true;
+		for (App a : new App[] { app, PLATFORM }) {
+			if (a == null) {
+				continue;
+			}
+			for (Rec r : a.recs.values()) {
 				if (!first) {
 					out.append(',');
 				}
@@ -164,7 +183,11 @@ public final class NetEvents {
 				if (r.lastFailure != null) {
 					out.append(",\"lastFailure\":").append(quote(r.lastFailure));
 				}
-				out.append(",\"open\":false,\"agent\":true}");
+				out.append(",\"open\":false,\"agent\":true");
+				if (a == PLATFORM) {
+					out.append(",\"platform\":true");
+				}
+				out.append('}');
 			}
 		}
 		return out.append(']').toString();
@@ -204,6 +227,40 @@ public final class NetEvents {
 			}
 		} catch (Throwable ignore) {
 			// never into the caller's connect
+		}
+	}
+
+	/// An `AsynchronousSocketChannel` connect returned: `connected`, failed
+	/// (neither connected nor pending, the failure handed to the caller's
+	/// handler or future, not thrown), or `pending`, completed by
+	/// [#channelFinish] or failed by [#asyncClosed].
+	public static void asyncConnect(Object channel, SocketAddress endpoint, boolean pending, boolean connected,
+			Throwable thrown, long start) {
+		try {
+			if (pending && thrown == null) {
+				channelConnect(channel, endpoint, false, null, start);
+			} else {
+				channelConnect(channel, endpoint, true,
+						thrown != null || connected ? thrown : new java.net.ConnectException("connect failed"), start);
+			}
+		} catch (Throwable ignore) {
+			// never into the caller's connect
+		}
+	}
+
+	/// An `AsynchronousSocketChannel` closed: a connect still pending on it
+	/// failed.
+	public static void asyncClosed(Object channel) {
+		try {
+			Pending p;
+			synchronized (PENDING) {
+				p = PENDING.remove(channel);
+			}
+			if (p != null) {
+				tcp(p.app, p.remote, new java.net.ConnectException("connect failed or abandoned"), p.start);
+			}
+		} catch (Throwable ignore) {
+			// never into the caller's close
 		}
 	}
 
@@ -358,8 +415,9 @@ public final class NetEvents {
 		}
 	}
 
-	/// The registered application the current thread works for, or null when
-	/// it works for none, or when the call is someone else's to report.
+	/// The registered application the current thread works for, the platform
+	/// when it works for none but Vorpal code is on the stack, or null when the
+	/// call is someone else's to report.
 	private static App caller(boolean socketLevel) {
 		App app = null;
 		ClassLoader cl = Thread.currentThread().getContextClassLoader();
@@ -372,10 +430,16 @@ public final class NetEvents {
 				cl = cl.getParent();
 			}
 		}
-		if (app == null) {
+		if (!ours(socketLevel)) {
 			return null;
 		}
-		return ours(socketLevel) ? app : null;
+		return app != null ? app : vorpalOnStack() ? PLATFORM : null;
+	}
+
+	/// Whether Vorpal code, other than this agent, is anywhere on the stack.
+	private static boolean vorpalOnStack() {
+		return StackWalker.getInstance().walk(frames -> frames.map(StackWalker.StackFrame::getClassName)
+				.anyMatch(c -> c.startsWith(VORPAL) && !c.startsWith(AGENT)));
 	}
 
 	/// Whether the code that made this call is the application's: the first
@@ -416,6 +480,7 @@ public final class NetEvents {
 	}
 
 	private static final String BOOT = "org.vorpal.blade.framework.v3.net.agent.boot.";
+	private static final String AGENT = "org.vorpal.blade.framework.v3.net.agent.";
 
 	private static boolean isJdk(String c) {
 		return c.startsWith("java.") || c.startsWith("javax.net.") || c.startsWith("javax.security.")

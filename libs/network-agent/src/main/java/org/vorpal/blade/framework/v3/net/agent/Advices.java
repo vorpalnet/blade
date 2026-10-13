@@ -53,6 +53,46 @@ final class Advices {
 		}
 	}
 
+	/// `sun.nio.ch.UnixAsynchronousSocketChannelImpl.implConnect(remote,
+	/// attachment, handler)`, behind both of NIO.2's `connect` methods (the JDK
+	/// WebSocket clients use it). It returns connected, failed (the channel is
+	/// closed and has no remote address) or still pending.
+	static final class AsyncConnect {
+		@Advice.OnMethodEnter
+		static long enter() {
+			return System.nanoTime();
+		}
+
+		@Advice.OnMethodExit(onThrowable = Throwable.class)
+		static void exit(@Advice.This Object channel, @Advice.Argument(0) SocketAddress endpoint,
+				@Advice.FieldValue("connectPending") boolean pending,
+				@Advice.FieldValue("remoteAddress") Object connectedTo, @Advice.Enter long start,
+				@Advice.Thrown Throwable thrown) {
+			NetEvents.asyncConnect(channel, endpoint, pending, connectedTo != null, thrown, start);
+		}
+	}
+
+	/// `sun.nio.ch.UnixAsynchronousSocketChannelImpl.finishConnect(boolean)`:
+	/// a pending connect completed. A failure has closed the channel already.
+	static final class AsyncFinish {
+		@Advice.OnMethodExit(onThrowable = Throwable.class)
+		static void exit(@Advice.This Object channel, @Advice.FieldValue("remoteAddress") Object connectedTo) {
+			if (connectedTo != null) {
+				NetEvents.channelFinish(channel, true, null);
+			}
+		}
+	}
+
+	/// `sun.nio.ch.UnixAsynchronousSocketChannelImpl.implClose()`: a connect
+	/// still pending when its channel closes failed, whether the connect itself
+	/// failed or the caller gave up waiting.
+	static final class AsyncClose {
+		@Advice.OnMethodEnter
+		static void enter(@Advice.This Object channel) {
+			NetEvents.asyncClosed(channel);
+		}
+	}
+
 	/// `sun.net.www.protocol.http.HttpURLConnection.getInputStream()`: every
 	/// HTTP(S) exchange through `HttpURLConnection` passes here, whether or not
 	/// the caller asks for the response code; the code is read from the field

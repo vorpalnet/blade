@@ -4,11 +4,13 @@ A Java agent that shows the dashboard the network calls an application's own cod
 library it makes them with: the REST client a developer picked, an object-storage SDK, a WebSocket.
 BLADE's own connectors already report their calls; this covers everything else.
 
-It adds a report to four JDK methods: every TCP connect (`java.net.Socket`, NIO `SocketChannel`),
-which catches "connection refused" and "timed out" from any library, and every exchange through the
-JDK's two HTTP clients (`HttpURLConnection`, `java.net.http.HttpClient`), which gives the status. Each
-call is credited to the application whose code made it; the container's own connections (the SIP
-transport, JMS, JDBC pools) are left out. The results join the framework's `Remotes` MBean, so they
+It adds a report to the JDK's network methods: every TCP connect (`java.net.Socket`, NIO
+`SocketChannel`, NIO.2 `AsynchronousSocketChannel`), which catches "connection refused" and "timed
+out" from any library, and every exchange through the JDK's two HTTP clients (`HttpURLConnection`,
+`java.net.http.HttpClient`), which gives the status. Each call is credited to the application whose
+code made it; the container's own connections (the SIP transport, JMS, JDBC pools) are left out.
+Vorpal code that no application owns, such as the media driver's control channel to the media
+server, is credited to `platform`, once per server. The results join the framework's `Remotes` MBean, so they
 appear on the dashboard's network map and under Operations, "Wrong now".
 
 ## Running it

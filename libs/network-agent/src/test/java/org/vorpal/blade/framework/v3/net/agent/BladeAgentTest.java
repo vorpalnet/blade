@@ -217,4 +217,35 @@ class BladeAgentTest {
 		assertEquals(1, number(e, "calls"));
 		assertEquals(0, number(e, "failures"));
 	}
+
+	@Test
+	void vorpalCodeThatNoApplicationOwnsIsThePlatforms() throws Exception {
+		org.vorpal.gryphon.FakeDriver.connect("127.0.0.1", closed);
+		String e = entry(recorded(), "tcp", "127.0.0.1:" + closed);
+		assertTrue(e != null, recorded());
+		assertTrue(e.contains("\"platform\":true"), e);
+		assertEquals(1, number(e, "failures"));
+	}
+
+	@Test
+	void anAsynchronousConnectRefusedIsAFailure() throws Exception {
+		try (java.nio.channels.AsynchronousSocketChannel ch = java.nio.channels.AsynchronousSocketChannel.open()) {
+			assertThrows(java.util.concurrent.ExecutionException.class,
+					() -> ch.connect(new InetSocketAddress("127.0.0.1", closed)).get(5, java.util.concurrent.TimeUnit.SECONDS));
+		}
+		String e = entry(recorded(), "tcp", "127.0.0.1:" + closed);
+		assertTrue(e != null, recorded());
+		assertEquals(1, number(e, "failures"), e);
+	}
+
+	@Test
+	void anAsynchronousConnectThatWorkedCountsAsACall() throws Exception {
+		try (java.nio.channels.AsynchronousSocketChannel ch = java.nio.channels.AsynchronousSocketChannel.open()) {
+			ch.connect(new InetSocketAddress("127.0.0.1", port)).get(5, java.util.concurrent.TimeUnit.SECONDS);
+		}
+		String e = entry(recorded(), "tcp", "127.0.0.1:" + port);
+		assertTrue(e != null, recorded());
+		assertEquals(1, number(e, "calls"), e);
+		assertEquals(0, number(e, "failures"), "closing a connected channel is not a failure: " + e);
+	}
 }

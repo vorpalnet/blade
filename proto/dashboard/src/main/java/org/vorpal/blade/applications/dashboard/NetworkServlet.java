@@ -125,17 +125,26 @@ public class NetworkServlet extends HttpServlet {
 
 	/// Every application's view of the services it calls (the framework's
 	/// `Remotes` MBean, one per application per server), each remote tagged
-	/// with its `application` and `server`.
+	/// with its `application` and `server`. The network agent serves the
+	/// platform's connections (`"platform":true`) through every application's
+	/// MBean on a server; they are kept once per server, as `platform`'s.
 	static List<JsonNode> remotes(MBeanServer dr) throws Exception {
 		List<JsonNode> out = new ArrayList<>();
+		java.util.Set<String> platform = new java.util.HashSet<>();
 		for (ObjectName on : dr.queryNames(new ObjectName("vorpal.blade:Type=Remotes,*"), null)) {
 			Object json = HealthServlet.get(dr, on, "RemotesJson");
 			if (!(json instanceof String)) {
 				continue;
 			}
+			String server = on.getKeyProperty("Location");
 			String app = ObjectName.unquote(on.getKeyProperty("Name"));
 			for (JsonNode r : MAPPER.readTree((String) json)) {
-				((ObjectNode) r).put("application", app).put("server", on.getKeyProperty("Location"));
+				if (r.path("platform").asBoolean()
+						&& !platform.add(server + "|" + r.path("kind").asText() + "|" + r.path("remote").asText())) {
+					continue;
+				}
+				((ObjectNode) r).put("application", r.path("platform").asBoolean() ? "platform" : app).put("server",
+						server);
 				out.add(r);
 			}
 		}
