@@ -29,6 +29,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 ///
 /// URL: `/blade/dashboard/data?r=<report>[,<report>…][&days=N][&sample=include][&domain=X][&account=A][&tz=Zone][&fresh=1]`
 ///
+/// The window is `days` back from now, `days=0` being the last hour (the
+/// board's Live), or `from` and `until` in epoch millis: a custom range, or a
+/// slice of a chart. The board narrows a panel further with `server`,
+/// `outcome` and `app`, and with `dow` (Monday 1) and `hod` for a cell of its
+/// weekday-by-hour grid ([AnalyticsReports.Filter]).
+///
 /// `tz` is the viewer's IANA time zone (`America/Chicago`): days and hours are
 /// cut, and times printed, in it. The data is UTC; without `tz`, or with one
 /// this JVM does not know, the reports are in UTC.
@@ -56,6 +62,9 @@ public class AnalyticsServlet extends HttpServlet {
 	/// query per few seconds per node however many boards are open.
 	static final java.util.Set<String> LIVE = java.util.Collections.singleton("calls.now");
 	static final long LIVE_TTL_MS = 4_000L;
+	/// How long a report over the last hour (`days=0`, the board's Live) is
+	/// reused: its numbers move by the minute.
+	static final long LIVE_RANGE_TTL_MS = 15_000L;
 	static final int MAX_DAYS = DashboardSettings.MAX_RANGE_DAYS;
 
 	/// Report results by [AnalyticsReports.Filter#key]. Per node, per application
@@ -86,11 +95,19 @@ public class AnalyticsServlet extends HttpServlet {
 		}
 
 		DashboardSettings settings = settings();
-		int days = clamp(intParam(req, "days", settings == null ? 7 : settings.getDefaultDays()), 1, MAX_DAYS);
+		int days = clamp(intParam(req, "days", settings == null ? 7 : settings.getDefaultDays()), 0, MAX_DAYS);
 		boolean includeSample = "include".equals(req.getParameter("sample"));
 		boolean fresh = "1".equals(req.getParameter("fresh"));
+		Date now = new Date();
 		AnalyticsReports.Filter filter = new AnalyticsReports.Filter(days, includeSample, req.getParameter("domain"),
-				new Date(), zone(req.getParameter("tz")));
+				now, zone(req.getParameter("tz")));
+		Long from = longParam(req, "from"), until = longParam(req, "until");
+		if (from != null) {
+			// A chosen window ends no later than now and spans at most MAX_DAYS.
+			long end = until == null ? now.getTime() : Math.min(until, now.getTime());
+			long start = Math.max(Math.min(from, end - 60_000L), end - MAX_DAYS * 86_400_000L);
+			filter = filter.window(new Date(start), new Date(end));
+		}
 		if (settings != null) {
 			filter = filter.tuned(settings.getLeakHours() * 3_600_000L, settings.getSplitCallSeconds() * 1000L,
 					settings.getSampleFreshMinutes() * 60_000L);
@@ -100,7 +117,11 @@ public class AnalyticsServlet extends HttpServlet {
 		if (access != null) {
 			filter = filter.limitedTo(access);
 		}
-		filter = filter.forAccount(req.getParameter("account"));
+		filter = filter.forAccount(req.getParameter("account")).onServer(req.getParameter("server"))
+				.forCalls(req.getParameter("outcome"), req.getParameter("app"))
+				.atHour(longParam(req, "dow") == null ? null : longParam(req, "dow").intValue(),
+						longParam(req, "hod") == null ? null : longParam(req, "hod").intValue());
+		long reuse = (days == 0 && from == null) ? Math.min(ttl, LIVE_RANGE_TTL_MS) : ttl;
 
 		Map<String, Object> out = new LinkedHashMap<>();
 		List<String> shown = new ArrayList<>(), refused = new ArrayList<>();
@@ -114,7 +135,7 @@ public class AnalyticsServlet extends HttpServlet {
 			}
 			String key = filter.key(name);
 			Cached hit = fresh ? null : cache.get(key);
-			if (hit == null || System.currentTimeMillis() - hit.asOf > (LIVE.contains(name) ? Math.min(ttl, LIVE_TTL_MS) : ttl)) {
+			if (hit == null || System.currentTimeMillis() - hit.asOf > (LIVE.contains(name) ? Math.min(ttl, LIVE_TTL_MS) : reuse)) {
 				if (reports == null && unavailable == null) {
 					try {
 						reports = store().reports(dataSource(settings));
@@ -220,6 +241,15 @@ public class AnalyticsServlet extends HttpServlet {
 			return v == null ? dflt : Integer.parseInt(v.trim());
 		} catch (NumberFormatException e) {
 			return dflt;
+		}
+	}
+
+	private static Long longParam(HttpServletRequest req, String name) {
+		try {
+			String v = req.getParameter(name);
+			return v == null || v.trim().isEmpty() ? null : Long.valueOf(v.trim());
+		} catch (NumberFormatException e) {
+			return null;
 		}
 	}
 

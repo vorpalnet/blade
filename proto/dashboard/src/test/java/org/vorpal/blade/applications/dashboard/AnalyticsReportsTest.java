@@ -463,6 +463,95 @@ class AnalyticsReportsTest {
 				"past a week, the day");
 	}
 
+	// ── windows, grains and narrowing ─────────────────────────────────────
+
+	@Test
+	void liveIsTheLastHourInMinutes() {
+		AnalyticsReports.Filter live = filter(0, false, null);
+		assertEquals(1, n(only(reports.run("calls.summary", live)).get(0)), "c6, up since 11:30");
+		AnalyticsReports.Table t = reports.run("calls.by-outcome", live);
+		assertEquals("minute", t.columns.get(0));
+		assertEquals(61, t.rows.size(), "11:00 to 12:00, each minute");
+		assertEquals("2026-10-03 11:00", t.rows.get(0).get(0));
+		assertEquals("hour", reports.run("calls.by-outcome", filter(7, false, null)).columns.get(0));
+		assertEquals("day", reports.run("calls.by-outcome", filter(30, false, null)).columns.get(0));
+	}
+
+	@Test
+	void aChosenWindowLeavesOutWhatCameAfterIt() {
+		AnalyticsReports.Filter morning = filter(7, false, null).window(
+				Date.from(Instant.parse("2026-10-03T07:30:00Z")), Date.from(Instant.parse("2026-10-03T09:00:00Z")));
+		assertEquals(2, n(only(reports.run("calls.summary", morning)).get(0)), "c1 and c2; c6 came later");
+		AnalyticsReports.Table t = reports.run("calls.by-outcome", morning);
+		assertEquals("minute", t.columns.get(0), "an hour and a half is minutes");
+		AnalyticsReports.Filter afternoon = filter(7, false, null).window(
+				Date.from(Instant.parse("2026-10-03T00:00:00Z")), Date.from(Instant.parse("2026-10-03T08:00:20Z")));
+		assertEquals("quarter", reports.run("calls.by-outcome", afternoon).columns.get(0), "eight hours is quarters");
+	}
+
+	@Test
+	void oneServersCallsAndSamples() {
+		assertEquals(2, n(only(reports.run("calls.summary", filter(7, false, null).onServer("engine1"))).get(0)),
+				"c3 and c6");
+		assertEquals(3, n(only(reports.run("calls.summary", filter(7, false, null).onServer("engine0"))).get(0)),
+				"c1, c2, c4");
+		AnalyticsReports.Table heap = reports.run("platform.heap", filter(7, false, null).onServer("engine0"));
+		assertFalse(heap.rows.isEmpty());
+		assertTrue(heap.rows.stream().allMatch(r -> String.valueOf(r.get(1)).endsWith("engine0")),
+				"named with its domain when several domains have an engine0");
+	}
+
+	@Test
+	void theLowerRowNarrowsToAnOutcomeAndAnApplication() {
+		AnalyticsReports.Filter completed = filter(7, false, null).forCalls("completed", null);
+		assertEquals(Arrays.asList(Arrays.asList("000000C3", "2026-10-02 09:00:00", 30L, "completed", "agent · transfer",
+				"CLEAR")), reports.run("calls.list", completed).rows);
+		assertEquals(Arrays.asList(Arrays.asList("agent", 1L), Arrays.asList("transfer", 1L)),
+				reports.run("calls.by-application", completed).rows);
+		assertEquals(Arrays.asList(Arrays.asList("CLEAR", 1L)), reports.run("highrisk.by-band", completed).rows);
+		assertTrue(reports.run("calls.list", filter(7, false, null).forCalls(null, "listener")).rows.isEmpty(),
+				"listener's only call is three weeks old");
+		assertEquals(5, reports.run("calls.list", filter(7, false, null)).rows.size());
+		assertEquals(null, filter(7, false, null).forCalls("lost", null).outcome, "only the five outcomes");
+	}
+
+	@Test
+	void operationsInThePastComeFromTheDatabase() {
+		AnalyticsReports.Table t = reports.run("ops.events", filter(7, false, "east-1"));
+		assertEquals(5, t.rows.size(), "o1 to o5; o6 is older than the week, o7 another domain's");
+		assertEquals(Arrays.asList(Instant.parse("2026-10-03T11:01:00Z").toEpochMilli(),
+				org.vorpal.blade.framework.v3.events.BladeEventTypes.QUEUE_DEPTH, "engine0", "queue", "sales"),
+				t.rows.get(0).subList(0, 5));
+		assertEquals(Arrays.asList(org.vorpal.blade.framework.v3.events.BladeEventTypes.TRUNK_FAILED),
+				reports.run("ops.events", filter(7, false, "east-1").onServer("engine1")).rows.stream()
+						.map(r -> r.get(1)).collect(java.util.stream.Collectors.toList()));
+		assertEquals(2, reports.run("ops.events", filter(7, false, "east-1").atHour(6, 11)).rows.size(),
+				"Saturday 11:00: the queue's two minutes");
+	}
+
+	@Test
+	void issuesAreWhatWasOpenInTheWindow() {
+		AnalyticsReports.Table week = reports.run("ops.issues", filter(7, false, "east-1"));
+		assertEquals(Arrays.asList("type", "subject", "node", "application", "detail", "from", "until", "open"),
+				week.columns);
+		assertEquals(Arrays.asList("flowroute", "carrier-a", "prompts"),
+				week.rows.stream().map(r -> r.get(1)).collect(java.util.stream.Collectors.toList()),
+				"newest first; the problem raised before the week is still open in it");
+		assertEquals(Instant.parse("2026-10-03T09:20:00Z").toEpochMilli(), week.rows.get(1).get(6));
+		assertEquals(null, week.rows.get(0).get(6), "the trunk never came back");
+		assertEquals("/blade/configurator/", week.rows.get(2).get(7));
+		assertEquals(Arrays.asList("flowroute", "prompts"), reports.run("ops.issues", filter(0, false, "east-1")).rows
+				.stream().map(r -> r.get(1)).collect(java.util.stream.Collectors.toList()),
+				"in the last hour: carrier-a was back long before");
+	}
+
+	@Test
+	void aQueuesMinutesFoldIntoItsWindow() {
+		assertEquals(Arrays.asList(Arrays.asList("sales", "engine0", 2L, 3L, 0L,
+				Instant.parse("2026-10-03T11:01:00Z").toEpochMilli())),
+				reports.run("ops.queues", filter(7, false, "east-1")).rows);
+	}
+
 	// ── who sees what ─────────────────────────────────────────────────────
 
 	private static DashboardGrant grant(String platform, String tenants, String departments, boolean content) {

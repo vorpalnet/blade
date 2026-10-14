@@ -209,3 +209,21 @@ CREATE TABLE v_config_changes (
 INSERT INTO v_config_changes VALUES ('g1', TIMESTAMP '2026-10-03 09:58:00', 'configSaved', 'irouter.json', NULL, 'operator1', 'saved', NULL, NULL, 'AdminServer', 'east-1');
 INSERT INTO v_config_changes VALUES ('g2', TIMESTAMP '2026-10-03 09:59:00', 'configPublished', 'irouter.json', 'irouter', NULL, NULL, 'domain', '["engine1"]', 'AdminServer', 'east-1');
 INSERT INTO v_config_changes VALUES ('g3', TIMESTAMP '2026-10-03 11:00:00', 'configPublished', 'gateway.json', 'gateway', NULL, NULL, 'domain', NULL, 'AdminServer', 'west-1');
+
+CREATE TABLE v_ops_events (
+   event_id VARCHAR(20) PRIMARY KEY, occurred_at TIMESTAMP, event_type VARCHAR(64), node VARCHAR(64),
+   application VARCHAR(64), subject VARCHAR(256), detail VARCHAR(512), remote_kind VARCHAR(16),
+   registrar VARCHAR(128), status_code BIGINT, low_waiting BIGINT, high_waiting BIGINT, waiting_now BIGINT,
+   open_page VARCHAR(256), domain VARCHAR(64));
+
+-- Operations on east-1: carrier-a down for twenty minutes this morning, the
+-- flowroute trunk failing since 10:00 on engine1, two minutes the sales queue
+-- held callers, and a problem the player raised two weeks ago and never
+-- cleared. One endpoint down on west-1.
+INSERT INTO v_ops_events VALUES ('o1', TIMESTAMP '2026-10-03 09:00:00', 'endpointDown', 'engine0', 'proxy-balancer', 'carrier-a', 'OPTIONS 408', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'east-1');
+INSERT INTO v_ops_events VALUES ('o2', TIMESTAMP '2026-10-03 09:20:00', 'endpointUp', 'engine0', 'proxy-balancer', 'carrier-a', 'OPTIONS 200', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'east-1');
+INSERT INTO v_ops_events VALUES ('o3', TIMESTAMP '2026-10-03 10:00:00', 'trunkFailed', 'engine1', 'gateway', 'flowroute', 'Forbidden', NULL, 'sip.flowroute.com', 403, NULL, NULL, NULL, NULL, 'east-1');
+INSERT INTO v_ops_events VALUES ('o4', TIMESTAMP '2026-10-03 11:00:00', 'queueDepth', 'engine0', 'queue', 'sales', NULL, NULL, NULL, NULL, 0, 3, 2, NULL, 'east-1');
+INSERT INTO v_ops_events VALUES ('o5', TIMESTAMP '2026-10-03 11:01:00', 'queueDepth', 'engine0', 'queue', 'sales', NULL, NULL, NULL, NULL, 0, 1, 0, NULL, 'east-1');
+INSERT INTO v_ops_events VALUES ('o6', TIMESTAMP '2026-09-20 08:00:00', 'problemRaised', 'engine0', 'player', 'prompts', 'Prompt files missing', NULL, NULL, NULL, NULL, NULL, NULL, '/blade/configurator/', 'east-1');
+INSERT INTO v_ops_events VALUES ('o7', TIMESTAMP '2026-10-03 11:30:00', 'endpointDown', 'engine0', 'proxy-balancer', 'carrier-b', 'OPTIONS 503', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'west-1');

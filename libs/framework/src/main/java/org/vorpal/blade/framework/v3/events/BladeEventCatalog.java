@@ -848,9 +848,16 @@ public final class BladeEventCatalog {
 
 	/// Facts about the platform rather than a call: queue depth, endpoint and
 	/// trunk health, registrations, presence, SIP access refusals and
-	/// configuration changes. Not persisted: dashboards and alerting subscribe.
-	/// Each carries the `node` that saw it, because every engine keeps its own
-	/// view.
+	/// configuration changes. Each carries the `node` that saw it, because
+	/// every engine keeps its own view.
+	///
+	/// **The changes are persisted; the chatter is not.** An endpoint, remote
+	/// or trunk going down and back, a problem raised and cleared, a queue's
+	/// occupied minute and a configuration change are written to the analytics
+	/// database, so the dashboard can show what happened in a past hour. They
+	/// are published on the change, so they are few. Registrations, presence
+	/// and SIP refusals stay on the bus only: a phone fleet re-registers all
+	/// day, and a scanner produces thousands of refusals.
 	public static List<EventType> operationsTypes() {
 		List<EventType> types = new ArrayList<>();
 		types.add(queueDepth());
@@ -872,7 +879,7 @@ public final class BladeEventCatalog {
 		return types;
 	}
 
-	/// A platform fact that IS persisted, unlike [#operationsTypes]: an
+	/// A platform fact that is persisted, like the changes among [#operationsTypes]: an
 	/// application's counters are reset on every deploy, so the only record of
 	/// what it dropped last week is the samples analytics kept.
 	private static EventType applicationSampled() {
@@ -953,9 +960,8 @@ public final class BladeEventCatalog {
 
 	private static EventType queueDepth() {
 		EventType declaration = base(BladeEventTypes.QUEUE_DEPTH, "Queue Depth",
-				"A queue's length over the last minute. Published only for a minute in which the queue held somebody.",
+				"A queue's length over the last minute. Published only for a minute in which the queue held somebody, and the first empty minute after one. Persisted: the dashboard folds the minutes into hours and days.",
 				"QueueDepth");
-		declaration.setPersist(false);
 		List<EventField> fields = new ArrayList<>();
 		fields.add(field("queue", EventFieldType.STRING, true, "The queue's configured id."));
 		fields.add(field("low", EventFieldType.INTEGER, true, "Fewest callers waiting during the minute."));
@@ -970,7 +976,6 @@ public final class BladeEventCatalog {
 		EventType declaration = base(BladeEventTypes.ENDPOINT_DOWN, "Endpoint Down",
 				"The balancer stopped offering calls to an endpoint: an OPTIONS ping failed or it answered a call 503. Published on the change, not on every failed ping.",
 				"EndpointDown");
-		declaration.setPersist(false);
 		List<EventField> fields = new ArrayList<>();
 		fields.add(field("endpoint", EventFieldType.STRING, true, "The endpoint's configured name."));
 		fields.add(field("note", EventFieldType.STRING, false, "What was observed, e.g. OPTIONS 408."));
@@ -984,7 +989,6 @@ public final class BladeEventCatalog {
 		EventType declaration = base(BladeEventTypes.ENDPOINT_UP, "Endpoint Up",
 				"An endpoint the balancer had marked down answered again.",
 				"EndpointUp");
-		declaration.setPersist(false);
 		List<EventField> fields = new ArrayList<>();
 		fields.add(field("endpoint", EventFieldType.STRING, true, "The endpoint's configured name."));
 		fields.add(field("note", EventFieldType.STRING, false, "What was observed, e.g. OPTIONS 200."));
@@ -997,7 +1001,6 @@ public final class BladeEventCatalog {
 		EventType declaration = base(BladeEventTypes.REMOTE_DOWN, "Remote Down",
 				"A service an application calls failed often enough that its circuit breaker cut it off; calls skip it until a retry succeeds. Published on the change, by each application and node that saw it.",
 				"RemoteDown");
-		declaration.setPersist(false);
 		declaration.setFields(remoteFields());
 		return declaration;
 	}
@@ -1005,7 +1008,6 @@ public final class BladeEventCatalog {
 	private static EventType remoteUp() {
 		EventType declaration = base(BladeEventTypes.REMOTE_UP, "Remote Up",
 				"A service whose circuit breaker had cut it off answered again.", "RemoteUp");
-		declaration.setPersist(false);
 		declaration.setFields(remoteFields());
 		return declaration;
 	}
@@ -1014,7 +1016,6 @@ public final class BladeEventCatalog {
 		EventType declaration = base(BladeEventTypes.PROBLEM_RAISED, "Problem Raised",
 				"An application found a problem an operator should fix, and says which admin page fixes it. The dashboard shows it under Issues until it is cleared.",
 				"ProblemRaised");
-		declaration.setPersist(false);
 		List<EventField> fields = new ArrayList<>();
 		fields.add(field("key", EventFieldType.STRING, true, "What the problem is about, unique within the application."));
 		fields.add(field("summary", EventFieldType.STRING, true, "The problem, in words."));
@@ -1028,7 +1029,6 @@ public final class BladeEventCatalog {
 	private static EventType problemCleared() {
 		EventType declaration = base(BladeEventTypes.PROBLEM_CLEARED, "Problem Cleared",
 				"The problem an application raised under this key is over.", "ProblemCleared");
-		declaration.setPersist(false);
 		List<EventField> fields = new ArrayList<>();
 		fields.add(field("key", EventFieldType.STRING, true, "The key it was raised under."));
 		fields.add(field("application", EventFieldType.STRING, false, "The application that raised it."));
@@ -1079,7 +1079,6 @@ public final class BladeEventCatalog {
 		EventType declaration = base(BladeEventTypes.TRUNK_REGISTERED, "Trunk Registered",
 				"A gateway's registration with its carrier trunk succeeded, the first time or after a failure. Refreshes are not published.",
 				"TrunkRegistered");
-		declaration.setPersist(false);
 		List<EventField> fields = new ArrayList<>();
 		fields.add(field("gateway", EventFieldType.STRING, true, "The gateway's configured name."));
 		fields.add(field("registrar", EventFieldType.STRING, true, "The carrier's registrar domain."));
@@ -1093,7 +1092,6 @@ public final class BladeEventCatalog {
 		EventType declaration = base(BladeEventTypes.TRUNK_FAILED, "Trunk Failed",
 				"A gateway's trunk registration failed. Calls through it fail until it recovers. Published on the change, not on every retry.",
 				"TrunkFailed");
-		declaration.setPersist(false);
 		List<EventField> fields = new ArrayList<>();
 		fields.add(field("gateway", EventFieldType.STRING, true, "The gateway's configured name."));
 		fields.add(field("registrar", EventFieldType.STRING, true, "The carrier's registrar domain."));
@@ -1108,7 +1106,6 @@ public final class BladeEventCatalog {
 		EventType declaration = base(BladeEventTypes.TRUNK_UNREGISTERED, "Trunk Unregistered",
 				"A gateway removed its trunk registration, as it does when stopping.",
 				"TrunkUnregistered");
-		declaration.setPersist(false);
 		List<EventField> fields = new ArrayList<>();
 		fields.add(field("gateway", EventFieldType.STRING, true, "The gateway's configured name."));
 		fields.add(field("registrar", EventFieldType.STRING, true, "The carrier's registrar domain."));

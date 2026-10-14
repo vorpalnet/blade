@@ -462,6 +462,26 @@ public final class BladeEventTypes {
 			return TRANSFER_DECLINED;
 		case "transferAbandoned":
 			return TRANSFER_ABANDONED;
+		case "queueDepth":
+			return QUEUE_DEPTH;
+		case "endpointDown":
+			return ENDPOINT_DOWN;
+		case "endpointUp":
+			return ENDPOINT_UP;
+		case "remoteDown":
+			return REMOTE_DOWN;
+		case "remoteUp":
+			return REMOTE_UP;
+		case "problemRaised":
+			return PROBLEM_RAISED;
+		case "problemCleared":
+			return PROBLEM_CLEARED;
+		case "trunkRegistered":
+			return TRUNK_REGISTERED;
+		case "trunkFailed":
+			return TRUNK_FAILED;
+		case "trunkUnregistered":
+			return TRUNK_UNREGISTERED;
 		default:
 			// An operator-defined name from an app's analytics.events config.
 			return CALL_EVENT;
@@ -552,6 +572,28 @@ public final class BladeEventTypes {
 			return "configSaved";
 		case CONFIG_PUBLISHED:
 			return "configPublished";
+		// Operations events, persisted for the dashboard's look back. Their
+		// last segments ("down", "up", "failed") would name several each.
+		case QUEUE_DEPTH:
+			return "queueDepth";
+		case ENDPOINT_DOWN:
+			return "endpointDown";
+		case ENDPOINT_UP:
+			return "endpointUp";
+		case REMOTE_DOWN:
+			return "remoteDown";
+		case REMOTE_UP:
+			return "remoteUp";
+		case PROBLEM_RAISED:
+			return "problemRaised";
+		case PROBLEM_CLEARED:
+			return "problemCleared";
+		case TRUNK_REGISTERED:
+			return "trunkRegistered";
+		case TRUNK_FAILED:
+			return "trunkFailed";
+		case TRUNK_UNREGISTERED:
+			return "trunkUnregistered";
 		default:
 			int dot = type.lastIndexOf('.');
 			return (dot < 0 || dot == type.length() - 1) ? type : type.substring(dot + 1);

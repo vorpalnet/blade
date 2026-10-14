@@ -5,31 +5,44 @@
    stacking more charts beneath it. A panel's title opens its full report
    (report.html), which is where the scrolling detail lives.
 
-   This domain's servers and operations are live (runtime MBeans and the event
-   bus, every 5 s). Another domain's servers come from the minute samples every
-   domain's dashboard writes to the analytics database. The analytics panels
-   come from the reporting views (cached on the server, every 60 s), over the
-   range and domain chosen in the top bar. Charts are drawn by charts.js; the
+   Detail grows left to right. The left column says whether things work
+   (servers; how calls ended), the middle what they are doing (traffic; which
+   applications), the right what went wrong (operations; the calls
+   themselves). Choosing something in a panel narrows the panels to its
+   right: a server narrows Traffic and Operations, a time on a Traffic chart
+   narrows Operations, an outcome narrows Applications and Calls, an
+   application narrows Calls. A narrowed panel says so in its header, with a
+   ✕ to undo it, and the headline numbers never narrow: the top of the board
+   always tells the whole truth.
+
+   Everything shows the range chosen in the top bar: Live (the last hour), a
+   number of days, or a custom range. A view that can only show now, such as
+   the connection pools, says "live" in its header instead.
+
+   The range and every choice live in the URL's hash, so Back undoes a step
+   and a link reproduces the view. This domain's servers and operations are
+   read live (runtime MBeans and the event bus, every 5 s); everything over a
+   range comes from the reporting views. Charts are drawn by charts.js; the
    report definitions are in reports.js. */
 (function () {
 	'use strict';
 	var C = window.BladeCharts, R = window.BladeReports, getJson = R.getJson;
 	/* Replaced by the dashboard's settings (/settings) when the board opens. */
 	var LIVE_MS = 5000, ANALYTICS_MS = 60000, HEAP_HIGH = 85;
+	/* How often the range's numbers are re-read while the board shows Live. */
+	var LIVE_ANALYTICS_MS = 15000;
 	/* What this viewer's grants show, from /settings. The server enforces it;
 	   the board only says so instead of showing empty panels. */
 	var RIGHTS = { platform: true, content: true };
-	/* The range buttons, in days; replaced by the settings' ranges and
-	   defaultDays (/settings) when the board opens. */
-	var RANGES = ['1', '7', '30'], DEFAULT_DAYS = '7';
+	/* The range buttons between Live and Custom, in days; replaced by the
+	   settings' ranges (/settings) when the board opens. */
+	var RANGES = ['1', '7', '30'];
 	function rangeLabel(d) { return d === '1' ? 'Last day' : d + ' days'; }
-	/* The range as a phrase on a tile or panel. One day is a rolling 24 hours;
-	   longer ranges are whole days, today's included (AnalyticsReports.since). */
-	function rangePhrase(d) { return d === '1' ? 'last 24 hours' : 'last ' + d + ' days'; }
 	/* Lines that are peers (servers, applications) take colours that rank
 	   nothing; the good/fair/bad tokens are kept for outcomes. Each line is
 	   named at its end, so the colour is never the only channel. */
 	var LINE_COLORS = function () { return [C.token('--accent'), C.token('--info'), C.token('--ink-2')]; };
+	var WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 	function store(key, value) {
 		try {
@@ -38,9 +51,6 @@
 		} catch (e) { /* private window: the board works without it */ }
 		return null;
 	}
-
-	var days = store('days') || DEFAULT_DAYS;
-	if (RANGES.indexOf(days) < 0) days = DEFAULT_DAYS;
 
 	/* The domain shown: '' is every domain. localDomain is the one this board
 	   runs in, the only one it can read live. */
@@ -69,6 +79,159 @@
 			return { name: name, values: result.rows.map(function (r) { return [r[0], r[i]]; }) };
 		});
 	}
+
+	/* ── what the board shows ──────────────────────────────────────────── */
+
+	/* The range in the top bar and what the viewer chose to narrow by:
+	   range is 'live', a number of days, or 'custom' with from and until in
+	   epoch millis; slice is a time on a Traffic chart, {from, until}, or a
+	   cell of the weekday grid, {dow, hod} with Monday 1. */
+	var state = { range: 'live', from: null, until: null, server: null, slice: null, outcome: null, app: null };
+
+	function isLive() { return state.range === 'live'; }
+	/* Operations is read from the event bus while the board shows the live
+	   hour with no time chosen; any other time comes from the database. */
+	function liveFeed() { return isLive() && !state.slice; }
+
+	function readHash() {
+		var p = new URLSearchParams(location.hash.replace(/^#/, '')), st = {};
+		var range = p.get('range') || 'live';
+		st.range = range === 'live' || range === 'custom' || /^\d+$/.test(range) ? range : 'live';
+		st.from = +p.get('from') || null;
+		st.until = +p.get('until') || null;
+		if (st.range === 'custom' && !(st.from && st.until && st.from < st.until)) st.range = 'live';
+		st.server = p.get('server') || null;
+		st.outcome = p.get('outcome') || null;
+		st.app = p.get('app') || null;
+		st.slice = null;
+		var s = p.get('slice');
+		var m = s && /^(\d+)-(\d+)$/.exec(s), w = s && /^([1-7])@(\d{1,2})$/.exec(s);
+		if (m) st.slice = { from: +m[1], until: +m[2] };
+		else if (w) st.slice = { dow: +w[1], hod: +w[2] };
+		return st;
+	}
+
+	function hashOf(st) {
+		var p = new URLSearchParams();
+		if (st.range !== 'live') p.set('range', st.range);
+		if (st.range === 'custom') { p.set('from', st.from); p.set('until', st.until); }
+		if (st.server) p.set('server', st.server);
+		if (st.slice) p.set('slice', st.slice.dow ? st.slice.dow + '@' + st.slice.hod : st.slice.from + '-' + st.slice.until);
+		if (st.outcome) p.set('outcome', st.outcome);
+		if (st.app) p.set('app', st.app);
+		return p.toString();
+	}
+
+	/* A choice: the hash changes (a step Back can undo), then the board follows. */
+	function choose(changes) {
+		var next = {};
+		Object.keys(state).forEach(function (k) { next[k] = k in changes ? changes[k] : state[k]; });
+		var h = hashOf(next);
+		if (h === location.hash.replace(/^#/, '')) { apply(next); return; }
+		location.hash = h;
+	}
+
+	/* Where the range opens, in epoch millis, as the server cuts it. */
+	function rangeStart(st) {
+		st = st || state;
+		if (st.range === 'custom') return st.from;
+		if (st.range === 'live') return Date.now() - 3600000;
+		if (st.range === '1') return Date.now() - 86400000;
+		var d = new Date(Date.now() - (+st.range - 1) * 86400000);
+		var parts = d.toLocaleDateString('en-CA', { timeZone: R.zone() }).split('-');
+		return R.zonedMs(+parts[0], +parts[1], +parts[2], 0, 0);
+	}
+	function rangeEnd(st) { st = st || state; return st.range === 'custom' ? st.until : Date.now(); }
+
+	function apply(next) {
+		var prev = state;
+		/* A time chosen outside the new range goes; the rest of the choice stays. */
+		if (next.slice && next.slice.from && (next.slice.until < rangeStart(next) || next.slice.from > rangeEnd(next))) next.slice = null;
+		state = next;
+		var rangeChanged = prev.range !== next.range || prev.from !== next.from || prev.until !== next.until;
+		var sliceChanged = JSON.stringify(prev.slice) !== JSON.stringify(next.slice);
+		var groups = {};
+		if (rangeChanged) { ['base', 'servers', 'traffic', 'ops', 'apps', 'calls'].forEach(function (g) { groups[g] = 1; }); }
+		if (prev.server !== next.server) { groups.traffic = 1; groups.ops = 1; }
+		if (sliceChanged) groups.ops = 1;
+		if (prev.outcome !== next.outcome) { groups.apps = 1; groups.calls = 1; }
+		if (prev.app !== next.app) groups.calls = 1;
+		if (rangeChanged) { buildRange(); labelRanges(); relinkAll(); scheduleAnalytics(); }
+		Object.keys(groups).forEach(function (g) { D[g] = undefined; loadGroup(g); });
+		drawAll();
+	}
+
+	/* "Thu 10/8" in the viewer's zone. */
+	function dayText(ms) {
+		return new Date(ms).toLocaleDateString([], { timeZone: R.zone(), weekday: 'short', month: 'numeric', day: 'numeric' }).replace(',', '');
+	}
+	function clockText(ms) { return R.time(ms, { hour: '2-digit', minute: '2-digit' }); }
+	/* "Thu 10/8 14:00–14:15", or across days "Thu 10/8 14:00 – Fri 10/9 09:00". */
+	function spanText(from, until) {
+		var end = until + 1;
+		if (dayText(from) === dayText(until)) return dayText(from) + ' ' + clockText(from) + '–' + clockText(end);
+		return dayText(from) + ' ' + clockText(from) + ' – ' + dayText(until) + ' ' + clockText(end);
+	}
+
+	/* The range as a phrase on a tile or panel. One day is a rolling 24 hours;
+	   longer ranges are whole days, today's included (AnalyticsReports.since). */
+	function rangePhrase() {
+		if (state.range === 'live') return 'last hour';
+		if (state.range === 'custom') return spanText(state.from, state.until - 1);
+		return state.range === '1' ? 'last 24 hours' : 'last ' + state.range + ' days';
+	}
+
+	function rangeQuery() {
+		if (state.range === 'custom') return '&from=' + state.from + '&until=' + state.until;
+		return '&days=' + (state.range === 'live' ? 0 : state.range);
+	}
+
+	/* The range narrowed to the time chosen on a Traffic chart, for Operations. */
+	function sliceQuery() {
+		var s = state.slice;
+		if (!s) return rangeQuery();
+		if (s.dow) return rangeQuery() + '&dow=' + s.dow + '&hod=' + s.hod;
+		return '&from=' + s.from + '&until=' + s.until;
+	}
+
+	function sliceLabel() {
+		var s = state.slice;
+		if (!s) return '';
+		if (s.dow) return 'every ' + WEEKDAYS[s.dow - 1] + ' ' + (s.hod < 10 ? '0' : '') + s.hod + ':00';
+		return spanText(s.from, s.until);
+	}
+
+	/* The time a chart bucket spans: "2026-10-08" is a day, "2026-10-08 14:15"
+	   starts a minute, a quarter-hour or an hour, as the report's first column
+	   (`grain`) says. Read in the viewer's zone, as the server cut it. */
+	function sliceOf(bucket, grain) {
+		var m = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}))?$/.exec(bucket);
+		if (!m) return null;
+		var from = R.zonedMs(+m[1], +m[2], +m[3], +(m[4] || 0), +(m[5] || 0));
+		var until = grain === 'day' ? R.zonedMs(+m[1], +m[2], +m[3] + 1, 0, 0) - 1
+			: from + ({ minute: 1, quarter: 15, hour: 60 }[grain] || 60) * 60000 - 1;
+		return { from: from, until: until };
+	}
+
+	/* A Traffic chart's buckets as choices: clicking one narrows Operations
+	   to it, clicking it again lets it go. */
+	function bucketPick(res) {
+		var grain = res.columns[0];
+		var picked = null;
+		if (state.slice && state.slice.from) {
+			res.rows.forEach(function (r) { var s = sliceOf(r[0], grain); if (s && s.from === state.slice.from) picked = r[0]; });
+		}
+		return {
+			pick: function (bucket) {
+				var s = sliceOf(bucket, grain);
+				choose({ slice: picked === bucket || !s ? null : s });
+			},
+			picked: picked,
+			pickLabel: when
+		};
+	}
+
+	function mergeOpts(a, b) { Object.keys(b).forEach(function (k) { a[k] = b[k]; }); return a; }
 
 	/* ── headline numbers ──────────────────────────────────────────────── */
 
@@ -102,7 +265,7 @@
 	}
 
 	function labelRanges() {
-		var word = rangePhrase(days);
+		var word = rangePhrase();
 		KPI.forEach(function (k) { if (k.rangeEl) k.rangeEl.textContent = ' · ' + word; });
 		Object.keys(P).forEach(function (k) { P[k].showRange(); });
 	}
@@ -137,31 +300,45 @@
 
 	/* ── panels ────────────────────────────────────────────────────────── */
 
-	/* views: [{ key, label, sub, live, draw(body) }]. The chosen tab is
-	   remembered per panel. A panel built with ranged reads the database, so its
-	   head names the range in the top bar; a view marked live does not. */
-	function Panel(name, title, family, ranged) {
+	/* views: [{ key, label, sub, live, narrow, first, draw(body) }]. The chosen
+	   tab is remembered per panel; until one is, the view marked `first` shows,
+	   else the leftmost. A panel built with ranged shows the top bar's range
+	   in its head; a view whose `live` is true (or returns true) can only show
+	   now, and says "live" instead. `narrows` names the choices made to the
+	   left that this panel follows; each shows as a chip in its head, unless the
+	   view says `narrow: false`. */
+	function Panel(name, title, family, ranged, narrows) {
 		this.name = name;
 		this.host = document.querySelector('[data-panel="' + name + '"]');
 		var head = el('div', 'panel__head');
 		var t = family ? el('a', 'panel__title', title) : el('span', 'panel__title', title);
-		if (family) { t.href = 'report.html?r=' + family + '&days=' + days + scopeQuery(); t.title = 'Open the full report'; this.link = t; this.family = family; }
+		if (family) { t.title = 'Open the full report'; this.link = t; this.family = family; }
 		this.ranged = !!ranged;
+		this.narrows = narrows || [];
 		this.range = el('span', 'panel__range');
-		this.range.title = 'The range chosen in the top bar';
+		this.chips = el('span', 'panel__chips');
 		this.sub = el('span', 'panel__sub', '');
 		this.tabs = el('div', 'tabs');
-		head.appendChild(t); head.appendChild(this.range); head.appendChild(this.sub); head.appendChild(this.tabs);
+		head.appendChild(t); head.appendChild(this.range); head.appendChild(this.chips); head.appendChild(this.sub);
+		head.appendChild(this.tabs);
 		this.body = el('div', 'panel__body');
 		this.host.appendChild(head); this.host.appendChild(this.body);
 		this.views = [];
 		this.current = store('tab.' + name);
+		this.relink();
 	}
+
+	Panel.prototype.view = function () {
+		var self = this;
+		return this.views.filter(function (v) { return v.key === self.current; })[0];
+	};
 
 	Panel.prototype.setViews = function (views) {
 		var self = this;
 		this.views = views;
-		if (!views.some(function (v) { return v.key === self.current; })) this.current = views[0].key;
+		if (!views.some(function (v) { return v.key === self.current; })) {
+			this.current = (views.filter(function (v) { return v.first; })[0] || views[0]).key;
+		}
 		this.tabs.textContent = '';
 		if (views.length > 1) {
 			views.forEach(function (v) {
@@ -179,26 +356,62 @@
 	};
 
 	Panel.prototype.draw = function () {
-		var self = this;
-		var view = this.views.filter(function (v) { return v.key === self.current; })[0];
+		var view = this.view();
 		if (!view) return;
 		this.body.textContent = '';
-		this.sub.textContent = view.sub || '';
+		this.sub.textContent = typeof view.sub === 'function' ? view.sub() : (view.sub || '');
+		this.sub.title = (view.tip ? view.tip + '. ' : '') + this.sub.textContent;
 		this.showRange();
+		this.showChips();
 		try { view.draw(this.body); } catch (e) { C.message(this.body, 'error', String(e.message || e)); }
 	};
 
 	Panel.prototype.showRange = function () {
-		var self = this;
-		var view = this.views.filter(function (v) { return v.key === self.current; })[0];
-		var on = this.ranged && view && !view.live;
-		this.range.textContent = on ? rangePhrase(days) : '';
-		this.range.hidden = !on;
+		var view = this.view();
+		var live = view && (typeof view.live === 'function' ? view.live() : view.live);
+		this.range.className = 'panel__range' + (live ? ' panel__range--live' : '');
+		this.range.textContent = live ? 'live' : (this.ranged ? rangePhrase() : '');
+		this.range.title = live ? 'Read now: this view has no history' : 'The range chosen in the top bar';
+		this.range.hidden = !live && !this.ranged;
 	};
 
-	Panel.prototype.relink = function () {
-		if (this.link) this.link.href = 'report.html?r=' + this.family + '&days=' + days + scopeQuery();
+	/* What the panel is narrowed to, each with a ✕ that lets it go. */
+	var CHIP = {
+		server: function () { return state.server; },
+		slice: function () { return state.slice && sliceLabel(); },
+		outcome: function () { return state.outcome && state.outcome.charAt(0).toUpperCase() + state.outcome.slice(1) + ' calls'; },
+		app: function () { return state.app; }
 	};
+	Panel.prototype.showChips = function () {
+		var view = this.view();
+		this.chips.textContent = '';
+		if (view && view.narrow === false) return;
+		var self = this;
+		this.narrows.forEach(function (key) {
+			var text = CHIP[key]();
+			if (!text) return;
+			var chip = el('span', 'chip');
+			chip.appendChild(el('span', 'chip__text', text));
+			var x = el('button', 'chip__x', '✕');
+			x.type = 'button';
+			x.title = 'Show all again';
+			x.setAttribute('aria-label', 'Stop narrowing to ' + text);
+			x.addEventListener('click', function () { var c = {}; c[key] = null; choose(c); });
+			chip.appendChild(x);
+			self.chips.appendChild(chip);
+		});
+	};
+
+	/* The full report, over the board's range. */
+	Panel.prototype.relink = function () {
+		if (!this.link) return;
+		var q = state.range === 'custom'
+			? '&days=' + Math.max(1, Math.ceil((state.until - state.from) / 86400000)) + '&from=' + state.from + '&until=' + state.until
+			: '&days=' + (state.range === 'live' ? 1 : state.range);
+		this.link.href = 'report.html?r=' + this.family + q + scopeQuery();
+	};
+
+	function relinkAll() { Object.keys(P).forEach(function (k) { P[k].relink(); }); }
 
 	/* A report result into a panel body, or its error. */
 	function guard(result, body, fn) {
@@ -211,11 +424,13 @@
 	   the board scrolls: the full list is one click away in the report. */
 	function fitTable(body, result, opts) {
 		opts = opts || {};
-		C.table(body, result, { limit: 40, wrap: opts.wrap });
+		C.table(body, result, { limit: 40, wrap: opts.wrap, rowOpen: opts.rowOpen });
 		var wrap = body.querySelector('.table-wrap');
 		if (!wrap) return;
 		var rows = wrap.querySelectorAll('tbody tr');
-		var room = body.clientHeight - (wrap.querySelector('thead') ? wrap.querySelector('thead').offsetHeight : 0) - 18;
+		// The body is the table's offset parent: anything above the table (a
+		// link line) takes room too, and so does the "more" line under it.
+		var room = body.clientHeight - wrap.offsetTop - (wrap.querySelector('thead') ? wrap.querySelector('thead').offsetHeight : 0) - 28;
 		var used = 0, shown = 0;
 		for (var i = 0; i < rows.length; i++) {
 			used += rows[i].offsetHeight;
@@ -231,7 +446,7 @@
 		return { columns: keep, rows: result.rows.map(function (r) { return idx.map(function (i) { return r[i]; }); }) };
 	}
 
-	/* ── live: cluster health and operations ───────────────────────────── */
+	/* ── servers ───────────────────────────────────────────────────────── */
 
 	var lastNodes = [], lastOps = null;
 
@@ -251,77 +466,108 @@
 
 	function num(v) { return (v == null || v < 0) ? 'n/a' : C.fmt(v); }
 
-	/* The servers in scope: this domain's from the runtime MBeans, every other
-	   domain's from its latest minute sample (platform.latest), marked with the
-	   sample's age. */
-	function visibleServers() {
+	/* Every domain's servers: this domain's from the runtime MBeans, every
+	   other domain's from its latest minute sample (platform.latest), marked
+	   with the sample's age. The Servers panel lists them all, so a domain can
+	   be chosen there; the headline tile counts the domain in scope. */
+	function allServers() {
 		var out = [];
-		if (!remoteScope()) lastNodes.forEach(function (n) { n.domain = localDomain; out.push(n); });
-		rowsOf(A['platform.latest']).forEach(function (r) {
+		lastNodes.forEach(function (n) { n.domain = localDomain; out.push(n); });
+		rowsOf(D.servers && D.servers['platform.latest']).forEach(function (r) {
 			var domain = r[0];
-			if (domain === localDomain || (scope && domain !== scope)) return;
+			if (domain === localDomain) return;
 			out.push({ domain: domain, server: r[1], cluster: r[2], state: r[3], heapUsedPct: r[4], appSessions: r[5],
 				sipSessions: r[6], threadsStuck: r[7], threadsHogging: r[8], sampled: r[9], cpuPct: r[10] });
 		});
 		return out;
 	}
 
+	function visibleServers() {
+		return allServers().filter(function (n) { return !scope || n.domain === scope; });
+	}
+
+	function byDomainThenName(a, b) {
+		return String(a.domain || '').localeCompare(String(b.domain || '')) || String(a.cluster || '').localeCompare(String(b.cluster || ''))
+			|| String(a.server).localeCompare(String(b.server));
+	}
+
+	/* A domain's heading: choosing it scopes the whole board to it, headline
+	   numbers included; choosing it again shows every domain. */
+	function domainRow(list, domain, note) {
+		var on = scope === domain;
+		var head = el('button', 'srv__domain' + (on ? ' srv__domain--on' : ''));
+		head.type = 'button';
+		head.appendChild(el('span', 'srv__domain-name', (on ? '▸ ' : '') + (domain || 'unnamed domain')));
+		if (note) head.appendChild(el('span', 'srv__domain-note', note));
+		head.title = on ? 'Showing ' + domain + ' only. Click to show every domain.' : 'Show ' + domain + ' only, everywhere on the board';
+		head.addEventListener('click', function () { scopeChanged(on ? '' : domain); });
+		list.appendChild(head);
+	}
+
+	/* A server's name: choosing it narrows Traffic and Operations to it. A
+	   server in another domain than the one in scope brings its domain in. */
+	function serverName(row, n) {
+		var on = state.server === n.server && (!scope || scope === n.domain);
+		var name = el('button', 'srv__name' + (on ? ' srv__name--on' : ''), (on ? '▸ ' : '') + n.server);
+		name.type = 'button';
+		name.title = (n.cluster || 'standalone') + '\n' + (on ? 'Click: every server again' : 'Click: Traffic and Operations for ' + n.server + ' only');
+		name.addEventListener('click', function () {
+			if (on) return choose({ server: null });
+			if (scope && scope !== n.domain) scopeChanged(n.domain);
+			choose({ server: n.server });
+		});
+		var cellEl = el('span', 'srv__who');
+		cellEl.appendChild(name);
+		/* This domain's servers open their own log; another domain's are read
+		   by that domain's Logs. */
+		var log = n.domain === localDomain ? L.to('log', { server: n.server, at: Date.now() }) : null;
+		if (log) {
+			var go = el('a', 'srv__go', '↗');
+			go.href = log.href; go.target = log.target;
+			go.title = 'Open ' + n.server + "'s server log";
+			cellEl.appendChild(go);
+		}
+		row.appendChild(cellEl);
+		if (on) row.classList.add('srv__row--on');
+	}
+
 	/* One line per server: state word, name, heap bar with its number, sessions
 	   and threads. Grouped by domain, then cluster, in name order; a domain read
 	   from its samples says how old the sample is. */
-	function drawServers(body) {
-		if (localOnly(body, 'Servers')) return;
-		var nodes = visibleServers();
-		if (!nodes.length) return C.message(body, 'empty', remoteScope()
-			? 'No sample from ' + scope + ' in the last three minutes. Its dashboard samples each minute; is it running?'
-			: 'Reading the runtime MBeans…');
+	function drawServersNow(body) {
+		var nodes = allServers();
+		if (!nodes.length) return C.message(body, 'empty', 'Reading the runtime MBeans…');
 		var list = el('div', 'srv');
-		nodes.sort(function (a, b) {
-			return String(a.domain || '').localeCompare(String(b.domain || '')) || String(a.cluster || '').localeCompare(String(b.cluster || ''))
-				|| String(a.server).localeCompare(String(b.server));
-		});
-		var domains = nodes.map(function (n) { return n.domain; }).filter(function (d, i, a) { return a.indexOf(d) === i; });
+		nodes.sort(byDomainThenName);
 		var head = el('div', 'srv__row srv__row--head');
-		['state', 'server', 'heap', 'cpu', 'SIP sessions', 'threads'].forEach(function (h) { head.appendChild(el('span', '', h)); });
+		srvHead(head, [['state'], ['server'], ['heap'], ['cpu'], ['sessions', 'SIP sessions now'], ['threads', 'stuck, pending or hogging threads']]);
 		list.appendChild(head);
 		var shownDomain;
 		nodes.forEach(function (n) {
-			if (domains.length > 1 && n.domain !== shownDomain) {
+			if (n.domain !== shownDomain) {
 				shownDomain = n.domain;
 				var age = n.sampled ? Math.max(0, Math.round((Date.now() - n.sampled) / 1000)) : null;
-				list.appendChild(el('div', 'srv__domain', (n.domain || 'unnamed domain')
-					+ (n.domain === localDomain ? ' · live' : (age == null ? '' : ' · sampled ' + age + ' s ago'))));
+				domainRow(list, n.domain, n.domain === localDomain ? 'this domain · live' : (age == null ? '' : 'sampled ' + age + ' s ago'));
 			}
 			var row = el('div', 'srv__row');
 			var st = el('span', 'srv__state ' + stateClass(n)); st.appendChild(el('i')); st.appendChild(document.createTextNode(stateWord(n)));
 			row.appendChild(st);
-			/* This domain's servers open their own log; another domain's are read
-			   by that domain's Logs. Stuck threads open the log at the
-			   container's stuck-thread warning (BEA-000337). */
-			var log = n.domain === localDomain ? L.to('log', { server: n.server, at: Date.now() }) : null;
-			var name = el(log ? 'a' : 'span', 'srv__name' + (log ? ' srv__name--link' : ''), n.server);
-			name.title = (n.cluster || 'standalone') + (log ? '\nOpen ' + n.server + "'s server log" : '');
-			if (log) { name.href = log.href; name.target = log.target; }
-			row.appendChild(name);
+			serverName(row, n);
 			if (n.up === false) {
 				['', '', '', ''].forEach(function () { row.appendChild(el('span', 'srv__n', '—')); });
 				list.appendChild(row);
 				return;
 			}
-			var heap = el('span', 'srv__heap' + (n.heapUsedPct >= HEAP_HIGH ? ' hot' : ''));
-			if (n.heapUsedPct != null) {
-				var bar = el('span', 'srv__bar'); var fill = el('span', 'srv__fill'); fill.style.width = Math.min(100, n.heapUsedPct) + '%';
-				bar.appendChild(fill); heap.appendChild(bar);
-				heap.appendChild(el('b', '', n.heapUsedPct + '%' + (n.heapUsedPct >= HEAP_HIGH ? ' high' : '')));
-			} else heap.appendChild(el('b', '', 'n/a'));
-			row.appendChild(heap);
+			row.appendChild(heapCell(n.heapUsedPct, n.heapUsedPct != null ? n.heapUsedPct + '%' : 'n/a'));
 			row.appendChild(el('span', 'srv__n', n.cpuPct == null ? '—' : n.cpuPct + '%'));
 			row.appendChild(el('span', 'srv__n', num(n.sipSessions)));
 			var threads = n.sampled ? '' : num(n.threadsTotal);
 			if (n.threadsStuck > 0) threads += (threads ? ' · ' : '') + n.threadsStuck + ' stuck';
 			else if (n.threadsPending > 0) threads += ' · ' + n.threadsPending + ' pending';
 			else if (n.threadsHogging > 0) threads += (threads ? ' · ' : '') + n.threadsHogging + ' hogging';
-			if (!threads) threads = 'none stuck';
+			if (!threads) threads = 'none';
+			/* Stuck threads open the log at the container's stuck-thread warning
+			   (BEA-000337). */
 			var stuck = n.threadsStuck > 0 && n.domain === localDomain
 				? L.to('log', { server: n.server, at: Date.now() - 15 * 60000, q: 'BEA-000337' }) : null;
 			var th = el(stuck ? 'a' : 'span', 'srv__n' + (n.threadsStuck > 0 ? ' warn' : '') + (stuck ? ' srv__n--link' : ''), threads);
@@ -330,6 +576,66 @@
 			list.appendChild(row);
 		});
 		body.appendChild(list);
+	}
+
+	/* The servers table's head: one short word a column, the long meaning on
+	   hover, the number columns aligned with their numbers. */
+	function srvHead(head, cols) {
+		cols.forEach(function (c, i) {
+			var h = el('span', i >= 3 ? 'srv__n' : '', c[0]);
+			if (c[1]) h.title = c[1];
+			head.appendChild(h);
+		});
+	}
+
+	function heapCell(pct, text) {
+		var heap = el('span', 'srv__heap' + (pct >= HEAP_HIGH ? ' hot' : ''));
+		if (pct != null) {
+			var bar = el('span', 'srv__bar'); var fill = el('span', 'srv__fill'); fill.style.width = Math.min(100, pct) + '%';
+			bar.appendChild(fill); heap.appendChild(bar);
+			heap.appendChild(el('b', '', text + (pct >= HEAP_HIGH ? ' high' : '')));
+		} else heap.appendChild(el('b', '', 'n/a'));
+		return heap;
+	}
+
+	/* Each server over the range, from its minute samples (platform.servers):
+	   how it stood at its last sample, the highest heap and CPU, how often it
+	   restarted, and the most threads stuck at once. */
+	function drawServersPast(body) {
+		guard(D.servers && D.servers['platform.servers'], body, function (res) {
+			var col = function (n) { return res.columns.indexOf(n); };
+			var rows = res.rows.map(function (r) {
+				return { domain: r[col('domain')], server: r[col('server')], state: r[col('state')], heap: r[col('peak heap %')],
+					cpu: r[col('peak cpu %')], restarts: r[col('restarts')], stuck: r[col('most stuck threads')],
+					refused: r[col('refused')] };
+			});
+			if (!rows.length) return C.message(body, 'empty', 'No server samples in this range.');
+			rows.sort(byDomainThenName);
+			var list = el('div', 'srv');
+			var head = el('div', 'srv__row srv__row--head');
+			srvHead(head, [['state', 'the last state in the range'], ['server'], ['heap', 'the highest heap reading in the range'],
+				['cpu', 'the busiest minute in the range'], ['restarts'], ['stuck', 'the most threads stuck at once']]);
+			list.appendChild(head);
+			var shownDomain;
+			rows.forEach(function (n) {
+				if (n.domain !== shownDomain) { shownDomain = n.domain; domainRow(list, n.domain, n.domain === localDomain ? 'this domain' : ''); }
+				var row = el('div', 'srv__row');
+				var st = el('span', 'srv__state ' + stateClass(n)); st.appendChild(el('i')); st.appendChild(document.createTextNode(stateWord(n)));
+				row.appendChild(st);
+				serverName(row, n);
+				row.appendChild(heapCell(n.heap == null ? null : Math.round(n.heap), n.heap == null ? 'n/a' : Math.round(n.heap) + '%'));
+				row.appendChild(el('span', 'srv__n', n.cpu == null ? '—' : Math.round(n.cpu) + '%'));
+				row.appendChild(el('span', 'srv__n' + (n.restarts > 0 ? ' warn' : ''), n.restarts ? n.restarts + '×' : 'none'));
+				row.appendChild(el('span', 'srv__n' + (n.stuck > 0 ? ' warn' : ''), n.stuck > 0 ? n.stuck + ' stuck' : 'none'));
+				list.appendChild(row);
+			});
+			body.appendChild(list);
+		});
+	}
+
+	function drawServers(body) {
+		if (!RIGHTS.platform) return C.message(body, 'empty', 'Servers are not in your grant.');
+		if (isLive()) drawServersNow(body); else drawServersPast(body);
 	}
 
 	/* A view that only this domain's runtime can answer. */
@@ -347,6 +653,7 @@
 		if (localOnly(body, 'Connection pools')) return;
 		var rows = [];
 		lastNodes.forEach(function (n) {
+			if (state.server && n.server !== state.server) return;
 			(n.jdbc || []).forEach(function (d) {
 				rows.push([n.server, d.name, d.state || '—', d.active, d.capacity, d.waiting, d.failures,
 					d.failuresAt ? R.time(d.failuresAt) : '—']);
@@ -355,6 +662,8 @@
 		if (!rows.length) return C.message(body, 'empty', 'No JDBC pools reported.');
 		fitTable(body, { columns: ['server', 'pool', 'state', 'active', 'capacity', 'waiting', 'failures', 'last failure'], rows: rows });
 	}
+
+	/* ── operations ────────────────────────────────────────────────────── */
 
 	var OPS_WORDS = {
 		'org.vorpal.blade.endpoint.down': 'down', 'org.vorpal.blade.endpoint.up': 'up',
@@ -397,10 +706,6 @@
 			return null;
 		}
 	}
-
-	/* The start of the board's range, in epoch millis: what a link to a list
-	   (Trace's recorded calls) narrows to. */
-	function rangeStart() { return Date.now() - (+days) * 86400000; }
 
 	/* ── the peek drawer ──
 	   A quick look at an app that can show itself embedded (it declares
@@ -446,14 +751,14 @@
 	   date as well before today. */
 	function opsWhen(ms) {
 		var day = function (t) { return new Date(t).toLocaleDateString([], { timeZone: R.zone() }); };
-		var clock = R.time(ms, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
-		if (day(ms) === day(Date.now())) return clock;
-		return new Date(ms).toLocaleDateString([], { timeZone: R.zone(), month: 'short', day: 'numeric' }) + ' ' + clock;
+		var clockTime = R.time(ms, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+		if (day(ms) === day(Date.now())) return clockTime;
+		return new Date(ms).toLocaleDateString([], { timeZone: R.zone(), month: 'short', day: 'numeric' }) + ' ' + clockTime;
 	}
 
-	/* How long something has been so: "40 s", "6 min", "2 h 5 min", "3 d 4 h". */
-	function opsFor(ms) {
-		var s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+	/* How long something lasted: "40 s", "6 min", "2 h 5 min", "3 d 4 h". */
+	function duration(ms) {
+		var s = Math.max(0, Math.round(ms / 1000));
 		if (s < 60) return s + ' s';
 		var m = Math.floor(s / 60);
 		if (m < 60) return m + ' min';
@@ -467,10 +772,10 @@
 		case 'org.vorpal.blade.endpoint.down':
 		case 'org.vorpal.blade.endpoint.up': return e.endpoint + (e.note ? ' · ' + e.note : '');
 		case 'org.vorpal.blade.remote.down':
-		case 'org.vorpal.blade.remote.up': return e.kind + ' ' + e.remote + ' · ' + e.application + (e.reason ? ' · ' + e.reason : '');
+		case 'org.vorpal.blade.remote.up': return (e.kind ? e.kind + ' ' : '') + e.remote + (e.application ? ' · ' + e.application : '') + (e.reason ? ' · ' + e.reason : '');
 		case 'org.vorpal.blade.trunk.failed': return e.gateway + ' · ' + (e.status || '') + ' ' + (e.reason || '');
 		case 'org.vorpal.blade.trunk.registered':
-		case 'org.vorpal.blade.trunk.unregistered': return e.gateway + ' · ' + e.registrar;
+		case 'org.vorpal.blade.trunk.unregistered': return e.gateway + (e.registrar ? ' · ' + e.registrar : '');
 		case 'org.vorpal.blade.queue.depth': return e.queue + ' · ' + e.depth + ' waiting (low ' + e.low + ', high ' + e.high + ')';
 		case 'org.vorpal.blade.sip.denied': return e.method + ' from ' + e.sourceAddress;
 		case 'org.vorpal.blade.config.saved': return e.file + ' ' + e.change + ' by ' + e.actor + ' (' + e.editor + ')';
@@ -485,12 +790,10 @@
 		}
 	}
 
-	/* Rows that fit, newest first, then a count of the rest. With `open`, the
-	   right column says how long each has been so, not when it began; the full
-	   line and the full date are on hover either way. */
-	function opsRows(body, items, word, empty, open) {
-		if (localOnly(body, 'Operations events')) return;
-		if (!lastOps) return C.message(body, 'empty', 'Listening to the event bus…');
+	/* Rows that fit, newest first, then a count of the rest. `when(e)` words
+	   the right column (default: when it happened); the full line and the full
+	   date are on hover either way. */
+	function opsRows(body, items, word, empty, when) {
 		if (!items.length) return C.message(body, 'empty', empty);
 		var box = el('div', 'ops-list');
 		body.appendChild(box);
@@ -504,11 +807,12 @@
 			var at = e.time ? new Date(e.time).getTime() : null;
 			go.appendChild(el('span', 'ops-row__what' + (OPS_BAD[w] ? ' bad' : ''), w));
 			go.appendChild(el('span', 'ops-row__main', main));
-			go.appendChild(el('span', 'ops-row__when', at == null ? '' : open ? 'for ' + opsFor(at) : opsWhen(at)));
+			go.appendChild(el('span', 'ops-row__when', at == null ? '' : when ? when(e) : opsWhen(at)));
 			var pb = peekButton(link);
 			if (pb) row.appendChild(pb);
-			row.title = w + ' · ' + main + (at == null ? '' : '\n' + (open ? 'since ' : '')
+			row.title = w + ' · ' + main + (at == null ? '' : '\n'
 				+ new Date(at).toLocaleString([], { timeZone: R.zone(), dateStyle: 'medium', timeStyle: 'medium' }))
+				+ (e.until ? ' until ' + new Date(e.until).toLocaleString([], { timeZone: R.zone(), dateStyle: 'medium', timeStyle: 'medium' }) : '')
 				+ (link ? '\nOpen in ' + link.app : '');
 			box.appendChild(row);
 			if (box.scrollHeight > body.clientHeight - 20) { box.removeChild(row); break; }
@@ -517,99 +821,111 @@
 		if (shown < items.length) body.appendChild(el('div', 'panel__more', (items.length - shown) + ' more'));
 	}
 
-	function issues() {
+	/* The live feed's events, narrowed to the chosen server. */
+	function onServer(items) {
+		return state.server ? items.filter(function (e) { return e.node === state.server; }) : items;
+	}
+
+	function liveIssues() {
 		if (!lastOps) return [];
-		return lastOps.endpointsDown.map(function (e) { e.type = 'org.vorpal.blade.endpoint.down'; return e; })
+		return onServer(lastOps.endpointsDown.map(function (e) { e.type = 'org.vorpal.blade.endpoint.down'; return e; })
 			.concat(lastOps.trunksFailing.map(function (e) { e.type = 'org.vorpal.blade.trunk.failed'; return e; }))
 			.concat((lastOps.remotesDown || []).map(function (e) { e.type = 'org.vorpal.blade.remote.down'; return e; }))
-			.concat((lastOps.problems || []).map(function (e) { e.type = 'org.vorpal.blade.problem.raised'; return e; }));
+			.concat((lastOps.problems || []).map(function (e) { e.type = 'org.vorpal.blade.problem.raised'; return e; })));
 	}
 
-	/* ── analytics ─────────────────────────────────────────────────────── */
+	/* An operations event from the database (ops.events, ops.issues) in the
+	   shape the live feed gives it, so one renderer words both. */
+	function opsEvent(type, at, node, application, subject, detail, extra) {
+		var e = { type: type, time: at, node: node, application: application };
+		switch (type.replace(/^org\.vorpal\.blade\./, '').split('.')[0]) {
+		case 'endpoint': e.endpoint = subject; e.note = detail; break;
+		case 'remote': e.remote = subject; e.reason = detail; break;
+		case 'trunk': e.gateway = subject; e.reason = detail; break;
+		case 'queue': e.queue = subject; break;
+		case 'problem': e.key = subject; e.summary = detail; break;
+		}
+		Object.keys(extra || {}).forEach(function (k) { if (extra[k] != null) e[k] = extra[k]; });
+		return e;
+	}
 
-	var A = {};   // report name → result
+	function pastEvents() {
+		return rowsOf(D.ops && D.ops['ops.events']).map(function (r) {
+			return opsEvent(r[1], r[0], r[2], r[3], r[4], r[5], { kind: r[6], registrar: r[7], status: r[8], low: r[9], high: r[10],
+				depth: r[11], open: r[12] });
+		});
+	}
 
-	/* How calls ended, good to bad, bottom up: the stoplight order, so position
-	   says what the colour says. */
-	/* Good to bad, the order of every outcome report's columns. Declined is
-	   ordinary traffic, fair like an abandon; failed and dropped are faults. */
-	var OUTCOME_PARTS = [
-		{ name: 'Completed', color: '--ok', explain: 'answered, then hung up normally' },
-		{ name: 'Abandoned', color: '--warn', explain: 'the caller hung up before anyone answered' },
-		{ name: 'Declined', color: '--warn', explain: 'the callee said no: busy, unavailable, not found, or no answer' },
-		{ name: 'Failed', color: '--bad', explain: 'the call could not be put through: nothing answered, a server error (5xx), or refused on credentials (401, 403, 407)' },
-		{ name: 'Dropped', color: '--bad', explain: 'a bug stopped relaying the signaling: the call was left half set up or half hung up until it expired, or the caller gave up on an answer that never reached them' }
-	];
-	var OUTCOME_NAMES = OUTCOME_PARTS.map(function (p) { return p.name.toLowerCase(); });
+	function pastIssues() {
+		return rowsOf(D.ops && D.ops['ops.issues']).map(function (r) {
+			return opsEvent(r[0], r[5], r[2], r[3], r[1], r[4], { until: r[6], open: r[7] });
+		});
+	}
 
-	/* One line per server for a per-minute sample reading (platform.heap,
-	   platform.cpu), drawn on the call charts' own buckets so every Traffic
-	   tab shares a time axis. A gap is an hour with no sample, not a zero. */
-	function perServer(report, what) {
-		return function (body) {
-			if (!RIGHTS.platform) return C.message(body, 'empty', what + ' are not in your grant.');
-			guard(A[report], body, function (res) {
-				var buckets = rowsOf(A['calls.by-outcome']).map(function (r) { return r[0]; });
-				var byServer = {};
-				res.rows.forEach(function (r) { (byServer[r[1]] = byServer[r[1]] || {})[r[0]] = r[2]; });
-				var series = Object.keys(byServer).sort().map(function (server) {
-					return { name: server, values: buckets.map(function (b) { return [b, b in byServer[server] ? byServer[server][b] : null]; }) };
+	/* Operations needs the platform grant and, for the live feed, this domain. */
+	function opsAllowed(body) {
+		if (!RIGHTS.platform) { C.message(body, 'empty', 'Operations events are not in your grant.'); return false; }
+		if (liveFeed()) {
+			if (localOnly(body, 'Operations events')) return false;
+			if (!lastOps) { C.message(body, 'empty', 'Listening to the event bus…'); return false; }
+		}
+		return true;
+	}
+
+	function drawIssues(body) {
+		if (!opsAllowed(body)) return;
+		if (liveFeed()) {
+			return opsRows(body, liveIssues(), function (e) { return OPS_WORDS[e.type]; },
+				'No open issues' + (state.server ? ' on ' + state.server : '') + '. An endpoint, trunk, cut-off service or a problem an application raised shows here from the event that reports it until the one that clears it.',
+				function (e) { return 'for ' + duration(Date.now() - new Date(e.time).getTime()); });
+		}
+		guard(D.ops && D.ops['ops.issues'], body, function () {
+			opsRows(body, pastIssues(), function (e) { return OPS_WORDS[e.type]; },
+				'Nothing was down and no problem was open at this time.',
+				function (e) {
+					return e.until ? duration(e.until - e.time) + ', from ' + clockText(e.time) : 'since ' + opsWhen(e.time) + ', still open';
 				});
-				if (!series.length) return C.message(body, 'empty', 'No server samples in this range.');
-				C.multiLine(body, series, { pct: true, colors: LINE_COLORS() });
-			});
-		};
-	}
-
-	/* "busiest: Thu 00:00 · 28 calls", the hour (or day) with the most calls
-	   started, in the viewer's zone, as the report's buckets already are. */
-	function busiest(res) {
-		var best = null, most = 0;
-		res.rows.forEach(function (r) {
-			var n = (r[1] || 0) + (r[2] || 0) + (r[3] || 0);
-			if (n > most) { most = n; best = r[0]; }
 		});
-		if (!best) return 'no calls in this range';
-		return 'busiest: ' + when(best) + ' · ' + C.fmt(most) + (most === 1 ? ' call' : ' calls');
 	}
 
-	/* "Thu 10/08 00:00" for an hour bucket, "Thu 10/08" for a day: buckets are
-	   already in the viewer's zone. */
-	function when(bucket) {
-		var m = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):00)?$/.exec(bucket);
-		if (!m) return bucket;
-		return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(+m[1], +m[2] - 1, +m[3]).getDay()] + ' ' + m[2] + '/'
-			+ m[3] + (m[4] ? ' ' + m[4] + ':00' : '');
-	}
-
-	/* Peak concurrent calls per hour (calls.concurrent), or per day past a
-	   week: a day's peak is its highest hour. This is the number a per-session
-	   price is metered on. */
-	function peaks(rows) {
-		if (+days <= 7) return rows;
-		var byDay = {}, order = [];
-		rows.forEach(function (r) {
-			var d = String(r[0]).slice(0, 10);
-			if (!(d in byDay)) { byDay[d] = 0; order.push(d); }
-			byDay[d] = Math.max(byDay[d], +r[1] || 0);
+	function drawQueues(body) {
+		if (!opsAllowed(body)) return;
+		if (liveFeed()) {
+			var q = lastOps ? onServer(lastOps.queues.map(function (e) { e.type = 'org.vorpal.blade.queue.depth'; return e; })) : [];
+			return opsRows(body, q, function () { return 'queue'; }, 'No queue has held a caller since this server started listening.');
+		}
+		guard(D.ops && D.ops['ops.queues'], body, function (res) {
+			if (!res.rows.length) return C.message(body, 'empty', 'No queue held a caller at this time.');
+			fitTable(body, { columns: res.columns, rows: res.rows.map(function (r) {
+				return [r[0], r[1], r[2], r[3], r[4], r[5] == null ? '—' : opsWhen(r[5])];
+			}) });
 		});
-		return order.map(function (d) { return [d, byDay[d]]; });
 	}
 
-	/* What changed in the range (the `changes` report), one row a day, newest
-	   first: restarts counted per server, configuration files by name. The
-	   day's every change, with its time, is on hover. */
-	function changeDays() {
-		var res = A.changes;
+	function drawRecent(body) {
+		if (!opsAllowed(body)) return;
+		if (liveFeed()) {
+			return opsRows(body, onServer(lastOps ? lastOps.recent : []), function (e) { return OPS_WORDS[e.type] || 'event'; }, 'No operations events yet.');
+		}
+		guard(D.ops && D.ops['ops.events'], body, function () {
+			opsRows(body, pastEvents(), function (e) { return OPS_WORDS[e.type] || 'event'; }, 'No operations events at this time.');
+		});
+	}
+
+	/* What changed in the range (the `changes` report), newest first: one
+	   row a day, or within a day or less one row a minute. Restarts counted
+	   per server, configuration files by name. Each row's every change, with
+	   its time, is on hover. */
+	function changeDays(res, byMinute) {
 		var col = function (name) { return res.columns.indexOf(name); };
-		var days = {}, order = [];
+		var byDay = {}, order = [];
 		res.rows.forEach(function (r) {
-			var day = String(r[col('bucket')]).slice(0, 10);
+			var day = byMinute ? String(r[col('at')] - r[col('at')] % 60000) : String(r[col('bucket')]).slice(0, 10);
 			var at = r[col('at')], change = r[col('change')], server = r[col('server')], what = r[col('what')];
 			var file = r[col('file')], failed = r[col('failed on')];
 			failed = failed && failed !== '[]' ? String(failed).replace(/[\[\]"]/g, '') : '';
-			var d = days[day];
-			if (!d) { d = days[day] = { day: day, lines: [], servers: {}, apps: {}, configs: [] }; order.push(d); }
+			var d = byDay[day];
+			if (!d) { d = byDay[day] = { day: day, lines: [], servers: {}, apps: {}, configs: [] }; order.push(d); }
 			var line;
 			switch (change) {
 			case 'server restarted':
@@ -628,11 +944,11 @@
 				line = file + ' ' + String(what).split(' · ').reverse().join(' by ');
 				if (d.configs.indexOf(line) < 0) d.configs.push(line);
 			}
-			d.lines.push(R.time(at, { hour: '2-digit', minute: '2-digit' }) + ' ' + line);
+			d.lines.push(clockText(at) + ' ' + line);
 		});
 		order.reverse();
 		return {
-			columns: ['day', 'what changed'],
+			columns: [byMinute ? 'time' : 'day', 'what changed'],
 			rows: order.map(function (d) {
 				var parts = [];
 				Object.keys(d.servers).forEach(function (srv) {
@@ -645,6 +961,7 @@
 					parts.push(names.length <= 4 ? names.map(times).join(', ') + ' restarted on ' + srv
 						: apps.length + ' restarts of ' + names.length + ' applications on ' + srv);
 				});
+				if (byMinute) return [dayText(+d.day) + ' ' + clockText(+d.day), parts.concat(d.configs).join(' · ')];
 				var p = d.day.split('-'), date = new Date(+p[0], +p[1] - 1, +p[2]);
 				return [date.toLocaleDateString([], { weekday: 'short' }) + ' ' + p[1] + '/' + p[2], parts.concat(d.configs).join(' · ')];
 			}),
@@ -654,6 +971,159 @@
 					+ (d.lines.length > shown.length ? '\n… ' + (d.lines.length - shown.length) + ' more' : '');
 			})
 		};
+	}
+
+	function drawChanges(body) {
+		if (!RIGHTS.platform) return C.message(body, 'empty', 'Changes are not in your grant.');
+		guard(D.ops && D.ops.changes, body, function (res) {
+			// A day or less is told by the minute; anything longer by the day.
+			var s = state.slice;
+			var span = s && s.from ? s.until - s.from : (s ? 3600000 : rangeEnd() - rangeStart());
+			var t = changeDays(res, span <= 86400000 + 60000);
+			if (!t.rows.length) return C.message(body, 'empty', 'Nothing restarted and no configuration changed at this time.');
+			fitTable(body, t, { wrap: true, more: span <= 86400000 + 60000 ? 'more' : 'more days' });
+			body.querySelectorAll('tbody tr').forEach(function (tr, i) { tr.title = t.titles[i]; });
+		});
+	}
+
+	/* ── analytics ─────────────────────────────────────────────────────── */
+
+	/* Report results by group: each group is one request, over the range and
+	   the choices the panels it fills follow. */
+	var D = {};
+
+	/* How calls ended, good to bad, bottom up: the stoplight order, so position
+	   says what the colour says. Declined is ordinary traffic, fair like an
+	   abandon; failed and dropped are faults. */
+	var OUTCOME_PARTS = [
+		{ name: 'Completed', color: '--ok', explain: 'answered, then hung up normally' },
+		{ name: 'Abandoned', color: '--warn', explain: 'the caller hung up before anyone answered' },
+		{ name: 'Declined', color: '--warn', explain: 'the callee said no: busy, unavailable, not found, or no answer' },
+		{ name: 'Failed', color: '--bad', explain: 'the call could not be put through: nothing answered, a server error (5xx), or refused on credentials (401, 403, 407)' },
+		{ name: 'Dropped', color: '--bad', explain: 'a bug stopped relaying the signaling: the call was left half set up or half hung up until it expired, or the caller gave up on an answer that never reached them' }
+	];
+	var OUTCOME_NAMES = OUTCOME_PARTS.map(function (p) { return p.name.toLowerCase(); });
+
+	/* One line per server for a per-minute sample reading (platform.heap,
+	   platform.cpu), drawn on the call charts' own buckets so every Traffic
+	   tab shares a time axis. A gap is a bucket with no sample, not a zero. */
+	function perServer(report, what) {
+		return function (body) {
+			if (!RIGHTS.platform) return C.message(body, 'empty', what + ' are not in your grant.');
+			guard(D.traffic && D.traffic[report], body, function (res) {
+				var calls = D.traffic['calls.by-outcome'];
+				var buckets = rowsOf(calls).map(function (r) { return r[0]; });
+				var byServer = {};
+				res.rows.forEach(function (r) { (byServer[r[1]] = byServer[r[1]] || {})[r[0]] = r[2]; });
+				var series = Object.keys(byServer).sort().map(function (server) {
+					return { name: server, values: buckets.map(function (b) { return [b, b in byServer[server] ? byServer[server][b] : null]; }) };
+				});
+				if (!series.length) return C.message(body, 'empty', 'No server samples at this time.');
+				C.multiLine(body, series, mergeOpts({ pct: true, colors: LINE_COLORS() }, calls ? bucketPick(calls) : {}));
+			});
+		};
+	}
+
+	/* "busiest: Thu 00:00 · 28 calls", the bucket with the most calls started,
+	   in the viewer's zone, as the report's buckets already are. */
+	function busiest(res) {
+		var best = null, most = 0;
+		res.rows.forEach(function (r) {
+			var n = 0;
+			for (var i = 1; i < r.length; i++) n += r[i] || 0;
+			if (n > most) { most = n; best = r[0]; }
+		});
+		if (!best) return 'no calls at this time';
+		return 'busiest: ' + when(best) + ' · ' + C.fmt(most) + (most === 1 ? ' call' : ' calls');
+	}
+
+	/* "Thu 10/08 14:00" for a bucket with a time, "Thu 10/08" for a day:
+	   buckets are already in the viewer's zone. */
+	function when(bucket) {
+		var m = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}:\d{2}))?$/.exec(bucket);
+		if (!m) return bucket;
+		return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(+m[1], +m[2] - 1, +m[3]).getDay()] + ' ' + m[2] + '/'
+			+ m[3] + (m[4] ? ' ' + m[4] : '');
+	}
+
+	/* The reports each group asks for. Individual calls only while their tab
+	   is open: a request for them is audited as someone looking at calls,
+	   which a hidden tab is not. */
+	var GROUPS = {
+		base: function () {
+			return { r: ['calls.summary', 'outcomes.summary', 'outcomes.ended', 'outcomes.daily', 'outcomes.by-application',
+				'duration.summary', 'risk.summary'], q: rangeQuery() + scopeQuery() };
+		},
+		/* Every domain's servers, so the Servers panel can offer each domain. */
+		servers: function () {
+			return { r: RIGHTS.platform ? ['platform.latest', 'platform.servers'] : [], q: rangeQuery() };
+		},
+		traffic: function () {
+			var r = ['calls.by-outcome', 'calls.concurrent', 'calls.heatmap'];
+			if (RIGHTS.platform) r.push('platform.heap', 'platform.cpu');
+			return { r: r, q: rangeQuery() + scopeQuery() + (state.server ? '&server=' + encodeURIComponent(state.server) : '') };
+		},
+		ops: function () {
+			var r = RIGHTS.platform ? ['changes'] : [];
+			if (RIGHTS.platform && !liveFeed()) r.push('ops.events', 'ops.issues', 'ops.queues');
+			return { r: r, q: sliceQuery() + scopeQuery() + (state.server ? '&server=' + encodeURIComponent(state.server) : '') };
+		},
+		apps: function () {
+			return { r: ['calls.by-application', 'duration.bands', 'health.coverage'],
+				q: rangeQuery() + scopeQuery() + (state.outcome ? '&outcome=' + state.outcome : '') };
+		},
+		calls: function () {
+			var r = ['highrisk.by-band', 'risk.daily'];
+			if (P.risk && P.risk.current === 'flagged') r.push('highrisk.calls');
+			if (P.risk && P.risk.current === 'list' && RIGHTS.content) r.push('calls.list');
+			return { r: r, q: rangeQuery() + scopeQuery() + (state.outcome ? '&outcome=' + state.outcome : '')
+				+ (state.app ? '&app=' + encodeURIComponent(state.app) : '') };
+		}
+	};
+	/* The panels each group fills. */
+	var DRAWS = { base: ['outcomes'], servers: ['cluster'], traffic: ['traffic'], ops: ['ops'], apps: ['apps'], calls: ['risk'] };
+
+	var seq = {};
+	function loadGroup(name) {
+		var g = GROUPS[name]();
+		if (!g.r.length) { D[name] = {}; DRAWS[name].forEach(function (k) { P[k].draw(); }); return Promise.resolve(); }
+		var n = seq[name] = (seq[name] || 0) + 1;
+		return getJson('data?r=' + g.r.join(',') + g.q + '&tz=' + encodeURIComponent(R.zone())).then(function (d) {
+			if (n !== seq[name]) return;   // a newer choice asked again
+			D[name] = d;
+			if (name === 'base') baseKpis(d);
+			if (name === 'servers') serverKpis();
+			DRAWS[name].forEach(function (k) { P[k].draw(); });
+		});
+	}
+
+	function baseKpis(d) {
+		var cs = d['calls.summary'], os = d['outcomes.summary'], ds = d['duration.summary'], rs = d['risk.summary'];
+		kpi('calls', cell(cs, 'calls'), state.range === 'custom' ? '' : C.fmt(cell(cs, 'today')) + ' today');
+		var started = cell(os, 'started'), answered = cell(os, 'answered');
+		kpi('answered', answered, (started ? Math.round(100 * answered / started) + '% of ' + C.fmt(started) + ' started'
+			: 'none started') + ' · ' + C.fmt(cell(os, 'lost')) + ' lost');
+		var med = cell(ds, 'median');
+		kpi('duration', clock(med), med == null ? '' : 'average ' + clock(cell(ds, 'average')) + ' · longest ' + clock(cell(ds, 'longest')));
+		var flagged = cell(rs, 'calls flagged');
+		kpi('flagged', flagged, C.fmt(cell(rs, 'calls assessed')) + ' assessed', flagged > 0);
+	}
+
+	function loadAnalytics() {
+		return Promise.all(Object.keys(GROUPS).map(loadGroup)).then(function () {
+			// The clock beside it says the time; the refresh time is on hover only.
+			setStatus('', 'live');
+			statusEl.title = 'Analytics refreshed at ' + R.time(Date.now(), { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+		}).catch(function (e) { if (e.message !== 'auth') setStatus('err', 'analytics failed'); });
+	}
+
+	/* Live re-reads the last hour often, a range of days each minute, and a
+	   custom range never: it does not move. */
+	var analyticsTimer = null;
+	function scheduleAnalytics() {
+		clearInterval(analyticsTimer);
+		if (state.range === 'custom') return;
+		analyticsTimer = setInterval(loadAnalytics, isLive() ? Math.min(ANALYTICS_MS, LIVE_ANALYTICS_MS) : ANALYTICS_MS);
 	}
 
 	/* ── the network map ── */
@@ -672,7 +1142,7 @@
 
 	function drawNetwork(body) {
 		if (!RIGHTS.platform) return C.message(body, 'empty', 'The network map is not in your grant.');
-		if (remoteScope()) return C.message(body, 'empty', 'The network map shows this domain. Choose it in the top bar.');
+		if (remoteScope()) return C.message(body, 'empty', 'The network map shows this domain. Choose it in Servers.');
 		if (!lastNetwork) { C.message(body, 'empty', 'Loading…'); loadNetwork().catch(function () {}); return; }
 		if (lastNetwork.error) return C.message(body, 'error', lastNetwork.error);
 		if (!lastNetwork.sites || !lastNetwork.sites.length) {
@@ -719,144 +1189,159 @@
 		});
 	}
 
-	function analyticsReports() {
-		var r = ['calls.domains', 'platform.latest', 'calls.summary', 'calls.by-outcome', 'calls.heatmap', 'calls.by-application',
-			'outcomes.summary', 'outcomes.daily', 'outcomes.ended', 'outcomes.by-application',
-			'duration.summary', 'duration.bands',
-			'health.coverage',
-			'risk.summary', 'highrisk.by-band', 'risk.daily', 'calls.concurrent'];
-		if (RIGHTS.platform) r.push('platform.heap', 'platform.cpu', 'changes');
-		// Individual calls only while their tab is open: a request for them is
-		// audited as someone looking at calls, which a hidden tab is not.
-		if (P.risk && P.risk.current === 'calls') r.push('highrisk.calls');
-		return r;
-	}
-
 	/* ── panel definitions ─────────────────────────────────────────────── */
 
 	var P = {};
 
 	function buildPanels() {
-		P.cluster = new Panel('cluster', 'Servers', 'platform');
+		P.cluster = new Panel('cluster', 'Servers', 'platform', false);
 		P.cluster.setViews([
-			{ key: 'servers', label: 'Now', sub: 'live, other domains a minute behind', draw: drawServers },
-			{ key: 'jdbc', label: 'JDBC', sub: 'live', draw: drawJdbc }
+			{ key: 'servers', label: 'Servers', live: isLive,
+				sub: function () { return isLive() ? 'click one to narrow' : 'peaks in the range'; }, tip: 'Click a server to narrow Traffic and Operations to it',
+				draw: drawServers },
+			{ key: 'jdbc', label: 'JDBC', live: true, sub: 'connection pools', draw: drawJdbc }
 		]);
+		P.cluster.showRange = function () {
+			Panel.prototype.showRange.call(this);
+			var v = this.view();
+			if (v && v.key === 'servers' && !isLive()) { this.range.hidden = false; this.range.textContent = rangePhrase(); }
+		};
 
-		P.traffic = new Panel('traffic', 'Traffic', 'calls', true);
+		P.traffic = new Panel('traffic', 'Traffic', 'calls', true, ['server']);
 		P.traffic.setViews([
-			{ key: 'calls', label: 'Calls', sub: 'per hour, or per day past a week', draw: function (body) {
-				guard(A['calls.by-outcome'], body, function (res) {
+			{ key: 'calls', label: 'Calls', sub: 'click a time to narrow', tip: 'Click a time to narrow Operations to it', draw: function (body) {
+				guard(D.traffic && D.traffic['calls.by-outcome'], body, function (res) {
 					P.traffic.sub.textContent = busiest(res);
-					C.stackBar(body, res.rows, { parts: OUTCOME_PARTS, empty: 'No calls ended in this range.' });
+					C.stackBar(body, res.rows, mergeOpts({ parts: OUTCOME_PARTS, empty: 'No calls ended at this time.' }, bucketPick(res)));
 				});
 			} },
 			{ key: 'sessions', label: 'Sessions', sub: 'peak concurrent calls', draw: function (body) {
-				guard(A['calls.concurrent'], body, function (res) {
-					var rows = peaks(res.rows);
-					var best = rows.reduce(function (b, r) { return r[1] > b[1] ? r : b; }, ['', 0]);
-					P.traffic.sub.textContent = best[1] ? 'peak ' + C.fmt(best[1]) + ' · ' + when(best[0]) : 'no calls in this range';
-					if (!best[1]) return C.message(body, 'empty', 'No calls in this range.');
-					C.line(body, rows, { name: 'peak', endLabel: false });
+				guard(D.traffic && D.traffic['calls.concurrent'], body, function (res) {
+					var best = res.rows.reduce(function (b, r) { return r[1] > b[1] ? r : b; }, ['', 0]);
+					P.traffic.sub.textContent = best[1] ? 'peak ' + C.fmt(best[1]) + ' · ' + when(best[0]) : 'no calls at this time';
+					if (!best[1]) return C.message(body, 'empty', 'No calls at this time.');
+					C.line(body, res.rows, mergeOpts({ name: 'peak', endLabel: false }, bucketPick(res)));
 				});
 			} },
-			{ key: 'heap', label: 'Heap', sub: 'per server · highest reading', draw: perServer('platform.heap', 'Heap readings') },
-			{ key: 'cpu', label: 'CPU', sub: 'per server · busiest minute', draw: perServer('platform.cpu', 'CPU readings') },
-			{ key: 'when', label: 'When', sub: 'weekday × hour of day', draw: function (body) {
-				guard(A['calls.heatmap'], body, function (res) { C.heatmap(body, res.rows); });
+			{ key: 'heap', label: 'Heap', sub: 'highest per server', draw: perServer('platform.heap', 'Heap readings') },
+			{ key: 'cpu', label: 'CPU', sub: 'busiest minute per server', draw: perServer('platform.cpu', 'CPU readings') },
+			{ key: 'when', label: 'When', sub: 'weekday × hour', tip: 'Click an hour to narrow Operations to every such hour in the range', draw: function (body) {
+				guard(D.traffic && D.traffic['calls.heatmap'], body, function (res) {
+					var s = state.slice;
+					C.heatmap(body, res.rows, {
+						pick: function (r) {
+							var dow = WEEKDAYS.indexOf(r[0]) + 1;
+							choose({ slice: s && s.dow === dow && s.hod === +r[1] ? null : { dow: dow, hod: +r[1] } });
+						},
+						picked: s && s.dow ? [WEEKDAYS[s.dow - 1], s.hod] : null
+					});
+				});
 			} },
-			{ key: 'network', label: 'Network', sub: 'sites, and the routes between them', live: true, draw: drawNetwork,
+			{ key: 'network', label: 'Network', sub: 'sites and routes', live: true, narrow: false, first: true, draw: drawNetwork,
 				fetch: function () { loadNetwork().catch(function () {}); } }
 		]);
 
-		P.ops = new Panel('ops', 'Operations', null);
+		P.ops = new Panel('ops', 'Operations', null, true, ['server', 'slice']);
 		P.ops.setViews([
-			{ key: 'issues', label: 'Issues', sub: 'until cleared', draw: function (body) {
-				opsRows(body, issues(), function (e) { return OPS_WORDS[e.type]; },
-					'No open issues. An endpoint, trunk, cut-off service or a problem an application raised shows here from the event that reports it until the one that clears it.', true);
-			} },
-			{ key: 'queues', label: 'Queues', sub: 'last minute · per node', draw: function (body) {
-				var q = lastOps ? lastOps.queues.map(function (e) { e.type = 'org.vorpal.blade.queue.depth'; return e; }) : [];
-				opsRows(body, q, function () { return 'queue'; }, 'No queue has held a caller since this server started listening.');
-			} },
-			{ key: 'recent', label: 'Recent', sub: 'newest first', draw: function (body) {
-				opsRows(body, lastOps ? lastOps.recent : [], function (e) { return OPS_WORDS[e.type] || 'event'; }, 'No operations events yet.');
-			} },
-			{ key: 'changes', label: 'Changes', sub: 'by day', draw: function (body) {
-				if (!RIGHTS.platform) return C.message(body, 'empty', 'Changes are not in your grant.');
-				guard(A.changes, body, function () {
-					var t = changeDays();
-					if (!t.rows.length) return C.message(body, 'empty', 'Nothing restarted and no configuration changed in this range.');
-					fitTable(body, t, { wrap: true, more: 'more days' });
-					body.querySelectorAll('tbody tr').forEach(function (tr, i) { tr.title = t.titles[i]; });
-				});
-			} }
+			{ key: 'issues', label: 'Issues', live: liveFeed,
+				sub: function () { return liveFeed() ? 'open now' : 'open in the range'; }, tip: 'An issue stays until it is cleared', draw: drawIssues },
+			{ key: 'queues', label: 'Queues', live: liveFeed,
+				sub: function () { return liveFeed() ? 'last minute' : 'minutes with callers'; }, tip: 'Per node: the minutes each queue held callers', draw: drawQueues },
+			{ key: 'recent', label: 'Recent', live: liveFeed, sub: 'newest first', draw: drawRecent },
+			{ key: 'changes', label: 'Changes', sub: 'newest first', tip: 'Restarts and configuration changes; hover a row for each one and its time', draw: drawChanges }
 		]);
+		/* Operations narrowed to a time shows that time, not the whole range. */
+		P.ops.showRange = function () {
+			Panel.prototype.showRange.call(this);
+			var v = this.view();
+			var live = v && (typeof v.live === 'function' ? v.live() : v.live);
+			if (state.slice && !live) this.range.hidden = true;
+		};
 
 		P.outcomes = new Panel('outcomes', 'Outcomes', 'outcomes', true);
 		P.outcomes.setViews([
-			{ key: 'ended', label: 'Ended', sub: 'each call counted once', draw: function (body) {
-				guard(A['outcomes.ended'], body, function (res) {
+			{ key: 'ended', label: 'Ended', sub: 'click one to narrow', tip: 'Each call counted once. Click an outcome to narrow Applications and Calls to it', draw: function (body) {
+				guard(D.base && D.base['outcomes.ended'], body, function (res) {
 					var by = {};
 					res.rows.forEach(function (r) { by[r[0]] = r[1] || 0; });
 					var total = Object.keys(by).reduce(function (n, k) { return n + by[k]; }, 0);
 					if (!total) return C.message(body, 'empty', 'No call ended in this range.');
 					var rows = OUTCOME_PARTS.map(function (p) { return [p.name, by[p.name.toLowerCase()] || 0, p]; });
 					C.hbar(body, rows, { valueWidth: 90,
-						/* Failed and dropped calls the flight recorder wrote out, in Trace. */
-						open: function (r) {
-							return (r[0] === 'Failed' || r[0] === 'Dropped') && r[1]
-								? L.to('recorded', { since: rangeStart() }) : null;
+						pick: function (r) {
+							var o = r[0].toLowerCase();
+							choose({ outcome: state.outcome === o ? null : o });
 						},
+						picked: state.outcome ? state.outcome.charAt(0).toUpperCase() + state.outcome.slice(1) : null,
 						value: function (r) { return C.fmt(r[1]) + ' · ' + Math.round(100 * r[1] / total) + '%'; },
 						color: function (r) { return r[2].color; },
 						title: function (r) {
-							return r[0] + ': ' + C.fmt(r[1]) + '\n' + r[2].explain
-								+ ((r[0] === 'Failed' || r[0] === 'Dropped') && r[1] && L.has('recorded')
-									? '\nClick: the calls recorded in this range, in Trace' : '');
+							return r[0] + ': ' + C.fmt(r[1]) + '\n' + r[2].explain + '\nClick: Applications and Calls for these calls only';
 						} });
 				});
 			} },
-			{ key: 'daily', label: 'Per day', sub: 'how calls ended, by day', draw: function (body) {
-				guard(A['outcomes.daily'], body, function (res) {
+			{ key: 'daily', label: 'Over time', sub: 'how calls ended', draw: function (body) {
+				guard(D.base && D.base['outcomes.daily'], body, function (res) {
 					C.multiLine(body, seriesOf(res, OUTCOME_NAMES),
 						{ colors: OUTCOME_PARTS.map(function (p) { return C.token(p.color); }) });
 				});
 			} },
 			{ key: 'apps', label: 'By application', sub: 'per application', draw: function (body) {
-				guard(A['outcomes.by-application'], body, function (res) { fitTable(body, res); });
+				guard(D.base && D.base['outcomes.by-application'], body, function (res) { fitTable(body, res); });
 			} }
 		]);
 
-		P.apps = new Panel('apps', 'Applications', 'health', true);
+		P.apps = new Panel('apps', 'Applications', 'health', true, ['outcome']);
 		P.apps.setViews([
-			{ key: 'calls', label: 'Calls', sub: 'a call through two applications counts for each', draw: function (body) {
-				guard(A['calls.by-application'], body, function (res) { C.hbar(body, res.rows, { limit: 8 }); });
+			{ key: 'calls', label: 'Calls', sub: 'click one to narrow', tip: 'A call through two applications counts for each. Click an application to narrow Calls to it', draw: function (body) {
+				guard(D.apps && D.apps['calls.by-application'], body, function (res) {
+					C.hbar(body, res.rows, { limit: 8,
+						pick: function (r) { choose({ app: state.app === r[0] ? null : r[0] }); },
+						picked: state.app,
+						title: function (r) { return r[0] + ': ' + C.fmt(r[1]) + ' calls\nClick: the Calls panel for ' + r[0] + "'s calls only"; } });
+				});
 			} },
 			{ key: 'length', label: 'Length', sub: 'calls by duration', draw: function (body) {
-				guard(A['duration.bands'], body, function (res) { C.bar(body, res.rows); });
+				guard(D.apps && D.apps['duration.bands'], body, function (res) { C.bar(body, res.rows); });
 			} },
-			{ key: 'gaps', label: 'Gaps', sub: 'lifecycle events each application never sends', draw: function (body) {
-				guard(A['health.coverage'], body, function (res) {
+			{ key: 'gaps', label: 'Gaps', narrow: false, sub: 'events never sent', tip: 'Lifecycle events each application never sends, over every call', draw: function (body) {
+				guard(D.apps && D.apps['health.coverage'], body, function (res) {
 					fitTable(body, pick(res, ['application', 'calls', 'gaps']));
 				});
 			} }
 		]);
 
-		P.risk = new Panel('risk', 'Call risk', 'risk', true);
+		P.risk = new Panel('risk', 'Calls', 'risk', true, ['outcome', 'app']);
 		P.risk.setViews([
-			{ key: 'bands', label: 'Bands', sub: 'calls by worst band reached', draw: function (body) {
-				guard(A['highrisk.by-band'], body, function (res) { R.bandList(body, res.rows); });
+			{ key: 'list', label: 'Calls', sub: 'click one for Trace', tip: 'Newest first. Click a call to open it in Trace', fetch: function () { loadGroup('calls'); },
+				draw: function (body) {
+					if (!RIGHTS.content) return C.message(body, 'empty', 'Individual calls are not in your grant.');
+					/* The flight recorder keeps a trace of every failed and dropped call. */
+					if ((state.outcome === 'failed' || state.outcome === 'dropped') && L.has('recorded')) {
+						var rec = L.to('recorded', { since: rangeStart() });
+						var a = el('a', 'panel__link', 'Their traces, as the flight recorder kept them, in Trace ↗');
+						a.href = rec.href; a.target = rec.target;
+						body.appendChild(a);
+					}
+					// The table draws into a box of its own: it clears what it draws into.
+					var box = el('div', 'panel__fill');
+					body.appendChild(box);
+					guard(D.calls && D.calls['calls.list'], box, function (res) {
+						if (!res.rows.length) return C.message(box, 'empty', 'No calls at this time.');
+						fitTable(box, res, { rowOpen: function (row) { return L.to('call', { call: row[0] }); } });
+					});
+				} },
+			{ key: 'bands', label: 'Risk', sub: 'calls by worst band reached', draw: function (body) {
+				guard(D.calls && D.calls['highrisk.by-band'], body, function (res) { R.bandList(body, res.rows); });
 			} },
-			{ key: 'daily', label: 'Per day', sub: 'calls assessed', draw: function (body) {
-				guard(A['risk.daily'], body, function (res) { C.bar(body, res.rows); });
+			{ key: 'daily', label: 'Over time', sub: 'calls assessed', draw: function (body) {
+				guard(D.calls && D.calls['risk.daily'], body, function (res) { C.bar(body, res.rows); });
 			} },
-			{ key: 'calls', label: 'Flagged calls', sub: 'highest score first', fetch: function () {
-				if (!A['highrisk.calls']) loadAnalytics();
-			}, draw: function (body) {
-				// Four columns fit a third of the screen; the full report has the rest.
-				guard(A['highrisk.calls'], body, function (res) { fitTable(body, pick(res, ['worst band', 'peak score', 'call', 'first assessed'])); });
-			} }
+			{ key: 'flagged', label: 'Flagged', sub: 'highest score first', fetch: function () { loadGroup('calls'); },
+				draw: function (body) {
+					// Four columns fit a third of the screen; the full report has the rest.
+					guard(D.calls && D.calls['highrisk.calls'], body, function (res) { fitTable(body, pick(res, ['worst band', 'peak score', 'call', 'first assessed'])); });
+				} }
 		]);
 	}
 
@@ -910,11 +1395,12 @@
 	function loadHealth() {
 		return getJson('health').then(function (r) {
 			if (!r || r.error) { kpi('nodes', null, (r && r.error) || 'health failed', true); return; }
-			var nodes = r.nodes || [];
-			lastNodes = nodes;
-			if (r.domain && r.domain !== localDomain) { localDomain = r.domain; fillScope(); }
+			lastNodes = r.nodes || [];
+			/* A past range may have drawn before this domain's name was known. */
+			var named = r.domain && !localDomain;
+			if (r.domain) localDomain = r.domain;
 			serverKpis();
-			P.cluster.draw();
+			if (named || isLive() || P.cluster.current === 'jdbc') P.cluster.draw();
 		});
 	}
 
@@ -938,28 +1424,12 @@
 		kpi('nodes', running + ' / ' + nodes.length, down.length ? down.join(' · ') : 'all running', trouble);
 	}
 
-	/* The domain picker: every domain with calls in the last month or a recent
-	   server sample, and this one. */
-	function fillScope() {
-		var sel = document.getElementById('scope'), names = [];
-		var add = function (d) { if (d && d !== '(none)' && names.indexOf(d) < 0) names.push(d); };
-		add(localDomain);
-		rowsOf(A['calls.domains']).forEach(function (r) { add(r[0]); });
-		rowsOf(A['platform.latest']).forEach(function (r) { add(r[0]); });
-		add(scope);
-		names.sort();
-		sel.textContent = '';
-		var all = el('option', '', 'all domains'); all.value = ''; sel.appendChild(all);
-		names.forEach(function (d) {
-			var o = el('option', '', d + (d === localDomain ? ' (this one)' : '')); o.value = d; sel.appendChild(o);
-		});
-		sel.value = scope;
-	}
-
+	/* A domain chosen in Servers scopes the whole board, headline numbers
+	   included. Remembered per browser. */
 	function scopeChanged(value) {
 		scope = value; store('domain', scope);
-		Object.keys(P).forEach(function (k) { P[k].relink(); });
-		A = {};
+		relinkAll();
+		['base', 'traffic', 'ops', 'apps', 'calls'].forEach(function (g) { D[g] = undefined; });
 		serverKpis();
 		drawAll();
 		loadOps().catch(function () {});
@@ -983,56 +1453,94 @@
 		return getJson('ops').then(function (o) {
 			if (!o || o.error) return;
 			lastOps = o;
-			if (remoteScope()) { kpi('queued', null, 'read live in ' + localDomain + ' only'); P.ops.draw(); return; }
-			/* Calls waiting in a queue, live from the queue application's gauges;
-			   the line is how long the longest of them has waited. */
-			var q = o.queuedNow || {};
-			if (q.calls == null) kpi('queued', null, q.error ? 'queue reading failed' : 'no queue application running', !!q.error);
-			else kpi('queued', q.calls, q.calls ? 'longest waiting ' + clock(q.longestMs / 1000) : 'none waiting');
-			P.ops.draw();
+			if (remoteScope()) { kpi('queued', null, 'read live in ' + localDomain + ' only'); }
+			else {
+				/* Calls waiting in a queue, live from the queue application's gauges;
+				   the line is how long the longest of them has waited. */
+				var q = o.queuedNow || {};
+				if (q.calls == null) kpi('queued', null, q.error ? 'queue reading failed' : 'no queue application running', !!q.error);
+				else kpi('queued', q.calls, q.calls ? 'longest waiting ' + clock(q.longestMs / 1000) : 'none waiting');
+			}
+			if (liveFeed() && P.ops.current !== 'changes') P.ops.draw();
 		});
 	}
 
-	function loadAnalytics() {
-		return getJson('data?r=' + analyticsReports().join(',') + '&days=' + days + scopeQuery() + '&tz=' + encodeURIComponent(R.zone())).then(function (d) {
-			A = d;
-			fillScope();
-			serverKpis();
-			P.cluster.draw();
-			var cs = d['calls.summary'], os = d['outcomes.summary'], ds = d['duration.summary'],
-				rs = d['risk.summary'];
-			kpi('calls', cell(cs, 'calls'), C.fmt(cell(cs, 'today')) + ' today');
-			var started = cell(os, 'started'), answered = cell(os, 'answered');
-			kpi('answered', answered, (started ? Math.round(100 * answered / started) + '% of ' + C.fmt(started) + ' started'
-				: 'none started') + ' · ' + C.fmt(cell(os, 'lost')) + ' lost');
-			var med = cell(ds, 'median');
-			kpi('duration', clock(med), med == null ? '' : 'average ' + clock(cell(ds, 'average')) + ' · longest ' + clock(cell(ds, 'longest')));
-			var flagged = cell(rs, 'calls flagged');
-			kpi('flagged', flagged, C.fmt(cell(rs, 'calls assessed')) + ' assessed', flagged > 0);
-			['traffic', 'outcomes', 'apps', 'risk', 'ops'].forEach(function (k) { P[k].draw(); });
-			// The clock beside it says the time; the refresh time is on hover only.
-			setStatus('', 'live');
-			statusEl.title = 'Analytics refreshed at ' + R.time(Date.now(), { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-		}).catch(function (e) { if (e.message !== 'auth') setStatus('err', 'analytics failed'); });
-	}
-
+	/* The range buttons: Live, the settings' ranges, and Custom, which opens
+	   two date pickers read in the board's time zone. */
 	function buildRange() {
 		var host = document.getElementById('range');
 		host.textContent = '';
-		RANGES.forEach(function (r) {
-			var b = el('button', r === days ? 'on' : '', rangeLabel(r));
+		var add = function (key, label, title) {
+			var b = el('button', state.range === key ? 'on' : '', label);
 			b.type = 'button';
+			if (title) b.title = title;
 			b.addEventListener('click', function () {
-				days = r; store('days', days);
-				Array.prototype.forEach.call(host.children, function (c) { c.className = c === b ? 'on' : ''; });
-				labelRanges();
-				Object.keys(P).forEach(function (k) { P[k].relink(); });
-				A = {};
-				drawAll();
-				loadAnalytics();
+				if (key === 'custom') return openCustom(b);
+				closeCustom();
+				choose({ range: key, from: null, until: null });
 			});
 			host.appendChild(b);
-		});
+		};
+		add('live', 'Live', 'The last hour, as it happens');
+		RANGES.forEach(function (r) { add(r, rangeLabel(r)); });
+		add('custom', state.range === 'custom' ? spanText(state.from, state.until - 1) : 'Custom', 'Choose the start and end');
+	}
+
+	var customBox = null;
+	function closeCustom() { if (customBox) customBox.hidden = true; }
+
+	/* "2026-10-14T08:00" for a datetime-local input, in the board's zone. */
+	function pickerValue(ms) {
+		var p = {};
+		new Intl.DateTimeFormat('en-CA', { timeZone: R.zone(), hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
+			hour: '2-digit', minute: '2-digit' }).formatToParts(new Date(ms)).forEach(function (x) { p[x.type] = x.value; });
+		return p.year + '-' + p.month + '-' + p.day + 'T' + p.hour + ':' + p.minute;
+	}
+
+	function pickerMs(value) {
+		var m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value || '');
+		return m ? R.zonedMs(+m[1], +m[2], +m[3], +m[4], +m[5]) : null;
+	}
+
+	function openCustom(anchor) {
+		if (!customBox) {
+			customBox = el('div', 'custom');
+			customBox.setAttribute('role', 'dialog');
+			customBox.setAttribute('aria-label', 'Custom range');
+			var row = function (label, input) { var l = el('label', 'custom__row'); l.appendChild(el('span', '', label)); l.appendChild(input); return l; };
+			customBox.from = el('input'); customBox.from.type = 'datetime-local';
+			customBox.until = el('input'); customBox.until.type = 'datetime-local';
+			customBox.zone = el('div', 'custom__zone');
+			customBox.err = el('div', 'custom__err');
+			var ok = el('button', 'custom__ok', 'Show this range'); ok.type = 'button';
+			var cancel = el('button', 'custom__cancel', 'Cancel'); cancel.type = 'button';
+			ok.addEventListener('click', function () {
+				var from = pickerMs(customBox.from.value), until = pickerMs(customBox.until.value);
+				if (!from || !until || until <= from) { customBox.err.textContent = 'The end must come after the start.'; return; }
+				if (from > Date.now()) { customBox.err.textContent = 'The start is in the future.'; return; }
+				closeCustom();
+				choose({ range: 'custom', from: from, until: Math.min(until, Date.now()) });
+			});
+			cancel.addEventListener('click', closeCustom);
+			customBox.appendChild(row('From', customBox.from));
+			customBox.appendChild(row('To', customBox.until));
+			customBox.appendChild(customBox.zone);
+			customBox.appendChild(customBox.err);
+			var buttons = el('div', 'custom__buttons'); buttons.appendChild(cancel); buttons.appendChild(ok);
+			customBox.appendChild(buttons);
+			document.body.appendChild(customBox);
+			document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeCustom(); });
+		}
+		var until = state.range === 'custom' ? state.until : Date.now(), from = state.range === 'custom' ? state.from : until - 86400000;
+		customBox.from.value = pickerValue(from);
+		customBox.until.value = pickerValue(until);
+		customBox.zone.textContent = 'Times are ' + R.zone() + ', the zone chosen in the top bar. Long ranges can take a while.';
+		customBox.err.textContent = '';
+		var r = anchor.getBoundingClientRect();
+		customBox.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 320)) + 'px';
+		customBox.style.top = (r.bottom + 6) + 'px';
+		customBox.hidden = false;
+		customBox.from.focus();
 	}
 
 	/* The time now in the viewer's zone. Every time on the board is in that
@@ -1045,16 +1553,17 @@
 	function zoneChanged() {
 		tick();
 		loadNow().catch(function () {});
-		A = {};
+		Object.keys(GROUPS).forEach(function (g) { D[g] = undefined; });
+		buildRange();
+		labelRanges();
 		drawAll();
 		loadAnalytics();
 	}
 
-	buildKpis();
+	state = readHash();
 	buildPanels();
+	buildKpis();
 	buildRange();
-	fillScope();
-	document.getElementById('scope').addEventListener('change', function (e) { scopeChanged(e.target.value); });
 	R.zoneSelect(document.getElementById('tz'), zoneChanged);
 	drawAll();
 	tick();
@@ -1063,6 +1572,7 @@
 	if (!window.name) window.name = 'blade-dashboard';
 	// Links appear once the apps' declarations are in.
 	L.load().then(drawAll, function () {});
+	window.addEventListener('hashchange', function () { apply(readHash()); });
 	var live = function () {
 		loadHealth().catch(function () {}); loadOps().catch(function () {}); loadNow().catch(function () {});
 		if (P.traffic.current === 'network') loadNetwork().catch(function () {});
@@ -1073,16 +1583,10 @@
 			ANALYTICS_MS = (cfg.analyticsRefreshSeconds || 60) * 1000;
 			HEAP_HIGH = cfg.heapHighPercent || HEAP_HIGH;
 			RIGHTS = { platform: cfg.platform !== false, content: cfg.content !== false };
-			/* The deployment's ranges. A viewer's remembered choice stands while it
-			   is still one of them; otherwise they start on the default. */
+			/* The deployment's ranges, between Live and Custom. */
 			if (cfg.ranges && cfg.ranges.length) {
 				RANGES = cfg.ranges.map(String);
-				DEFAULT_DAYS = String(cfg.defaultDays || RANGES[0]);
-				var remembered = store('days');
-				days = (remembered && RANGES.indexOf(remembered) >= 0) ? remembered : DEFAULT_DAYS;
 				buildRange();
-				labelRanges();
-				Object.keys(P).forEach(function (k) { P[k].relink(); });
 			}
 			buildAccount(cfg);
 		}
@@ -1094,7 +1598,7 @@
 		live();
 		loadAnalytics();
 		setInterval(live, LIVE_MS);
-		setInterval(loadAnalytics, ANALYTICS_MS);
+		scheduleAnalytics();
 	});
 	setInterval(tick, 15000);
 	var rz;

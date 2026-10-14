@@ -61,6 +61,29 @@ The recorder holds at most 20,000 calls per application per server, in that serv
 call that fails over starts a new record. It hooks where every message is drawn on the log's
 sequence diagram, so every callflow, v2 or v3, is recorded at any log level.
 
+### Dashboard: detail left to right, Live, and a look back at any time
+
+The board reads left to right from "does it work" to "what went wrong", and a click narrows
+what is to its right. A server narrows Traffic and Operations; an hour on a Traffic chart, or a
+cell of the weekday grid, narrows Operations to that time; an outcome narrows Applications and
+Calls; an application narrows Calls. Each narrowed panel shows a chip with a ✕, the headline
+numbers never narrow, and the choices live in the page's address, so Back undoes a step and a
+link reproduces the view. Domains are chosen in Servers; the domain list in the top bar is gone.
+
+The range is Live (the last hour, by the minute, the default), a number of days, or a custom
+start and end. Charts cut it into minutes, quarter-hours, hours or days by its length. Servers
+over a past range shows each server's peaks and restarts from the minute samples. The lower
+right panel is now Calls: the calls themselves, newest first, each opening in Trace, with risk
+as a tab.
+
+Operations has a past now. The operations events (an endpoint, remote service or trunk down
+and back, a problem raised and cleared, a queue's busy minute) are persisted, with short names
+of their own (`endpointDown`, `trunkFailed`, `queueDepth`, ...), and read through a new view,
+`v_ops_events`, in all three dialects. The analytics sink stores an operations type when the
+framework marks it persisted, without a domain having to declare it in `events.json`; this also
+makes the configuration events of the last release reach the database. Registrations, presence
+and SIP refusals stay on the bus only.
+
 ### Dashboard: every problem opens the app that fixes it
 
 The board only shows problems; now each one opens, in a window of its own, the admin app that can

@@ -444,8 +444,8 @@ GO
 -- Configuration changes: every file the Configurator pushed to the servers
 -- running its application, and every save from an editor. `failed` lists the
 -- servers that did not take a push, as a JSON array; null when every one did.
--- The dashboard marks these on its time charts, beside restarts, to answer
--- "what changed just before the failures rose".
+-- The dashboard lists these under Operations, Changes, beside restarts, to
+-- answer "what changed just before the failures rose".
 CREATE OR ALTER VIEW v_config_changes AS
 SELECT
    CAST(e.id AS VARCHAR(20)) AS event_id,
@@ -462,4 +462,32 @@ SELECT
 FROM events e
 JOIN applications a ON a.id = e.application_id
 WHERE e.type IN ('configPublished', 'configSaved');
+GO
+
+-- Operations events: what went down and came back, problems applications
+-- raised and cleared, and each minute a queue held callers. One row per event,
+-- published on the change. The dashboard reads these to show a past hour's
+-- Operations; `subject` is what the event is about (the endpoint, remote
+-- service, gateway, queue, or problem key) and `detail` what was observed.
+CREATE OR ALTER VIEW v_ops_events AS
+SELECT
+   CAST(e.id AS VARCHAR(20)) AS event_id,
+   e.created AS occurred_at,
+   e.type AS event_type,
+   JSON_VALUE(e.payload, '$."node"') AS node,
+   COALESCE(JSON_VALUE(e.payload, '$."application"'), a.name) AS application,
+   COALESCE(JSON_VALUE(e.payload, '$."endpoint"'), JSON_VALUE(e.payload, '$."remote"'), JSON_VALUE(e.payload, '$."gateway"'), JSON_VALUE(e.payload, '$."queue"'), JSON_VALUE(e.payload, '$."key"')) AS subject,
+   COALESCE(JSON_VALUE(e.payload, '$."note"'), JSON_VALUE(e.payload, '$."reason"'), JSON_VALUE(e.payload, '$."summary"')) AS detail,
+   JSON_VALUE(e.payload, '$."kind"') AS remote_kind,
+   JSON_VALUE(e.payload, '$."registrar"') AS registrar,
+   TRY_CAST(JSON_VALUE(e.payload, '$."status"') AS BIGINT) AS status_code,
+   TRY_CAST(JSON_VALUE(e.payload, '$."low"') AS BIGINT) AS low_waiting,
+   TRY_CAST(JSON_VALUE(e.payload, '$."high"') AS BIGINT) AS high_waiting,
+   TRY_CAST(JSON_VALUE(e.payload, '$."depth"') AS BIGINT) AS waiting_now,
+   JSON_VALUE(e.payload, '$."open"') AS open_page,
+   a.domain AS domain
+FROM events e
+JOIN applications a ON a.id = e.application_id
+WHERE e.type IN ('queueDepth', 'endpointDown', 'endpointUp', 'remoteDown', 'remoteUp', 'problemRaised',
+   'problemCleared', 'trunkRegistered', 'trunkFailed', 'trunkUnregistered');
 GO

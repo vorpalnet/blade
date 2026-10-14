@@ -410,8 +410,8 @@ WHERE e.type = 'agentDisposition';
 -- Configuration changes: every file the Configurator pushed to the servers
 -- running its application, and every save from an editor. `failed` lists the
 -- servers that did not take a push, as a JSON array; null when every one did.
--- The dashboard marks these on its time charts, beside restarts, to answer
--- "what changed just before the failures rose".
+-- The dashboard lists these under Operations, Changes, beside restarts, to
+-- answer "what changed just before the failures rose".
 CREATE OR REPLACE VIEW v_config_changes AS
 SELECT
    CAST(e.id AS CHAR(20)) AS event_id,
@@ -428,3 +428,30 @@ SELECT
 FROM events e
 JOIN applications a ON a.id = e.application_id
 WHERE e.type IN ('configPublished', 'configSaved');
+
+-- Operations events: what went down and came back, problems applications
+-- raised and cleared, and each minute a queue held callers. One row per event,
+-- published on the change. The dashboard reads these to show a past hour's
+-- Operations; `subject` is what the event is about (the endpoint, remote
+-- service, gateway, queue, or problem key) and `detail` what was observed.
+CREATE OR REPLACE VIEW v_ops_events AS
+SELECT
+   CAST(e.id AS CHAR(20)) AS event_id,
+   e.created AS occurred_at,
+   e.type AS event_type,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."node"')) AS node,
+   COALESCE(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."application"')), a.name) AS application,
+   COALESCE(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."endpoint"')), JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."remote"')), JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."gateway"')), JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."queue"')), JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."key"'))) AS subject,
+   COALESCE(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."note"')), JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."reason"')), JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."summary"'))) AS detail,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."kind"')) AS remote_kind,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."registrar"')) AS registrar,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."status"')) AS DECIMAL(12,0)) AS status_code,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."low"')) AS DECIMAL(12,0)) AS low_waiting,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."high"')) AS DECIMAL(12,0)) AS high_waiting,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."depth"')) AS DECIMAL(12,0)) AS waiting_now,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."open"')) AS open_page,
+   a.domain AS domain
+FROM events e
+JOIN applications a ON a.id = e.application_id
+WHERE e.type IN ('queueDepth', 'endpointDown', 'endpointUp', 'remoteDown', 'remoteUp', 'problemRaised',
+   'problemCleared', 'trunkRegistered', 'trunkFailed', 'trunkUnregistered');

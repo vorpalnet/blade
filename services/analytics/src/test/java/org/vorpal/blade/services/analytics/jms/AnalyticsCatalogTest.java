@@ -68,6 +68,23 @@ class AnalyticsCatalogTest {
 		assertTrue(AnalyticsCatalog.persists(callEvent("com.example.shuffle.fraudScored")));
 	}
 
+	/// The dashboard's look back at a past hour reads these rows: without
+	/// them, Operations has nothing to show for any time but now.
+	@Test
+	@DisplayName("the framework's operations events are written as it marks them, without a catalog")
+	void operationsEventsFollowTheFrameworksFlag() {
+		assertTrue(AnalyticsCatalog.persists(operationsEvent(BladeEventTypes.ENDPOINT_DOWN)));
+		assertTrue(AnalyticsCatalog.persists(operationsEvent(BladeEventTypes.TRUNK_FAILED)));
+		assertTrue(AnalyticsCatalog.persists(operationsEvent(BladeEventTypes.PROBLEM_RAISED)));
+		assertTrue(AnalyticsCatalog.persists(operationsEvent(BladeEventTypes.QUEUE_DEPTH)));
+		assertTrue(AnalyticsCatalog.persists(operationsEvent(BladeEventTypes.CONFIG_PUBLISHED)));
+		assertFalse(AnalyticsCatalog.persists(operationsEvent(BladeEventTypes.SIP_DENIED)),
+				"a scanner produces thousands; they answer to network operations");
+		assertFalse(AnalyticsCatalog.persists(operationsEvent(BladeEventTypes.REGISTRATION_ADDED)));
+		assertTrue(AnalyticsCatalog.persistedTypes().contains(BladeEventTypes.ENDPOINT_DOWN));
+		assertFalse(AnalyticsCatalog.persistedTypes().contains(BladeEventTypes.SIP_DENIED));
+	}
+
 	@Test
 	@DisplayName("an undeclared event about no call is not written")
 	void undeclaredOperationsEventsAreNotWritten() {

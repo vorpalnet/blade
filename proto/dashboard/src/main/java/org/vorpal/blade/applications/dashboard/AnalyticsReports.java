@@ -31,6 +31,7 @@ import javax.persistence.EntityManagerFactory;
 import javax.persistence.TypedQuery;
 
 import org.vorpal.blade.applications.dashboard.model.UtcTimestamp;
+import org.vorpal.blade.framework.v3.events.BladeEventTypes;
 import org.vorpal.blade.framework.v3.net.CallOrigin;
 import org.vorpal.blade.framework.v3.net.Legs;
 
@@ -72,11 +73,39 @@ import org.vorpal.blade.framework.v3.net.Legs;
 /// as JSON unchanged.
 public class AnalyticsReports {
 
+	/// How finely a window is cut into the chart's buckets: by its span, not
+	/// by the button that chose it. An hour is minutes, a working day
+	/// quarter-hours, a week hours, a month days.
+	public enum Grain {
+		MINUTE("minute", 1), QUARTER("quarter", 15), HOUR("hour", 60), DAY("day", 1440);
+
+		/// The name of a bucketed report's first column, so the board knows
+		/// what a bucket spans.
+		final String column;
+		final int minutes;
+
+		Grain(String column, int minutes) {
+			this.column = column;
+			this.minutes = minutes;
+		}
+
+		static Grain of(long spanMs) {
+			long h = spanMs / 3_600_000L;
+			if (spanMs <= 2 * 3_600_000L) {
+				return MINUTE;
+			}
+			return h <= 12 ? QUARTER : (h <= 8 * 24 ? HOUR : DAY);
+		}
+	}
+
 	/// The scope every report is asked for.
 	public static final class Filter {
+		/// How far back the window reaches: 0 is the last hour (the board's
+		/// Live), 1 the last 24 hours, more whole days. Ignored when [#from] is set.
 		final int days;
 		final boolean includeSample;
 		final String domain;
+		/// The end of the window: now, or the end of a window the viewer chose.
 		final Date now;
 		/// The viewer's zone: days and hours are cut, and times printed, in it.
 		final ZoneId zone;
@@ -89,6 +118,19 @@ public class AnalyticsReports {
 		final Access access;
 		/// One caller's calls only: their `account` key; null for every caller.
 		final String account;
+		/// The start of a window the viewer chose ([#window]); null for one
+		/// counted back from now by [#days].
+		private Date from;
+		/// One server's calls and samples only ([#onServer]); null for all.
+		String server;
+		/// Calls that ended this way only, one of [#ENDINGS]; null for all.
+		String outcome;
+		/// Calls this application took part in only; null for all.
+		String application;
+		/// A recurring slice of the window, from the board's weekday-by-hour
+		/// grid: Monday is 1. Null for none.
+		Integer weekday;
+		Integer hourOfDay;
 
 		/// @param days          how far back the window reaches
 		/// @param includeSample whether `cluster_name = 'sample'` rows count
@@ -96,25 +138,17 @@ public class AnalyticsReports {
 		/// @param now           the end of the window (a parameter so tests can pin it)
 		/// @param zone          the viewer's time zone, or null for UTC
 		public Filter(int days, boolean includeSample, String domain, Date now, ZoneId zone) {
-			this.days = days;
-			this.includeSample = includeSample;
-			this.domain = (domain == null || domain.isEmpty()) ? null : domain;
-			this.now = now;
-			this.zone = (zone == null) ? ZoneOffset.UTC : zone;
-			this.leakMs = LEAK_MS;
-			this.splitMs = SPLIT_MS;
-			this.freshMs = SAMPLE_FRESH_MS;
-			this.access = null;
-			this.account = null;
+			this(days, includeSample, (domain == null || domain.isEmpty()) ? null : domain, now,
+					(zone == null) ? ZoneOffset.UTC : zone, LEAK_MS, SPLIT_MS, SAMPLE_FRESH_MS, null, null);
 		}
 
-		private Filter(Filter f, String domain, long leakMs, long splitMs, long freshMs, Access access,
-				String account) {
-			this.days = f.days;
-			this.includeSample = f.includeSample;
+		private Filter(int days, boolean includeSample, String domain, Date now, ZoneId zone, long leakMs,
+				long splitMs, long freshMs, Access access, String account) {
+			this.days = days;
+			this.includeSample = includeSample;
 			this.domain = domain;
-			this.now = f.now;
-			this.zone = f.zone;
+			this.now = now;
+			this.zone = zone;
 			this.leakMs = leakMs;
 			this.splitMs = splitMs;
 			this.freshMs = freshMs;
@@ -122,47 +156,135 @@ public class AnalyticsReports {
 			this.account = account;
 		}
 
+		/// A copy with the given finals and every narrowing of this one.
+		private Filter with(String domain, Date now, long leakMs, long splitMs, long freshMs, Access access,
+				String account) {
+			Filter c = new Filter(days, includeSample, domain, now, zone, leakMs, splitMs, freshMs, access, account);
+			c.from = from;
+			c.server = server;
+			c.outcome = outcome;
+			c.application = application;
+			c.weekday = weekday;
+			c.hourOfDay = hourOfDay;
+			return c;
+		}
+
+		private Filter copy() {
+			return with(domain, now, leakMs, splitMs, freshMs, access, account);
+		}
+
 		/// This scope with the settings' thresholds in place of the defaults.
 		public Filter tuned(long leakMs, long splitMs, long freshMs) {
-			return new Filter(this, domain, leakMs, splitMs, freshMs, access, account);
+			return with(domain, now, leakMs, splitMs, freshMs, access, account);
 		}
 
 		/// This scope limited to what `access` lets the viewer see.
 		public Filter limitedTo(Access access) {
-			return new Filter(this, domain, leakMs, splitMs, freshMs, access, account);
+			return with(domain, now, leakMs, splitMs, freshMs, access, account);
 		}
 
 		/// This scope narrowed to one caller: the calls filed under `account`
 		/// ([KeyRow]). Seeing it needs a grant with content, and a department
 		/// sees the account only on the calls it took part in.
 		public Filter forAccount(String account) {
-			return new Filter(this, domain, leakMs, splitMs, freshMs, access,
+			return with(domain, now, leakMs, splitMs, freshMs, access,
 					(account == null || account.isEmpty()) ? null : account);
+		}
+
+		/// This scope over a window the viewer chose, `from` to `until`: a
+		/// custom range, or a slice of a chart they clicked. Rows after `until`
+		/// are left out, as well as rows before `from`.
+		public Filter window(Date from, Date until) {
+			Filter c = with(domain, until, leakMs, splitMs, freshMs, access, account);
+			c.from = from;
+			return c;
+		}
+
+		/// This scope narrowed to one server: its calls ([CallRow#server], the
+		/// server of the first application that reported the call) and its
+		/// samples and operations events (`node`).
+		public Filter onServer(String server) {
+			Filter c = copy();
+			c.server = blank(server);
+			return c;
+		}
+
+		/// This scope narrowed to the calls that ended as `outcome` ([#ENDINGS])
+		/// and that `application` took part in; either may be null.
+		public Filter forCalls(String outcome, String application) {
+			Filter c = copy();
+			c.outcome = outcome != null && Arrays.asList(ENDINGS).contains(outcome) ? outcome : null;
+			c.application = blank(application);
+			return c;
+		}
+
+		/// This scope narrowed to one weekday and hour of day, every week of the
+		/// window: a cell of the board's weekday-by-hour grid. Applied to the
+		/// operations reports, which list events.
+		public Filter atHour(Integer weekday, Integer hourOfDay) {
+			Filter c = copy();
+			boolean ok = weekday != null && hourOfDay != null && weekday >= 1 && weekday <= 7 && hourOfDay >= 0
+					&& hourOfDay <= 23;
+			c.weekday = ok ? weekday : null;
+			c.hourOfDay = ok ? hourOfDay : null;
+			return c;
+		}
+
+		private static String blank(String s) {
+			return (s == null || s.trim().isEmpty()) ? null : s.trim();
 		}
 
 		/// This scope without its domain.
 		Filter allDomains() {
-			return new Filter(this, null, leakMs, splitMs, freshMs, access, account);
+			return with(null, now, leakMs, splitMs, freshMs, access, account);
 		}
 
-		/// Where the window opens. One day is the last 24 hours, cut into hours.
-		/// Longer windows are whole days in the viewer's zone, today's included:
-		/// seven days is today and the six before it. A rolling 168 hours would
-		/// open part-way through a day, so the first day's bar would read low and
-		/// the weekday grid would add that day's afternoon to today's.
+		/// Whether the window ends before now, so rows after [#now] are left out.
+		boolean bounded() {
+			return from != null;
+		}
+
+		/// Where the window opens. A chosen window opens where it was chosen.
+		/// Live is the last hour; one day the last 24 hours. Longer windows are
+		/// whole days in the viewer's zone, today's included: seven days is today
+		/// and the six before it. A rolling 168 hours would open part-way through
+		/// a day, so the first day's bar would read low and the weekday grid
+		/// would add that day's afternoon to today's.
 		Date since() {
-			if (days <= 1) {
-				return new Date(now.getTime() - days * 86_400_000L);
+			if (from != null) {
+				return from;
+			}
+			if (days <= 0) {
+				return new Date(now.getTime() - 3_600_000L);
+			}
+			if (days == 1) {
+				return new Date(now.getTime() - 86_400_000L);
 			}
 			return Date.from(LocalDate.ofInstant(now.toInstant(), zone).minusDays(days - 1L).atStartOfDay(zone)
 					.toInstant());
+		}
+
+		/// How finely the window is cut into buckets.
+		Grain grain() {
+			return Grain.of(now.getTime() - since().getTime());
+		}
+
+		/// Whether an instant falls in the recurring slice, if there is one.
+		boolean inSlice(Instant at) {
+			if (weekday == null) {
+				return true;
+			}
+			LocalDateTime t = LocalDateTime.ofInstant(at, zone);
+			return t.getDayOfWeek().getValue() == weekday && t.getHour() == hourOfDay;
 		}
 
 		/// The cache key for this scope plus a report name.
 		String key(String report) {
 			return report + '|' + days + '|' + includeSample + '|' + (domain == null ? "" : domain) + '|' + zone + '|'
 					+ leakMs + '|' + splitMs + '|' + freshMs + '|' + (access == null ? "" : access.key()) + '|'
-					+ (account == null ? "" : account);
+					+ (account == null ? "" : account) + '|' + (from == null ? "" : from.getTime() + "-" + now.getTime())
+					+ '|' + (server == null ? "" : server) + '|' + (outcome == null ? "" : outcome) + '|'
+					+ (application == null ? "" : application) + '|' + (weekday == null ? "" : weekday + "@" + hourOfDay);
 		}
 	}
 
@@ -184,7 +306,7 @@ public class AnalyticsReports {
 	/// Reports that show individual calls or what was said in them: only a
 	/// grant with `content` sees them (see [Access#seesContent]).
 	static final Set<String> CONTENT = Collections.unmodifiableSet(new HashSet<>(Arrays.asList("highrisk.calls",
-			"sessions.open", "conversation.intents", "health.split-calls", "risk.verdicts")));
+			"sessions.open", "conversation.intents", "health.split-calls", "risk.verdicts", "calls.list")));
 
 	/// The report names the servlet accepts, in the order a reader meets them.
 	public static final List<String> NAMES = Collections.unmodifiableList(Arrays.asList(
@@ -203,7 +325,7 @@ public class AnalyticsReports {
 			"conversation.intents",
 			"health.summary", "health.coverage", "health.chains", "health.split-calls", "health.publishing",
 			"health.publishing-daily", "platform.servers", "platform.latest", "platform.servers-hourly", "platform.heap", "platform.cpu",
-			"changes", "metrics.summary",
+			"changes", "ops.events", "ops.issues", "ops.queues", "calls.list", "metrics.summary",
 			"metrics.counters", "metrics.timings", "risk.verdicts", "risk.calibration"));
 
 	// Lifecycle names as the views carry them: the short names, plus the camelCase
@@ -236,6 +358,7 @@ public class AnalyticsReports {
 	private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 	private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 	private static final DateTimeFormatter HOUR = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:00");
+	private static final DateTimeFormatter MINUTE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
 	/// Two call rows with one Vorpal-ID born this close together are one call
 	/// split in two, not the ID reused: see [#healthSplitCalls]. The default;
@@ -320,6 +443,10 @@ public class AnalyticsReports {
 			case "platform.heap": return platformPeak(em, f, "heapUsedPct", "peak heap %");
 			case "platform.cpu": return platformPeak(em, f, "cpuPct", "peak cpu %");
 			case "changes": return changes(em, f);
+			case "ops.events": return opsEvents(em, f);
+			case "ops.issues": return opsIssues(em, f);
+			case "ops.queues": return opsQueues(em, f);
+			case "calls.list": return callsList(em, f);
 			case "metrics.summary": return metricsSummary(em, f);
 			case "metrics.counters": return metricsCounters(em, f);
 			case "metrics.timings": return metricsTimings(em, f);
@@ -417,7 +544,15 @@ public class AnalyticsReports {
 	/// add up to more than the call total: that is a call reaching two
 	/// applications.
 	private Table callsByApplication(EntityManager em, Filter f) {
-		Map<String, Long> byApp = callsPerHandler(em, f);
+		Set<String> only = narrowed(em, f);
+		Map<String, Long> byApp = only == null ? callsPerHandler(em, f) : new HashMap<>();
+		if (only != null) {
+			participation(em, f).forEach((call, apps) -> {
+				if (only.contains(call)) {
+					apps.forEach(app -> byApp.merge(app, 1L, Long::sum));
+				}
+			});
+		}
 		List<String> apps = new ArrayList<>(byApp.keySet());
 		apps.sort(Comparator.comparing((String a) -> -byApp.get(a)).thenComparing(a -> a));
 		Table t = new Table("application", "calls");
@@ -494,7 +629,7 @@ public class AnalyticsReports {
 		return t;
 	}
 
-	/// The most calls up at once in each hour of the window.
+	/// The most calls up at once in each bucket of the window.
 	///
 	/// A sweep over start and end times: +1 at each start, −1 at each end, the
 	/// running sum's peak per hour. Calls already up when the window opens start
@@ -503,20 +638,22 @@ public class AnalyticsReports {
 	private Table callsConcurrent(EntityManager em, Filter f) {
 		Date since = f.since();
 		List<long[]> deltas = upDeltas(em, f, since);
-		Table t = new Table("hour", "peak");
-		LocalDateTime h = LocalDateTime.ofInstant(since.toInstant(), f.zone).withMinute(0).withSecond(0).withNano(0);
-		LocalDateTime end = LocalDateTime.ofInstant(f.now.toInstant(), f.zone);
+		Grain g = f.grain();
+		Table t = new Table(g.column, "peak");
 		long running = 0;
 		int i = 0;
-		for (; !h.isAfter(end); h = h.plusHours(1)) {
-			long hourEnd = h.plusHours(1).atZone(f.zone).toInstant().toEpochMilli();
-			// The hour starts with whatever was already up, then sees every change in it.
+		for (String b : buckets(f)) {
+			LocalDateTime start = g == Grain.DAY ? LocalDate.parse(b, DAY).atStartOfDay()
+					: LocalDateTime.parse(b, MINUTE);
+			long bucketEnd = (g == Grain.DAY ? start.plusDays(1) : start.plusMinutes(g.minutes)).atZone(f.zone)
+					.toInstant().toEpochMilli();
+			// The bucket starts with whatever was already up, then sees every change in it.
 			long peak = running;
-			for (; i < deltas.size() && deltas.get(i)[0] < hourEnd; i++) {
+			for (; i < deltas.size() && deltas.get(i)[0] < bucketEnd; i++) {
 				running += deltas.get(i)[1];
 				peak = Math.max(peak, running);
 			}
-			t.row(h.format(HOUR), peak);
+			t.row(b, peak);
 		}
 		return t;
 	}
@@ -543,36 +680,23 @@ public class AnalyticsReports {
 				peak == 0 ? null : stamp(new Date(peakAt), f));
 	}
 
-	/// Calls per hour (a week or less) or per day, by how each ended, good to
+	/// Calls per bucket of the window's [Grain], by how each ended, good to
 	/// bad, in [#ENDINGS]' order.
 	///
 	/// Bucketed by when the call started. A call still up, or one no
 	/// application reported an end for, is in no part.
 	private Table callsByOutcome(EntityManager em, Filter f) {
-		boolean hourly = f.days <= 7;
 		Map<String, Object[]> ends = endings(em, f);
 		Map<String, long[]> byBucket = new HashMap<>();
 		for (Object[] r : list(em, "SELECT c.callId, c.startedAt FROM CallRow c" + where("c", "c.startedAt", f), f,
 				true)) {
 			Object[] end = ends.get((String) r[0]);
 			if (end != null) {
-				Instant at = instant(r[1]).toInstant();
-				String key = hourly ? hour(at, f).format(HOUR) : day(at, f);
-				byBucket.computeIfAbsent(key, k -> new long[ENDINGS.length])[(Integer) end[0]]++;
+				byBucket.computeIfAbsent(bucket(instant(r[1]).toInstant(), f), k -> new long[ENDINGS.length])[(Integer) end[0]]++;
 			}
 		}
-		List<String> buckets = new ArrayList<>();
-		if (hourly) {
-			LocalDateTime h = LocalDateTime.ofInstant(f.since().toInstant(), f.zone).withMinute(0).withSecond(0).withNano(0);
-			LocalDateTime last = LocalDateTime.ofInstant(f.now.toInstant(), f.zone);
-			for (; !h.isAfter(last); h = h.plusHours(1)) {
-				buckets.add(h.format(HOUR));
-			}
-		} else {
-			buckets.addAll(fillDays(new TreeMap<String, Long>(), f).keySet());
-		}
-		Table t = new Table(endingColumns(hourly ? "hour" : "day"));
-		for (String b : buckets) {
+		Table t = new Table(endingColumns(f.grain().column));
+		for (String b : buckets(f)) {
 			t.row(endingRow(b, byBucket.getOrDefault(b, new long[ENDINGS.length])));
 		}
 		return t;
@@ -751,7 +875,13 @@ public class AnalyticsReports {
 		String[] names = { "under 15 s", "15-30 s", "30-60 s", "1-3 min", "3-10 min", "10 min +" };
 		double[] upper = { 15, 30, 60, 180, 600, Double.MAX_VALUE };
 		long[] counts = new long[names.length];
-		for (Object[] r : durations(em, f)) {
+		Set<String> only = narrowed(em, f);
+		for (Object[] r : only == null ? durations(em, f)
+				: list(em, "SELECT c.callId, c.durationSeconds FROM CallRow c" + where("c", "c.startedAt", f)
+						+ " AND c.durationSeconds IS NOT NULL", f, true)) {
+			if (only != null && !only.contains((String) r[0])) {
+				continue;
+			}
 			double d = (Double) r[1];
 			int i = 0;
 			while (d >= upper[i]) {
@@ -848,15 +978,16 @@ public class AnalyticsReports {
 		return t;
 	}
 
-	/// Calls per day by how each ended, each call once, on the day it ended.
+	/// Calls per bucket of the window's [Grain] by how each ended, each call
+	/// once, in the bucket it ended in.
 	private Table outcomesDaily(EntityManager em, Filter f) {
-		Map<String, long[]> byDay = new TreeMap<>();
+		Map<String, long[]> byBucket = new TreeMap<>();
 		for (Object[] end : endings(em, f).values()) {
-			byDay.computeIfAbsent(day(((Date) end[1]).toInstant(), f), k -> new long[ENDINGS.length])[(Integer) end[0]]++;
+			byBucket.computeIfAbsent(bucket(((Date) end[1]).toInstant(), f), k -> new long[ENDINGS.length])[(Integer) end[0]]++;
 		}
-		Table t = new Table(endingColumns("day"));
-		for (String day : fillDays(new TreeMap<String, Long>(), f).keySet()) {
-			t.row(endingRow(day, byDay.getOrDefault(day, new long[ENDINGS.length])));
+		Table t = new Table(endingColumns(f.grain().column));
+		for (String b : buckets(f)) {
+			t.row(endingRow(b, byBucket.getOrDefault(b, new long[ENDINGS.length])));
 		}
 		return t;
 	}
@@ -1288,23 +1419,29 @@ public class AnalyticsReports {
 	/// Calls assessed and calls flagged per day, each on the day of its first
 	/// such assessment. Calls, not assessments: a call is assessed every few
 	/// seconds while it lasts, so a count of assessments measures talk time.
+	/// Calls assessed and flagged per bucket of the window's [Grain], each on
+	/// its first assessment; narrowed to [#narrowed] calls when the viewer
+	/// chose an outcome or an application.
 	private Table riskDaily(EntityManager em, Filter f) {
-		Map<String, Long> assessed = riskCallsPerDay(em, f, "");
-		Map<String, Long> flagged = riskCallsPerDay(em, f, " AND r.eventType = 'callRiskFlagged'");
-		Table t = new Table("day", "calls assessed", "calls flagged");
-		for (String day : fillDays(new TreeMap<String, Long>(), f).keySet()) {
-			t.row(day, assessed.getOrDefault(day, 0L), flagged.getOrDefault(day, 0L));
+		Set<String> calls = narrowed(em, f);
+		Map<String, Long> assessed = riskCallsPerBucket(em, f, "", calls);
+		Map<String, Long> flagged = riskCallsPerBucket(em, f, " AND r.eventType = 'callRiskFlagged'", calls);
+		Table t = new Table(f.grain().column, "calls assessed", "calls flagged");
+		for (String b : buckets(f)) {
+			t.row(b, assessed.getOrDefault(b, 0L), flagged.getOrDefault(b, 0L));
 		}
 		return t;
 	}
 
-	private Map<String, Long> riskCallsPerDay(EntityManager em, Filter f, String and) {
-		Map<String, Long> byDay = new TreeMap<>();
+	private Map<String, Long> riskCallsPerBucket(EntityManager em, Filter f, String and, Set<String> calls) {
+		Map<String, Long> byBucket = new TreeMap<>();
 		for (Object[] r : list(em, "SELECT r.callId, MIN(r.assessedAt) FROM RiskRow r" + where("r", "r.assessedAt", f)
 				+ " AND r.callId IS NOT NULL" + and + " GROUP BY r.callId", f, true)) {
-			byDay.merge(day(instant(r[1]).toInstant(), f), 1L, Long::sum);
+			if (calls == null || calls.contains((String) r[0])) {
+				byBucket.merge(bucket(instant(r[1]).toInstant(), f), 1L, Long::sum);
+			}
 		}
-		return byDay;
+		return byBucket;
 	}
 
 	private Table riskByBand(EntityManager em, Filter f) {
@@ -1353,9 +1490,19 @@ public class AnalyticsReports {
 
 	private Table highriskByBand(EntityManager em, Filter f) {
 		Map<String, Long> n = new HashMap<>();
-		for (Object[] r : list(em, "SELECT s.peakRiskBand, COUNT(s) FROM RiskCallRow s"
-				+ where("s", "s.lastAssessedAt", f) + " GROUP BY s.peakRiskBand", f, true)) {
-			n.merge(label(r[0]), num(r[1]), Long::sum);
+		Set<String> only = narrowed(em, f);
+		if (only == null) {
+			for (Object[] r : list(em, "SELECT s.peakRiskBand, COUNT(s) FROM RiskCallRow s"
+					+ where("s", "s.lastAssessedAt", f) + " GROUP BY s.peakRiskBand", f, true)) {
+				n.merge(label(r[0]), num(r[1]), Long::sum);
+			}
+		} else {
+			for (Object[] r : list(em, "SELECT s.peakRiskBand, s.callId FROM RiskCallRow s"
+					+ where("s", "s.lastAssessedAt", f), f, true)) {
+				if (only.contains((String) r[1])) {
+					n.merge(label(r[0]), 1L, Long::sum);
+				}
+			}
 		}
 		return bandOrdered(n, "worst band", "calls");
 	}
@@ -1367,9 +1514,15 @@ public class AnalyticsReports {
 				+ " AND s.peakRiskBand IN ('SUSPECT', 'WATCH') ORDER BY s.peakBandRank DESC, s.peakRiskScore DESC",
 				Object[].class);
 		bind(q, f, true);
-		q.setMaxResults(500);
+		Set<String> only = narrowed(em, f);
+		if (only == null) {
+			q.setMaxResults(500);
+		}
 		Table t = new Table("worst band", "call", "first assessed", "peak score", "assessments");
 		for (Object[] r : q.getResultList()) {
+			if (only != null && (!only.contains((String) r[1]) || t.rows.size() >= 500)) {
+				continue;
+			}
 			t.row(label(r[0]), label(r[1]), stamp(r[2], f), r[3] == null ? null : round(((Number) r[3]).doubleValue()),
 					r[4] == null ? null : num(r[4]));
 		}
@@ -1591,7 +1744,7 @@ public class AnalyticsReports {
 		List<Object[]> rows = samples(em, "SELECT s.domain, s.node, SUM(s.received), SUM(s.rejected), "
 				+ "SUM(s.appSessionsCreated), MAX(s.activeAppSessions), MAX(s.heapUsedPct), MAX(s.threadsStuck), "
 				+ "MAX(s.threadsHogging), MAX(s.sampledAt), SUM(s.routed), SUM(s.routingFallbacks), "
-				+ "SUM(s.undeployedBypasses), SUM(s.routingCycles) FROM ServerSampleRow s WHERE " + sampled("s", f)
+				+ "SUM(s.undeployedBypasses), SUM(s.routingCycles), MAX(s.cpuPct) FROM ServerSampleRow s WHERE " + sampled("s", f)
 				+ " GROUP BY s.domain, s.node", f);
 		Map<String, Object[]> latest = new HashMap<>();
 		for (Object[] r : this.<Object[]>samples(em, "SELECT s.domain, s.node, s.sampledAt, s.activeAppSessions, "
@@ -1608,29 +1761,28 @@ public class AnalyticsReports {
 		Table t = new Table("domain", "server", "state", "messages received", "refused", "app sessions created",
 				"app sessions now", "sip sessions now", "most app sessions", "peak heap %", "most stuck threads",
 				"most hogging threads", "routed", "no rule matched", "routed past undeployed", "routing loops",
-				"restarts", "last sample");
+				"restarts", "last sample", "peak cpu %");
 		for (Object[] r : rows) {
 			String key = label(r[0]) + '/' + label(r[1]);
 			Object[] now = latest.get(key);
 			t.row(label(r[0]), label(r[1]), now == null ? null : now[5], num(r[2]), num(r[3]), num(r[4]),
 					now == null ? null : now[3], now == null ? null : now[4], r[5], r[6], r[7], r[8], r[10], r[11],
-					r[12], r[13], restarts.getOrDefault(key, 0L), stamp(r[9], f));
+					r[12], r[13], restarts.getOrDefault(key, 0L), stamp(r[9], f), r[14]);
 		}
 		return t;
 	}
 
-	/// What changed, oldest first, for the marks on the board's time charts:
-	/// a server restarted, an application restarted (deployed again, or its
+	/// What changed, oldest first, for the board's Operations, Changes: a
+	/// server restarted, an application restarted (deployed again, or its
 	/// server restarted), a configuration file pushed or saved. `bucket` is the
-	/// chart bucket the change falls in, the hour or past a week the day, as
-	/// [#callsByOutcome] cuts them; `at` is the instant, in epoch millis.
+	/// chart bucket the change falls in, as [#callsByOutcome] cuts them; `at`
+	/// is the instant, in epoch millis.
 	///
 	/// Restarts come from the per-minute samples, so they are as late as one
 	/// minute; an application restart on a server that restarted in the same
 	/// sample is left out, since the server restart says it. A database
 	/// without `v_config_changes` yet still has its restarts.
 	private Table changes(EntityManager em, Filter f) {
-		boolean hourly = f.days <= 7;
 		List<Object[]> out = new ArrayList<>();
 		Set<String> serverRestarts = new HashSet<>();
 		for (Object[] r : this.<Object[]>samples(em, "SELECT s.sampledAt, s.node FROM ServerSampleRow s WHERE "
@@ -1648,8 +1800,8 @@ public class AnalyticsReports {
 		}
 		try {
 			javax.persistence.Query q = em.createQuery("SELECT c.changedAt, c.changeType, c.node, c.configFile, "
-					+ "c.configuredApplication, c.actor, c.changeKind, c.failed FROM ChangeRow c WHERE c.changedAt >= :since"
-					+ (f.domain == null ? "" : " AND c.domain = :domain") + (f.access == null ? "" : f.access.samplePredicate("c")));
+					+ "c.configuredApplication, c.actor, c.changeKind, c.failed FROM ChangeRow c WHERE "
+					+ sampled("c", "c.changedAt", "c.node", f));
 			bindSampled(q, f);
 			for (Object o : q.getResultList()) {
 				Object[] r = (Object[]) o;
@@ -1665,7 +1817,200 @@ public class AnalyticsReports {
 		Table t = new Table("bucket", "at", "change", "server", "what", "file", "failed on");
 		for (Object[] r : out) {
 			Instant at = (Instant) r[0];
-			t.row(hourly ? hour(at, f).format(HOUR) : day(at, f), at.toEpochMilli(), r[1], r[2], r[3], r[4], r[5]);
+			if (f.inSlice(at)) {
+				t.row(bucket(at, f), at.toEpochMilli(), r[1], r[2], r[3], r[4], r[5]);
+			}
+		}
+		return t;
+	}
+
+	/// The calls the viewer narrowed the board's lower row to, by id: those
+	/// that ended as [Filter#outcome] and that [Filter#application] took part
+	/// in. Null when neither is chosen, so a report counts in the database as
+	/// before; a set, and the report filters its rows by it here.
+	private Set<String> narrowed(EntityManager em, Filter f) {
+		if (f.outcome == null && f.application == null) {
+			return null;
+		}
+		Set<String> calls = null;
+		if (f.outcome != null) {
+			int want = Arrays.asList(ENDINGS).indexOf(f.outcome);
+			calls = new HashSet<>();
+			for (Map.Entry<String, Object[]> e : endings(em, f).entrySet()) {
+				if ((Integer) e.getValue()[0] == want) {
+					calls.add(e.getKey());
+				}
+			}
+		}
+		if (f.application != null) {
+			Set<String> took = new HashSet<>();
+			participation(em, f).forEach((call, apps) -> {
+				if (apps.contains(f.application)) {
+					took.add(call);
+				}
+			});
+			if (calls == null) {
+				calls = took;
+			} else {
+				calls.retainAll(took);
+			}
+		}
+		return calls;
+	}
+
+	/// The calls themselves, newest first: each call's Vorpal-ID, when it
+	/// started, how long it lasted, how it ended, the applications it reached
+	/// and the worst risk band it reached. The board's lower right, narrowed
+	/// by [#narrowed]; each row opens the call in Trace. At most 500.
+	private Table callsList(EntityManager em, Filter f) {
+		Set<String> only = narrowed(em, f);
+		Map<String, Object[]> ends = endings(em, f);
+		Map<String, TreeSet<String>> apps = participation(em, f);
+		Map<String, String> bands = new HashMap<>();
+		for (Object[] r : list(em, "SELECT s.callId, s.peakRiskBand FROM RiskCallRow s"
+				+ where("s", "s.lastAssessedAt", f), f, true)) {
+			bands.put((String) r[0], label(r[1]));
+		}
+		TypedQuery<Object[]> q = em.createQuery("SELECT c.callId, c.vorpalId, c.startedAt, c.durationSeconds, c.endedAt"
+				+ " FROM CallRow c" + where("c", "c.startedAt", f) + " ORDER BY c.startedAt DESC", Object[].class);
+		bind(q, f, true);
+		if (only == null) {
+			q.setMaxResults(500);
+		}
+		Table t = new Table("call", "started", "length", "outcome", "applications", "worst band");
+		for (Object[] r : q.getResultList()) {
+			String call = (String) r[0];
+			if (only != null && !only.contains(call)) {
+				continue;
+			}
+			Object[] end = ends.get(call);
+			String outcome = end != null ? ENDINGS[(Integer) end[0]] : (r[4] == null ? "still up" : null);
+			TreeSet<String> reached = apps.get(call);
+			t.row(r[1], stamp(r[2], f), r[3] == null ? null : Math.round(((Number) r[3]).doubleValue()), outcome,
+					reached == null ? null : String.join(CHAIN_SEPARATOR, reached), bands.get(call));
+			if (t.rows.size() >= 500) {
+				break;
+			}
+		}
+		return t;
+	}
+
+	/// The operations events a raise opens and its clear closes, by family.
+	static final Map<String, String> RAISES = Map.of("endpointDown", "endpoint", "remoteDown", "remote",
+			"trunkFailed", "trunk", "problemRaised", "problem");
+	static final Map<String, String> CLEARS = Map.of("endpointUp", "endpoint", "remoteUp", "remote",
+			"trunkRegistered", "trunk", "problemCleared", "problem");
+
+	/// How far before the window an issue may have been raised and still be
+	/// open in it.
+	static final long ISSUE_LOOKBACK_MS = 30L * 86_400_000L;
+
+	/// Every operations event in the window, newest first, as the board's live
+	/// feed shows them (`type` is the full event type): what went down and came
+	/// back, problems raised and cleared, the minutes a queue held callers.
+	/// From `v_ops_events`; narrowed to a server and a weekday and hour when
+	/// the viewer chose them. At most 500.
+	private Table opsEvents(EntityManager em, Filter f) {
+		TypedQuery<Object[]> q = em.createQuery("SELECT o.occurredAt, o.eventType, o.node, o.application, o.subject,"
+				+ " o.detail, o.remoteKind, o.registrar, o.statusCode, o.lowWaiting, o.highWaiting, o.waitingNow,"
+				+ " o.openPage FROM OpsEventRow o WHERE " + sampled("o", "o.occurredAt", "o.node", f)
+				+ " ORDER BY o.occurredAt DESC", Object[].class);
+		bindSampled(q, f);
+		q.setMaxResults(5000);
+		Table t = new Table("at", "type", "node", "application", "subject", "detail", "kind", "registrar", "status",
+				"low", "high", "depth", "open");
+		for (Object[] r : q.getResultList()) {
+			Instant at = instant(r[0]).toInstant();
+			if (!f.inSlice(at)) {
+				continue;
+			}
+			t.row(at.toEpochMilli(), BladeEventTypes.forEventName((String) r[1]), r[2], r[3], r[4], r[5], r[6], r[7],
+					r[8], r[9], r[10], r[11], r[12]);
+			if (t.rows.size() >= 500) {
+				break;
+			}
+		}
+		return t;
+	}
+
+	/// Every issue open at some time in the window, newest first: an
+	/// endpoint, remote service or trunk down, or a problem an application
+	/// raised, from the event that raised it to the one that cleared it
+	/// (`until` null: still open). Raised up to [#ISSUE_LOOKBACK_MS] before the
+	/// window and open into it counts. A raise and its clear pair on the
+	/// family, the subject, the server and the application; a repeated raise
+	/// while open, or a clear with nothing open, is ignored. With a weekday
+	/// and hour chosen, the issues raised in that hour.
+	private Table opsIssues(EntityManager em, Filter f) {
+		Filter back = f.window(new Date(f.since().getTime() - ISSUE_LOOKBACK_MS), f.now);
+		List<String> types = new ArrayList<>(RAISES.keySet());
+		types.addAll(CLEARS.keySet());
+		TypedQuery<Object[]> q = em.createQuery("SELECT o.occurredAt, o.eventType, o.node, o.application, o.subject,"
+				+ " o.detail, o.openPage FROM OpsEventRow o WHERE " + sampled("o", "o.occurredAt", "o.node", back)
+				+ " AND o.eventType IN :types ORDER BY o.occurredAt", Object[].class);
+		bindSampled(q, back);
+		q.setParameter("types", types);
+		Map<String, Object[]> open = new HashMap<>();
+		List<Object[]> issues = new ArrayList<>();
+		for (Object[] r : q.getResultList()) {
+			String type = (String) r[1];
+			String family = RAISES.containsKey(type) ? RAISES.get(type) : CLEARS.get(type);
+			String key = family + '|' + label(r[4]) + '|' + label(r[2]) + '|' + label(r[3]);
+			long at = instant(r[0]).getTime();
+			if (RAISES.containsKey(type)) {
+				open.computeIfAbsent(key, k -> {
+					Object[] issue = { BladeEventTypes.forEventName(type), r[4], r[2], r[3], r[5], at, null, r[6] };
+					issues.add(issue);
+					return issue;
+				});
+			} else {
+				Object[] issue = open.remove(key);
+				if (issue != null) {
+					issue[6] = at;
+				}
+			}
+		}
+		long since = f.since().getTime(), until = f.now.getTime();
+		Table t = new Table("type", "subject", "node", "application", "detail", "from", "until", "open");
+		for (int i = issues.size() - 1; i >= 0; i--) {
+			Object[] issue = issues.get(i);
+			long from = (Long) issue[5];
+			if (from <= until && (issue[6] == null || (Long) issue[6] >= since) && f.inSlice(Instant.ofEpochMilli(from))) {
+				t.row(issue);
+			}
+		}
+		return t;
+	}
+
+	/// Each queue on each server over the window, from its minute reports
+	/// (`queueDepth`, published for each minute it held callers): how many
+	/// minutes it held anyone, the most waiting at once, and how many were
+	/// waiting at its last report. Busiest first.
+	private Table opsQueues(EntityManager em, Filter f) {
+		TypedQuery<Object[]> q = em.createQuery("SELECT o.occurredAt, o.subject, o.node, o.highWaiting, o.waitingNow"
+				+ " FROM OpsEventRow o WHERE " + sampled("o", "o.occurredAt", "o.node", f)
+				+ " AND o.eventType = 'queueDepth' ORDER BY o.occurredAt", Object[].class);
+		bindSampled(q, f);
+		Map<String, Object[]> byQueue = new LinkedHashMap<>();
+		for (Object[] r : q.getResultList()) {
+			Instant at = instant(r[0]).toInstant();
+			if (!f.inSlice(at)) {
+				continue;
+			}
+			Object[] a = byQueue.computeIfAbsent(label(r[1]) + '|' + label(r[2]),
+					k -> new Object[] { label(r[1]), label(r[2]), 0L, 0L, null, null });
+			if (num(r[3]) > 0) {
+				a[2] = (Long) a[2] + 1;
+			}
+			a[3] = Math.max((Long) a[3], num(r[3]));
+			a[4] = r[4] == null ? null : num(r[4]);
+			a[5] = at.toEpochMilli();
+		}
+		List<Object[]> rows = new ArrayList<>(byQueue.values());
+		rows.sort(Comparator.comparing((Object[] r) -> -(Long) r[2]).thenComparing(r -> (String) r[0]));
+		Table t = new Table("queue", "node", "busy minutes", "most waiting", "waiting at last report", "last report");
+		for (Object[] r : rows) {
+			t.row(r);
 		}
 		return t;
 	}
@@ -1729,7 +2074,7 @@ public class AnalyticsReports {
 	}
 
 	/// Each server's highest reading of one per-minute sample field (heap in
-	/// use, CPU used) per hour (a week or less) or per day, so it reads over
+	/// use, CPU used) per bucket of the window's [Grain], so it reads over
 	/// the same range as the call charts beside it. One row per server and
 	/// hour or day that has a sample; a server named with its domain when the
 	/// scope holds several.
@@ -1740,9 +2085,12 @@ public class AnalyticsReports {
 	/// @param field  a [ServerSampleRow] reading, e.g. `heapUsedPct`
 	/// @param column the result's value column
 	private Table platformPeak(EntityManager em, Filter f, String field, String column) {
-		boolean hourly = f.days <= 7;
+		// Minutes for a window of minutes: every zone is a whole number of
+		// minutes from UTC, so a UTC minute is a local minute.
+		boolean minutes = f.grain() == Grain.MINUTE;
 		String parts = "EXTRACT(YEAR FROM s.sampledAt), EXTRACT(MONTH FROM s.sampledAt), EXTRACT(DAY FROM s.sampledAt),"
-				+ " EXTRACT(HOUR FROM s.sampledAt), FUNCTION('FLOOR', EXTRACT(MINUTE FROM s.sampledAt) / 15)";
+				+ " EXTRACT(HOUR FROM s.sampledAt), " + (minutes ? "EXTRACT(MINUTE FROM s.sampledAt)"
+						: "FUNCTION('FLOOR', EXTRACT(MINUTE FROM s.sampledAt) / 15)");
 		List<Object[]> rows;
 		try {
 			TypedQuery<Object[]> q = em.createQuery("SELECT s.domain, s.node, " + parts + ", MAX(s." + field + ")"
@@ -1760,13 +2108,13 @@ public class AnalyticsReports {
 				continue;
 			}
 			Instant start = LocalDateTime.of((int) num(r[2]), (int) num(r[3]), (int) num(r[4]), (int) num(r[5]),
-					(int) num(r[6]) * 15).toInstant(ZoneOffset.UTC);
-			String bucket = hourly ? hour(start, f).format(HOUR) : day(start, f);
+					(int) num(r[6]) * (minutes ? 1 : 15)).toInstant(ZoneOffset.UTC);
+			String bucket = bucket(start, f);
 			String server = domains ? label(r[0]) + "/" + label(r[1]) : label(r[1]);
 			byServer.computeIfAbsent(server, k -> new TreeMap<>()).merge(bucket, Math.round(((Number) r[7]).doubleValue()),
 					Math::max);
 		}
-		Table t = new Table(hourly ? "hour" : "day", "server", column);
+		Table t = new Table(f.grain().column, "server", column);
 		byServer.forEach((server, buckets) -> buckets.forEach((bucket, pct) -> t.row(bucket, server, pct)));
 		return t;
 	}
@@ -1894,12 +2242,34 @@ public class AnalyticsReports {
 	/// carry the publishing server's domain, not a `cluster_name`, so
 	/// [#where] does not apply to them. Bind with [#bindSampled].
 	static String sampled(String alias, Filter f) {
-		return alias + ".sampledAt >= :since" + (f.domain == null ? "" : " AND " + alias + ".domain = :domain")
+		return sampled(alias, alias + ".sampledAt", alias + ".node", f);
+	}
+
+	/// [#sampled] for a row whose time and server are named otherwise: a
+	/// configuration change ([ChangeRow]), an operations event ([OpsEventRow]).
+	static String sampled(String alias, String timePath, String nodePath, Filter f) {
+		return timePath + " >= :since" + (f.bounded() ? " AND " + timePath + " <= :until" : "")
+				+ (f.server == null ? "" : " AND " + nodePath + " = :server")
+				+ (f.domain == null ? "" : " AND " + alias + ".domain = :domain")
 				+ (f.access == null ? "" : f.access.samplePredicate(alias));
+	}
+
+	/// The window's end and the server, for a query whose text names them:
+	/// [#where] and [#sampled] add them only when the filter has them, and a
+	/// query built by hand may leave them out.
+	private static void bindNarrowing(javax.persistence.Query q, Filter f) {
+		for (javax.persistence.Parameter<?> p : q.getParameters()) {
+			if ("until".equals(p.getName())) {
+				q.setParameter("until", f.now);
+			} else if ("server".equals(p.getName())) {
+				q.setParameter("server", f.server);
+			}
+		}
 	}
 
 	private static void bindSampled(javax.persistence.Query q, Filter f) {
 		q.setParameter("since", f.since());
+		bindNarrowing(q, f);
 		if (f.domain != null) {
 			q.setParameter("domain", f.domain);
 		}
@@ -1999,6 +2369,14 @@ public class AnalyticsReports {
 		StringBuilder w = new StringBuilder(" WHERE 1 = 1");
 		if (timePath != null) {
 			w.append(" AND ").append(timePath).append(" >= :since");
+			if (f.bounded()) {
+				w.append(" AND ").append(timePath).append(" <= :until");
+			}
+		}
+		// Only a call row names its server; an event-based row is narrowed
+		// through the calls it is joined to.
+		if (f.server != null && "c".equals(alias)) {
+			w.append(" AND c.server = :server");
 		}
 		if (!f.includeSample) {
 			w.append(" AND (").append(alias).append(".clusterName IS NULL OR ").append(alias)
@@ -2026,6 +2404,7 @@ public class AnalyticsReports {
 		if (windowed) {
 			q.setParameter("since", f.since());
 		}
+		bindNarrowing(q, f);
 		if (f.domain != null) {
 			q.setParameter("domain", f.domain);
 		}
@@ -2139,6 +2518,38 @@ public class AnalyticsReports {
 	/// The viewer's hour an instant falls in.
 	private static LocalDateTime hour(Instant at, Filter f) {
 		return LocalDateTime.ofInstant(at, f.zone).withMinute(0).withSecond(0).withNano(0);
+	}
+
+	/// The chart bucket an instant falls in, at the window's [Grain]: a day
+	/// as `yyyy-MM-dd`, anything finer as `yyyy-MM-dd HH:mm` from its start.
+	static String bucket(Instant at, Filter f) {
+		Grain g = f.grain();
+		if (g == Grain.DAY) {
+			return day(at, f);
+		}
+		LocalDateTime t = LocalDateTime.ofInstant(at, f.zone).withSecond(0).withNano(0);
+		return t.withMinute(t.getMinute() / g.minutes * g.minutes).format(MINUTE);
+	}
+
+	/// Every bucket of the window in order, so a quiet stretch shows as a gap
+	/// rather than the bars closing ranks.
+	static List<String> buckets(Filter f) {
+		Grain g = f.grain();
+		List<String> out = new ArrayList<>();
+		if (g == Grain.DAY) {
+			LocalDate end = LocalDate.ofInstant(f.now.toInstant(), f.zone);
+			for (LocalDate d = LocalDate.ofInstant(f.since().toInstant(), f.zone); !d.isAfter(end); d = d.plusDays(1)) {
+				out.add(d.format(DAY));
+			}
+			return out;
+		}
+		LocalDateTime t = LocalDateTime.ofInstant(f.since().toInstant(), f.zone).withSecond(0).withNano(0);
+		t = t.withMinute(t.getMinute() / g.minutes * g.minutes);
+		LocalDateTime end = LocalDateTime.ofInstant(f.now.toInstant(), f.zone);
+		for (; !t.isAfter(end); t = t.plusMinutes(g.minutes)) {
+			out.add(t.format(MINUTE));
+		}
+		return out;
 	}
 
 	/// A timestamp from a query result as the instant it stands for. A column

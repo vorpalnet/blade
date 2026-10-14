@@ -88,7 +88,25 @@
 		s = String(s);
 		var m = /^\d{4}-(\d{2})-(\d{2})( (\d{2}):00)?$/.exec(s);
 		if (m) return m[3] ? m[1] + '/' + m[2] + ' ' + m[4] + 'h' : m[1] + '/' + m[2];
+		// A bucket finer than an hour: its clock time, which is what changes.
+		m = /^\d{4}-\d{2}-\d{2} (\d{2}:\d{2})$/.exec(s);
+		if (m) return m[1];
 		return s.length > 14 ? s.slice(0, 13) + '…' : s;
+	}
+
+	/* Choosing a bucket on a time chart: opts.pick(label) is called with the
+	   bucket clicked, and opts.picked names the one chosen, drawn with a solid
+	   outline so the choice is a shape, not a colour. One column per bucket,
+	   the bar's full height, so a quiet bucket can be chosen too. */
+	function pickColumns(s, left, width, labels, opts) {
+		if (!opts.pick) return;
+		var cols = s.g.selectAll('rect.pick-col').data(labels, function (b) { return b; }).join('rect').attr('class', 'pick-col')
+			.classed('pick-col--on', function (b) { return b === opts.picked; })
+			.attr('x', left).attr('width', width).attr('y', -4).attr('height', s.h + 4)
+			.on('click', function (event, b) { opts.pick(b); });
+		cols.selectAll('title').data(function (b) { return [b]; }).join('title')
+			.text(function (b) { return (b === opts.picked ? 'Chosen: ' : 'Choose ') + (opts.pickLabel ? opts.pickLabel(b) : shortLabel(b)); });
+		cols.lower();
 	}
 
 	/* Vertical bars: rows of [label, value]. One accent for every bar. */
@@ -132,6 +150,7 @@
 		var x = d3.scaleBand().domain(rows.map(function (r) { return r[0]; })).range([0, s.w]).padding(0.18);
 		var y = countScale(top, [s.h, 0]);
 		gridY(s.g, y, s.w, true);
+		pickColumns(s, x, x.bandwidth(), x.domain(), opts);
 		s.g.selectAll('g.x-axis').data([0]).join('g').attr('class', 'x-axis').attr('transform', 'translate(0,' + s.h + ')')
 			.call(d3.axisBottom(x).tickValues(sparseTicks(x.domain(), s.w)).tickFormat(shortLabel).tickSize(0).tickPadding(6))
 			.call(function (a) { a.select('.domain').attr('class', 'domain baseline'); });
@@ -148,8 +167,11 @@
 			.style('fill', function (d) { return token(d.part.color); })
 			.attr('x', function (d) { return x(d.label); }).attr('width', x.bandwidth())
 			.attr('y', function (d) { return y(d.y1); }).attr('height', function (d) { return Math.max(0, y(d.y0) - y(d.y1)); })
+			.on('click', function (event, d) { if (opts.pick) opts.pick(d.label); })
+			.classed('seg--pick', !!opts.pick)
 			.selectAll('title').data(function (d) { return [d]; }).join('title')
-			.text(function (d) { return shortLabel(d.label) + '\n' + d.part.name + ': ' + fmt(d.v) + '\n' + d.part.explain; });
+			.text(function (d) { return shortLabel(d.label) + '\n' + d.part.name + ': ' + fmt(d.v) + '\n' + d.part.explain
+				+ (opts.pick ? '\nClick: Operations at this time' : ''); });
 		// Where a segment sits on another, the line between them.
 		s.g.selectAll('line.seg-edge').data(segs.filter(function (d) { return d.y0 > 0; }), function (d) { return d.key; })
 			.join('line').attr('class', 'seg-edge')
@@ -198,11 +220,23 @@
 			var go = function (event, r) { var o = opts.open(r); if (o) window.open(o.href, o.target || '_blank'); };
 			s.g.selectAll('rect.bar').classed('bar--link', function (r) { return !!opts.open(r); }).on('click', go);
 		}
+		/* opts.pick(r): choosing a bar narrows the panels beside it; the chosen
+		   one (opts.picked, its label) is outlined and its name bold. */
+		if (opts.pick) {
+			s.g.selectAll('rect.bar').classed('bar--pick', true)
+				.classed('bar--picked', function (r) { return r[0] === opts.picked; })
+				.on('click', function (event, r) { opts.pick(r); });
+		}
 		s.g.selectAll('text.cat').data(rows, function (r) { return r[0]; }).join('text').attr('class', 'cat')
 			.attr('x', -8).attr('y', function (r) { return y(r[0]) + y.bandwidth() / 2; }).attr('dy', '.35em')
 			.attr('text-anchor', 'end').text(function (r) { return shortLabel(r[0]); })
 			.classed('cat--link', function (r) { return !!(opts.open && opts.open(r)); })
-			.on('click', function (event, r) { var o = opts.open && opts.open(r); if (o) window.open(o.href, o.target || '_blank'); });
+			.classed('cat--pick', !!opts.pick)
+			.classed('cat--picked', function (r) { return !!opts.pick && r[0] === opts.picked; })
+			.on('click', function (event, r) {
+				if (opts.pick) return opts.pick(r);
+				var o = opts.open && opts.open(r); if (o) window.open(o.href, o.target || '_blank');
+			});
 		s.g.selectAll('text.value').data(rows, function (r) { return r[0]; }).join('text').attr('class', 'value')
 			.attr('x', function (r) { return x(+r[1] || 0) + 6; }).attr('y', function (r) { return y(r[0]) + y.bandwidth() / 2; })
 			.attr('dy', '.35em').text(function (r) { return opts.value ? opts.value(r) : fmt(r[1]); });
@@ -234,6 +268,11 @@
 		s.g.selectAll('g.x-axis').data([0]).join('g').attr('class', 'x-axis').attr('transform', 'translate(0,' + s.h + ')')
 			.call(d3.axisBottom(x).tickValues(tickValues).tickFormat(tickFormat).tickSize(0).tickPadding(6))
 			.call(function (a) { a.select('.domain').attr('class', 'domain baseline'); });
+		if (opts.pick) {
+			// A scalePoint has no width: each point owns the band halfway to its neighbours.
+			var step = labels.length > 1 ? x(labels[1]) - x(labels[0]) : s.w;
+			pickColumns(s, function (b) { return x(b) - step / 2; }, step, labels, opts);
+		}
 		var colors = opts.colors || [token('--accent')];
 		var line = d3.line().defined(function (v) { return v[1] != null; })
 			.x(function (v) { return x(v[0]); }).y(function (v) { return y(+v[1] || 0); });
@@ -280,11 +319,15 @@
 		var ramp = d3.scaleSqrt().domain([0, max]).range([0.06, 1]);
 		var cells = s.g.selectAll('g.cell').data(rows, function (r) { return r[0] + ' ' + r[1]; }).join('g').attr('class', 'cell')
 			.attr('transform', function (r) { return 'translate(' + x(r[1]) + ',' + y(r[0]) + ')'; });
+		var isPicked = function (r) { return !!opts.picked && opts.picked[0] === r[0] && +opts.picked[1] === +r[1]; };
 		cells.selectAll('rect').data(function (r) { return [r]; }).join('rect').attr('class', 'heat')
+			.classed('heat--pick', !!opts.pick).classed('heat--picked', isPicked)
 			.attr('width', x.bandwidth()).attr('height', y.bandwidth()).attr('rx', 2)
 			.attr('fill-opacity', function (r) { return ramp(+r[2] || 0); })
+			.on('click', function (event, r) { if (opts.pick) opts.pick(r); })
 			.selectAll('title').data(function (r) { return [r]; }).join('title')
-			.text(function (r) { return r[0] + ' ' + r[1] + ':00 · ' + fmt(r[2]) + ' calls'; });
+			.text(function (r) { return r[0] + ' ' + r[1] + ':00 · ' + fmt(r[2]) + ' calls'
+				+ (opts.pick ? '\nClick: Operations at this hour, every ' + r[0] : ''); });
 		var showNumbers = x.bandwidth() >= 18 && y.bandwidth() >= 12;
 		cells.selectAll('text').data(function (r) { return showNumbers && +r[2] ? [r] : []; }).join('text').attr('class', 'heat-n')
 			.attr('x', x.bandwidth() / 2).attr('y', y.bandwidth() / 2).attr('dy', '.35em').attr('text-anchor', 'middle')
@@ -332,6 +375,13 @@
 		var scoreCol = result.columns.findIndex(function (c) { return /score/.test(c); });
 		shown.forEach(function (row) {
 			var tr = body.insertRow();
+			/* opts.rowOpen(row): where a row leads, {href, target, app} or null. */
+			var link = opts.rowOpen ? opts.rowOpen(row) : null;
+			if (link) {
+				tr.className = 'row--link';
+				tr.title = 'Open in ' + link.app;
+				tr.addEventListener('click', function () { window.open(link.href, link.target || '_blank'); });
+			}
 			row.forEach(function (v, i) {
 				var td = tr.insertCell();
 				if (i === bandCol && v) td.appendChild(bandPill(v, scoreCol >= 0 ? row[scoreCol] : null));

@@ -1,9 +1,12 @@
 package org.vorpal.blade.services.analytics.jms;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 
+import org.vorpal.blade.framework.v3.events.BladeEventCatalog;
 import org.vorpal.blade.framework.v3.events.CloudEvent;
 import org.vorpal.blade.framework.v3.events.EventCatalog;
 import org.vorpal.blade.framework.v3.events.EventCatalogFile;
@@ -22,6 +25,21 @@ public final class AnalyticsCatalog {
 	private AnalyticsCatalog() {
 	}
 
+	/// The framework's own flag for each operations type it declares (an
+	/// endpoint down, a trunk failed, a queue's minute, a configuration push).
+	/// They are about no call, so without this they would persist only when a
+	/// domain's `events.json` declared them, and a domain that never published
+	/// one would keep no history of its operations.
+	private static final Map<String, Boolean> OPERATIONS = operations();
+
+	private static Map<String, Boolean> operations() {
+		Map<String, Boolean> flags = new HashMap<>();
+		for (EventType type : BladeEventCatalog.operationsTypes()) {
+			flags.put(type.getType(), type.isPersist());
+		}
+		return flags;
+	}
+
 	/// Whether the sink should write this event to the database.
 	///
 	/// **A declaration that exists always wins**, so an operator can switch any
@@ -33,6 +51,9 @@ public final class AnalyticsCatalog {
 	/// `events.json` would silently stop analytics dead: `persist` is a newer
 	/// field, so nothing in that file carries it, every flag would read false
 	/// and every event would be dropped.
+	///
+	/// **The framework's operations types persist as the framework marks
+	/// them** ([#OPERATIONS]), unless a catalog says otherwise.
 	///
 	/// **Any other call event persists too, declared or not.** An application
 	/// adding an event used to have to add it to `events.json` as well, or the
@@ -50,7 +71,11 @@ public final class AnalyticsCatalog {
 		if (declared != null) {
 			return declared.isPersist();
 		}
-		return EventCatalogFile.frameworkDefaults().findType(type) != null || event.isCallScoped();
+		if (EventCatalogFile.frameworkDefaults().findType(type) != null) {
+			return true;
+		}
+		Boolean operations = OPERATIONS.get(type);
+		return operations != null ? operations : event.isCallScoped();
 	}
 
 	/// The types a declaration switches off: the call events the sink must not
@@ -87,6 +112,11 @@ public final class AnalyticsCatalog {
 			String type = framework.getType();
 			if (type != null && catalog.findType(type) == null) {
 				wanted.add(type);
+			}
+		}
+		for (Map.Entry<String, Boolean> operations : OPERATIONS.entrySet()) {
+			if (operations.getValue() && catalog.findType(operations.getKey()) == null) {
+				wanted.add(operations.getKey());
 			}
 		}
 		return new ArrayList<>(wanted);

@@ -183,6 +183,25 @@
 		return new Date(ms).toLocaleTimeString([], o);
 	}
 
+	/* The UTC offset of a zone at an instant, in millis. */
+	function offsetAt(ms, z) {
+		var parts = {};
+		new Intl.DateTimeFormat('en-US', { timeZone: z, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
+			hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(ms))
+			.forEach(function (x) { parts[x.type] = x.value; });
+		var asUtc = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour % 24, +parts.minute, +parts.second);
+		return asUtc - (ms - ms % 1000);
+	}
+
+	/* The instant a wall-clock time names in the viewer's zone: what a date
+	   picker or a chart bucket means, read where the viewer reads the board.
+	   Two passes, so a time just after a daylight-saving change lands right. */
+	function zonedMs(y, month, day, h, min) {
+		var z = zone(), guess = Date.UTC(y, month - 1, day, h || 0, min || 0);
+		var off = offsetAt(guess, z), t = guess - off, off2 = offsetAt(t, z);
+		return off2 === off ? t : guess - off2;
+	}
+
 	/* Fills a <select> with every zone the browser knows, the browser's own
 	   first, and calls onChange after the viewer picks one. */
 	function zoneSelect(select, onChange) {
@@ -318,7 +337,9 @@
 
 	function params() {
 		var p = new URLSearchParams(window.location.search);
-		return { r: p.get('r') || 'calls', days: p.get('days') || '', sample: p.get('sample') === 'include', domain: p.get('domain') || '', account: p.get('account') || '' };
+		return { r: p.get('r') || 'calls', days: p.get('days') || '', sample: p.get('sample') === 'include', domain: p.get('domain') || '', account: p.get('account') || '',
+			// A window chosen on the board (a custom range), kept until the range here changes.
+			from: p.get('from') || '', until: p.get('until') || '' };
 	}
 
 	function setParams(p) {
@@ -327,13 +348,15 @@
 		if (p.sample) q.set('sample', 'include');
 		if (p.domain) q.set('domain', p.domain);
 		if (p.account) q.set('account', p.account);
+		if (p.from) { q.set('from', p.from); q.set('until', p.until); }
 		history.replaceState(null, '', 'report.html?' + q.toString());
 	}
 
 	function scope(p) {
 		return '&days=' + encodeURIComponent(p.days) + '&tz=' + encodeURIComponent(zone()) + (p.sample ? '&sample=include' : '')
 			+ (p.domain ? '&domain=' + encodeURIComponent(p.domain) : '')
-			+ (p.account ? '&account=' + encodeURIComponent(p.account) : '');
+			+ (p.account ? '&account=' + encodeURIComponent(p.account) : '')
+			+ (p.from ? '&from=' + encodeURIComponent(p.from) + '&until=' + encodeURIComponent(p.until) : '');
 	}
 
 	function renderDetail() {
@@ -378,6 +401,7 @@
 		}
 
 		function load() {
+			if (p.days !== days.value) { p.from = ''; p.until = ''; }
 			p.days = days.value; p.sample = sample.checked; p.domain = domain.value; p.account = account.value.trim();
 			setParams(p);
 			status.textContent = 'querying…';
@@ -443,7 +467,7 @@
 	}
 
 	global.BladeReports = { FAMILIES: FAMILIES, ORDER: ORDER, getJson: getJson, bandList: bandList, renderDetail: renderDetail,
-		zone: zone, time: time, zoneSelect: zoneSelect };
+		zone: zone, time: time, zoneSelect: zoneSelect, zonedMs: zonedMs };
 
 	// report.html has a sections container; the overview does not.
 	if (document.getElementById('sections')) renderDetail();

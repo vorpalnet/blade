@@ -14,9 +14,30 @@ in an EAR.
 **The board** (`/blade/dashboard/`) fits one screen and never scrolls. A row of
 headline numbers (servers running, calls now, calls, answered, median call, calls
 flagged, queued now), then six panels: servers, traffic, operations, outcomes,
-applications and call risk. Each panel switches between views with the tabs in its
+applications and calls. Each panel switches between views with the tabs in its
 header instead of stacking more charts below. A tile that needs attention is
 outlined and says what is wrong in words.
+
+**Detail grows left to right, and a click narrows what is to its right.** The left
+column says whether things work (Servers; how calls ended), the middle what they are
+doing (Traffic; which applications), the right what went wrong (Operations; the calls
+themselves). Click a server and Traffic and Operations show only that server. Click an
+hour on a Traffic chart, or a cell of the weekday grid, and Operations shows only that
+time. Click Failed in Outcomes and Applications and Calls show only the failed calls;
+click an application and Calls shows only its calls, each one opening in Trace. A
+narrowed panel says so in its header, with a ✕ to undo it. The headline numbers never
+narrow. The choices are in the page's address, so Back undoes a step and a copied link
+opens the same view.
+
+**Live, a number of days, or a custom range.** Live, the default, is the last hour by the
+minute. A custom range takes a start and an end, read in the board's time zone, and can
+take a while over a long span. Charts cut the range into minutes, quarter-hours, hours
+or days by its length. Every panel shows the range, Servers included: over a past range
+it shows each server's last state, its peak heap and CPU, its restarts and its most
+stuck threads, from the minute samples. A view that can only show now (the connection
+pools, the network map, the live event feed) says "live" in its header. Operations in
+the past comes from the database: the issues open at some time in the range (down to
+back, raised to cleared), each queue's busy minutes, and every operations event.
 
 Traffic's **Network** tab is a map of the sites in the settings' `sites` list: where this
 domain's servers run (`cluster`), where calls arrive from (`inbound`) and where they are
@@ -38,13 +59,13 @@ Sites close enough to overlap share one mark; clicking it zooms in on every serv
 A balancer site with coordinates joins the map without being entered twice. Addresses no
 site claims are listed under the map.
 
-- One domain or all of them, chosen in the top bar. This domain's servers and
-  operations are live: runtime MBeans and the event bus, every 5 seconds. Another
+- One domain or all of them, chosen by clicking a domain's heading in Servers. This
+  domain's servers and operations are live: runtime MBeans and the event bus, every 5
+  seconds. Another
   domain's servers come from the minute samples its own dashboard writes to the
   shared analytics database, so a domain shows here only if it runs the dashboard.
-- The analytics panels cover the last day, 7 days or 30 days, chosen in the top bar,
-  from data at most five minutes old, so a wall of open browsers costs the database
-  one query per report every five minutes.
+- Reports over days are at most five minutes old, so a wall of open browsers costs the
+  database one query per report every five minutes; Live's are at most 15 seconds old.
 - Thresholds and refresh intervals are in the dashboard's settings, in the
   Configurator.
 - Below 1000 × 640 the board stacks into a scrolling page.
@@ -54,18 +75,20 @@ site claims are listed under the map.
 **Every problem opens the app that fixes it.** A dropped call opens Trace at that call; a
 configuration change, the Configurator at its application; a remote cut off or a trunk failing,
 Logs on that server at that minute with the name searched for; a server's name, its server log;
-its stuck threads, the container's stuck-thread warnings; the Failed and Dropped bars, the calls
-recorded in the range. Each app says what it opens in an `opens.json` beside its pages, and the
+its stuck threads, the container's stuck-thread warnings (the ↗ beside a server's name opens
+its log; the name itself narrows the board); the failed and dropped calls, their traces in
+Trace. Each app says what it opens in an `opens.json` beside its pages, and the
 board finds the apps from the portal's card list: an app not deployed gives no link, and a new
 app that declares what it opens is linked without a change here. Links open in one window per
 app. An app that can show itself embedded (Logs, the Configurator) also gets a **peek** button
 that opens it in a drawer beside the board. An application can raise a problem of its own with
 the page that fixes it (`Problems.raise` in the framework); it shows under Issues until cleared.
 
-**What changed, day by day.** Operations has a Changes tab: one row a day, newest first,
-saying which servers and applications restarted and which configuration files were pushed or
-saved. Hover a day for every change with its time. Restarts come from the minute samples; configuration changes from
-`v_config_changes`, which needs the analytics service on the framework that persists them.
+**What changed.** Operations has a Changes tab, newest first: one row a day, or one a minute
+over a day or less, saying which servers and applications restarted and which configuration
+files were pushed or saved. Hover a row for every change with its time. Restarts come from the
+minute samples; configuration changes from `v_config_changes`, and the operations history from
+`v_ops_events`. Both need the analytics service on the framework that persists those events.
 
 **Who sees what.** Sign-in is the deployment's OpenID Connect provider when
 `blade-oidc.properties` is deployed with the WAR, the WebLogic login otherwise. The grants in
