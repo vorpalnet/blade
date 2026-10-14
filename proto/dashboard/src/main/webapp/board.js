@@ -1010,7 +1010,9 @@
 			var flagged = cell(rs, 'calls flagged');
 			kpi('flagged', flagged, C.fmt(cell(rs, 'calls assessed')) + ' assessed', flagged > 0);
 			['traffic', 'outcomes', 'apps', 'risk', 'ops'].forEach(function (k) { P[k].draw(); });
-			setStatus('', 'live · ' + R.time(Date.now(), { hour: '2-digit', minute: '2-digit' }));
+			// The clock beside it says the time; the refresh time is on hover only.
+			setStatus('', 'live');
+			statusEl.title = 'Analytics refreshed at ' + R.time(Date.now(), { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 		}).catch(function (e) { if (e.message !== 'auth') setStatus('err', 'analytics failed'); });
 	}
 

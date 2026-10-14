@@ -11,12 +11,12 @@
 
 	<header class="topbar topbar--board">
 		<a class="brand" href="/blade/portal/">
-			<img class="brand__logo" src="/blade/portal/brand/VorpalBoy_lightpurple.svg" alt="Vorpal">
-			<span class="brand__name">Dashboard<small>OCCAS &middot; BLADE</small></span>
+			<span class="brand__pill"><img class="brand__logo" src="/blade/portal/brand/VorpalBoy_lightpurple.svg" alt="Vorpal">Dashboard</span>
 		</a>
 		<div class="seg" id="range" title="Range for the call analytics. Server health and operations are always live."></div>
 		<select class="tz" id="scope" title="Which domain the board shows. This domain is read live; every other one from its minute samples."></select>
 		<div class="spacer"></div>
+		<span class="status" id="status"><span class="dot"></span><span id="statusText">loading…</span></span>
 		<span class="clock" id="clock"></span>
 		<select class="tz" id="tz" title="Time zone for every time on the board. The data is UTC."></select>
 		<nav class="nav">
@@ -24,7 +24,6 @@
 			<a href="/blade/tuning/">Tuning</a>
 			<a href="/blade/balancer/">Balancer</a>
 		</nav>
-		<span class="status" id="status"><span class="dot"></span><span id="statusText">loading…</span></span>
 		<div class="acct" id="acct" hidden></div>
 	</header>
 
