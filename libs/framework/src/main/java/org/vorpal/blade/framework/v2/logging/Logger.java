@@ -41,6 +41,7 @@ import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipURI;
 
 import org.vorpal.blade.framework.AsyncSipServlet;
+import org.vorpal.blade.framework.v3.diagnostics.FlightRecorder;
 import org.vorpal.blade.framework.v3.events.AnalyticsEvent;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
@@ -1015,6 +1016,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 //				+ ", response=" + ((response != null) ? response.getMethod() : null) //
 //				+ ", name=" + name //
 //				+ ", user=" + user);
+
+		FlightRecorder.record(Direction.SEND.equals(direction), request, response);
 
 		try {
 

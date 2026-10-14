@@ -50,6 +50,7 @@ import org.vorpal.blade.framework.v3.metrics.Counter;
 import org.vorpal.blade.framework.v3.net.CallOrigin;
 import org.vorpal.blade.framework.v3.net.Legs;
 import org.vorpal.blade.framework.v3.net.DroppedCalls;
+import org.vorpal.blade.framework.v3.diagnostics.FlightRecorder;
 import org.vorpal.blade.framework.v3.metrics.Histogram;
 import org.vorpal.blade.framework.v3.metrics.MetricsRegistry;
 import org.vorpal.blade.framework.v2.b2bua.Terminate;
@@ -936,7 +937,8 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/// Final: closes this application's analytics session if no callflow did
-	/// ([Analytics#sessionClose]), then runs the hook.
+	/// ([Analytics#sessionClose]) and lets the call's [FlightRecorder] ladder
+	/// go, publishing it if the call went wrong, then runs the hook.
 	@Override
 	public final void sessionDestroyed(SipApplicationSessionEvent event) {
 		closeSession(event);
@@ -958,6 +960,7 @@ public abstract class AsyncSipServlet extends SipServlet
 		} catch (Throwable t) {
 			// A lost stop must never fail the container's session cleanup.
 		}
+		FlightRecorder.finish((event == null) ? null : event.getApplicationSession(), false);
 	}
 
 	/// Overridable hook, invoked when a SipApplicationSession expires, before the

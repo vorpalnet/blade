@@ -145,6 +145,13 @@ h1 { font-size: clamp(26px, 3.4vw, 40px); line-height: 1.08; letter-spacing: -.0
 .ops-list { overflow-y: auto; max-height: 260px; font-size: 13px; }
 .ops-row { display: flex; gap: 10px; align-items: baseline; padding: 6px 2px; border-bottom: 1px solid var(--line); }
 .ops-row:last-child { border-bottom: 0; }
+/* A row that opens the app that can solve it: underlined, an arrow after it. */
+a.ops-row--link { color: inherit; text-decoration: none; }
+a.ops-row--link .ops-row__main { text-decoration: underline; text-decoration-color: var(--line-2); }
+a.ops-row--link .ops-row__main::after { content: " ↗"; color: var(--accent); }
+a.ops-row--link:hover .ops-row__main { text-decoration-color: var(--accent); }
+.bar--link, .cat--link { cursor: pointer; }
+.cat--link { text-decoration: underline; }
 .ops-row__what { font-weight: 700; min-width: 9ch; text-transform: uppercase; font-size: 11px; letter-spacing: .06em; color: var(--ink-2); }
 .ops-row__what.bad { color: var(--warn); }
 .ops-row__main { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -24,6 +24,7 @@ public class CallflowSettings extends Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	protected String sourceServer = null;
+	protected String analyticsDataSource = "jdbc/BladeAnalytics";
 
 	public CallflowSettings() {
 	}
@@ -37,6 +38,18 @@ public class CallflowSettings extends Configuration implements Serializable {
 
 	public CallflowSettings setSourceServer(String sourceServer) {
 		this.sourceServer = sourceServer;
+		return this;
+	}
+
+	@JsonPropertyDescription("JNDI name of the analytics datasource holding recorded calls (the framework's "
+			+ "callTraced events). Must be targeted at the AdminServer so this admin app can look it up.")
+	public String getAnalyticsDataSource() {
+		return analyticsDataSource;
+	}
+
+	public CallflowSettings setAnalyticsDataSource(String analyticsDataSource) {
+		this.analyticsDataSource = (analyticsDataSource == null || analyticsDataSource.isEmpty())
+				? "jdbc/BladeAnalytics" : analyticsDataSource;
 		return this;
 	}
 }

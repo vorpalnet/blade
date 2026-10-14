@@ -357,6 +357,17 @@
 	};
 	var OPS_BAD = { down: 1, 'trunk down': 1, refused: 1, 'cut off': 1, dropped: 1 };
 
+	/* Where a problem is solved: the admin app that can show why, already at
+	   the call. One window per app, so ten clicks reuse one Trace window.
+	   (A first slice of root TODO item 9; apps will declare these.) */
+	var TRACE = '/blade/callflow/traces.html';
+	function solveLink(e) {
+		if (e.type === 'org.vorpal.blade.call.dropped' && e.vorpalId) {
+			return { href: TRACE + '?call=' + encodeURIComponent(e.vorpalId), target: 'blade-trace', app: 'Trace' };
+		}
+		return null;
+	}
+
 	/* When an event happened, in the viewer's zone: the clock time today, the
 	   date as well before today. */
 	function opsWhen(ms) {
@@ -410,13 +421,16 @@
 		var shown = 0;
 		for (var i = 0; i < items.length; i++) {
 			var e = items[i], w = word(e);
-			var row = el('div', 'ops-row'), main = opsSummary(e) + (e.node ? ' · ' + e.node : '');
+			var link = solveLink(e);
+			var row = el(link ? 'a' : 'div', 'ops-row' + (link ? ' ops-row--link' : '')), main = opsSummary(e) + (e.node ? ' · ' + e.node : '');
+			if (link) { row.href = link.href; row.target = link.target; }
 			var at = e.time ? new Date(e.time).getTime() : null;
 			row.appendChild(el('span', 'ops-row__what' + (OPS_BAD[w] ? ' bad' : ''), w));
 			row.appendChild(el('span', 'ops-row__main', main));
 			row.appendChild(el('span', 'ops-row__when', at == null ? '' : open ? 'for ' + opsFor(at) : opsWhen(at)));
 			row.title = w + ' · ' + main + (at == null ? '' : '\n' + (open ? 'since ' : '')
-				+ new Date(at).toLocaleString([], { timeZone: R.zone(), dateStyle: 'medium', timeStyle: 'medium' }));
+				+ new Date(at).toLocaleString([], { timeZone: R.zone(), dateStyle: 'medium', timeStyle: 'medium' }))
+				+ (link ? '\nOpen in ' + link.app : '');
 			box.appendChild(row);
 			if (box.scrollHeight > body.clientHeight - 20) { box.removeChild(row); break; }
 			shown++;
@@ -640,9 +654,17 @@
 					if (!total) return C.message(body, 'empty', 'No call ended in this range.');
 					var rows = OUTCOME_PARTS.map(function (p) { return [p.name, by[p.name.toLowerCase()] || 0, p]; });
 					C.hbar(body, rows, { valueWidth: 90,
+						/* Failed and dropped calls the flight recorder wrote out, in Trace. */
+						open: function (r) {
+							return (r[0] === 'Failed' || r[0] === 'Dropped') && r[1]
+								? { href: TRACE + '?recorded=1', target: 'blade-trace' } : null;
+						},
 						value: function (r) { return C.fmt(r[1]) + ' · ' + Math.round(100 * r[1] / total) + '%'; },
 						color: function (r) { return r[2].color; },
-						title: function (r) { return r[0] + ': ' + C.fmt(r[1]) + '\n' + r[2].explain; } });
+						title: function (r) {
+							return r[0] + ': ' + C.fmt(r[1]) + '\n' + r[2].explain
+								+ ((r[0] === 'Failed' || r[0] === 'Dropped') && r[1] ? '\nClick: the recorded calls, in Trace' : '');
+						} });
 				});
 			} },
 			{ key: 'daily', label: 'Per day', sub: 'how calls ended, by day', draw: function (body) {

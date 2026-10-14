@@ -11,6 +11,7 @@ import javax.servlet.sip.UAMode;
 
 import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.framework.v3.events.BladeEventTypes;
+import org.vorpal.blade.framework.v3.diagnostics.FlightRecorder;
 import org.vorpal.blade.framework.v3.events.Events;
 
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -36,7 +37,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 ///   its final response) or one leg up after the other ended (a BYE never
 ///   relayed). A leg whose partner is gone counts as a partner that ended.
 ///
-/// A proxy has no linked legs, so it never reports one.
+/// A proxy has no linked legs, so it never reports one. A dropped call's
+/// [FlightRecorder] ladder is published with it.
 public final class DroppedCalls {
 
 	/// The application-session attribute marking a call already reported, so a
@@ -70,6 +72,7 @@ public final class DroppedCalls {
 					o.put("inviteOpen", inviteOpen(leg));
 				}
 			});
+			FlightRecorder.finish(appSession, true);
 		} catch (RuntimeException e) {
 			// A missing fact is better than a failed expiry.
 		}

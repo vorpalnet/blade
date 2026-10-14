@@ -58,7 +58,8 @@
 		save: document.getElementById('tr-save'),
 		load: document.getElementById('tr-load'),
 		file: document.getElementById('tr-file'),
-		report: document.getElementById('tr-report')
+		report: document.getElementById('tr-report'),
+		recorded: document.getElementById('tr-recorded')
 	};
 
 	var snapshot = window.BLADE_TRACE_SNAPSHOT || null;
@@ -74,6 +75,41 @@
 	var sourceCache = {};      // "app|className" → source text
 	var autoTimer = null;
 
+	// Recorded mode reads calls the framework's flight recorder wrote out
+	// (api/traces/recorded) instead of the live armed buffers. A link such as
+	// the dashboard's opens it on one call: traces.html?call=<Vorpal-ID>.
+	var params = new URLSearchParams(location.search);
+	var linkedCall = params.get('call');
+	var recordedMode = !snapshot && (!!linkedCall || params.get('recorded') === '1');
+	var verdicts = {};         // sessionId → [{app, verdict}] for recorded calls
+
+	// What a recorded call's verdict says, in words. The finding names are the
+	// framework's (CallLadder.Verdict); one sentence each.
+	function verdictText(app, v) {
+		if (!v) { return ''; }
+		var peer = v.peer || 'the far end', m = v.method || 'request', st = v.status ? v.status + ' ' : '';
+		switch (v.finding) {
+		case 'silent': return peer + ' never answered the ' + m;
+		case 'timeout': return peer + ' never answered the ' + m + '; the container gave up (' + st.trim() + ')';
+		case 'forgot': return peer + ' no longer knew the call: ' + st + 'to the ' + m;
+		case 'error': return peer + ' failed: ' + st + 'to the ' + m;
+		case 'credentials': return peer + ' refused the credentials: ' + st + 'to the ' + m;
+		case 'unanswered': return app + ' never answered the ' + m + ' from ' + peer;
+		case 'unrelayed': return app + ' never passed on the BYE from ' + peer;
+		default: return v.dropped ? 'the call expired dropped' : '';
+		}
+	}
+
+	// One line per application that recorded the call: whose fault, then what.
+	function verdictsOf(sessionId) {
+		return (verdicts[sessionId] || []).map(function (x) {
+			var v = x.verdict, text = verdictText(x.app, v);
+			if (!text) { return null; }
+			var whose = v.fault === 'application' ? 'BLADE' : v.fault === 'downstream' ? 'DOWNSTREAM' : 'DROPPED';
+			return whose + ' · ' + text + (v.dropped && v.fault ? ' · dropped' : '');
+		}).filter(Boolean);
+	}
+
 	function setStatus(t) { els.status.textContent = t; }
 
 	// ---- data ----
@@ -81,7 +117,17 @@
 
 	function applyData(sources, statusPrefix) {
 		lastSources = sources || [];
+		verdicts = {};
+		lastSources.forEach(function (src) {
+			if (!src.recorded || !src.steps || !src.steps.length) { return; }
+			var id = src.steps[0].sessionId;
+			(verdicts[id] = verdicts[id] || []).push({ app: src.app, verdict: src.verdict || {} });
+		});
 		calls = aggregate(lastSources);
+		if (linkedCall && !selectedCall) {
+			var want = linkedCall.toUpperCase();
+			if (calls.some(function (c) { return c.sessionId === want; })) { selectedCall = want; }
+		}
 		var steps = calls.reduce(function (n, c) { return n + c.steps.length; }, 0);
 		setStatus((statusPrefix || '')
 			+ calls.length + (calls.length === 1 ? ' call · ' : ' calls · ') + steps + ' steps');
@@ -92,6 +138,7 @@
 		}
 		renderTimeline();
 		renderLadder(currentCall());
+		if (recordedMode && currentCall() && selectedStep == null) { showVerdict(currentCall()); }
 	}
 
 	function currentCall() {
@@ -103,9 +150,19 @@
 			applyData(snapshot.sources, (snapshotName || 'snapshot') + ' · ');
 			return;
 		}
-		fetch(API + '/traces', { headers: { Accept: 'application/json' } })
+		if (els.recorded) { els.recorded.textContent = recordedMode ? 'Live Captures' : 'Recorded Calls'; }
+		var url = recordedMode
+			? API + '/traces/recorded' + (linkedCall ? '?call=' + encodeURIComponent(linkedCall) : '')
+			: API + '/traces';
+		fetch(url, { headers: { Accept: 'application/json' } })
 			.then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
-			.then(function (data) { applyData(data.sources); })
+			.then(function (data) {
+				applyData(data.sources, recordedMode ? (linkedCall ? 'call ' + linkedCall.toUpperCase() : 'recorded') + ' · ' : '');
+				if (recordedMode && linkedCall && !calls.length) {
+					els.calls.innerHTML = '<p class="cf-muted">No recording of call ' + escapeHtml(linkedCall)
+						+ '. The flight recorder writes out only calls that went wrong.</p>';
+				}
+			})
 			.catch(function (err) {
 				setStatus('Error');
 				els.calls.innerHTML = '<p class="cf-muted">Could not load traces: ' + escapeHtml(err.message) + '</p>';
@@ -149,7 +206,9 @@
 		if (!calls.length) {
 			els.calls.innerHTML = snapshot
 				? '<p class="cf-muted">This snapshot holds no captured calls.</p>'
-				: '<p class="cf-muted">Nothing captured yet. Arm a rule, then place a matching call.</p>';
+				: recordedMode
+					? '<p class="cf-muted">No recorded calls. The flight recorder writes out only calls that went wrong.</p>'
+					: '<p class="cf-muted">Nothing captured yet. Arm a rule, then place a matching call.</p>';
 			return;
 		}
 		var frag = document.createDocumentFragment();
@@ -164,8 +223,10 @@
 			var uniqueApps = c.apps.filter(function (a, i) { return c.apps.indexOf(a) === i; });
 			btn.querySelector('.cf-item-title').textContent =
 				c.sessionId + '  ·  ' + c.steps.length + ' steps';
+			var found = verdictsOf(c.sessionId);
 			btn.querySelector('.cf-item-cat').textContent =
-				hhmmss(c.firstMillis) + '  ·  ' + uniqueApps.join(', ');
+				hhmmss(c.firstMillis) + '  ·  ' + uniqueApps.join(', ') + (found.length ? '  ·  ' + found[0] : '');
+			if (found.length) { btn.title = found.join('\n'); }
 			btn.addEventListener('click', function () {
 				selectedCall = c.sessionId;
 				selectedStep = null;
@@ -173,6 +234,7 @@
 				renderTimeline();
 				renderLadder(c);
 				setTab('seq');
+				showVerdict(c);
 			});
 			frag.appendChild(btn);
 		});
@@ -201,8 +263,9 @@
 			// an in-step names its handler method when one was resolved
 			// (process / processContinue / …); a receive nobody handled (a
 			// fire-and-forget request's response) honestly names the servlet.
-			btn.querySelector('.cf-item-cat').textContent =
-				(s.direction === 'in'
+			btn.querySelector('.cf-item-cat').textContent = !s.className
+				? (s.direction === 'in' ? 'from ' : 'to ') + (s.peer || 'the network') + '  ·  ' + hhmmss(s.epochMillis)
+				: (s.direction === 'in'
 					? (isHandlerMethod(s.methodName)
 						? simpleName(s.className) + '.' + s.methodName + '  ·  received'
 						: 'received by ' + simpleName(s.className))
@@ -259,7 +322,27 @@
 		if (onEl && onEl.scrollIntoView) { onEl.scrollIntoView({ block: 'nearest' }); }
 	}
 
+	// A recorded call opens on what went wrong; the sequence diagram is below it.
+	function showVerdict(call) {
+		var found = verdictsOf(call.sessionId);
+		if (!found.length) { return; }
+		els.title.textContent = 'Call ' + call.sessionId;
+		els.stepInfo.textContent = found.join('  ·  ');
+		els.sourcePath.hidden = true;
+	}
+
 	function showStep(call, s, i) {
+		if (!s.className) { // recorded: no SIP text, no source position
+			var kind = s.kind === 'request' ? 'request' : 'response';
+			els.title.textContent = 'Step #' + (i + 1) + ' — ' + kind + ' ' + s.label
+				+ (s.direction === 'in' ? ' received by ' : ' sent by ') + s.app;
+			els.stepInfo.textContent = hhmmss(s.epochMillis) + '  ·  ' + (s.direction === 'in' ? 'from ' : 'to ')
+				+ (s.peer || 'the network') + '  ·  leg ' + s.leg + (s.server ? '  ·  recorded on ' + s.server : '');
+			els.sourcePath.hidden = true;
+			if (els.message) { els.message.textContent = '(the flight recorder keeps no SIP text)'; }
+			if (els.code) { els.code.innerHTML = '<li class="tr-line"><span class="tr-line-text">The flight recorder keeps no source position.</span></li>'; }
+			return;
+		}
 		var kindWord = s.kind === 'request' ? 'request' : 'response';
 		var dirWord = s.direction === 'in' ? 'received by' : 'sent by';
 		els.title.textContent = 'Step #' + (i + 1) + ' — ' + kindWord + ' ' + s.label + ' ' + dirWord + ' ' + s.app;
@@ -587,6 +670,15 @@
 			selectedStep = null;
 			post('/traces/clear');
 		});
+		if (els.recorded) {
+			els.recorded.addEventListener('click', function () {
+				recordedMode = !recordedMode;
+				linkedCall = null;
+				selectedCall = null;
+				selectedStep = null;
+				refresh();
+			});
+		}
 		els.refresh.addEventListener('click', function () {
 			if (snapshot) { // leave snapshot view, back to live
 				snapshot = null;

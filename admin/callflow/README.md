@@ -27,6 +27,17 @@ by the stable `X-Vorpal-Session` id. This app is the reader:
   and an app only answers for classes its own scan inventoried, so no browser-supplied
   path ever reaches a filesystem lookup.
 
+## Recorded calls
+
+Arming only catches calls you knew to watch. The framework's flight recorder keeps every call's
+messages in memory and writes out the ones that went wrong, with a verdict: which server, or which
+BLADE application, let the call down. **Recorded Calls** shows them, read from the analytics
+database, on the same timeline and sequence diagram. A recorded step has no SIP text and no
+source line: the time, direction, method or status, and the far end's address.
+
+`traces.html?call=<Vorpal-ID>` opens one recorded call. The dashboard links its dropped calls and
+its Failed and Dropped outcome bars here.
+
 ## Configuration
 
 `./config/custom/vorpal/callflow.json`:
@@ -34,6 +45,7 @@ by the stable `X-Vorpal-Session` id. This app is the reader:
 | Setting | Description |
 | --- | --- |
 | `sourceServer` | Which node serves source reads (e.g. an engine carrying no call traffic). Unset = first server. Re-read live on every request. |
+| `analyticsDataSource` | JNDI name of the analytics datasource holding recorded calls. Default `jdbc/BladeAnalytics`; it must be targeted at the AdminServer. |
 
 ## Related modules
 

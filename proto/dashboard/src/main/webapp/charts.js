@@ -192,9 +192,17 @@
 			.style('fill', function (r) { return opts.color ? token(opts.color(r)) : null; })
 			.selectAll('title').data(function (r) { return [r]; }).join('title')
 			.text(function (r) { return opts.title ? opts.title(r) : r[0] + ': ' + fmt(r[1]); });
+		/* opts.open(r): where a bar leads, {href, target} or null. The bar and
+		   its name open it; the name is underlined, so a link is not colour alone. */
+		if (opts.open) {
+			var go = function (event, r) { var o = opts.open(r); if (o) window.open(o.href, o.target || '_blank'); };
+			s.g.selectAll('rect.bar').classed('bar--link', function (r) { return !!opts.open(r); }).on('click', go);
+		}
 		s.g.selectAll('text.cat').data(rows, function (r) { return r[0]; }).join('text').attr('class', 'cat')
 			.attr('x', -8).attr('y', function (r) { return y(r[0]) + y.bandwidth() / 2; }).attr('dy', '.35em')
-			.attr('text-anchor', 'end').text(function (r) { return shortLabel(r[0]); });
+			.attr('text-anchor', 'end').text(function (r) { return shortLabel(r[0]); })
+			.classed('cat--link', function (r) { return !!(opts.open && opts.open(r)); })
+			.on('click', function (event, r) { var o = opts.open && opts.open(r); if (o) window.open(o.href, o.target || '_blank'); });
 		s.g.selectAll('text.value').data(rows, function (r) { return r[0]; }).join('text').attr('class', 'value')
 			.attr('x', function (r) { return x(+r[1] || 0) + 6; }).attr('y', function (r) { return y(r[0]) + y.bandwidth() / 2; })
 			.attr('dy', '.35em').text(function (r) { return opts.value ? opts.value(r) : fmt(r[1]); });

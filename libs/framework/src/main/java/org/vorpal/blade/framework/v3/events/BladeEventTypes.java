@@ -187,6 +187,15 @@ public final class BladeEventTypes {
 	/// `ageSeconds`. See [org.vorpal.blade.framework.v3.net.DroppedCalls].
 	public static final String CALL_DROPPED = "org.vorpal.blade.call.dropped";
 
+	/// A call that went wrong, with its SIP messages as the application saw
+	/// them and the verdict they support: `fault` (`downstream` or
+	/// `application`), `finding`, the `method`, `status`, `peer` and `leg` it is
+	/// about, whether the call was `dropped`, and `steps` (each `{t, dir, leg,
+	/// method, status, cseq, peer}`), with `omitted` counting steps left out of
+	/// a long call's middle. See
+	/// [org.vorpal.blade.framework.v3.diagnostics.FlightRecorder].
+	public static final String CALL_TRACED = "org.vorpal.blade.call.traced";
+
 	/// An application placed a call on someone's behalf (third-party call
 	/// control) and it was answered or refused. Carries `party`, `status`.
 	public static final String CALL_ORIGINATED = "org.vorpal.blade.call.originated";
@@ -412,6 +421,8 @@ public final class BladeEventTypes {
 			return CALL_BRANCH_FAILED;
 		case "callDropped":
 			return CALL_DROPPED;
+		case "callTraced":
+			return CALL_TRACED;
 		case "callOriginated":
 			return CALL_ORIGINATED;
 		case "callHeld":
@@ -488,6 +499,8 @@ public final class BladeEventTypes {
 			return "branchFailed";
 		case CALL_DROPPED:
 			return "callDropped";
+		case CALL_TRACED:
+			return "callTraced";
 		case CALL_ORIGINATED:
 			return "callOriginated";
 		case CALL_HELD:

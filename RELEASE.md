@@ -35,6 +35,32 @@ failed or dropped.
 Applications publish `callDropped` once they are rebuilt with this framework; the analytics service
 persists it once it is redeployed with it.
 
+### Framework: a flight recorder for every call
+
+Every call's SIP messages are now recorded from its first INVITE, small and in memory: the time,
+direction, leg, method or status, CSeq and the far end's host and port (never a phone number or a
+header). A call that ends well is let go without a trace. A call that went wrong is written out as
+one event, `org.vorpal.blade.call.traced` (`callTraced`), with its messages and a verdict, so a
+complaint about a call that "disappeared" days ago has its evidence already in the database.
+
+The verdict says which side let the call down. Downstream: a request sent that never got a final
+response (`silent`); the container answering for a server that never did (`timeout`); `forgot`
+(481, the server no longer knew the dialog); `error` (5xx); `credentials` (401, 403, 407). This
+application: a request received that it never answered (`unanswered`, which also catches a caller
+who gave up on an answer that never reached them), or a BYE it never passed on (`unrelayed`). A
+refused leg the call recovered from is no fault; a callee declining is no fault. A dropped call is
+written out whatever its verdict.
+
+**Trace shows them.** The Trace app's **Recorded Calls** reads them from the analytics database
+and draws each on its usual timeline and sequence diagram, with the verdict on top;
+`traces.html?call=<Vorpal-ID>` opens one. The dashboard's dropped calls (Operations "Recent") and
+its Failed and Dropped outcome bars open Trace in one reused window: the first of the dashboard's
+links to the app that can explain a problem.
+
+The recorder holds at most 20,000 calls per application per server, in that server's memory: a
+call that fails over starts a new record. It hooks where every message is drawn on the log's
+sequence diagram, so every callflow, v2 or v3, is recorded at any log level.
+
 ### Listener: a refused call reaches the caller
 
 A call the listener anchored that the callee refused (busy, not found, no answer) never

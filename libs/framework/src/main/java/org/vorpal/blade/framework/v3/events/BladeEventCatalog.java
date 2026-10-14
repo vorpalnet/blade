@@ -685,6 +685,7 @@ public final class BladeEventCatalog {
 		types.add(callResponded());
 		types.add(branchFailed());
 		types.add(callDropped());
+		types.add(callTraced());
 		types.add(callOriginated());
 		types.add(callHeld());
 		types.add(callHoldEnded());
@@ -703,6 +704,29 @@ public final class BladeEventCatalog {
 		fields.add(field("legs", EventFieldType.ARRAY, true,
 				"Each leg as it stood at expiry: {role (caller, callee, or gone for a partner no longer there), state (INITIAL, EARLY, CONFIRMED, TERMINATED or GONE), inviteOpen (an INVITE on it has no final response)}."));
 		fields.add(field("ageSeconds", EventFieldType.LONG, true, "How long the call had existed when it expired."));
+		declaration.setFields(fields);
+		return declaration;
+	}
+
+	private static EventType callTraced() {
+		EventType declaration = callScopedBase(BladeEventTypes.CALL_TRACED, "Call Traced",
+				"A call that went wrong, with its SIP messages as the application saw them and the verdict they support: a server the call was sent to that never answered, answered from the container's own timer, forgot the dialog, erred or refused credentials; or this application, which never answered a request or never passed on a BYE. Written only for such calls; a call that ends well leaves no trace.",
+				"CallTraced");
+		List<EventField> fields = callScopedFields();
+		fields.add(field("fault", EventFieldType.STRING, false,
+				"downstream (a server the call was sent to) or application (this application); absent when the call was dropped with no finding."));
+		fields.add(field("finding", EventFieldType.STRING, false,
+				"silent (a request sent never got a final response), timeout (the container answered for a server that never did), forgot (481), error (5xx), credentials (401, 403, 407), unanswered (a request received was never answered), unrelayed (a BYE received was never sent on)."));
+		fields.add(field("method", EventFieldType.STRING, false, "The method of the request the finding is about."));
+		fields.add(field("status", EventFieldType.INTEGER, false, "The status of the response the finding is about."));
+		fields.add(field("peer", EventFieldType.STRING, false,
+				"The server the finding names: host and port, never a phone number."));
+		fields.add(field("leg", EventFieldType.INTEGER, false, "The leg the finding is on, numbered from 1 in the order seen."));
+		fields.add(field("dropped", EventFieldType.BOOLEAN, true, "The call expired dropped (callDropped)."));
+		fields.add(field("omitted", EventFieldType.INTEGER, true,
+				"Steps left out of a long call's middle; the first 16 and the last 48 are kept."));
+		fields.add(field("steps", EventFieldType.ARRAY, true,
+				"Each message: {t (epoch milliseconds), dir (in or out), leg, method, status (a response's), cseq, peer}."));
 		declaration.setFields(fields);
 		return declaration;
 	}

@@ -51,7 +51,7 @@ function aggregate(sources) {
 				epochMillis: s.epochMillis, order: s.order,
 				direction: s.direction, kind: s.kind, label: s.label,
 				className: s.className, methodName: s.methodName, line: s.line,
-				message: s.message
+				message: s.message, peer: s.peer, leg: s.leg
 			});
 		});
 	});
@@ -106,6 +106,7 @@ function viaHost(via) {
 // comes From the caller; a sent request goes To the callee; responses reverse.
 // Falls back to Contact/Via host, then "(network)" — never invents a name.
 function farParty(s) {
+	if (!s.message && s.peer) { return s.peer; } // a recorded step: the leg's address
 	var msg = s.message;
 	var val = s.kind === 'request'
 		? (s.direction === 'in' ? sipHeader(msg, 'from', 'f') : sipHeader(msg, 'to', 't'))
