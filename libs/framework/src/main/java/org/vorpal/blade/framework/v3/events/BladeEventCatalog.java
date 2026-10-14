@@ -858,6 +858,8 @@ public final class BladeEventCatalog {
 		types.add(endpointUp());
 		types.add(remoteDown());
 		types.add(remoteUp());
+		types.add(problemRaised());
+		types.add(problemCleared());
 		types.add(registrationAdded());
 		types.add(registrationRemoved());
 		types.add(trunkRegistered());
@@ -1008,6 +1010,33 @@ public final class BladeEventCatalog {
 		return declaration;
 	}
 
+	private static EventType problemRaised() {
+		EventType declaration = base(BladeEventTypes.PROBLEM_RAISED, "Problem Raised",
+				"An application found a problem an operator should fix, and says which admin page fixes it. The dashboard shows it under Issues until it is cleared.",
+				"ProblemRaised");
+		declaration.setPersist(false);
+		List<EventField> fields = new ArrayList<>();
+		fields.add(field("key", EventFieldType.STRING, true, "What the problem is about, unique within the application."));
+		fields.add(field("summary", EventFieldType.STRING, true, "The problem, in words."));
+		fields.add(field("open", EventFieldType.STRING, false, "The admin page that fixes it: a path under /blade/."));
+		fields.add(field("application", EventFieldType.STRING, false, "The application that raised it."));
+		fields.add(field("node", EventFieldType.STRING, true, "The server it was raised on."));
+		declaration.setFields(fields);
+		return declaration;
+	}
+
+	private static EventType problemCleared() {
+		EventType declaration = base(BladeEventTypes.PROBLEM_CLEARED, "Problem Cleared",
+				"The problem an application raised under this key is over.", "ProblemCleared");
+		declaration.setPersist(false);
+		List<EventField> fields = new ArrayList<>();
+		fields.add(field("key", EventFieldType.STRING, true, "The key it was raised under."));
+		fields.add(field("application", EventFieldType.STRING, false, "The application that raised it."));
+		fields.add(field("node", EventFieldType.STRING, true, "The server it was raised on."));
+		declaration.setFields(fields);
+		return declaration;
+	}
+
 	private static List<EventField> remoteFields() {
 		List<EventField> fields = new ArrayList<>();
 		fields.add(field("kind", EventFieldType.STRING, true, "What sort of service: rest, jdbc, ldap, oauth, oidc, media."));
@@ -1122,7 +1151,8 @@ public final class BladeEventCatalog {
 		EventType declaration = base(BladeEventTypes.CONFIG_SAVED, "Config Saved",
 				"Somebody saved a configuration file from an editor. The change reaches the engines as Config Published.",
 				"ConfigSaved");
-		declaration.setPersist(false);
+		// Persisted: a handful a day, and the dashboard marks them on its time
+		// charts (v_config_changes) beside the failures they may explain.
 		List<EventField> fields = new ArrayList<>();
 		fields.add(field("actor", EventFieldType.STRING, true, "Who saved it, as the container authenticated them."));
 		fields.add(field("file", EventFieldType.STRING, true, "The file, relative to the configuration directory; relative to the domain directory from the files editor."));
@@ -1137,7 +1167,6 @@ public final class BladeEventCatalog {
 		EventType declaration = base(BladeEventTypes.CONFIG_PUBLISHED, "Config Published",
 				"A changed configuration file was pushed to the servers running its application. Published for every change the Configurator sees, whoever or whatever made it.",
 				"ConfigPublished");
-		declaration.setPersist(false);
 		List<EventField> fields = new ArrayList<>();
 		fields.add(field("file", EventFieldType.STRING, true, "The file, relative to the configuration directory."));
 		fields.add(field("application", EventFieldType.STRING, true, "The application it configures."));

@@ -284,6 +284,21 @@ body.embedded .log-page { padding-top: 8px; }
 
 .log-pane.show-offsets .log-rec { grid-template-columns: 11ch 8ch 1fr; }
 
+/* The record a link from another app asked for: an outline and a label row
+   above it, so it reads without telling colours apart. */
+.log-rec.is-target {
+	outline: 2px solid #fff;
+	outline-offset: -1px;
+}
+.log-target-tag {
+	grid-column: 1 / -1;
+	font-size: 0.85em;
+	font-weight: 700;
+	color: #fff;
+	user-select: none;
+}
+.log-target-tag::before { content: "\25B8  "; }
+
 .log-off {
 	display: none;
 	color: var(--pane-dim);

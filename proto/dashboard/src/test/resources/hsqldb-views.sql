@@ -198,3 +198,14 @@ INSERT INTO v_conversation VALUES ('s1', 'c1', TIMESTAMP '2026-10-03 08:00:05', 
 INSERT INTO v_conversation VALUES ('s2', 'c1', TIMESTAMP '2026-10-03 08:00:20', 'callerSaid',  NULL, 'conference', 'east-1', '000000C1', 'and tomorrow',        'weather', 'tomorrow', 'yes', NULL, NULL, NULL);
 INSERT INTO v_conversation VALUES ('s3', 'c3', TIMESTAMP '2026-10-02 09:00:05', 'callerSaid',  'uhg', 'agent',      'east-1', '000000C3', 'book tuesday',        'booking', 'tuesday', 'no',  NULL, NULL, 'radiology');
 INSERT INTO v_conversation VALUES ('s4', 'c1', TIMESTAMP '2026-10-03 08:00:00', 'callStarted', NULL, 'conference', 'east-1', '000000C1', NULL, NULL, NULL, NULL, '+15550100', '+15550199', NULL);
+
+CREATE TABLE v_config_changes (
+   event_id VARCHAR(20) PRIMARY KEY, changed_at TIMESTAMP, change_type VARCHAR(64), config_file VARCHAR(256),
+   configured_application VARCHAR(64), actor VARCHAR(128), change_kind VARCHAR(16), config_scope VARCHAR(16),
+   failed VARCHAR(2000), node VARCHAR(64), domain VARCHAR(64));
+
+-- Configuration changes: irouter.json saved and pushed just before meetings
+-- restarted on east-1, the push failing on engine1; one change on west-1.
+INSERT INTO v_config_changes VALUES ('g1', TIMESTAMP '2026-10-03 09:58:00', 'configSaved', 'irouter.json', NULL, 'operator1', 'saved', NULL, NULL, 'AdminServer', 'east-1');
+INSERT INTO v_config_changes VALUES ('g2', TIMESTAMP '2026-10-03 09:59:00', 'configPublished', 'irouter.json', 'irouter', NULL, NULL, 'domain', '["engine1"]', 'AdminServer', 'east-1');
+INSERT INTO v_config_changes VALUES ('g3', TIMESTAMP '2026-10-03 11:00:00', 'configPublished', 'gateway.json', 'gateway', NULL, NULL, 'domain', NULL, 'AdminServer', 'west-1');

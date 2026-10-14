@@ -49,6 +49,10 @@ final class OpsFeed implements EventSubscriber.Handler {
 	/// `gateway|node` → the `trunk.failed` still in force.
 	private final Map<String, ObjectNode> trunksFailing = new ConcurrentHashMap<>();
 
+	/// `application|key|node` → the `problem.raised` still in force: a problem
+	/// an application reported with the page that fixes it.
+	private final Map<String, ObjectNode> problems = new ConcurrentHashMap<>();
+
 	/// `queue|node` → the latest `queue.depth`.
 	private final Map<String, ObjectNode> queues = new ConcurrentHashMap<>();
 
@@ -62,7 +66,8 @@ final class OpsFeed implements EventSubscriber.Handler {
 			BladeEventTypes.ENDPOINT_DOWN, BladeEventTypes.ENDPOINT_UP, BladeEventTypes.REMOTE_DOWN,
 			BladeEventTypes.REMOTE_UP, BladeEventTypes.TRUNK_REGISTERED, BladeEventTypes.TRUNK_FAILED,
 			BladeEventTypes.TRUNK_UNREGISTERED, BladeEventTypes.SIP_DENIED, BladeEventTypes.CONFIG_SAVED,
-			BladeEventTypes.CONFIG_PUBLISHED, BladeEventTypes.CALL_DROPPED);
+			BladeEventTypes.CONFIG_PUBLISHED, BladeEventTypes.CALL_DROPPED, BladeEventTypes.PROBLEM_RAISED,
+			BladeEventTypes.PROBLEM_CLEARED);
 
 	@Override
 	public void handle(List<CloudEvent> batch) {
@@ -93,6 +98,12 @@ final class OpsFeed implements EventSubscriber.Handler {
 		case BladeEventTypes.TRUNK_UNREGISTERED:
 			trunksFailing.remove(data.path("gateway").asText() + "|" + node);
 			break;
+		case BladeEventTypes.PROBLEM_RAISED:
+			problems.put(problemKey(data, node), stamped(event, data));
+			break;
+		case BladeEventTypes.PROBLEM_CLEARED:
+			problems.remove(problemKey(data, node));
+			break;
 		case BladeEventTypes.QUEUE_DEPTH:
 			queues.put(data.path("queue").asText() + "|" + node, stamped(event, data));
 			return;
@@ -115,11 +126,16 @@ final class OpsFeed implements EventSubscriber.Handler {
 		out.set("endpointsDown", array(endpointsDown));
 		out.set("trunksFailing", array(trunksFailing));
 		out.set("queues", array(queues));
+		out.set("problems", array(problems));
 		ArrayNode feed = out.putArray("recent");
 		synchronized (recent) {
 			recent.forEach(feed::add);
 		}
 		return out;
+	}
+
+	private static String problemKey(ObjectNode data, String node) {
+		return data.path("application").asText("") + "|" + data.path("key").asText() + "|" + node;
 	}
 
 	private static ObjectNode stamped(CloudEvent event, ObjectNode data) {

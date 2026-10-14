@@ -40,16 +40,25 @@ final class RecordedCalls {
 	}
 
 	/// The recorded calls, newest first: one call's records when `vorpalId` is
-	/// given, else the latest `limit` records. `{"sources":[...]}`.
-	static ObjectNode read(String dataSource, String vorpalId, int limit) throws NamingException, SQLException {
+	/// given, else the latest `limit` records, recorded at or after `since`
+	/// (epoch millis) when it is given. `{"sources":[...]}`.
+	static ObjectNode read(String dataSource, String vorpalId, Long since, int limit)
+			throws NamingException, SQLException {
 		DataSource ds = (DataSource) new InitialContext().lookup(dataSource);
 		String sql = "SELECT application, vorpal_id, payload FROM v_events WHERE event_type = 'callTraced'"
-				+ (vorpalId == null ? "" : " AND vorpal_id = ?") + " ORDER BY occurred_at DESC";
+				+ (vorpalId == null ? "" : " AND vorpal_id = ?") + (since == null ? "" : " AND occurred_at >= ?")
+				+ " ORDER BY occurred_at DESC";
 		ObjectNode out = MAPPER.createObjectNode();
 		ArrayNode sources = out.putArray("sources");
 		try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
+			int i = 1;
 			if (vorpalId != null) {
-				ps.setString(1, vorpalId.trim().toUpperCase(Locale.ROOT));
+				ps.setString(i++, vorpalId.trim().toUpperCase(Locale.ROOT));
+			}
+			if (since != null) {
+				// The database keeps UTC wall-clock times.
+				ps.setTimestamp(i++, java.sql.Timestamp.valueOf(java.time.LocalDateTime
+						.ofInstant(java.time.Instant.ofEpochMilli(since), java.time.ZoneOffset.UTC)));
 			}
 			ps.setMaxRows(limit);
 			try (ResultSet rs = ps.executeQuery()) {

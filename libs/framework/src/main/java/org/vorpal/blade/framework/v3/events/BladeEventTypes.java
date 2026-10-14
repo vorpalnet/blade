@@ -274,6 +274,17 @@ public final class BladeEventTypes {
 	/// A service whose breaker had cut it off answered again.
 	public static final String REMOTE_UP = "org.vorpal.blade.remote.up";
 
+	/// An application found a problem an operator should fix and says where it
+	/// is fixed: `key` (what the problem is about, unique within the
+	/// application), `summary` in words, `open` (the admin page that fixes it,
+	/// a path under `/blade/`), `application`, `node`. The dashboard shows it
+	/// under Issues, linked to `open`, until [#PROBLEM_CLEARED] with the same
+	/// key arrives from the same node. Published on the change. See [Problems].
+	public static final String PROBLEM_RAISED = "org.vorpal.blade.problem.raised";
+
+	/// The problem raised under `key` on `node` is over.
+	public static final String PROBLEM_CLEARED = "org.vorpal.blade.problem.cleared";
+
 	/// A device registered a contact it did not already have: `aor`, `contact`,
 	/// `expires`. A refresh of a known contact is not published.
 	public static final String REGISTRATION_ADDED = "org.vorpal.blade.registration.added";
@@ -423,6 +434,10 @@ public final class BladeEventTypes {
 			return CALL_DROPPED;
 		case "callTraced":
 			return CALL_TRACED;
+		case "configSaved":
+			return CONFIG_SAVED;
+		case "configPublished":
+			return CONFIG_PUBLISHED;
 		case "callOriginated":
 			return CALL_ORIGINATED;
 		case "callHeld":
@@ -532,6 +547,11 @@ public final class BladeEventTypes {
 			return "serverSampled";
 		case DASHBOARD_VIEWED:
 			return "dashboardViewed";
+		// Their last segments, "saved" and "published", say nothing of what.
+		case CONFIG_SAVED:
+			return "configSaved";
+		case CONFIG_PUBLISHED:
+			return "configPublished";
 		default:
 			int dot = type.lastIndexOf('.');
 			return (dot < 0 || dot == type.length() - 1) ? type : type.substring(dot + 1);

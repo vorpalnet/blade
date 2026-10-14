@@ -440,3 +440,26 @@ JOIN applications a ON a.id = e.application_id
 LEFT JOIN sessions s ON s.id = e.session_id
 WHERE e.type = 'agentDisposition';
 GO
+
+-- Configuration changes: every file the Configurator pushed to the servers
+-- running its application, and every save from an editor. `failed` lists the
+-- servers that did not take a push, as a JSON array; null when every one did.
+-- The dashboard marks these on its time charts, beside restarts, to answer
+-- "what changed just before the failures rose".
+CREATE OR ALTER VIEW v_config_changes AS
+SELECT
+   CAST(e.id AS VARCHAR(20)) AS event_id,
+   e.created AS changed_at,
+   e.type AS change_type,
+   JSON_VALUE(e.payload, '$."file"') AS config_file,
+   JSON_VALUE(e.payload, '$."application"') AS configured_application,
+   JSON_VALUE(e.payload, '$."actor"') AS actor,
+   JSON_VALUE(e.payload, '$."change"') AS change_kind,
+   JSON_VALUE(e.payload, '$."scope"') AS config_scope,
+   JSON_QUERY(e.payload, '$."failed"') AS failed,
+   JSON_VALUE(e.payload, '$."node"') AS node,
+   a.domain AS domain
+FROM events e
+JOIN applications a ON a.id = e.application_id
+WHERE e.type IN ('configPublished', 'configSaved');
+GO

@@ -37,6 +37,15 @@ with. The viewer therefore asks each node what its reader can do (via
 `MBeanServer.getMBeanInfo`) rather than assuming, and says so plainly when a node's reader
 predates a capability.
 
+## Opening at a moment
+
+`logs.html?server=engine1&app=gateway&at=<epoch ms or ISO time>&q=<text>` opens that
+application's log on that server at that moment, with the text searched for; `file=` names a file
+outright, and without `app` or `file` it is the server log. A log rotates, so the newest file of
+the family that had begun by then is chosen, and the line written at that moment is marked. The
+dashboard links here (declared in `opens.json`). A BLADE log line has no zone, so the page reads it
+in the servers' zone, which `api/time-zone` reports, whatever zone the browser is in.
+
 ## Testing
 
 ```bash

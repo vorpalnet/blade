@@ -218,16 +218,51 @@
 		}
 	}
 
+	/// The zone the servers write their logs in (an IANA id such as
+	/// "America/New_York"), or null for the browser's own.
+	var serverZone = null;
+
+	function setZone(id) {
+		try {
+			new Intl.DateTimeFormat("en-US", { timeZone: id });
+			serverZone = id;
+		} catch (e) {
+			serverZone = null;
+		}
+	}
+
+	/// How far `zone` is ahead of UTC at the instant `utcMs`, in millis.
+	function zoneOffset(utcMs, zone) {
+		var parts = new Intl.DateTimeFormat("en-US", {
+			timeZone: zone, hourCycle: "h23",
+			year: "numeric", month: "2-digit", day: "2-digit",
+			hour: "2-digit", minute: "2-digit", second: "2-digit"
+		}).formatToParts(new Date(utcMs));
+		var v = {};
+		parts.forEach(function (p) { v[p.type] = Number(p.value); });
+		var wall = Date.UTC(v.year, v.month - 1, v.day, v.hour, v.minute, v.second);
+		return wall - Math.floor(utcMs / 1000) * 1000;
+	}
+
 	/// Parse both timestamp dialects into epoch millis, or NaN.
 	///
-	/// Neither carries a zone the browser can trust — the vorpal formatter uses
-	/// SimpleDateFormat in the server's default zone and writes no offset — so
-	/// both are read as local time. Jump-to-time is therefore consistent with
-	/// what the file shows, which is what an operator reading it means.
+	/// The vorpal formatter writes the server's wall-clock time with no zone, so
+	/// it is read in the server's zone ([setZone]) when the page knows it, and
+	/// as the browser's local time otherwise. That matters to a link from
+	/// another app, which names an instant: read in the wrong zone, a log would
+	/// open hours away from it. WebLogic's own lines name their zone.
 	function parseTime(s) {
 		if (!s) return NaN;
 		var m = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})\.(\d{3})$/.exec(s);
-		if (m) return Date.parse(m[1] + "T" + m[2] + "." + m[3]);
+		if (m) {
+			var iso = m[1] + "T" + m[2] + "." + m[3];
+			if (!serverZone) return Date.parse(iso);
+			var asUtc = Date.parse(iso + "Z");
+			// The offset at the wall time itself is an hour off for an hour
+			// around a change of clocks; a second pass settles it.
+			var t = asUtc - zoneOffset(asUtc, serverZone);
+			return asUtc - zoneOffset(t, serverZone);
+		}
 		// WLS: "Aug 4, 2026 10:12:33,123 AM UTC" — drop the millis, which no
 		// engine parses in that position, and let Date handle the rest.
 		return Date.parse(String(s).replace(/,(\d{1,3})(?=\s)/, ""));
@@ -319,6 +354,7 @@
 		renderText: renderText,
 		sevClass: sevClass,
 		parseTime: parseTime,
+		setZone: setZone,
 		classify: classify,
 		parseRecords: parseRecords,
 		recText: recText

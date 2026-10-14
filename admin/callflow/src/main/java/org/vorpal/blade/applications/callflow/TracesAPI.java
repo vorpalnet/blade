@@ -102,13 +102,15 @@ public class TracesAPI {
 	/// Calls the framework's flight recorder wrote out because they went wrong,
 	/// in the shape [#traces] returns, newest first: one call's records with
 	/// `call` (its Vorpal-ID, as the dashboard links it), else the latest
-	/// `limit` (default 50). Each source adds `recorded` and the `verdict`. See
+	/// `limit` (default 50), only those recorded since `since` (epoch millis)
+	/// when given. Each source adds `recorded` and the `verdict`. See
 	/// [RecordedCalls].
 	@GET
 	@javax.ws.rs.Path("/recorded")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(summary = "Read calls the flight recorder wrote out, from the analytics database.")
-	public Response recorded(@QueryParam("call") String call, @QueryParam("limit") Integer limit) {
+	public Response recorded(@QueryParam("call") String call, @QueryParam("since") Long since,
+			@QueryParam("limit") Integer limit) {
 		String vorpalId = isBlank(call) ? null : call.trim();
 		if (vorpalId != null && !vorpalId.matches("[0-9A-Fa-f]{1,16}")) {
 			return bad("'call' is a Vorpal-ID: hexadecimal digits");
@@ -120,7 +122,7 @@ public class TracesAPI {
 		String ds = (settings != null) ? settings.getAnalyticsDataSource() : "jdbc/BladeAnalytics";
 		int max = (limit == null || limit < 1) ? 50 : Math.min(limit, 500);
 		try {
-			return Response.ok(RecordedCalls.read(ds, vorpalId, max).toString()).build();
+			return Response.ok(RecordedCalls.read(ds, vorpalId, since, max).toString()).build();
 		} catch (Exception e) {
 			return error(e);
 		}

@@ -35,6 +35,10 @@
 			<a href="docs/index.html">Documentation</a>
 		</nav>
 		<div class="vorpal-topbar-right">
+			<!-- Opened from the dashboard (a "blade-" window it named): the way back. -->
+			<a id="to-board" class="vorpal-topbar-link" href="/blade/dashboard/" target="blade-dashboard" style="display: none"
+				title="Back to the dashboard that opened this">Dashboard ↗</a>
+			<script>if (/^blade-/.test(window.name) && window.name !== 'blade-dashboard') document.getElementById('to-board').style.display = '';</script>
 			<span id="status-pill" class="vorpal-pill">Loading…</span>
 		</div>
 	</header>

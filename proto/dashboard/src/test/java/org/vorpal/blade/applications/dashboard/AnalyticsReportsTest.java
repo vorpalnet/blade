@@ -448,6 +448,21 @@ class AnalyticsReportsTest {
 		assertEquals(Arrays.asList("2026-10-03 10:00", 800L, 4L), hourly.rows.get(0).subList(0, 3));
 	}
 
+	@Test
+	void changesAreMarkedInOrderOnTheChartsBuckets() {
+		AnalyticsReports.Table t = reports.run("changes", filter(7, false, "east-1"));
+		assertEquals(Arrays.asList("bucket", "at", "change", "server", "what", "file", "failed on"), t.columns);
+		assertEquals(3, t.rows.size(), "east-1's save, push and restart; west-1's push is another domain's");
+		assertEquals(Arrays.asList("2026-10-03 09:00", Instant.parse("2026-10-03T09:58:00Z").toEpochMilli(),
+				"config saved", "AdminServer", "operator1 · saved", "irouter.json", null), t.rows.get(0));
+		assertEquals(Arrays.asList("config pushed", "AdminServer", "irouter", "irouter.json", "[\"engine1\"]"),
+				t.rows.get(1).subList(2, 7));
+		assertEquals(Arrays.asList("2026-10-03 10:00", "application restarted", "engine0", "meetings"),
+				Arrays.asList(t.rows.get(2).get(0), t.rows.get(2).get(2), t.rows.get(2).get(3), t.rows.get(2).get(4)));
+		assertEquals("2026-10-03", reports.run("changes", filter(30, false, null)).rows.get(0).get(0),
+				"past a week, the day");
+	}
+
 	// ── who sees what ─────────────────────────────────────────────────────
 
 	private static DashboardGrant grant(String platform, String tenants, String departments, boolean content) {

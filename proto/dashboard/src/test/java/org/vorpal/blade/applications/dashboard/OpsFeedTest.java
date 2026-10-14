@@ -56,6 +56,26 @@ class OpsFeedTest {
 	}
 
 	@Test
+	void aProblemAnApplicationRaisedStaysUntilItClearsIt() {
+		OpsFeed feed = new OpsFeed();
+		ObjectNode raised = MAPPER.createObjectNode();
+		raised.put("key", "cert:sip.example.net").put("summary", "certificate expires in 6 days")
+				.put("open", "/blade/configurator/configurator.html?schema=gateway").put("application", "gateway")
+				.put("node", "engine0");
+		feed.apply(CloudEvent.create(BladeEventTypes.PROBLEM_RAISED, "/blade/test", "cert:sip.example.net", raised));
+		assertEquals("/blade/configurator/configurator.html?schema=gateway",
+				feed.snapshot().path("problems").get(0).path("open").asText(), "the page that fixes it rides along");
+
+		ObjectNode cleared = MAPPER.createObjectNode();
+		cleared.put("key", "cert:sip.example.net").put("application", "gateway").put("node", "engine1");
+		feed.apply(CloudEvent.create(BladeEventTypes.PROBLEM_CLEARED, "/blade/test", "cert:sip.example.net", cleared));
+		assertEquals(1, feed.snapshot().path("problems").size(), "cleared on another node: still a problem here");
+		cleared.put("node", "engine0");
+		feed.apply(CloudEvent.create(BladeEventTypes.PROBLEM_CLEARED, "/blade/test", "cert:sip.example.net", cleared));
+		assertEquals(0, feed.snapshot().path("problems").size());
+	}
+
+	@Test
 	void theFeedIsNewestFirstAndBounded() {
 		OpsFeed feed = new OpsFeed();
 		for (int i = 0; i < OpsFeed.RECENT + 5; i++) {

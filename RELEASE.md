@@ -61,6 +61,37 @@ The recorder holds at most 20,000 calls per application per server, in that serv
 call that fails over starts a new record. It hooks where every message is drawn on the log's
 sequence diagram, so every callflow, v2 or v3, is recorded at any log level.
 
+### Dashboard: every problem opens the app that fixes it
+
+The board only shows problems; now each one opens, in a window of its own, the admin app that can
+explain or fix it, already at the call, log, file or minute:
+- a dropped call opens Trace at that call; the Failed and Dropped bars, the calls recorded in the
+  board's range;
+- a remote cut off or a failing trunk opens Logs on that server, at that minute, with the remote or
+  gateway searched for; a server's name opens its server log, and its stuck threads the
+  container's stuck-thread warnings (BEA-000337);
+- a configuration saved or pushed opens the Configurator at its application.
+
+Each app declares what it opens in an `opens.json` beside its pages, and the board finds the apps
+from the portal's card list, so an app that is not deployed gives no link. Logs and the
+Configurator, which can show themselves embedded, also get a **peek** button: a drawer beside the
+board, with "Open in its own window" at the top. An app opened from the board links back to it.
+
+**What changed, day by day.** A Changes tab in Operations lists each day of the range, newest
+first: which servers and applications restarted, which configuration files were pushed or saved.
+Hovering a day lists every change with its time. Configuration changes are now
+persisted (`configSaved`, `configPublished`) and read through a new view, `v_config_changes`, in
+all three dialects.
+
+**Applications can raise problems.** `Problems.raise(key, summary, open)` in the framework puts a
+problem under the dashboard's Issues with a link to the page that fixes it, until
+`Problems.clear(key)`; the dashboard needs no change for a new kind of problem.
+
+**Logs opens at a moment** (`?server=&app=&at=&q=`), choosing the rotated file that holds it and
+marking the line, and reads log times in the servers' zone, whatever zone the browser is in.
+**Trace** fills in a rule for "the next call like this" from a recorded call, or from a link; you
+press Arm.
+
 ### Listener: a refused call reaches the caller
 
 A call the listener anchored that the callee refused (busy, not found, no answer) never

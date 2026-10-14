@@ -23,6 +23,7 @@
 		<class>org.vorpal.blade.applications.dashboard.model.TimingRow</class>
 		<class>org.vorpal.blade.applications.dashboard.model.DispositionRow</class>
 		<class>org.vorpal.blade.applications.dashboard.model.RoutingRow</class>
+		<class>org.vorpal.blade.applications.dashboard.model.ChangeRow</class>
 		<exclude-unlisted-classes>true</exclude-unlisted-classes>
 		<properties>
 			<property name="javax.persistence.jdbc.driver" value="org.hsqldb.jdbc.JDBCDriver" />

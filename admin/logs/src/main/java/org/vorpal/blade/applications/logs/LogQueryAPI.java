@@ -87,6 +87,21 @@ public class LogQueryAPI {
 		}
 	}
 
+	/// The zone the servers write their log timestamps in. A BLADE log line
+	/// carries the server's wall-clock time and no zone, so the viewer needs
+	/// this to turn a link's instant into the line that was written then.
+	/// It is this server's zone: the AdminServer and the engines of one domain
+	/// are installed together and share it.
+	@GET
+	@Path("/time-zone")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(summary = "The time zone log timestamps are written in.")
+	public Response timeZone() {
+		ObjectNode n = mapper.createObjectNode();
+		n.put("id", java.util.TimeZone.getDefault().getID());
+		return Response.ok(n.toString()).build();
+	}
+
 	@GET
 	@Path("/servers/{name}/logs")
 	@Produces(MediaType.APPLICATION_JSON)

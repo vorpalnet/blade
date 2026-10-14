@@ -203,7 +203,7 @@ public class AnalyticsReports {
 			"conversation.intents",
 			"health.summary", "health.coverage", "health.chains", "health.split-calls", "health.publishing",
 			"health.publishing-daily", "platform.servers", "platform.latest", "platform.servers-hourly", "platform.heap", "platform.cpu",
-			"metrics.summary",
+			"changes", "metrics.summary",
 			"metrics.counters", "metrics.timings", "risk.verdicts", "risk.calibration"));
 
 	// Lifecycle names as the views carry them: the short names, plus the camelCase
@@ -319,6 +319,7 @@ public class AnalyticsReports {
 			case "platform.servers-hourly": return platformServersHourly(em, f);
 			case "platform.heap": return platformPeak(em, f, "heapUsedPct", "peak heap %");
 			case "platform.cpu": return platformPeak(em, f, "cpuPct", "peak cpu %");
+			case "changes": return changes(em, f);
 			case "metrics.summary": return metricsSummary(em, f);
 			case "metrics.counters": return metricsCounters(em, f);
 			case "metrics.timings": return metricsTimings(em, f);
@@ -1614,6 +1615,57 @@ public class AnalyticsReports {
 			t.row(label(r[0]), label(r[1]), now == null ? null : now[5], num(r[2]), num(r[3]), num(r[4]),
 					now == null ? null : now[3], now == null ? null : now[4], r[5], r[6], r[7], r[8], r[10], r[11],
 					r[12], r[13], restarts.getOrDefault(key, 0L), stamp(r[9], f));
+		}
+		return t;
+	}
+
+	/// What changed, oldest first, for the marks on the board's time charts:
+	/// a server restarted, an application restarted (deployed again, or its
+	/// server restarted), a configuration file pushed or saved. `bucket` is the
+	/// chart bucket the change falls in, the hour or past a week the day, as
+	/// [#callsByOutcome] cuts them; `at` is the instant, in epoch millis.
+	///
+	/// Restarts come from the per-minute samples, so they are as late as one
+	/// minute; an application restart on a server that restarted in the same
+	/// sample is left out, since the server restart says it. A database
+	/// without `v_config_changes` yet still has its restarts.
+	private Table changes(EntityManager em, Filter f) {
+		boolean hourly = f.days <= 7;
+		List<Object[]> out = new ArrayList<>();
+		Set<String> serverRestarts = new HashSet<>();
+		for (Object[] r : this.<Object[]>samples(em, "SELECT s.sampledAt, s.node FROM ServerSampleRow s WHERE "
+				+ sampled("s", f) + " AND s.restarted = 'true'", f)) {
+			Instant at = instant(r[0]).toInstant();
+			serverRestarts.add(label(r[1]) + '|' + at.getEpochSecond() / 60);
+			out.add(new Object[] { at, "server restarted", label(r[1]), label(r[1]), null, null });
+		}
+		for (Object[] r : this.<Object[]>samples(em, "SELECT s.sampledAt, s.node, s.application FROM SampleRow s "
+				+ "WHERE " + sampled("s", f) + " AND s.restarted = 'true'", f)) {
+			Instant at = instant(r[0]).toInstant();
+			if (!serverRestarts.contains(label(r[1]) + '|' + at.getEpochSecond() / 60)) {
+				out.add(new Object[] { at, "application restarted", label(r[1]), label(r[2]), null, null });
+			}
+		}
+		try {
+			javax.persistence.Query q = em.createQuery("SELECT c.changedAt, c.changeType, c.node, c.configFile, "
+					+ "c.configuredApplication, c.actor, c.changeKind, c.failed FROM ChangeRow c WHERE c.changedAt >= :since"
+					+ (f.domain == null ? "" : " AND c.domain = :domain") + (f.access == null ? "" : f.access.samplePredicate("c")));
+			bindSampled(q, f);
+			for (Object o : q.getResultList()) {
+				Object[] r = (Object[]) o;
+				boolean pushed = "configPublished".equals(r[1]);
+				String what = pushed ? label(r[4]) : label(r[5]) + " · " + label(r[6]);
+				out.add(new Object[] { instant(r[0]).toInstant(), pushed ? "config pushed" : "config saved", label(r[2]),
+						what, r[3], r[7] });
+			}
+		} catch (javax.persistence.PersistenceException noViewYet) {
+			// v_config_changes is newer than this database's views.
+		}
+		out.sort(Comparator.comparing((Object[] r) -> (Instant) r[0]));
+		Table t = new Table("bucket", "at", "change", "server", "what", "file", "failed on");
+		for (Object[] r : out) {
+			Instant at = (Instant) r[0];
+			t.row(hourly ? hour(at, f).format(HOUR) : day(at, f), at.toEpochMilli(), r[1], r[2], r[3], r[4], r[5]);
 		}
 		return t;
 	}

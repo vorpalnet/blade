@@ -86,8 +86,8 @@
 
 	function segs(p) { return p.split("/").map(encodeURIComponent).join("/"); }
 
-	function sliceUrl(off, max) {
-		return "api/servers/" + encodeURIComponent(state.server) + "/logs/" + segs(state.file)
+	function sliceUrl(off, max, file) {
+		return "api/servers/" + encodeURIComponent(state.server) + "/logs/" + segs(file || state.file)
 			+ "?offset=" + off + "&max=" + max;
 	}
 	function tailUrl(cursor, max) {
@@ -310,9 +310,11 @@
 		if (state.loading) return Promise.resolve(false);
 		state.loading = true;
 		panePill("reading…");
+		// Cleared before the work, not after it, so a notice the work raises
+		// (a seek that found no timestamps) stays up.
+		clearNotice();
 		return Promise.resolve()
 			.then(fn)
-			.then(function (r) { clearNotice(); return r; })
 			.catch(function (e) { notice("Read failed", String(e.message || e)); return false; })
 			.then(function (r) {
 				state.loading = false;
@@ -709,6 +711,122 @@
 		}
 	}
 
+	// ---- Opened from another app ------------------------------------------
+	//
+	// `?server=engine1&app=gateway&at=<epoch ms or ISO>&q=<text>` opens that
+	// application's log on that server at that moment, with the text searched
+	// for: how the dashboard sends an operator from a problem to its log lines.
+	// `file=` names a file outright; without `app` or `file` it is the server
+	// log. Every parameter is optional, and the link is used once: choosing
+	// another server or file afterwards behaves as it always has.
+
+	var link = (function () {
+		var q = new URLSearchParams(location.search);
+		var at = q.get("at"), ms = NaN;
+		if (at) ms = /^\d+$/.test(at) ? Number(at) : Date.parse(at);
+		return {
+			server: q.get("server"), file: q.get("file"), app: q.get("app"),
+			at: isNaN(ms) ? null : ms, q: q.get("q"),
+			pending: !!(q.get("server") || q.get("file") || q.get("app") || at || q.get("q"))
+		};
+	})();
+
+	/// The files one link can mean, newest first: the named file, the app's
+	/// log and its rotated generations, or the server log and its.
+	function family(files) {
+		var pick;
+		if (link.file) {
+			pick = files.filter(function (f) { return f.relativePath === link.file; });
+		} else if (link.app) {
+			var pre = "vorpal/" + link.app + ".";
+			pick = files.filter(function (f) { return f.relativePath.indexOf(pre) === 0; });
+		} else {
+			pick = files.filter(function (f) { return f.kind === "WLS_SERVER"; });
+		}
+		return pick.sort(function (a, b) { return b.lastModifiedMs - a.lastModifiedMs; });
+	}
+
+	/// The time of a file's first record, or null.
+	function firstTime(file) {
+		return apiBytes(sliceUrl(0, 8192, file)).then(function (res) {
+			var snap = P.snapWindow(res.buf, res.start, res.eof, true, true);
+			var recs = P.parseRecords(DECODER.decode(res.buf.subarray(snap.lo, snap.hi)), res.start + snap.lo);
+			for (var i = 0; i < recs.length; i++) {
+				if (!isNaN(recs[i].ts)) return recs[i].ts;
+			}
+			return null;
+		});
+	}
+
+	/// The newest file of the family that had begun by the link's time: a log
+	/// rotates, and the minute asked for may be in yesterday's file.
+	function fileForTime(candidates) {
+		var i = 0;
+		function next() {
+			if (i >= candidates.length) {
+				var oldest = candidates[candidates.length - 1];
+				notice("Older than the logs",
+					"The oldest log here begins after " + new Date(link.at).toLocaleString()
+					+ "; the lines from then have rotated away. Opened " + oldest.relativePath + " at its start.");
+				return oldest;
+			}
+			var f = candidates[i++];
+			return firstTime(f.relativePath).then(function (t) {
+				return (t !== null && t <= link.at) ? f : next();
+			});
+		}
+		return Promise.resolve(next());
+	}
+
+	/// Mark and centre the first record written at or after `ms`.
+	function markRecord(ms) {
+		for (var i = 0; i < state.chunks.length; i++) {
+			var recs = state.chunks[i].recs;
+			for (var j = 0; j < recs.length; j++) {
+				if (!isNaN(recs[j].ts) && recs[j].ts >= ms) {
+					var el = state.chunks[i].el.querySelectorAll(".log-rec")[j];
+					if (!el) return;
+					el.classList.add("is-target");
+					var tag = document.createElement("span");
+					tag.className = "log-target-tag";
+					tag.textContent = "linked time";
+					el.insertBefore(tag, el.firstChild);
+					el.scrollIntoView({ block: "center" });
+					return;
+				}
+			}
+		}
+	}
+
+	/// Opens what the link names. Runs inside the catalog load, so it is
+	/// already guarded.
+	function followLink(files) {
+		link.pending = false;
+		var candidates = family(files);
+		if (!candidates.length) {
+			notice("Not on " + state.server,
+				(link.file || (link.app ? "No log for " + link.app : "No server log")) + " on this server.");
+			return null;
+		}
+		var choose = (link.at === null) ? Promise.resolve(candidates[0]) : fileForTime(candidates);
+		return choose.then(function (f) {
+			$("logFile").value = f.relativePath;
+			return openFile();
+		}).then(function () {
+			if (link.at === null) return;
+			$("goto").value = new Date(link.at).toLocaleString();
+			panePill("seeking…");
+			return seekTime(link.at).then(function (off) {
+				return loadAt(off).then(function () { markRecord(link.at); });
+			});
+		}).then(function () {
+			if (!link.q) return;
+			$("find").value = link.q;
+			runFind();
+			return runFileSearch(0);
+		});
+	}
+
 	// ---- Catalog ----------------------------------------------------------
 
 	function loadServers() {
@@ -722,6 +840,14 @@
 				sel.appendChild(opt);
 			});
 			if (!list.length) throw new Error("No servers found via DomainConfiguration.");
+			if (link.server) {
+				if (list.some(function (s) { return s.name === link.server; })) {
+					sel.value = link.server;
+				} else {
+					link.missing = link.server;
+					link.pending = false;
+				}
+			}
 			state.server = sel.value;
 			pill(list.length + " server" + (list.length === 1 ? "" : "s"));
 		});
@@ -749,6 +875,8 @@
 				$("paneTitle").textContent = "No log files on " + state.server;
 				return;
 			}
+			if (link.pending) return followLink(files);
+
 			// Open the server log by default — it is what an operator wants
 			// nine times out of ten.
 			var pick = files.filter(function (f) { return f.kind === "WLS_SERVER"; })[0] || files[0];
@@ -894,8 +1022,17 @@
 	document.addEventListener("DOMContentLoaded", function () {
 		wire();
 		applyPaneClasses();
-		loadServers()
+		getJson("api/time-zone")
+			.then(function (z) { P.setZone(z.id); })
+			.catch(function () { /* an older server: times read as the browser's */ })
+			.then(loadServers)
 			.then(function () { return guarded(loadCatalog); })
+			.then(function () {
+				if (link.missing) {
+					notice("No server " + link.missing, "The link names a server this domain does not have; "
+						+ "showing " + state.server + " instead.");
+				}
+			})
 			.catch(function (e) {
 				pill("error");
 				panePill("failed");

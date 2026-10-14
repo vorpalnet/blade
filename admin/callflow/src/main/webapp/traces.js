@@ -59,7 +59,8 @@
 		load: document.getElementById('tr-load'),
 		file: document.getElementById('tr-file'),
 		report: document.getElementById('tr-report'),
-		recorded: document.getElementById('tr-recorded')
+		recorded: document.getElementById('tr-recorded'),
+		like: document.getElementById('tr-like')
 	};
 
 	var snapshot = window.BLADE_TRACE_SNAPSHOT || null;
@@ -80,6 +81,9 @@
 	// the dashboard's opens it on one call: traces.html?call=<Vorpal-ID>.
 	var params = new URLSearchParams(location.search);
 	var linkedCall = params.get('call');
+	// ?since=<epoch ms>: only calls recorded since then, the range a link was
+	// looking at.
+	var since = /^\d+$/.test(params.get('since') || '') ? params.get('since') : null;
 	var recordedMode = !snapshot && (!!linkedCall || params.get('recorded') === '1');
 	var verdicts = {};         // sessionId → [{app, verdict}] for recorded calls
 
@@ -152,7 +156,8 @@
 		}
 		if (els.recorded) { els.recorded.textContent = recordedMode ? 'Live Captures' : 'Recorded Calls'; }
 		var url = recordedMode
-			? API + '/traces/recorded' + (linkedCall ? '?call=' + encodeURIComponent(linkedCall) : '')
+			? API + '/traces/recorded' + (linkedCall ? '?call=' + encodeURIComponent(linkedCall)
+				: since ? '?since=' + since : '')
 			: API + '/traces';
 		fetch(url, { headers: { Accept: 'application/json' } })
 			.then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
@@ -325,10 +330,37 @@
 	// A recorded call opens on what went wrong; the sequence diagram is below it.
 	function showVerdict(call) {
 		var found = verdictsOf(call.sessionId);
+		if (els.like) { els.like.hidden = !origin(call); }
 		if (!found.length) { return; }
 		els.title.textContent = 'Call ' + call.sessionId;
 		els.stepInfo.textContent = found.join('  ·  ');
 		els.sourcePath.hidden = true;
+	}
+
+	// The address a recorded call came from: its first step is the INVITE
+	// received, and a recorded step names the far end as address:port.
+	function origin(call) {
+		if (!recordedMode || !els.armForm || !call || !call.steps.length) { return null; }
+		var first = call.steps[0];
+		if (first.direction !== 'in' || !first.peer || first.peer.indexOf('leg ') === 0) { return null; }
+		// A port always follows: after the last colon, for IPv4 and IPv6 alike.
+		var host = first.peer.replace(/:[^:]*$/, '').replace(/^\[|\]$/g, '');
+		return /^[0-9a-fA-F.:]+$/.test(host) ? host : null;
+	}
+
+	// Fill in the arm form; the person checks it and presses Arm. Nothing is
+	// armed from a link or a click here.
+	function prefill(attribute, pattern, label, why) {
+		if (!els.armForm) { return; }
+		var known = Array.prototype.some.call(els.attribute.options, function (o) { return o.value === attribute; });
+		els.attribute.value = known ? attribute : '__other__';
+		els.attributeOther.hidden = known;
+		if (!known) { els.attributeOther.value = attribute || ''; }
+		els.pattern.value = pattern || '';
+		els.label.value = label || '';
+		els.armForm.scrollIntoView({ block: 'nearest' });
+		els.armForm.querySelector('button[type="submit"]').focus();
+		setStatus(why);
 	}
 
 	function showStep(call, s, i) {
@@ -670,10 +702,25 @@
 			selectedStep = null;
 			post('/traces/clear');
 		});
+		if (els.like) {
+			els.like.addEventListener('click', function () {
+				var call = calls.filter(function (c) { return c.sessionId === selectedCall; })[0];
+				var host = origin(call);
+				if (!host) { return; }
+				prefill('Origin-IP', '^' + host.replace(/[.]/g, '\\.') + '$', 'like call ' + call.sessionId,
+					'Filled in: the next calls from ' + host + '. Check the rule, then press Arm.');
+			});
+		}
+		// ?arm=1&attribute=&pattern=&label= from a link: filled in, never armed.
+		if (params.get('arm') === '1' && !snapshot) {
+			prefill(params.get('attribute') || 'From', params.get('pattern'), params.get('label'),
+				'Filled in from a link. Check the rule, then press Arm.');
+		}
 		if (els.recorded) {
 			els.recorded.addEventListener('click', function () {
 				recordedMode = !recordedMode;
 				linkedCall = null;
+				if (els.like) { els.like.hidden = true; }
 				selectedCall = null;
 				selectedStep = null;
 				refresh();

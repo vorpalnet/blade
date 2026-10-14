@@ -51,6 +51,22 @@ site claims are listed under the map.
 - Times are the viewer's: the browser's zone unless another is picked beside the
   clock. The data is UTC; days and hours are cut in the chosen zone.
 
+**Every problem opens the app that fixes it.** A dropped call opens Trace at that call; a
+configuration change, the Configurator at its application; a remote cut off or a trunk failing,
+Logs on that server at that minute with the name searched for; a server's name, its server log;
+its stuck threads, the container's stuck-thread warnings; the Failed and Dropped bars, the calls
+recorded in the range. Each app says what it opens in an `opens.json` beside its pages, and the
+board finds the apps from the portal's card list: an app not deployed gives no link, and a new
+app that declares what it opens is linked without a change here. Links open in one window per
+app. An app that can show itself embedded (Logs, the Configurator) also gets a **peek** button
+that opens it in a drawer beside the board. An application can raise a problem of its own with
+the page that fixes it (`Problems.raise` in the framework); it shows under Issues until cleared.
+
+**What changed, day by day.** Operations has a Changes tab: one row a day, newest first,
+saying which servers and applications restarted and which configuration files were pushed or
+saved. Hover a day for every change with its time. Restarts come from the minute samples; configuration changes from
+`v_config_changes`, which needs the analytics service on the framework that persists them.
+
 **Who sees what.** Sign-in is the deployment's OpenID Connect provider when
 `blade-oidc.properties` is deployed with the WAR, the WebLogic login otherwise. The grants in
 the dashboard's settings then decide, per group, which domains' servers, which tenants' and

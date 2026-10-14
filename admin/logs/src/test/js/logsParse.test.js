@@ -276,6 +276,22 @@ test('an unparseable timestamp reports NaN rather than a wrong date', function (
 	assert.ok(isNaN(P.parseTime('not a time at all')));
 });
 
+test('a vorpal timestamp is read in the servers\' zone once the page knows it', function () {
+	try {
+		P.setZone('UTC');
+		assert.strictEqual(P.parseTime('2026-08-04 14:32:05.123'), Date.UTC(2026, 7, 4, 14, 32, 5, 123));
+		P.setZone('America/New_York'); // EDT, four hours behind
+		assert.strictEqual(P.parseTime('2026-08-04 14:32:05.123'), Date.UTC(2026, 7, 4, 18, 32, 5, 123));
+		P.setZone('America/New_York'); // EST, five hours behind
+		assert.strictEqual(P.parseTime('2026-12-04 14:32:05.000'), Date.UTC(2026, 11, 4, 19, 32, 5, 0));
+		P.setZone('Not/AZone');
+		assert.strictEqual(P.parseTime('2026-08-04 14:32:05.123'), Date.parse('2026-08-04T14:32:05.123'),
+			'an unknown zone falls back to the browser\'s');
+	} finally {
+		P.setZone(null);
+	}
+});
+
 test('timestamps are ordered, which is what the time seek bisects on', function () {
 	var a = P.parseTime('2026-08-04 14:32:05.123');
 	var b = P.parseTime('2026-08-04 14:32:05.124');

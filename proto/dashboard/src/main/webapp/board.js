@@ -209,8 +209,9 @@
 
 	/* A table cut to the rows that fit, with the count of the rest. Nothing on
 	   the board scrolls: the full list is one click away in the report. */
-	function fitTable(body, result) {
-		C.table(body, result, { limit: 40 });
+	function fitTable(body, result, opts) {
+		opts = opts || {};
+		C.table(body, result, { limit: 40, wrap: opts.wrap });
 		var wrap = body.querySelector('.table-wrap');
 		if (!wrap) return;
 		var rows = wrap.querySelectorAll('tbody tr');
@@ -221,7 +222,7 @@
 			if (used > room) { rows[i].style.display = 'none'; } else { shown++; }
 		}
 		var total = result.rows.length;
-		if (shown < total) body.appendChild(el('div', 'panel__more', (total - shown) + ' more in the full report'));
+		if (shown < total) body.appendChild(el('div', 'panel__more', (total - shown) + ' ' + (opts.more || 'more in the full report')));
 	}
 
 	/* Only the named columns of a report, in that order. */
@@ -294,8 +295,13 @@
 			var row = el('div', 'srv__row');
 			var st = el('span', 'srv__state ' + stateClass(n)); st.appendChild(el('i')); st.appendChild(document.createTextNode(stateWord(n)));
 			row.appendChild(st);
-			var name = el('span', 'srv__name', n.server);
-			name.title = n.cluster || 'standalone';
+			/* This domain's servers open their own log; another domain's are read
+			   by that domain's Logs. Stuck threads open the log at the
+			   container's stuck-thread warning (BEA-000337). */
+			var log = n.domain === localDomain ? L.to('log', { server: n.server, at: Date.now() }) : null;
+			var name = el(log ? 'a' : 'span', 'srv__name' + (log ? ' srv__name--link' : ''), n.server);
+			name.title = (n.cluster || 'standalone') + (log ? '\nOpen ' + n.server + "'s server log" : '');
+			if (log) { name.href = log.href; name.target = log.target; }
 			row.appendChild(name);
 			if (n.up === false) {
 				['', '', '', ''].forEach(function () { row.appendChild(el('span', 'srv__n', '—')); });
@@ -316,7 +322,11 @@
 			else if (n.threadsPending > 0) threads += ' · ' + n.threadsPending + ' pending';
 			else if (n.threadsHogging > 0) threads += (threads ? ' · ' : '') + n.threadsHogging + ' hogging';
 			if (!threads) threads = 'none stuck';
-			row.appendChild(el('span', 'srv__n' + (n.threadsStuck > 0 ? ' warn' : ''), threads));
+			var stuck = n.threadsStuck > 0 && n.domain === localDomain
+				? L.to('log', { server: n.server, at: Date.now() - 15 * 60000, q: 'BEA-000337' }) : null;
+			var th = el(stuck ? 'a' : 'span', 'srv__n' + (n.threadsStuck > 0 ? ' warn' : '') + (stuck ? ' srv__n--link' : ''), threads);
+			if (stuck) { th.href = stuck.href; th.target = stuck.target; th.title = 'The stuck-thread warnings in ' + n.server + "'s server log"; }
+			row.appendChild(th);
 			list.appendChild(row);
 		});
 		body.appendChild(list);
@@ -353,19 +363,83 @@
 		'org.vorpal.blade.trunk.unregistered': 'trunk off', 'org.vorpal.blade.queue.depth': 'queue',
 		'org.vorpal.blade.sip.denied': 'refused',
 		'org.vorpal.blade.config.saved': 'config', 'org.vorpal.blade.config.published': 'pushed',
-		'org.vorpal.blade.call.dropped': 'dropped'
+		'org.vorpal.blade.call.dropped': 'dropped', 'org.vorpal.blade.problem.raised': 'problem',
+		'org.vorpal.blade.problem.cleared': 'solved'
 	};
-	var OPS_BAD = { down: 1, 'trunk down': 1, refused: 1, 'cut off': 1, dropped: 1 };
+	var OPS_BAD = { down: 1, 'trunk down': 1, refused: 1, 'cut off': 1, dropped: 1, problem: 1 };
 
 	/* Where a problem is solved: the admin app that can show why, already at
-	   the call. One window per app, so ten clicks reuse one Trace window.
-	   (A first slice of root TODO item 9; apps will declare these.) */
-	var TRACE = '/blade/callflow/traces.html';
+	   the call, log, file or time (links.js; each app declares what it opens).
+	   A problem an application raised names its own page. */
+	var L = window.BladeLinks;
 	function solveLink(e) {
-		if (e.type === 'org.vorpal.blade.call.dropped' && e.vorpalId) {
-			return { href: TRACE + '?call=' + encodeURIComponent(e.vorpalId), target: 'blade-trace', app: 'Trace' };
+		var at = e.time ? new Date(e.time).getTime() : null;
+		switch (e.type) {
+		case 'org.vorpal.blade.problem.raised':
+			return /^\/blade\/[\w-]/.test(e.open || '')
+				? { href: e.open, target: 'blade-' + e.open.split('/')[2], app: (e.application || 'its') + ' admin page' } : null;
+		case 'org.vorpal.blade.call.dropped':
+			return e.vorpalId ? L.to('call', { call: e.vorpalId }) : null;
+		case 'org.vorpal.blade.config.saved':
+		case 'org.vorpal.blade.config.published':
+			return L.to('config', { application: e.application || String(e.file || '').replace(/^.*\//, '').replace(/\.json$/, '') });
+		case 'org.vorpal.blade.endpoint.down':
+		case 'org.vorpal.blade.endpoint.up':
+			return L.to('endpoint', { endpoint: e.endpoint }) || L.to('log', { server: e.node, at: at, q: e.endpoint });
+		case 'org.vorpal.blade.remote.down':
+		case 'org.vorpal.blade.remote.up':
+			return L.to('log', { server: e.node, app: e.application, at: at, q: e.remote });
+		case 'org.vorpal.blade.trunk.failed':
+		case 'org.vorpal.blade.trunk.registered':
+		case 'org.vorpal.blade.trunk.unregistered':
+			return L.to('log', { server: e.node, app: 'gateway', at: at, q: e.gateway });
+		default:
+			return null;
 		}
-		return null;
+	}
+
+	/* The start of the board's range, in epoch millis: what a link to a list
+	   (Trace's recorded calls) narrows to. */
+	function rangeStart() { return Date.now() - (+days) * 86400000; }
+
+	/* ── the peek drawer ──
+	   A quick look at an app that can show itself embedded (it declares
+	   "embed" in its opens.json), beside the board; "Open in its own window"
+	   is one click away. New windows stay the default: the drawer opens only
+	   from its own button. */
+	var drawer = null;
+	function peek(link) {
+		if (!drawer) {
+			drawer = el('aside', 'drawer');
+			drawer.setAttribute('aria-label', 'Quick look');
+			var head = el('div', 'drawer__head');
+			drawer.title_ = el('span', 'drawer__title', '');
+			drawer.own = el('a', 'drawer__own', 'Open in its own window ↗');
+			var close = el('button', 'drawer__close', 'Close ✕');
+			close.type = 'button';
+			close.addEventListener('click', function () { drawer.hidden = true; drawer.frame.src = 'about:blank'; });
+			head.appendChild(drawer.title_); head.appendChild(drawer.own); head.appendChild(close);
+			drawer.frame = el('iframe', 'drawer__frame');
+			drawer.frame.title = 'Quick look';
+			drawer.appendChild(head); drawer.appendChild(drawer.frame);
+			document.body.appendChild(drawer);
+			document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && !drawer.hidden) close.click(); });
+		}
+		var hash = link.href.indexOf('#'), base = hash < 0 ? link.href : link.href.slice(0, hash);
+		drawer.frame.src = base + (base.indexOf('?') < 0 ? '?' : '&') + 'embed=1' + (hash < 0 ? '' : link.href.slice(hash));
+		drawer.title_.textContent = link.app;
+		drawer.own.href = link.href; drawer.own.target = link.target;
+		drawer.hidden = false;
+	}
+
+	/* A "peek" button for a link whose app can show itself embedded, or null. */
+	function peekButton(link) {
+		if (!link || !link.embed) return null;
+		var b = el('button', 'peek', 'peek');
+		b.type = 'button';
+		b.title = 'Quick look at ' + link.app + ' beside the board';
+		b.addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); peek(link); });
+		return b;
 	}
 
 	/* When an event happened, in the viewer's zone: the clock time today, the
@@ -405,6 +479,8 @@
 		case 'org.vorpal.blade.call.dropped': return (e.appName || 'call') + ' · ' + (e.legs || []).map(function (l) {
 			return l.role + ' ' + l.state + (l.inviteOpen ? ', waiting' : '');
 		}).join(' · ') + (e.vorpalId ? ' · call ' + e.vorpalId : '');
+		case 'org.vorpal.blade.problem.raised': return (e.application ? e.application + ' · ' : '') + (e.summary || e.key);
+		case 'org.vorpal.blade.problem.cleared': return (e.application ? e.application + ' · ' : '') + e.key;
 		default: return e.type;
 		}
 	}
@@ -422,12 +498,15 @@
 		for (var i = 0; i < items.length; i++) {
 			var e = items[i], w = word(e);
 			var link = solveLink(e);
-			var row = el(link ? 'a' : 'div', 'ops-row' + (link ? ' ops-row--link' : '')), main = opsSummary(e) + (e.node ? ' · ' + e.node : '');
-			if (link) { row.href = link.href; row.target = link.target; }
+			var row = el('div', 'ops-row' + (link ? ' ops-row--link' : '')), main = opsSummary(e) + (e.node ? ' · ' + e.node : '');
+			var go = row;
+			if (link) { go = el('a', 'ops-row__go'); go.href = link.href; go.target = link.target; row.appendChild(go); }
 			var at = e.time ? new Date(e.time).getTime() : null;
-			row.appendChild(el('span', 'ops-row__what' + (OPS_BAD[w] ? ' bad' : ''), w));
-			row.appendChild(el('span', 'ops-row__main', main));
-			row.appendChild(el('span', 'ops-row__when', at == null ? '' : open ? 'for ' + opsFor(at) : opsWhen(at)));
+			go.appendChild(el('span', 'ops-row__what' + (OPS_BAD[w] ? ' bad' : ''), w));
+			go.appendChild(el('span', 'ops-row__main', main));
+			go.appendChild(el('span', 'ops-row__when', at == null ? '' : open ? 'for ' + opsFor(at) : opsWhen(at)));
+			var pb = peekButton(link);
+			if (pb) row.appendChild(pb);
 			row.title = w + ' · ' + main + (at == null ? '' : '\n' + (open ? 'since ' : '')
 				+ new Date(at).toLocaleString([], { timeZone: R.zone(), dateStyle: 'medium', timeStyle: 'medium' }))
 				+ (link ? '\nOpen in ' + link.app : '');
@@ -442,7 +521,8 @@
 		if (!lastOps) return [];
 		return lastOps.endpointsDown.map(function (e) { e.type = 'org.vorpal.blade.endpoint.down'; return e; })
 			.concat(lastOps.trunksFailing.map(function (e) { e.type = 'org.vorpal.blade.trunk.failed'; return e; }))
-			.concat((lastOps.remotesDown || []).map(function (e) { e.type = 'org.vorpal.blade.remote.down'; return e; }));
+			.concat((lastOps.remotesDown || []).map(function (e) { e.type = 'org.vorpal.blade.remote.down'; return e; }))
+			.concat((lastOps.problems || []).map(function (e) { e.type = 'org.vorpal.blade.problem.raised'; return e; }));
 	}
 
 	/* ── analytics ─────────────────────────────────────────────────────── */
@@ -516,6 +596,66 @@
 		return order.map(function (d) { return [d, byDay[d]]; });
 	}
 
+	/* What changed in the range (the `changes` report), one row a day, newest
+	   first: restarts counted per server, configuration files by name. The
+	   day's every change, with its time, is on hover. */
+	function changeDays() {
+		var res = A.changes;
+		var col = function (name) { return res.columns.indexOf(name); };
+		var days = {}, order = [];
+		res.rows.forEach(function (r) {
+			var day = String(r[col('bucket')]).slice(0, 10);
+			var at = r[col('at')], change = r[col('change')], server = r[col('server')], what = r[col('what')];
+			var file = r[col('file')], failed = r[col('failed on')];
+			failed = failed && failed !== '[]' ? String(failed).replace(/[\[\]"]/g, '') : '';
+			var d = days[day];
+			if (!d) { d = days[day] = { day: day, lines: [], servers: {}, apps: {}, configs: [] }; order.push(d); }
+			var line;
+			switch (change) {
+			case 'server restarted':
+				line = server + ' restarted';
+				d.servers[server] = (d.servers[server] || 0) + 1;
+				break;
+			case 'application restarted':
+				line = what + ' restarted on ' + server;
+				(d.apps[server] = d.apps[server] || []).push(what);
+				break;
+			case 'config pushed':
+				line = file + ' pushed' + (failed ? ', FAILED on ' + failed : '');
+				if (d.configs.indexOf(line) < 0) d.configs.push(line);
+				break;
+			default: // config saved: what is "actor · saved|restored|deleted"
+				line = file + ' ' + String(what).split(' · ').reverse().join(' by ');
+				if (d.configs.indexOf(line) < 0) d.configs.push(line);
+			}
+			d.lines.push(R.time(at, { hour: '2-digit', minute: '2-digit' }) + ' ' + line);
+		});
+		order.reverse();
+		return {
+			columns: ['day', 'what changed'],
+			rows: order.map(function (d) {
+				var parts = [];
+				Object.keys(d.servers).forEach(function (srv) {
+					var n = d.servers[srv];
+					parts.push(srv + ' restarted' + (n > 1 ? ' ' + n + ' times' : ''));
+				});
+				Object.keys(d.apps).forEach(function (srv) {
+					var apps = d.apps[srv], names = apps.filter(function (a, i) { return apps.indexOf(a) === i; });
+					var times = function (a) { var n = apps.filter(function (b) { return b === a; }).length; return n > 1 ? a + ' ×' + n : a; };
+					parts.push(names.length <= 4 ? names.map(times).join(', ') + ' restarted on ' + srv
+						: apps.length + ' restarts of ' + names.length + ' applications on ' + srv);
+				});
+				var p = d.day.split('-'), date = new Date(+p[0], +p[1] - 1, +p[2]);
+				return [date.toLocaleDateString([], { weekday: 'short' }) + ' ' + p[1] + '/' + p[2], parts.concat(d.configs).join(' · ')];
+			}),
+			titles: order.map(function (d) {
+				var shown = d.lines.slice(0, 20);
+				return (d.lines.length === 1 ? '1 change' : d.lines.length + ' changes') + ':\n' + shown.join('\n')
+					+ (d.lines.length > shown.length ? '\n… ' + (d.lines.length - shown.length) + ' more' : '');
+			})
+		};
+	}
+
 	/* ── the network map ── */
 
 	/* /network, read on the live cycle while its tab shows; the zoomed place
@@ -585,7 +725,7 @@
 			'duration.summary', 'duration.bands',
 			'health.coverage',
 			'risk.summary', 'highrisk.by-band', 'risk.daily', 'calls.concurrent'];
-		if (RIGHTS.platform) r.push('platform.heap', 'platform.cpu');
+		if (RIGHTS.platform) r.push('platform.heap', 'platform.cpu', 'changes');
 		// Individual calls only while their tab is open: a request for them is
 		// audited as someone looking at calls, which a hidden tab is not.
 		if (P.risk && P.risk.current === 'calls') r.push('highrisk.calls');
@@ -633,7 +773,7 @@
 		P.ops.setViews([
 			{ key: 'issues', label: 'Issues', sub: 'until cleared', draw: function (body) {
 				opsRows(body, issues(), function (e) { return OPS_WORDS[e.type]; },
-					'No open issues. An endpoint, trunk or cut-off service shows here from the event that reports it until the one that clears it.', true);
+					'No open issues. An endpoint, trunk, cut-off service or a problem an application raised shows here from the event that reports it until the one that clears it.', true);
 			} },
 			{ key: 'queues', label: 'Queues', sub: 'last minute · per node', draw: function (body) {
 				var q = lastOps ? lastOps.queues.map(function (e) { e.type = 'org.vorpal.blade.queue.depth'; return e; }) : [];
@@ -641,6 +781,15 @@
 			} },
 			{ key: 'recent', label: 'Recent', sub: 'newest first', draw: function (body) {
 				opsRows(body, lastOps ? lastOps.recent : [], function (e) { return OPS_WORDS[e.type] || 'event'; }, 'No operations events yet.');
+			} },
+			{ key: 'changes', label: 'Changes', sub: 'by day', draw: function (body) {
+				if (!RIGHTS.platform) return C.message(body, 'empty', 'Changes are not in your grant.');
+				guard(A.changes, body, function () {
+					var t = changeDays();
+					if (!t.rows.length) return C.message(body, 'empty', 'Nothing restarted and no configuration changed in this range.');
+					fitTable(body, t, { wrap: true, more: 'more days' });
+					body.querySelectorAll('tbody tr').forEach(function (tr, i) { tr.title = t.titles[i]; });
+				});
 			} }
 		]);
 
@@ -657,13 +806,14 @@
 						/* Failed and dropped calls the flight recorder wrote out, in Trace. */
 						open: function (r) {
 							return (r[0] === 'Failed' || r[0] === 'Dropped') && r[1]
-								? { href: TRACE + '?recorded=1', target: 'blade-trace' } : null;
+								? L.to('recorded', { since: rangeStart() }) : null;
 						},
 						value: function (r) { return C.fmt(r[1]) + ' · ' + Math.round(100 * r[1] / total) + '%'; },
 						color: function (r) { return r[2].color; },
 						title: function (r) {
 							return r[0] + ': ' + C.fmt(r[1]) + '\n' + r[2].explain
-								+ ((r[0] === 'Failed' || r[0] === 'Dropped') && r[1] ? '\nClick: the recorded calls, in Trace' : '');
+								+ ((r[0] === 'Failed' || r[0] === 'Dropped') && r[1] && L.has('recorded')
+									? '\nClick: the calls recorded in this range, in Trace' : '');
 						} });
 				});
 			} },
@@ -859,7 +1009,7 @@
 			kpi('duration', clock(med), med == null ? '' : 'average ' + clock(cell(ds, 'average')) + ' · longest ' + clock(cell(ds, 'longest')));
 			var flagged = cell(rs, 'calls flagged');
 			kpi('flagged', flagged, C.fmt(cell(rs, 'calls assessed')) + ' assessed', flagged > 0);
-			['traffic', 'outcomes', 'apps', 'risk'].forEach(function (k) { P[k].draw(); });
+			['traffic', 'outcomes', 'apps', 'risk', 'ops'].forEach(function (k) { P[k].draw(); });
 			setStatus('', 'live · ' + R.time(Date.now(), { hour: '2-digit', minute: '2-digit' }));
 		}).catch(function (e) { if (e.message !== 'auth') setStatus('err', 'analytics failed'); });
 	}
@@ -907,6 +1057,10 @@
 	drawAll();
 	tick();
 	setStatus('', 'loading…');
+	// The window the apps' "Dashboard" link comes back to.
+	if (!window.name) window.name = 'blade-dashboard';
+	// Links appear once the apps' declarations are in.
+	L.load().then(drawAll, function () {});
 	var live = function () {
 		loadHealth().catch(function () {}); loadOps().catch(function () {}); loadNow().catch(function () {});
 		if (P.traffic.current === 'network') loadNetwork().catch(function () {});

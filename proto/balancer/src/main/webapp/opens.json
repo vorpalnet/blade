@@ -1,0 +1,6 @@
+{
+  "app": "Balancer",
+  "opens": {
+    "endpoint": "health.html#grid"
+  }
+}

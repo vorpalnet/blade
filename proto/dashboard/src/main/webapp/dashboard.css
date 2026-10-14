@@ -146,10 +146,37 @@ h1 { font-size: clamp(26px, 3.4vw, 40px); line-height: 1.08; letter-spacing: -.0
 .ops-row { display: flex; gap: 10px; align-items: baseline; padding: 6px 2px; border-bottom: 1px solid var(--line); }
 .ops-row:last-child { border-bottom: 0; }
 /* A row that opens the app that can solve it: underlined, an arrow after it. */
-a.ops-row--link { color: inherit; text-decoration: none; }
-a.ops-row--link .ops-row__main { text-decoration: underline; text-decoration-color: var(--line-2); }
-a.ops-row--link .ops-row__main::after { content: " ↗"; color: var(--accent); }
-a.ops-row--link:hover .ops-row__main { text-decoration-color: var(--accent); }
+/* A row that opens the app that fixes it: the link's box gives way so its
+   spans stay the row's flex items; the main text is underlined and ends in
+   an arrow, so a link is not colour alone. */
+.ops-row__go { display: contents; color: inherit; text-decoration: none; }
+.ops-row--link .ops-row__main { text-decoration: underline; text-decoration-color: var(--line-2); }
+.ops-row--link .ops-row__main::after { content: " ↗"; color: var(--accent); }
+.ops-row--link:hover .ops-row__main { text-decoration-color: var(--accent); }
+
+/* "peek": a quick look in the drawer, for an app that can show itself embedded. */
+.peek {
+	flex: none; align-self: center; font: 600 10.5px var(--font); letter-spacing: .04em;
+	color: var(--ink-2); background: transparent; border: 1px solid var(--line-2); border-radius: 6px;
+	padding: 1px 6px; cursor: pointer;
+}
+.peek:hover { color: var(--ink); border-color: var(--accent); }
+.drawer {
+	position: fixed; top: 0; right: 0; bottom: 0; width: min(760px, 92vw); z-index: 50;
+	display: flex; flex-direction: column; background: var(--bg-2);
+	border-left: 2px solid var(--accent); box-shadow: -24px 0 60px -30px rgba(0,0,0,.8);
+}
+.drawer[hidden] { display: none; }
+.drawer__head { display: flex; gap: 14px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.drawer__title { font-weight: 800; flex: 1 1 auto; }
+.drawer__own { color: var(--ink-2); font-size: 13px; }
+.drawer__close { background: transparent; color: var(--ink-2); border: 1px solid var(--line-2); border-radius: 6px; padding: 3px 8px; cursor: pointer; font: inherit; font-size: 12px; }
+.drawer__close:hover { color: var(--ink); }
+.drawer__frame { flex: 1 1 auto; width: 100%; border: 0; background: #fff; }
+
+/* What changed on a time chart: a thin line down the plot and a downward
+   triangle above it, with the count when more than one; the changes are in
+   its tooltip. */
 .bar--link, .cat--link { cursor: pointer; }
 .cat--link { text-decoration: underline; }
 .ops-row__what { font-weight: 700; min-width: 9ch; text-transform: uppercase; font-size: 11px; letter-spacing: .06em; color: var(--ink-2); }
@@ -198,6 +225,8 @@ table.report th {
 	padding: 8px 10px; border-bottom: 1px solid var(--line-2); white-space: nowrap;
 }
 table.report td { padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.report--wrap td { white-space: normal; overflow-wrap: anywhere; vertical-align: top; }
+table.report--wrap td:first-child { white-space: nowrap; }
 table.report td.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
 table.report th.num { text-align: right; }
 /* Stacked bars: each part in its own colour; a thin line where two meet. */
@@ -340,6 +369,8 @@ a.panel__title:hover { text-decoration: none; color: var(--accent); }
 .srv__state { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 800; letter-spacing: .06em; }
 .srv__state i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
 .srv__name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+a.srv__name--link, a.srv__n--link { color: inherit; text-decoration: underline; text-decoration-color: var(--line-2); }
+a.srv__name--link:hover, a.srv__n--link:hover { text-decoration-color: var(--accent); }
 .srv__heap { display: flex; align-items: center; gap: 6px; }
 .srv__heap b { font-family: var(--mono); font-size: 11px; font-weight: 600; white-space: nowrap; }
 .srv__heap.hot b { color: var(--warn); font-weight: 800; }

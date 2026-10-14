@@ -1,0 +1,7 @@
+{
+  "app": "Configurator",
+  "embed": true,
+  "opens": {
+    "config": "configurator.html?schema={application}"
+  }
+}

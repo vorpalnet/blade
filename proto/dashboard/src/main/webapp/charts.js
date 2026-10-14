@@ -317,7 +317,7 @@
 		if (!result || !result.rows || !result.rows.length) return message(el, 'empty', opts.empty || 'Nothing in this window.');
 		el.textContent = '';
 		var wrap = document.createElement('div'); wrap.className = 'table-wrap';
-		var t = document.createElement('table'); t.className = 'report';
+		var t = document.createElement('table'); t.className = 'report' + (opts.wrap ? ' report--wrap' : '');
 		var thead = t.createTHead().insertRow();
 		var shown = result.rows.slice(0, opts.limit || 500);
 		result.columns.forEach(function (c, i) {

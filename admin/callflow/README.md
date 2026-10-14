@@ -35,8 +35,12 @@ BLADE application, let the call down. **Recorded Calls** shows them, read from t
 database, on the same timeline and sequence diagram. A recorded step has no SIP text and no
 source line: the time, direction, method or status, and the far end's address.
 
-`traces.html?call=<Vorpal-ID>` opens one recorded call. The dashboard links its dropped calls and
-its Failed and Dropped outcome bars here.
+`traces.html?call=<Vorpal-ID>` opens one recorded call; `traces.html?recorded=1&since=<epoch ms>`
+the calls recorded since then. The dashboard links its dropped calls and its Failed and Dropped
+outcome bars here. **Trace the next call like this** fills in a rule for the next calls from the
+recorded call's address; `traces.html?arm=1&attribute=&pattern=&label=` fills one in from a link.
+Either way you check the rule and press Arm: nothing is armed for you. What Trace opens is
+declared in `opens.json`, which the dashboard reads.
 
 ## Configuration
 

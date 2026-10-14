@@ -1,0 +1,8 @@
+{
+  "app": "Trace",
+  "opens": {
+    "call": "traces.html?call={call}",
+    "recorded": "traces.html?recorded=1&since={since}",
+    "traceRule": "traces.html?arm=1&attribute={attribute}&pattern={pattern}&label={label}"
+  }
+}

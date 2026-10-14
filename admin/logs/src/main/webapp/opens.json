@@ -1,0 +1,7 @@
+{
+  "app": "Logs",
+  "embed": true,
+  "opens": {
+    "log": "logs.html?server={server}&app={app}&file={file}&at={at}&q={q}"
+  }
+}
