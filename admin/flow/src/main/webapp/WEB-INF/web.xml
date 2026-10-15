@@ -6,7 +6,7 @@
 	<display-name>flow</display-name>
 
 	<welcome-file-list>
-		<welcome-file>index.html</welcome-file>
+		<welcome-file>flow.html</welcome-file>
 	</welcome-file-list>
 
 	<security-constraint>

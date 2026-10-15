@@ -977,11 +977,21 @@
 		icon.style.maskImage = m;
 	}
 
-	function railItem(card) {
+	/* Where an application opens: here, unless every server it runs on is
+	   another one (an engine-tier app such as Audit or Recordings), which a
+	   browser reaches at the engine tier's own address. */
+	function appHref(card, where) {
+		var path = '/' + card.contextRoot + '/';
+		var elsewhere = where.server && card.servers && card.servers.length
+			&& card.servers.indexOf(where.server) < 0;
+		return elsewhere && where.engineBaseUrl ? where.engineBaseUrl + path : path;
+	}
+
+	function railItem(card, where) {
 		var service = card.kind === 'service';
 		var a = el('a', 'rail__item');
 		a.href = service ? '/blade/configurator/configurator.html?schema=' + encodeURIComponent(card.configuratorDomain || card.name)
-			: '/' + card.contextRoot + '/';
+			: appHref(card, where);
 		a.target = service ? 'blade-configurator' : 'blade-' + card.contextRoot.replace(/^.*\//, '');
 		var icon = el('span', 'rail__icon');
 		icon.setAttribute('aria-hidden', 'true');
@@ -1001,7 +1011,8 @@
 		return a;
 	}
 
-	function loadRail() {
+	function loadRail(cfg) {
+		var where = { server: cfg && cfg.about && cfg.about.server, engineBaseUrl: cfg && cfg.engineBaseUrl };
 		var rail = document.getElementById('rail');
 		if (!rail) return;
 		getJson('/blade/portal/api/v1/cards').then(function (res) {
@@ -1023,7 +1034,7 @@
 				});
 				if (!some.length) return;
 				rail.appendChild(el('div', 'rail__head', g[1]));
-				some.forEach(function (c) { rail.appendChild(railItem(c)); });
+				some.forEach(function (c) { rail.appendChild(railItem(c, where)); });
 			});
 		}).catch(function () {
 			rail.textContent = '';
@@ -1950,6 +1961,11 @@
 
 	function drawAll() { Object.keys(P).forEach(function (k) { P[k].draw(); }); }
 
+	/* Charts take their colours from the tokens when they draw, so a theme
+	   switch redraws them. */
+	new MutationObserver(function () { drawAll(); })
+		.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
 	/* ── who is signed in ──────────────────────────────────────────────── */
 
 	/* The account menu: the person's initials and name; opened, what their
@@ -2210,7 +2226,6 @@
 	buildRange();
 	R.zoneSelect(document.getElementById('tz'), zoneChanged);
 	drawAll();
-	loadRail();
 	tick();
 	setStatus('', 'loading…');
 	// The window the apps' "Dashboard" link comes back to.
@@ -2239,6 +2254,7 @@
 			buildAccount(cfg);
 		}
 		buildAbout(cfg && cfg.about);
+		loadRail(cfg);
 		if (!RIGHTS.platform) {
 			live = function () { loadNow().catch(function () {}); };
 			hidePlatformKpis();

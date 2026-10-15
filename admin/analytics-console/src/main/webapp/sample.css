@@ -1,10 +1,8 @@
 /*
  * Analytics sample-data page — uses brand.css tokens; only page-specific rules.
  *
- * Theme: "dark shell, light document". The page runs under `body.vorpal-glass`
- * (dark/purple chrome + backdrop). The form fieldsets and result stats are
- * LIGHT brand sheets floating on the purple; section labels and transient
- * status text that sit directly on the backdrop read light.
+ * The form fieldsets and result stats are brand sheets; section labels and
+ * transient status text sit on the page itself. Both follow the theme.
  */
 
 /* Each fieldset is a light sheet. */
@@ -20,7 +18,7 @@
 /* Float the legend into normal flow (full width) so it reads as a clean
    heading INSIDE the sheet, and the panel border stays an unbroken
    rounded rectangle — instead of the native legend tab straddling the
-   top border (which sat half on the purple backdrop). */
+   top border. */
 .sample-fieldset legend {
   float: left;
   width: 100%;
@@ -68,19 +66,17 @@
   gap: 14px;
   margin-bottom: 1.5rem;
 }
-/* Status sits on the dark backdrop beside the Generate button — read light. */
+/* Status sits on the page beside the Generate button. */
 .vorpal-glass .sample-status {
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--vorpal-slate-600);
   font-size: .9em;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
-/* "Result" is a section label on the dark backdrop; the stat cells below are
-   the light sheets. */
+/* "Result" is a section label on the page; the stat cells below are the
+   sheets. */
 .vorpal-glass .sample-results h2 {
   margin-top: 0;
-  color: rgba(255, 255, 255, 0.92);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  color: var(--vorpal-ink-900);
 }
 
 .sample-counts {
@@ -103,7 +99,7 @@
 .sample-error {
   margin-top: 1rem;
   padding: 12px 14px;
-  background: #fbecea;
+  background: var(--vorpal-surface-alt);
   border: 1px solid #e0b4ae;
   border-left: 4px solid #c0392b;
   border-radius: var(--vorpal-radius-lg);

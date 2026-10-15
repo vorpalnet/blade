@@ -7,7 +7,7 @@
 	<display-name>balancer</display-name>
 
 	<welcome-file-list>
-		<welcome-file>index.html</welcome-file>
+		<welcome-file>health.html</welcome-file>
 	</welcome-file-list>
 
 	<!-- Registers the SettingsManager so the app's name/tagline appear on the

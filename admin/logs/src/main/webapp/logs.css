@@ -235,9 +235,8 @@ body.embedded .log-page { padding-top: 8px; }
 /* ---- The pane -----------------------------------------------------------
    A DELIBERATE dark console, kept from the original design: light text on a
    dark surface is the conventional look for tailing logs and the right call
-   for long monospace dumps. Per the light-document policy's stated exception
-   it stays a SELF-CONTAINED dark panel framed by the white sheet, never bare
-   on the purple backdrop. Pane-local custom properties keep the dark palette
+   for long monospace dumps, in either theme. It stays a SELF-CONTAINED dark
+   panel framed by the sheet. Pane-local custom properties keep the dark palette
    from leaking into the rest of the page. */
 .log-pane {
 	--pane-bg:    #1e1e1e;
@@ -287,7 +286,7 @@ body.embedded .log-page { padding-top: 8px; }
 /* The record a link from another app asked for: an outline and a label row
    above it, so it reads without telling colours apart. */
 .log-rec.is-target {
-	outline: 2px solid #fff;
+	outline: 2px solid var(--vorpal-divider);
 	outline-offset: -1px;
 }
 .log-target-tag {
@@ -360,8 +359,8 @@ body.embedded .log-page { padding-top: 8px; }
 	border-radius: 2px;
 }
 .log-pane mark.is-current {
-	background: #fff;
-	color: #1e1e1e;
+	background: var(--vorpal-surface);
+	color: var(--vorpal-ink-900);
 	box-shadow: 0 0 0 2px #fff;
 }
 
@@ -373,7 +372,7 @@ body.embedded .log-page { padding-top: 8px; }
 .a-dim { opacity: .65; }
 .a-ital { font-style: italic; }
 .a-under { text-decoration: underline; }
-.a-fg-0 { color: #6b7076; } .a-fg-1 { color: #f48771; }
+.a-fg-0 { color: var(--vorpal-slate-600); } .a-fg-1 { color: #f48771; }
 .a-fg-2 { color: #89d185; } .a-fg-3 { color: #dcb67a; }
 .a-fg-4 { color: #75beff; } .a-fg-5 { color: #d69bd6; }
 .a-fg-6 { color: #6fc3c3; } .a-fg-7 { color: #e8e8e8; }

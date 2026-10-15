@@ -264,9 +264,9 @@
 /* The primary action is distinguished by weight and fill, not by hue, so it still
    reads as primary in greyscale. */
 .phone-btn-primary {
-	background: #fff;
+	background: var(--vorpal-surface);
 	color: var(--vorpal-purple-700);
-	border-color: #fff;
+	border-color: var(--vorpal-divider);
 	grid-column: span 2;
 	font-size: 1.02rem;
 	padding: 13px;
@@ -278,9 +278,9 @@
 
 /* A toggled control is outlined and labelled ON, never colour-only. */
 .phone-btn[aria-pressed="true"] {
-	background: #fff;
+	background: var(--vorpal-surface);
 	color: var(--vorpal-purple-700);
-	border-color: #fff;
+	border-color: var(--vorpal-divider);
 }
 
 .phone-btn-icon { font-size: 1.05rem; line-height: 1; }
@@ -289,7 +289,7 @@
 
 .phone-incoming {
 	margin-top: 14px;
-	border: 3px solid #fff;
+	border: 3px solid var(--vorpal-divider);
 	border-radius: var(--vorpal-radius-md);
 	padding: 14px;
 	background: rgba(255, 255, 255, .14);

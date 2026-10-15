@@ -7,7 +7,7 @@
 	<display-name>logs</display-name>
 
 	<welcome-file-list>
-		<welcome-file>index.html</welcome-file>
+		<welcome-file>logs.html</welcome-file>
 	</welcome-file-list>
 
 	<!-- Registers the per-JVM VorpalLogReader MBean. Listener class is a thin

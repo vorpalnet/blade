@@ -743,13 +743,12 @@
 			}),
 			fetchText('callflow.css'),
 			fetchText('/blade/portal/brand/brand.css'),
-			fetchDataUrl('/blade/portal/brand/blurred.jpg').catch(function () { return null; }),
 			fetchDataUrl('/blade/portal/brand/vorpal_splotch.svg').catch(function () { return null; }),
 			fetchSources()
 		]).then(function (parts) {
 			download(buildSnapshotHtml({
 				js: parts[0], appCss: parts[1], brandCss: parts[2],
-				backdrop: parts[3], mark: parts[4], sourceFiles: parts[5]
+				mark: parts[3], sourceFiles: parts[4]
 			}));
 			refresh();
 		}).catch(function (err) {
@@ -775,13 +774,12 @@
 		// terminate the data block early
 		var json = JSON.stringify(data).replace(/<\//g, '<\\/');
 		var brandCss = parts.brandCss;
-		if (parts.backdrop) {
-			brandCss = brandCss.split('/blade/portal/brand/blurred.jpg').join(parts.backdrop);
-		}
+		// The snapshot keeps the theme it was saved in; it carries no switch.
+		var theme = document.documentElement.getAttribute('data-theme') || 'light';
 		var when = now.toLocaleString();
 		return [
 			'<!DOCTYPE html>',
-			'<html lang="en">',
+			'<html lang="en" data-theme="' + theme + '">',
 			'<head>',
 			'<meta charset="UTF-8">',
 			'<meta name="viewport" content="width=device-width, initial-scale=1.0">',
@@ -794,13 +792,11 @@
 			'<header class="vorpal-topbar">',
 			'<span class="vorpal-brand">'
 				+ (parts.mark ? '<img class="vorpal-brand-mark" src="' + parts.mark + '" alt="Vorpal">' : '')
-				+ '<span class="vorpal-brand-text">'
-				+ '<span class="vorpal-brand-product">BLADE Trace Snapshot</span>'
-				+ '<span class="vorpal-brand-tagline">exported ' + escapeHtml(when)
+				+ '</span>',
+			'<span class="vorpal-appmark">Trace Snapshot</span>',
+			'<div class="vorpal-topbar-right"><span>exported ' + escapeHtml(when)
 				+ (data.host ? ' from ' + escapeHtml(data.host) : '') + '</span>'
-				+ '</span></span>',
-			'<span class="vorpal-appmark">Trace</span>',
-			'<div class="vorpal-topbar-right"><span id="status" class="vorpal-pill">Loading…</span></div>',
+				+ '<span id="status" class="vorpal-pill">Loading…</span></div>',
 			'</header>',
 			'<main class="vorpal-main">',
 			'<div class="tr-page">',

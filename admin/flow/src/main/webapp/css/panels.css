@@ -302,7 +302,7 @@
 	font-size: 10.5px;
 	padding: 1px 4px;
 	border: 1px solid var(--vorpal-slate-200);
-	background: #fff;
+	background: var(--vorpal-surface);
 	white-space: nowrap;
 }
 .expr-help .hint {

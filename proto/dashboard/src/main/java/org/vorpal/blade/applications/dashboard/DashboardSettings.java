@@ -28,6 +28,7 @@ public class DashboardSettings extends Configuration implements Serializable {
 	private int certificateWarningDays = 30;
 	private int capacityCallsPerSecond;
 	private int capacitySessions;
+	private String engineBaseUrl;
 	private NotifySettings notify = new NotifySettings();
 	private int healthyPercent = 90;
 	private int unhealthyPercent = 60;
@@ -116,6 +117,19 @@ public class DashboardSettings extends Configuration implements Serializable {
 
 	public void setCapacitySessions(int capacitySessions) {
 		this.capacitySessions = Math.max(0, capacitySessions);
+	}
+
+	@JsonPropertyDescription("The engine tier's address as a browser reaches it, e.g. \"https://apps.example_co.net\": a proxy or load balancer in front of the engines, or an engine's own HTTPS port. The rail opens an application that runs on the engines, not on this server, at <engineBaseUrl>/<context root>. Unset, such an application opens on this server's address, where nothing serves it. The API Explorer has the same setting.")
+	public String getEngineBaseUrl() {
+		return engineBaseUrl;
+	}
+
+	public void setEngineBaseUrl(String engineBaseUrl) {
+		String url = engineBaseUrl == null ? null : engineBaseUrl.trim();
+		while (url != null && url.endsWith("/")) {
+			url = url.substring(0, url.length() - 1);
+		}
+		this.engineBaseUrl = url == null || url.isEmpty() ? null : url;
 	}
 
 	@JsonPropertyDescription("Days before a TLS certificate expires at which it is raised as a problem under Operations › Issues. The dashboard reads the certificate every HTTPS and SIP-TLS listener presents, once an hour.")

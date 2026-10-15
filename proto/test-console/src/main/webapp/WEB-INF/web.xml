@@ -7,7 +7,7 @@
 	<display-name>test-console</display-name>
 
 	<welcome-file-list>
-		<welcome-file>index.html</welcome-file>
+		<welcome-file>console.html</welcome-file>
 	</welcome-file-list>
 
 	<!-- Registers the SettingsManager so the app's name/tagline appear on the

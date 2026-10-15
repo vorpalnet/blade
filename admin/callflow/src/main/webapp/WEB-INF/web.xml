@@ -7,7 +7,7 @@
 	<display-name>callflow</display-name>
 
 	<welcome-file-list>
-		<welcome-file>index.html</welcome-file>
+		<welcome-file>traces.html</welcome-file>
 	</welcome-file-list>
 
 	<!-- Registers the SettingsManager so the app's name/tagline appear on the

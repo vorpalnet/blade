@@ -24,9 +24,9 @@
 }
 
 .ev-panel {
-	border: 1px solid var(--vorpal-slate-300, #cbd2da);
+	border: 1px solid var(--vorpal-slate-300, var(--vorpal-slate-300));
 	border-radius: 8px;
-	background: #fff;
+	background: var(--vorpal-surface);
 	overflow: hidden;
 }
 
@@ -35,8 +35,8 @@
    slightly-bolder line of body text does not. */
 .ev-panel > header {
 	padding: .6rem .85rem;
-	border-bottom: 1px solid var(--vorpal-slate-300, #cbd2da);
-	background: var(--vorpal-slate-100, #f4f6f8);
+	border-bottom: 1px solid var(--vorpal-slate-300, var(--vorpal-slate-300));
+	background: var(--vorpal-slate-100, var(--vorpal-surface-alt));
 	font-weight: 700;
 	font-size: 14px;
 	text-transform: uppercase;
@@ -51,7 +51,7 @@
 .ev-subhead {
 	margin: 1.25rem 0 .5rem;
 	padding-bottom: .3rem;
-	border-bottom: 1px solid var(--vorpal-slate-200, #e3e8ed);
+	border-bottom: 1px solid var(--vorpal-slate-200, var(--vorpal-divider));
 	font-size: 13px;
 	font-weight: 700;
 	text-transform: uppercase;
@@ -76,23 +76,23 @@
 	font-size: 12px;
 	line-height: 1.5;
 	white-space: pre;
-	background: var(--vorpal-slate-100, #f4f6f8);
+	background: var(--vorpal-slate-100, var(--vorpal-surface-alt));
 }
 
 .ev-tabs { display: flex; gap: .25rem; flex-wrap: wrap; }
 
 .ev-tab {
 	padding: .3rem .7rem;
-	border: 1px solid var(--vorpal-slate-300, #cbd2da);
+	border: 1px solid var(--vorpal-slate-300, var(--vorpal-slate-300));
 	border-radius: 6px 6px 0 0;
-	background: var(--vorpal-slate-100, #f4f6f8);
+	background: var(--vorpal-slate-100, var(--vorpal-surface-alt));
 	cursor: pointer;
 	font-size: 13px;
 }
 
 .ev-tab[aria-selected="true"] {
-	background: #fff;
-	border-bottom-color: #fff;
+	background: var(--vorpal-surface);
+	border-bottom-color: var(--vorpal-divider);
 	font-weight: 600;
 }
 
@@ -110,7 +110,7 @@ table.ev-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.ev-table th, table.ev-table td {
 	text-align: left;
 	padding: .45rem .6rem;
-	border-bottom: 1px solid var(--vorpal-slate-200, #e3e8ed);
+	border-bottom: 1px solid var(--vorpal-slate-200, var(--vorpal-divider));
 	vertical-align: top;
 }
 table.ev-table th { font-weight: 600; white-space: nowrap; }
@@ -123,7 +123,7 @@ table.ev-table td.ev-num { text-align: right; font-variant-numeric: tabular-nums
 	border-left: 4px solid var(--vorpal-slate-400, #9aa5b1);
 	padding: .5rem .75rem;
 	margin-bottom: .5rem;
-	background: var(--vorpal-slate-100, #f4f6f8);
+	background: var(--vorpal-slate-100, var(--vorpal-surface-alt));
 }
 .ev-finding.is-problem { border-left-width: 8px; }
 .ev-finding .ev-kind { font-weight: 600; }
@@ -144,7 +144,7 @@ table.ev-table td.ev-num { text-align: right; font-variant-numeric: tabular-nums
 	padding: 0;
 	border: 1px solid var(--vorpal-slate-400, #9aa5b1);
 	border-radius: 50%;
-	background: #fff;
+	background: var(--vorpal-surface);
 	color: var(--vorpal-slate-600, #5b6672);
 	font-size: 11px;
 	font-weight: 700;
@@ -188,7 +188,7 @@ table.ev-table td.ev-num { text-align: right; font-variant-numeric: tabular-nums
 	max-width: 44rem;
 	width: calc(100vw - 3rem);
 	padding: 0;
-	border: 1px solid var(--vorpal-slate-300, #cbd2da);
+	border: 1px solid var(--vorpal-slate-300, var(--vorpal-slate-300));
 	border-radius: 10px;
 }
 
@@ -199,8 +199,8 @@ table.ev-table td.ev-num { text-align: right; font-variant-numeric: tabular-nums
 	justify-content: space-between;
 	align-items: center;
 	padding: .75rem 1rem;
-	border-bottom: 1px solid var(--vorpal-slate-200, #e3e8ed);
-	background: var(--vorpal-slate-100, #f4f6f8);
+	border-bottom: 1px solid var(--vorpal-slate-200, var(--vorpal-divider));
+	background: var(--vorpal-slate-100, var(--vorpal-surface-alt));
 	font-weight: 700;
 }
 

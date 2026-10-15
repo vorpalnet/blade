@@ -133,6 +133,29 @@ an icon shows a plain window and a service a plug. Trace, Phone and the dashboar
 outline icons. The portal application stays deployed: it serves the login page, the brand
 assets, the editor kit, the card list, the deployment inventory and the service pages.
 
+
+### Every admin app takes the dashboard's look, light or dark
+
+Every admin app now uses the dashboard's top bar: the splotch and the app's name in one
+brand pill, then the app's pages as a segmented row. A switch at the right of the top bar
+picks light or dark, and the choice holds in every admin app on that browser. Until someone
+picks, the theme follows the computer's own setting. The purple photograph behind the apps
+is gone; it stays only behind the login page, whose glossy black panel is unchanged. Printed
+reports always come out light. The Configurator's own theme picker (Light, Dark, Midnight
+Blue, Warm Sand) gave way to the shared switch, and its editors follow it. The splotch
+returns to the dashboard rather than the retired portal page.
+
+The admin apps' overview pages (a hero and a deck of cards that only pointed onward) are
+gone. Each app's address now opens its working page (the Configurator opens its editor, Logs
+its viewer, Trace its traces), and the pages the cards led to are tabs in that page's top
+row: Documentation, Feature Reference, API Contract, Troubleshooting and the like.
+
+The rail opens an application that runs on the engine tier (Audit, Catalog, Recordings) at the
+engine tier's own address, from the dashboard's new `engineBaseUrl` setting (the API Explorer
+has the same one). Before, those links went to the admin address, where nothing serves them,
+and landed back on the dashboard. The server's default application now redirects only the bare
+address (`/`, `/blade`) to the dashboard; any other unowned path answers 404 with a page that
+says so.
 ### Dashboard: notices, finding a call, headroom, the database, and the diagnosis path
 
 - **Notices.** A problem raised or cleared (an application's, a certificate near expiry, events

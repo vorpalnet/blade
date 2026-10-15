@@ -7,7 +7,7 @@
 	<display-name>files</display-name>
 
 	<welcome-file-list>
-		<welcome-file>index.html</welcome-file>
+		<welcome-file>files.html</welcome-file>
 	</welcome-file-list>
 
 	<!-- Registers the SettingsManager so the editable-file registry materializes

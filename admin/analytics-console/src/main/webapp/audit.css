@@ -1,31 +1,27 @@
 /*
- * Audit page styles. Brand layer (topbar, page background, dark-glass chrome,
- * hero, typography) lives in /blade/portal/brand/brand.css; this file is just
- * the audit-specific bits.
- *
- * Theme: "dark shell, light document". The page runs under `body.vorpal-glass`
- * (dark/purple chrome + backdrop). Dense work content therefore sits on LIGHT
- * brand sheets — solid var(--vorpal-surface) panels, var(--vorpal-divider)
- * borders, explicit dark var(--vorpal-ink-*) text — floating on the purple.
+ * Audit page styles. Brand layer (topbar, page background, hero, typography,
+ * the light and dark themes) lives in /blade/portal/brand/brand.css; this file
+ * is just the audit-specific bits. Work content sits on brand sheets: solid
+ * var(--vorpal-surface) panels, var(--vorpal-divider) borders and
+ * var(--vorpal-ink-*) text, so it follows either theme.
  *
  * State distinction by shape + label, not color alone (a meaningful number of
  * operators are colorblind). The OK / MISSING / ERROR badges differ in glyph
  * and word, not just hue; the colored left-accent on a row is a secondary cue.
  */
 
-/* Refresh lives inside the dark-glass hero (.vorpal-hero-meta), so it stays
-   light-on-translucent to read against that dark surface. */
+/* Refresh lives inside the hero (.vorpal-hero-meta). */
 .audit-refresh {
 	font: inherit;
 	padding: 0.45rem 1.1rem;
-	border: 1px solid rgba(255, 255, 255, 0.3);
-	border-radius: 0;
-	background: rgba(255, 255, 255, 0.06);
-	color: inherit;
+	border: 1px solid var(--vorpal-divider);
+	border-radius: 9px;
+	background: var(--vorpal-surface);
+	color: var(--vorpal-ink-900);
 	cursor: pointer;
 }
 .audit-refresh:hover {
-	background: rgba(255, 255, 255, 0.12);
+	border-color: var(--vorpal-slate-300);
 }
 .audit-refresh:active {
 	transform: translateY(1px);
@@ -66,16 +62,14 @@
 .audit-results {
 	margin-top: 2rem;
 }
-/* "Findings" is a section label sitting directly on the dark backdrop (the
-   findings themselves are the sheets below it), so it reads light — like the
-   brand page-title under glass. */
+/* "Findings" is a section label on the page itself; the findings are the
+   sheets below it. */
 .vorpal-glass .audit-results h2 {
 	margin-top: 0;
 	font-size: 1rem;
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
-	color: rgba(255, 255, 255, 0.92);
-	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+	color: var(--vorpal-slate-600);
 }
 
 /* Each finding is a light sheet; the colored left edge is a secondary cue on
@@ -138,7 +132,7 @@
 .audit-error {
 	margin-top: 1rem;
 	padding: 1rem 1.25rem;
-	background: #fbecea;
+	background: var(--vorpal-surface-alt);
 	border: 1px solid #e0b4ae;
 	border-left: 4px solid #c0392b;
 	border-radius: var(--vorpal-radius-lg);
@@ -177,8 +171,8 @@
 	white-space: pre-wrap;
 }
 
-/* Overall pill lives in the dark-glass topbar-right, so its tints read on a
-   dark surface — keep the translucent state tints. */
+/* Overall pill, in the top bar: translucent state tints read on either
+   theme. */
 .vorpal-pill.pill-ok {
 	background: rgba(120, 220, 150, 0.18);
 	border-color: rgba(120, 220, 150, 0.4);

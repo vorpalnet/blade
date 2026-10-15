@@ -10,17 +10,17 @@
  *                    topbar, hero, card grid, iframe wrap, docs layout,
  *                    callouts, tables, login.
  *
- * THEME: light + purple (matches vorpal.net). Two registers:
- *   - App surfaces (topbar, hero, cards, docs, tables, buttons): LIGHT.
- *     White / off-white backgrounds, dark ink text, purple as a sparing
- *     accent for buttons, links, focus rings, active states.
- *   - Login screen: deliberate DARK-GLASS exception (`.vorpal-login*`).
- *     A "front door" moment — small ceremonial surface, blurred backdrop,
- *     translucent glass card. Doesn't apply to dense work surfaces (the
- *     reason we dropped dark-on-everything in the first place).
+ * THEME: the dashboard's look, light or dark. theme.js (loaded beside this
+ * file) sets data-theme="light" or "dark" on <html>, from the computer's
+ * setting until the person picks one with the switch it adds to the top bar.
+ * Each theme is a token set below; the primitives only read tokens, so an
+ * app that styles itself with var(--vorpal-*) follows both. The top bar is
+ * the dashboard's: the splotch and the app's name in one brand-600 pill,
+ * then the app's pages as a segmented row.
  *
- * Dark mode is a future task — would swap tokens under
- * @media (prefers-color-scheme: dark).
+ * Without data-theme (a page that does not load theme.js) the original
+ * light tokens apply unchanged. The login page is one such page: it keeps
+ * its own backdrop and its glossy black panel, and nothing here touches it.
  */
 
 /* ============================================================
@@ -72,6 +72,93 @@
 	/* Standard dimensions */
 	--vorpal-topbar-height: 64px;
 	--vorpal-rail-width:    92px;
+
+	/* The brand mark's pill, the active tab and the primary button. */
+	--vorpal-mark:          #602671;
+	--vorpal-mark-hover:    #4a1c58;
+}
+
+/* ---- Light: the dashboard's geometry and type on pale surfaces ---- */
+html[data-theme="light"] {
+	color-scheme: light;
+	--vorpal-purple:        #602671;
+	--vorpal-purple-700:    #4a1c58;
+	--vorpal-purple-100:    #efe4f4;
+	--vorpal-purple-soft:   #f7f1fa;
+
+	--vorpal-surface:       #ffffff;
+	--vorpal-surface-alt:   #faf9fd;
+	--vorpal-slate-100:     #f3f2f8;
+	--vorpal-slate-200:     #e5e3ef;
+	--vorpal-slate-300:     #d3d0e0;
+	--vorpal-slate-400:     #8d8aa3;
+	--vorpal-slate-600:     #5d5a74;
+	--vorpal-divider:       #e5e3ef;
+
+	--vorpal-ink-900:       #1b1a33;
+	--vorpal-ink-700:       #34324f;
+
+	--vorpal-success:       #1f8a4c;
+	--vorpal-warn:          #a8621f;
+	--vorpal-warn-soft:     #fbf2e8;
+	--vorpal-error:         #a8431f;
+	--vorpal-error-soft:    #fcf0ea;
+
+	--vorpal-radius-sm:     6px;
+	--vorpal-radius-md:     10px;
+	--vorpal-radius-lg:     16px;
+	--vorpal-shadow-sm:     0 1px 2px rgba(27, 26, 51, 0.05);
+	--vorpal-shadow-md:     0 6px 18px -6px rgba(27, 26, 51, 0.12);
+	--vorpal-shadow-lg:     0 24px 60px -30px rgba(27, 26, 51, 0.25);
+
+	--vorpal-mark:          #602671;
+	--vorpal-mark-hover:    #4a1c58;
+	--vorpal-backdrop:
+		radial-gradient(1100px 620px at 82% -8%, rgba(118, 77, 240, 0.06), transparent 60%),
+		radial-gradient(900px 520px at 8% 4%, rgba(96, 38, 113, 0.07), transparent 55%);
+}
+
+/* ---- Dark: the dashboard's own palette -------------------------- *
+ * On screen only: a printed page (the reports) always comes out light. */
+@media screen {
+	html[data-theme="dark"] {
+		color-scheme: dark;
+		--vorpal-purple:        #b97cd0;  /* links and accents read on indigo */
+		--vorpal-purple-700:    #d3aee0;
+		--vorpal-purple-100:    rgba(185, 124, 208, 0.20);
+		--vorpal-purple-soft:   rgba(185, 124, 208, 0.10);
+
+		--vorpal-surface:       #191d40;
+		--vorpal-surface-alt:   #151938;
+		--vorpal-slate-100:     #101435;
+		--vorpal-slate-200:     #272b4e;
+		--vorpal-slate-300:     #353a60;
+		--vorpal-slate-400:     #80839e;
+		--vorpal-slate-600:     #a5a7bd;
+		--vorpal-divider:       #272b4e;
+
+		--vorpal-ink-900:       #eceef4;
+		--vorpal-ink-700:       #c8cada;
+
+		--vorpal-success:       #86c9a6;
+		--vorpal-warn:          #dcb877;
+		--vorpal-warn-soft:     rgba(220, 184, 119, 0.12);
+		--vorpal-error:         #e79ab0;
+		--vorpal-error-soft:    rgba(231, 154, 176, 0.12);
+
+		--vorpal-radius-sm:     6px;
+		--vorpal-radius-md:     10px;
+		--vorpal-radius-lg:     16px;
+		--vorpal-shadow-sm:     0 1px 0 rgba(255, 255, 255, 0.04) inset;
+		--vorpal-shadow-md:     0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 16px 40px -24px rgba(0, 0, 0, 0.7);
+		--vorpal-shadow-lg:     0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 24px 60px -34px rgba(0, 0, 0, 0.7);
+
+		--vorpal-mark:          #602671;
+		--vorpal-mark-hover:    #7b3690;
+		--vorpal-backdrop:
+			radial-gradient(1100px 620px at 82% -8%, rgba(118, 77, 240, 0.16), transparent 60%),
+			radial-gradient(900px 520px at 8% 4%, rgba(96, 38, 113, 0.20), transparent 55%);
+	}
 }
 
 /* ============================================================
@@ -106,6 +193,17 @@ a:hover, a:focus {
 
 code, pre, kbd, samp { font-family: var(--vorpal-font-mono); }
 
+/* A themed page: the dashboard's soft glow over a flat ground, no image.
+   It outweighs a framework's plain body colour (Tuning's Bootstrap). The
+   main area's rule is lowered with :where() so an app that makes its main
+   area a sheet (Files, Flow) still wins. */
+html[data-theme] body {
+	background: var(--vorpal-backdrop), var(--vorpal-slate-100);
+	background-attachment: fixed;
+	min-height: 100vh;
+}
+:where(html[data-theme]) .vorpal-main { background: transparent; }
+
 /* ============================================================
  * 3. PRIMITIVES — admin-console layout vocabulary
  * ============================================================ */
@@ -118,41 +216,69 @@ code, pre, kbd, samp { font-family: var(--vorpal-font-mono); }
 	min-height: 100vh;
 }
 
-/* ---- Topbar — LIGHT --------------------------------------- */
+/* ---- Topbar: the dashboard's ------------------------------- */
 
 .vorpal-topbar {
-	background: var(--vorpal-surface);
-	color: var(--vorpal-ink-900);
-	border-bottom: 1px solid var(--vorpal-slate-200);
-	box-shadow: var(--vorpal-shadow-sm);
-	display: flex;
-	align-items: stretch;
-	height: var(--vorpal-topbar-height);
+	position: sticky;
+	top: 0;
 	z-index: 10;
-}
-
-.vorpal-brand {
 	display: flex;
 	align-items: center;
-	gap: 14px;
-	padding: 0 24px;
-	border-right: 1px solid var(--vorpal-slate-200);
-	text-decoration: none;
-	color: inherit;
+	height: var(--vorpal-topbar-height);
+	padding: 0 clamp(16px, 3vw, 40px);
+	background: color-mix(in srgb, var(--vorpal-slate-100) 82%, transparent);
+	backdrop-filter: blur(10px);
+	-webkit-backdrop-filter: blur(10px);
+	border-bottom: 1px solid var(--vorpal-divider);
+	color: var(--vorpal-ink-900);
 }
-.vorpal-brand:hover { border-bottom-color: transparent; }
+
+/* The mark: the white splotch and the app's name in one brand-600 pill.
+   Two links, one shape: the splotch goes back to the dashboard, the name to
+   the app's own first page. */
+.vorpal-brand,
+.vorpal-appmark {
+	display: flex;
+	align-items: center;
+	align-self: center;
+	height: 36px;
+	background: var(--vorpal-mark);
+	color: #fff;
+	text-decoration: none;
+	flex-shrink: 0;
+	-webkit-print-color-adjust: exact;
+	print-color-adjust: exact;
+}
+.vorpal-brand {
+	padding: 0 4px 0 9px;
+	border-radius: 9px 0 0 9px;
+}
+.vorpal-appmark {
+	padding: 0 13px 0 4px;
+	border-radius: 0 9px 9px 0;
+	margin-right: 18px;
+	font-size: 15px;
+	font-weight: 800;
+	letter-spacing: -0.01em;
+	white-space: nowrap;
+}
+.vorpal-brand:hover,
+.vorpal-appmark:hover {
+	color: #fff;
+	background: var(--vorpal-mark-hover);
+	border-bottom-color: transparent;
+}
 
 .vorpal-brand-mark {
-	height: 36px;
+	height: 26px;
 	width: auto;
 	flex-shrink: 0;
+	filter: brightness(0) invert(1);
 }
 
-.vorpal-brand-text {
-	display: flex;
-	flex-direction: column;
-	line-height: 1.1;
-}
+/* The portal's name and tagline beside the splotch: retired with the
+   portal. The pill carries the app's own name instead. */
+.vorpal-topbar .vorpal-brand-text { display: none; }
 
 .vorpal-brand-product {
 	font-size: 15px;
@@ -169,59 +295,49 @@ code, pre, kbd, samp { font-family: var(--vorpal-font-mono); }
 	margin-top: 2px;
 }
 
-/* The current app's name, sitting to the RIGHT of the constant portal identity
-   (which keeps its border-right divider — the "|"). The far-left brand stays
-   "BLADE Admin Portal / Unified Administration" on every page; this says which
-   app you're in, followed by that app's nav. */
-.vorpal-appmark {
-	display: flex;
-	align-items: center;
-	padding: 0 20px;
-	font-size: 15px;
-	font-weight: 600;
-	letter-spacing: 0.02em;
-	color: var(--vorpal-ink-900);
-	white-space: nowrap;
-	flex-shrink: 0;
-	text-decoration: none;
-}
-.vorpal-appmark:hover { color: var(--vorpal-purple); }
-
+/* The app's pages: a segmented row, the current page filled. */
 .vorpal-nav {
-	display: flex;
-	align-items: stretch;
-	flex: 1;
-	padding: 0 8px;
+	display: inline-flex;
+	align-items: center;
+	align-self: center;
+	gap: 2px;
+	padding: 3px;
+	min-width: 0;
+	overflow-x: auto;
+	background: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-divider);
+	border-radius: 11px;
 }
-
 .vorpal-nav a {
 	display: inline-flex;
 	align-items: center;
-	padding: 0 18px;
+	padding: 5px 12px;
+	border-radius: 8px;
+	border-bottom: 0;
 	color: var(--vorpal-slate-600);
-	font-size: 13.5px;
-	font-weight: 500;
-	letter-spacing: 0.02em;
-	border-bottom: 2px solid transparent;
-	transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+	font-size: 12.5px;
+	font-weight: 600;
+	white-space: nowrap;
 }
 .vorpal-nav a:hover {
 	color: var(--vorpal-ink-900);
-	border-bottom-color: var(--vorpal-slate-300);
+	border-bottom: 0;
 }
 .vorpal-nav a.vorpal-active {
-	color: var(--vorpal-purple);
-	border-bottom-color: var(--vorpal-purple);
+	background: var(--vorpal-mark);
+	color: #fff;
+	font-weight: 800;
 }
 
 .vorpal-topbar-right {
 	display: flex;
 	align-items: center;
 	gap: 14px;
-	padding: 0 22px;
-	border-left: 1px solid var(--vorpal-slate-200);
+	margin-left: auto;
+	padding-left: 18px;
 	color: var(--vorpal-slate-600);
 	font-size: 12.5px;
+	white-space: nowrap;
 }
 
 .vorpal-pill {
@@ -230,11 +346,12 @@ code, pre, kbd, samp { font-family: var(--vorpal-font-mono); }
 	gap: 6px;
 	padding: 3px 10px;
 	border-radius: 999px;
-	background: var(--vorpal-purple-100);
-	border: 1px solid var(--vorpal-purple-soft);
-	color: var(--vorpal-purple-700);
-	font-size: 11px;
-	letter-spacing: 0.04em;
+	background: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-divider);
+	color: var(--vorpal-slate-600);
+	font-size: 11.5px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
 }
 .vorpal-pill::before {
 	content: "";
@@ -248,17 +365,50 @@ code, pre, kbd, samp { font-family: var(--vorpal-font-mono); }
 	color: var(--vorpal-slate-600);
 	text-decoration: none;
 	font-size: 12.5px;
-	padding: 4px 10px;
-	border-radius: var(--vorpal-radius-md);
-	border: 1px solid var(--vorpal-slate-300);
+	font-weight: 600;
+	padding: 5px 12px;
+	border-radius: 9px;
+	border: 1px solid var(--vorpal-divider);
 	background: var(--vorpal-surface);
 	transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
 }
 .vorpal-topbar-link:hover {
-	color: var(--vorpal-purple);
-	background: var(--vorpal-purple-soft);
-	border-color: var(--vorpal-purple-100);
-	border-bottom-color: var(--vorpal-purple-100);
+	color: var(--vorpal-ink-900);
+	border-color: var(--vorpal-slate-300);
+	border-bottom-color: var(--vorpal-slate-300);
+}
+
+/* The theme switch theme.js adds to the top bar: an icon and the name of
+   the theme it turns on. */
+.theme-switch {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font: inherit;
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--vorpal-slate-600);
+	background: transparent;
+	border: 1px solid var(--vorpal-divider);
+	border-radius: 9px;
+	padding: 4px 10px;
+	cursor: pointer;
+}
+.theme-switch:hover { color: var(--vorpal-ink-900); border-color: var(--vorpal-slate-300); }
+.theme-switch svg {
+	width: 15px;
+	height: 15px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.8;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+@media (max-width: 760px) {
+	.vorpal-topbar { gap: 8px; padding: 0 16px; }
+	.vorpal-appmark { margin-right: 8px; }
+	.theme-switch span { display: none; }
 }
 
 /* ---- Main layout -------------------------------------------- */
@@ -716,7 +866,7 @@ code, pre, kbd, samp { font-family: var(--vorpal-font-mono); }
 /* ---- Buttons — PURPLE primary ------------------------------ */
 
 .vorpal-btn {
-	background: var(--vorpal-purple);
+	background: var(--vorpal-mark);
 	color: #fff;
 	border: 0;
 	border-radius: var(--vorpal-radius-md);
@@ -729,7 +879,7 @@ code, pre, kbd, samp { font-family: var(--vorpal-font-mono); }
 	box-shadow: 0 1px 2px rgba(96, 38, 113, 0.25);
 }
 .vorpal-btn:hover {
-	background: var(--vorpal-purple-700);
+	background: var(--vorpal-mark-hover);
 	box-shadow: 0 2px 6px rgba(96, 38, 113, 0.32);
 }
 .vorpal-btn:active { transform: translateY(1px); }
@@ -914,8 +1064,46 @@ code, pre, kbd, samp { font-family: var(--vorpal-font-mono); }
 	font-size: 13.5px;
 }
 
+/* Form rows: a small label above its field. In the apps they take the
+   theme's surface and ink; inside the dark login card they keep its
+   dark-on-darker look (below). */
 .vorpal-form-row { margin-bottom: 14px; }
 .vorpal-form-row label {
+	display: block;
+	font-size: 11px;
+	color: var(--vorpal-slate-600);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	margin-bottom: 5px;
+	font-weight: 600;
+}
+.vorpal-form-row input[type=text],
+.vorpal-form-row input[type=password],
+.vorpal-form-row input[type=number],
+.vorpal-form-row select,
+.vorpal-form-row textarea {
+	width: 100%;
+	padding: 8px 10px;
+	border: 1px solid var(--vorpal-slate-300);
+	border-radius: var(--vorpal-radius-md);
+	font-size: 14px;
+	font-family: inherit;
+	color: var(--vorpal-ink-900);
+	background: var(--vorpal-surface);
+	transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.vorpal-form-row input::placeholder,
+.vorpal-form-row textarea::placeholder {
+	color: var(--vorpal-slate-400);
+}
+.vorpal-form-row input:focus,
+.vorpal-form-row select:focus,
+.vorpal-form-row textarea:focus {
+	outline: 0;
+	border-color: var(--vorpal-purple);
+	box-shadow: 0 0 0 3px var(--vorpal-purple-soft);
+}
+.vorpal-login .vorpal-form-row label {
 	display: block;
 	font-size: 11px;
 	color: rgba(232, 234, 239, 0.7);
@@ -924,8 +1112,8 @@ code, pre, kbd, samp { font-family: var(--vorpal-font-mono); }
 	margin-bottom: 5px;
 	font-weight: 600;
 }
-.vorpal-form-row input[type=text],
-.vorpal-form-row input[type=password] {
+.vorpal-login .vorpal-form-row input[type=text],
+.vorpal-login .vorpal-form-row input[type=password] {
 	width: 100%;
 	padding: 10px 12px;
 	border: 1px solid rgba(0, 0, 0, 0.5);
@@ -939,10 +1127,10 @@ code, pre, kbd, samp { font-family: var(--vorpal-font-mono); }
 		inset 0 1px 2px rgba(0, 0, 0, 0.35);
 	transition: border-color 120ms ease, box-shadow 120ms ease;
 }
-.vorpal-form-row input::placeholder {
+.vorpal-login .vorpal-form-row input::placeholder {
 	color: rgba(232, 234, 239, 0.35);
 }
-.vorpal-form-row input:focus {
+.vorpal-login .vorpal-form-row input:focus {
 	outline: 0;
 	border-color: var(--vorpal-purple);
 	box-shadow:
@@ -1022,251 +1210,10 @@ code, pre, kbd, samp { font-family: var(--vorpal-font-mono); }
 }
 
 /* ============================================================
- * DARK-GLASS LAYER — opt-in via `vorpal-glass` on <body>
+ * vorpal-glass
  * ============================================================
  *
- * The portal's "black glass" front-door look, generalized so any
- * LANDING page (a collection of panels: topbar + hero + card grid)
- * can adopt it with one class — `<body class="vorpal-glass">` — and
- * nothing else. Inert until that class is present, so every existing
- * app renders exactly as before.
- *
- * Use it ONLY on panel-collection surfaces (portal, app Overviews).
- * Do NOT put it on dense work pages (audit findings, data tables,
- * forms, the Flow canvas): bare running text/data over a blurred
- * backdrop is unreadable. Those stay LIGHT — see the THEME note at
- * the top of this file. Glass is the front door; light is the bench.
- *
- * The richness comes from being genuinely dark (high alpha) with a
- * lit-from-above gradient, a "lamp glow" at top-center, a metallic
- * edge strip, and a diagonal sheen — ported from .form-3/.vorpal-login.
- * Portal-only card details (favicon tiles, taglines, the row layout)
- * stay in portal.css. */
-
-/* ---- Page backdrop — vivid blurred image, no muting overlay ----- */
-body.vorpal-glass {
-	background: #563c55 url('/blade/portal/brand/blurred.jpg') center center / cover no-repeat fixed;
-	/* Always fill the viewport so the purple backdrop covers the page even
-	   when content is short (else a short page lets the document's own
-	   <html> background show below the body). 100vh, not 100% — a %
-	   min-height is ignored when the parent's height is auto. */
-	min-height: 100vh;
-}
-.vorpal-glass .vorpal-main { background: transparent; }
-
-/* ---- Topbar + nav → glass -------------------------------------- */
-.vorpal-glass .vorpal-topbar {
-	background: rgba(18, 18, 24, 0.55);
-	backdrop-filter: blur(16px) saturate(140%);
-	-webkit-backdrop-filter: blur(16px) saturate(140%);
-	border-bottom: 1px solid rgba(255, 255, 255, 0.10);
-	box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04), 0 8px 24px -14px rgba(0, 0, 0, 0.6);
-	/* Base light color so ANY stray topbar text (custom labels, selects,
-	   app pickers) reads on the dark glass without each app re-solving it.
-	   The specific pieces below (brand, nav, links) still set their own. */
-	color: rgba(232, 234, 239, 0.85);
-}
-.vorpal-glass .vorpal-brand { border-right-color: rgba(255, 255, 255, 0.10); }
-/* The Vorpal Boy splotch ships dark purple (for light surfaces); on the
-   dark glass topbar, whiten it so it reads. */
-.vorpal-glass .vorpal-brand-mark { filter: brightness(0) invert(1); }
-.vorpal-glass .vorpal-brand-product { color: #fff; }
-.vorpal-glass .vorpal-brand-tagline { color: rgba(232, 234, 239, 0.6); }
-.vorpal-glass .vorpal-topbar-right {
-	border-left-color: rgba(255, 255, 255, 0.10);
-	color: rgba(232, 234, 239, 0.7);
-}
-.vorpal-glass .vorpal-topbar-link {
-	color: rgba(232, 234, 239, 0.85);
-	background: rgba(255, 255, 255, 0.06);
-	border-color: rgba(255, 255, 255, 0.18);
-}
-.vorpal-glass .vorpal-topbar-link:hover {
-	color: #fff;
-	background: rgba(124, 58, 144, 0.40);
-	border-color: rgba(124, 58, 144, 0.6);
-	border-bottom-color: rgba(124, 58, 144, 0.6);
-}
-.vorpal-glass .vorpal-appmark { color: #fff; }
-.vorpal-glass .vorpal-appmark:hover { color: rgba(255, 255, 255, 0.75); }
-/* Nav links — light on the dark topbar (the portal's nav is empty, but
-   app topbars carry real tabs that would otherwise be invisible). */
-.vorpal-glass .vorpal-nav a { color: rgba(232, 234, 239, 0.72); }
-.vorpal-glass .vorpal-nav a:hover {
-	color: #fff;
-	border-bottom-color: rgba(255, 255, 255, 0.35);
-}
-.vorpal-glass .vorpal-nav a.vorpal-active {
-	color: #fff;
-	border-bottom-color: #a05cc0;
-}
-
-/* ---- Hero → black glass ---------------------------------------- */
-.vorpal-glass .vorpal-hero {
-	background:
-		linear-gradient(125deg, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0.05) 16%, rgba(255, 255, 255, 0.02) 34%, transparent 58%),
-		radial-gradient(80px 26px at 50% -8px, rgba(255, 255, 255, 0.26), transparent 72%),
-		linear-gradient(168deg,
-			rgba(50, 50, 60, 0.82) 0%,
-			rgba(20, 20, 26, 0.90) 38%,
-			rgba(11, 11, 15, 0.94) 100%);
-	backdrop-filter: blur(16px) saturate(130%);
-	-webkit-backdrop-filter: blur(16px) saturate(130%);
-	border: 1px solid rgba(0, 0, 0, 0.5);
-	border-left: 4px solid var(--vorpal-purple);
-	box-shadow:
-		inset 0 1px 0 rgba(255, 255, 255, 0.12),
-		inset 0 0 2px 1px rgba(255, 255, 255, 0.05),
-		0 24px 60px -14px rgba(0, 0, 0, 0.6);
-	color: #e8eaef;
-}
-.vorpal-glass .vorpal-hero h1 { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); }
-.vorpal-glass .vorpal-hero p { color: rgba(240, 242, 247, 0.95); }
-.vorpal-glass .vorpal-hero-meta { color: rgba(232, 234, 239, 0.72); }
-.vorpal-glass .vorpal-hero::after {
-	background: radial-gradient(closest-side, rgba(124, 58, 144, 0.45), transparent);
-}
-.vorpal-glass .vorpal-hero::before {
-	content: "";
-	position: absolute;
-	left: 32%;
-	top: 0;
-	width: 36%;
-	height: 1px;
-	background: linear-gradient(90deg, transparent, rgba(205, 205, 215, 0.8) 50%, transparent);
-	box-shadow: 0 0 4px rgba(255, 255, 255, 0.4);
-	pointer-events: none;
-	z-index: 2;
-}
-
-/* ---- Cards → black glass --------------------------------------- */
-.vorpal-glass .vorpal-card {
-	position: relative;
-	overflow: hidden;
-	background:
-		radial-gradient(50px 22px at 50% -6px, rgba(255, 255, 255, 0.30), transparent 72%),
-		linear-gradient(168deg,
-			rgba(50, 50, 60, 0.82) 0%,
-			rgba(20, 20, 26, 0.90) 38%,
-			rgba(11, 11, 15, 0.94) 100%);
-	backdrop-filter: blur(16px) saturate(130%);
-	-webkit-backdrop-filter: blur(16px) saturate(130%);
-	border: 1px solid rgba(0, 0, 0, 0.5);
-	box-shadow:
-		inset 0 1px 0 rgba(255, 255, 255, 0.14),
-		inset 0 0 2px 1px rgba(255, 255, 255, 0.05),
-		0 18px 44px -16px rgba(0, 0, 0, 0.65);
-	color: #e8eaef;
-}
-.vorpal-glass .vorpal-card:hover {
-	transform: translateY(-2px);
-	border-color: rgba(124, 58, 144, 0.6);
-	box-shadow:
-		inset 0 1px 0 rgba(255, 255, 255, 0.16),
-		inset 0 0 2px 1px rgba(255, 255, 255, 0.08),
-		0 0 22px -2px rgba(124, 58, 144, 0.45),
-		0 26px 60px -16px rgba(0, 0, 0, 0.7);
-}
-.vorpal-glass .vorpal-card::before {
-	content: "";
-	position: absolute;
-	left: 15%;
-	top: 0;
-	width: 70%;
-	height: 1px;
-	background: linear-gradient(90deg,
-		transparent 0%,
-		rgba(120, 120, 130, 0) 8%,
-		rgba(220, 220, 230, 0.95) 50%,
-		rgba(120, 120, 130, 0) 92%,
-		transparent 100%);
-	box-shadow: 0 0 6px rgba(255, 255, 255, 0.6);
-	pointer-events: none;
-	z-index: 2;
-}
-.vorpal-glass .vorpal-card::after {
-	content: "";
-	position: absolute;
-	inset: 0;
-	border-radius: inherit;
-	background: linear-gradient(125deg,
-		rgba(255, 255, 255, 0.26) 0%,
-		rgba(255, 255, 255, 0.12) 16%,
-		rgba(255, 255, 255, 0.04) 34%,
-		rgba(255, 255, 255, 0.0) 60%);
-	pointer-events: none;
-	z-index: 1;
-}
-/* Keep the card content above the strip and sheen. */
-.vorpal-glass .vorpal-card > * { position: relative; z-index: 3; }
-
-/* Layout — icon beside the title; description + link span the full width
-   below. Apps have flat card markup (icon, h3, p, link as siblings),
-   unlike the portal's body-wrapper row layout (portal.css). The middle
-   row grows (1fr) so the link pins to the bottom and aligns across a row. */
-.vorpal-glass .vorpal-card {
-	display: grid;
-	grid-template-columns: auto 1fr;
-	grid-template-rows: auto 1fr auto;
-	column-gap: 16px;
-	row-gap: 10px;
-}
-.vorpal-glass .vorpal-card .vorpal-card-icon { grid-column: 1; grid-row: 1; align-self: center; }
-.vorpal-glass .vorpal-card h3 {
-	grid-column: 2;
-	grid-row: 1;
-	align-self: center;
-	margin: 0;
-	font-size: 22px;
-	color: #fff;
-	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-}
-.vorpal-glass .vorpal-card > p {
-	grid-column: 1 / -1;
-	grid-row: 2;
-	margin: 0;
-	color: rgba(240, 242, 247, 0.96);
-}
-.vorpal-glass .vorpal-card-link {
-	grid-column: 1 / -1;
-	grid-row: 3;
-	color: #d3aee0;
-}
-
-/* Glyph card icons (apps use a <span> glyph; the portal overrides with
-   <img> favicons in portal.css) — frosted chip so they read on glass. */
-.vorpal-glass .vorpal-card-icon {
-	width: 44px;
-	height: 44px;
-	border-radius: 10px;
-	font-size: 24px;
-	background: linear-gradient(160deg, rgba(255, 255, 255, 0.97), rgba(226, 228, 238, 0.88));
-	color: var(--vorpal-purple);
-	border: 1px solid rgba(255, 255, 255, 0.55);
-	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-}
-
-/* ---- Bare-on-backdrop text (section labels, footer) → light ---- */
-.vorpal-glass .vorpal-eyebrow {
-	color: rgba(255, 255, 255, 0.95);
-	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
-}
-/* Page-header title/subtitle sit bare on the backdrop → light + shadow.
-   (Doc nav/content panels stay light — the "dark shell, light document"
-   pattern keeps dense reference text readable.) */
-.vorpal-glass .vorpal-page-title {
-	color: #fff;
-	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
-}
-.vorpal-glass .vorpal-page-subtitle {
-	color: rgba(255, 255, 255, 0.85);
-	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
-}
-.vorpal-glass .vorpal-footer {
-	color: rgba(255, 255, 255, 0.62);
-	border-top-color: rgba(255, 255, 255, 0.12);
-	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-}
-.vorpal-glass .vorpal-footer span { color: rgba(255, 255, 255, 0.62); }
-.vorpal-glass .vorpal-footer a { color: #d3aee0; }
-.vorpal-glass .vorpal-footer a:hover { color: #e0c4ec; }
+ * Pages still carry `<body class="vorpal-glass">` from the black-glass look
+ * that set dark panels over a blurred photograph. The themes replaced it:
+ * the class now changes nothing, and the photograph stays only behind the
+ * login page. */

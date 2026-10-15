@@ -5,11 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Editor · BLADE Configurator</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<script src="/blade/portal/brand/theme.js"></script>
     <link rel="stylesheet" href="configurator.css">
     <link rel="icon" type="image/svg+xml" href="/blade/configurator/favicon.svg">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.8/ace.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.8/mode-json.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.8/theme-eclipse.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.8/theme-tomorrow_night.js"></script>
     <!-- Embed mode (?embed=1): tightens the in-page padding when iframed
          by the portal but keeps the brand topbar visible so navigation
          parity (Overview / Editor / Documentation) is preserved whether
@@ -27,7 +29,7 @@
 <body class="vorpal-glass autopublish-on">
 
     <header class="vorpal-topbar">
-        <a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+        <a class="vorpal-brand" href="/blade/dashboard/" title="Back to the dashboard">
             <img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
             <span class="vorpal-brand-text">
                 <span class="vorpal-brand-product">BLADE Admin Portal</span>
@@ -36,9 +38,10 @@
         </a>
         <a class="vorpal-appmark" href="/blade/configurator/">Configurator</a>
         <nav class="vorpal-nav" aria-label="Primary">
-            <a href="index.html">Overview</a>
             <a href="configurator.html" class="vorpal-active">Editor</a>
             <a href="docs/index.html">Documentation</a>
+            <a href="docs/features.html">Feature Reference</a>
+            <a href="docs/troubleshooting.html">Troubleshooting</a>
         </nav>
         <div class="vorpal-topbar-right">
             <!-- Opened from the dashboard (a "blade-" window it named): the way back. -->
@@ -80,16 +83,6 @@
                 <span class="autopublish-track"><span class="autopublish-thumb"></span></span>
                 <span id="autopublish-state" class="autopublish-state">on</span>
             </label>
-            <div class="theme-selector">
-                <label for="app-theme-select">Theme:</label>
-                <select id="app-theme-select" onchange="switchAppTheme(this.value)">
-                    <option value="light">Light</option>
-                    <option value="dark">Dark</option>
-                    <option value="midnight">Midnight Blue</option>
-                    <option value="warm">Warm Sand</option>
-                    <!-- <option value="glossy">Glossy Black</option> -->
-                </select>
-            </div>
         </div>
 
         <div class="tabs">

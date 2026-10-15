@@ -1,25 +1,28 @@
 /* ============ THEME DEFINITIONS ============ */
 :root {
+    /* Chrome, text, borders, tabs and the primary button follow the admin
+       theme (brand.css tokens, light or dark by the top bar's switch); the
+       status, publish, clone and delete colours stay this app's own. */
     /* Page chrome */
-    --bg-page: #f8fafc;
-    --bg-surface: #ffffff;
-    --bg-surface-alt: #f8fafc;
-    --bg-inset: #f1f5f9;
+    --bg-page: transparent;
+    --bg-surface: var(--vorpal-surface);
+    --bg-surface-alt: var(--vorpal-surface-alt);
+    --bg-inset: var(--vorpal-slate-100);
 
     /* Text */
-    --text-primary: #1e293b;
-    --text-secondary: #374151;
-    --text-muted: #6b7280;
+    --text-primary: var(--vorpal-ink-900);
+    --text-secondary: var(--vorpal-ink-700);
+    --text-muted: var(--vorpal-slate-600);
 
     /* Borders */
-    --border-default: #d1d5db;
-    --border-subtle: #e2e8f0;
-    --border-strong: #cbd5e1;
-    --border-item: #e5e7eb;
+    --border-default: var(--vorpal-slate-300);
+    --border-subtle: var(--vorpal-divider);
+    --border-strong: var(--vorpal-slate-300);
+    --border-item: var(--vorpal-divider);
 
     /* Buttons */
-    --btn-primary: #3b82f6;
-    --btn-primary-hover: #2563eb;
+    --btn-primary: var(--vorpal-mark);
+    --btn-primary-hover: var(--vorpal-mark-hover);
     --btn-secondary: #6b7280;
     --btn-secondary-hover: #4b5563;
     --btn-publish: #059669;
@@ -28,18 +31,18 @@
     --btn-clone-hover: #7c3aed;
     --btn-delete: #e879a0;
     --btn-delete-hover: #d4527b;
-    --btn-add: #3b82f6;
-    --btn-add-hover: #2563eb;
+    --btn-add: var(--vorpal-mark);
+    --btn-add-hover: var(--vorpal-mark-hover);
     --btn-text: #ffffff;
 
     /* Tabs */
-    --tab-bg: #e5e7eb;
-    --tab-text: #6b7280;
-    --tab-hover-bg: #d1d5db;
-    --tab-hover-text: #374151;
-    --tab-active-bg: #ffffff;
-    --tab-active-text: #1f2937;
-    --tab-active-accent: #3b82f6;
+    --tab-bg: var(--vorpal-slate-100);
+    --tab-text: var(--vorpal-slate-600);
+    --tab-hover-bg: var(--vorpal-slate-200);
+    --tab-hover-text: var(--vorpal-ink-900);
+    --tab-active-bg: var(--vorpal-surface);
+    --tab-active-text: var(--vorpal-ink-900);
+    --tab-active-accent: var(--vorpal-purple);
 
     /* Status */
     --status-success-bg: #d1fae5;
@@ -51,12 +54,12 @@
     --status-warning-text: #92400e;
 
     /* Badges */
-    --badge-bg: #e5e7eb;
-    --badge-text: #6b7280;
+    --badge-bg: var(--vorpal-slate-200);
+    --badge-text: var(--vorpal-slate-600);
 
     /* Focus */
-    --focus-ring: rgba(59, 130, 246, 0.1);
-    --focus-border: #3b82f6;
+    --focus-ring: var(--vorpal-purple-soft);
+    --focus-border: var(--vorpal-purple);
 
     /* Dirty indicator */
     --dirty-bg: #fbbf24;
@@ -69,7 +72,7 @@
 
     /* Modal */
     --modal-backdrop: rgba(0, 0, 0, 0.5);
-    --modal-close-hover-bg: #f3f4f6;
+    --modal-close-hover-bg: var(--vorpal-slate-100);
 
     /* Shadows */
     --shadow-sm: 0 4px 6px rgba(0, 0, 0, 0.05);
@@ -81,32 +84,15 @@
     --field-error-bg: #fef2f2;
     --field-error-text: #dc2626;
     --validation-list-text: #7f1d1d;
-    --version-hover-bg: #f9fafb;
-    --add-placeholder-hover-bg: #f1f5f9;
-    --add-placeholder-hover-border: #94a3b8;
-    --add-label-text: #64748b;
-    --disabled-bg: #cbd5e1;
+    --version-hover-bg: var(--vorpal-surface-alt);
+    --add-placeholder-hover-bg: var(--vorpal-slate-100);
+    --add-placeholder-hover-border: var(--vorpal-slate-400);
+    --add-label-text: var(--vorpal-slate-600);
+    --disabled-bg: var(--vorpal-slate-300);
 }
 
 [data-theme="dark"] {
     color-scheme: dark;
-
-    --bg-page: #0f172a;
-    --bg-surface: #1e293b;
-    --bg-surface-alt: #1e293b;
-    --bg-inset: #334155;
-
-    --text-primary: #f1f5f9;
-    --text-secondary: #cbd5e1;
-    --text-muted: #94a3b8;
-
-    --border-default: #475569;
-    --border-subtle: #334155;
-    --border-strong: #475569;
-    --border-item: #334155;
-
-    --btn-primary: #3b82f6;
-    --btn-primary-hover: #60a5fa;
     --btn-secondary: #64748b;
     --btn-secondary-hover: #94a3b8;
     --btn-publish: #10b981;
@@ -115,17 +101,7 @@
     --btn-clone-hover: #a78bfa;
     --btn-delete: #f472b6;
     --btn-delete-hover: #f9a8d4;
-    --btn-add: #3b82f6;
-    --btn-add-hover: #60a5fa;
     --btn-text: #ffffff;
-
-    --tab-bg: #334155;
-    --tab-text: #94a3b8;
-    --tab-hover-bg: #475569;
-    --tab-hover-text: #e2e8f0;
-    --tab-active-bg: #1e293b;
-    --tab-active-text: #f1f5f9;
-    --tab-active-accent: #3b82f6;
 
     --status-success-bg: #064e3b;
     --status-success-text: #6ee7b7;
@@ -135,21 +111,13 @@
     --status-warning-bg: #78350f;
     --status-warning-text: #fde68a;
 
-    --badge-bg: #475569;
-    --badge-text: #94a3b8;
-
-    --focus-ring: rgba(59, 130, 246, 0.3);
-    --focus-border: #60a5fa;
-
     --dirty-bg: #d97706;
     --dirty-text: #fef3c7;
-
 
     --tooltip-bg: #0f172a;
     --tooltip-text: #e2e8f0;
 
     --modal-backdrop: rgba(0, 0, 0, 0.7);
-    --modal-close-hover-bg: #334155;
 
     --shadow-sm: 0 4px 6px rgba(0, 0, 0, 0.3);
     --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
@@ -159,11 +127,6 @@
     --field-error-bg: #450a0a;
     --field-error-text: #fca5a5;
     --validation-list-text: #fca5a5;
-    --version-hover-bg: #334155;
-    --add-placeholder-hover-bg: #334155;
-    --add-placeholder-hover-border: #64748b;
-    --add-label-text: #94a3b8;
-    --disabled-bg: #475569;
 }
 
 [data-theme="midnight"] {
@@ -1330,31 +1293,6 @@ body.inspector-open .inspector-panel {
     color: var(--status-warning-text);
 }
 
-.theme-selector {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-left: auto;
-}
-
-.theme-selector label {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    margin: 0;
-    white-space: nowrap;
-}
-
-.theme-selector select {
-    padding: 6px 10px;
-    border: 1px solid var(--border-default);
-    border-radius: 4px;
-    font-size: 13px;
-    background: var(--bg-surface);
-    color: var(--text-secondary);
-    min-width: 140px;
-}
-
 label {
     display: block;
     margin-bottom: 3px;
@@ -1497,9 +1435,6 @@ body.autopublish-on .btn-publish {
     font-size: 12px;
     color: var(--text-secondary);
 }
-.autopublish-switch + .theme-selector {
-    margin-left: 16px;
-}
 .autopublish-caption {
     font-weight: 500;
 }
@@ -1526,7 +1461,7 @@ body.autopublish-on .btn-publish {
     width: 14px;
     height: 14px;
     border-radius: 50%;
-    background: var(--btn-text, #fff);
+    background: var(--btn-text, var(--vorpal-surface));
     transition: transform 0.15s ease;
 }
 /* Checked = ON: track turns the publish color, thumb slides right. */
@@ -2494,12 +2429,9 @@ body.autopublish-on .btn-publish {
    shows through it. Here we only (a) keep that opacity explicit
    and (b) inset + frame it so the purple reads as a border.
 
-   NOTE: we deliberately do NOT pin the surface to white. The
-   Configurator ships its own Theme selector (Light/Dark/Midnight/
-   Warm, via [data-theme] on <html>); pinning white would break a
-   user's chosen dark theme by leaving a white container wrapped
-   around dark fields. In the default Light theme this is a white
-   sheet framed by purple, exactly as intended.
+   NOTE: we deliberately do NOT pin the surface to white: the admin
+   theme ([data-theme] on <html>) may be dark, and a white container
+   around dark fields would break it.
    ============================================================ */
 body.vorpal-glass .container {
     background: var(--bg-surface);   /* stay opaque over the purple backdrop */

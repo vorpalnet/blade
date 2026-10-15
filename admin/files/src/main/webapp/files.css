@@ -47,7 +47,7 @@
    colour alone. */
 .files-toolbar button.files-danger {
 	border: 2px solid #a12b2b;
-	background: #fbeaea;
+	background: var(--vorpal-surface-alt);
 	color: #5a1414;
 	font-weight: 600;
 }
@@ -77,7 +77,7 @@
 /* Outcome is conveyed by an explicit word ("Saved" / "Rejected") plus a left
    border and icon — not by colour alone. */
 .files-message.files-ok {
-	background: #eef4ff;
+	background: var(--vorpal-surface-alt);
 	border-left: 4px solid #1f3a66;
 }
 
@@ -87,7 +87,7 @@
 }
 
 .files-message.files-error {
-	background: #fbeaea;
+	background: var(--vorpal-surface-alt);
 	border-left: 4px solid #a12b2b;
 }
 
@@ -99,19 +99,16 @@
 .files-editor {
 	width: 100%;
 	/* Light-mode fallback: fill the area below topbar (~64px) + toolbar
-	   (~52px). The dark-glass shell below overrides this with flex sizing. */
+	   (~52px). The shell below overrides this with flex sizing. */
 	height: calc(100vh - 124px);
 }
 
 /* ============================================================
-   DARK-GLASS SHELL — opt-in via <body class="vorpal-glass">.
-   Policy "dark shell, light document": the brand topbar + page
-   backdrop go dark/purple, but the editor stays a LIGHT sheet
-   (white surface, dark text) floating on the purple — the same
-   full-bleed recipe the Flow editor uses.
+   SHELL: the editor is a sheet (the theme's surface) on the page,
+   the same full-bleed recipe the Flow editor uses.
    ============================================================ */
 
-/* Pin the dark-glass brand topbar to the top (64px tall). */
+/* Pin the brand topbar to the top (64px tall). */
 .vorpal-glass .vorpal-topbar {
 	position: fixed;
 	top: 0;
@@ -120,11 +117,10 @@
 	z-index: 10;
 }
 
-/* The main area becomes a white sheet inset on the purple backdrop:
-   the top margin clears the 64px fixed topbar (+16px gap); the side
-   and bottom margins let the purple show around the sheet's edges.
-   (Overrides brand.css's `.vorpal-glass .vorpal-main { background:
-   transparent }` — equal specificity, files.css loads later.) */
+/* The main area becomes a sheet inset on the page: the top margin
+   clears the 64px fixed topbar (+16px gap).
+   (Overrides brand.css's transparent `.vorpal-main`, which it states at
+   a lower specificity.) */
 .vorpal-glass .vorpal-main {
 	margin: 80px 24px 24px;
 	/* Definite height (viewport minus the 80px top margin + 24px bottom)

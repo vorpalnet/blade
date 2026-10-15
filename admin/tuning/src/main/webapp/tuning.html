@@ -5,6 +5,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>BLADE Tuning</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<script src="/blade/portal/brand/theme.js"></script>
 
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.6.0/css/bootstrap.min.css">
@@ -12,7 +13,7 @@
 	<script src="recommendations.js"></script>
 
 	<style>
-		body { padding: 0; background: #f5f5f5; font-size: 14px; }
+		body { padding: 0; background: var(--vorpal-surface-alt); font-size: 14px; }
 		.container-fluid { max-width: 1440px; margin: 0 auto; padding: 24px 24px 40px; }
 		h4 { margin-bottom: 20px; }
 		.card { margin-bottom: 16px; }
@@ -22,10 +23,10 @@
 		.form-control-sm { font-size: 13px; }
 
 		/* Setting rows */
-		.setting-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
+		.setting-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--vorpal-divider); }
 		.setting-row:last-child { border-bottom: none; }
 		.setting-label h6 { margin-bottom: 1px; font-size: 14px; }
-		.setting-label small { color: #888; font-size: 12px; }
+		.setting-label small { color: var(--vorpal-slate-600); font-size: 12px; }
 
 		/* Per-server cards */
 		.server-card { border-left: 3px solid #007bff; }
@@ -33,10 +34,10 @@
 		.cluster-card { border-left: 3px solid #fd7e14; }
 
 		/* Status badges */
-		.server-status { font-size: 13px; color: #666; margin-top: 6px; }
+		.server-status { font-size: 13px; color: var(--vorpal-ink-700); margin-top: 6px; }
 
 		/* Warning box */
-		.info-box { background: #e8f4fd; border: 1px solid #b8daff; border-radius: 4px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; }
+		.info-box { background: var(--vorpal-surface-alt); border: 1px solid #b8daff; border-radius: 4px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; }
 		.warning-box { background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; }
 		.warning-box strong, .info-box strong { color: #856404; }
 		.info-box strong { color: #004085; }
@@ -44,7 +45,7 @@
 		/* Inline field groups */
 		.field-group { margin-bottom: 8px; }
 		.field-group label { font-weight: 600; font-size: 12px; margin-bottom: 1px; display: block; }
-		.field-group .hint { font-size: 11px; color: #999; }
+		.field-group .hint { font-size: 11px; color: var(--vorpal-slate-600); }
 
 		/* Default-vs-set distinction for JVM scalar fields. A field showing only
 		   its grayed default placeholder and one holding an explicit value were
@@ -53,7 +54,7 @@
 		   left accent bar (inset box-shadow, so no layout shift), and a faint fill;
 		   an unset field's placeholder is italic and literally reads "default …". */
 		.field-group input.mono.is-set,
-		.field-group select.is-set { font-weight: 700; box-shadow: inset 3px 0 0 #2f6fed; background-color: #eef3ff; }
+		.field-group select.is-set { font-weight: 700; box-shadow: inset 3px 0 0 #2f6fed; background-color: var(--vorpal-surface-alt); }
 		.field-group input.mono::placeholder { font-style: italic; color: #aab2bd; }
 
 		/* About panel — three readout columns over a deployed-apps strip. The
@@ -62,9 +63,9 @@
 		.about-card .card-header strong { font-size: 14px; }
 		.about-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 		@media (max-width: 900px) { .about-grid { grid-template-columns: 1fr; } }
-		.about-col h6 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #888; margin-bottom: 8px; }
+		.about-col h6 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--vorpal-slate-600); margin-bottom: 8px; }
 		.about-kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 13px; }
-		.about-kv dt { color: #666; font-weight: 600; white-space: nowrap; }
+		.about-kv dt { color: var(--vorpal-ink-700); font-weight: 600; white-space: nowrap; }
 		.about-kv dd { margin: 0; }
 		.about-version { font-size: 20px; font-weight: 700; line-height: 1.1; }
 		.about-patch { font-size: 12px; line-height: 1.35; margin-bottom: 4px; }
@@ -93,15 +94,15 @@
 		   border, radius, shadow, and horizontal padding as the cards below)
 		   so it reads as part of the same family instead of a bare strip. */
 		.section-nav { position: sticky; top: 0; z-index: 100;
-			background: var(--vorpal-surface, #fff);
+			background: var(--vorpal-surface, var(--vorpal-surface));
 			border: 1px solid rgba(0, 0, 0, .08); border-radius: 4px;
 			box-shadow: var(--vorpal-shadow-md, 0 6px 20px -8px rgba(0, 0, 0, .45));
 			padding: 10px 15px; margin-bottom: 16px; }
-		.section-nav a { font-size: 13px; margin-right: 16px; color: #555; }
+		.section-nav a { font-size: 13px; margin-right: 16px; color: var(--vorpal-ink-700); }
 		.section-nav a:hover { color: #007bff; text-decoration: none; }
 
 		/* Tooltips — dotted underline on labels with tips */
-		[data-toggle="tooltip"], label[title], th[title], .tip { border-bottom: 1px dotted #999; cursor: help; }
+		[data-toggle="tooltip"], label[title], th[title], .tip { border-bottom: 1px dotted var(--vorpal-slate-300); cursor: help; }
 		.tooltip-inner { max-width: 320px; text-align: left; font-size: 12px; }
 
 		/* Embed mode (?embed=1): tightens the in-page heading when iframed
@@ -117,7 +118,7 @@
 		.jvm-argwrap .jvm-arghl,
 		.jvm-argwrap textarea.jvm-argta {
 			margin: 0;
-			border: 1px solid #ced4da;
+			border: 1px solid var(--vorpal-slate-300);
 			border-radius: .2rem;
 			padding: .3rem .5rem;
 			font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
@@ -130,7 +131,7 @@
 		}
 		.jvm-argwrap .jvm-arghl {
 			position: absolute; top: 0; left: 0; height: 100%;
-			color: #212529; background: #fff;
+			color: var(--vorpal-ink-900); background: var(--vorpal-surface);
 			overflow: auto; pointer-events: none; z-index: 1;
 		}
 		.jvm-argwrap textarea.jvm-argta {
@@ -148,61 +149,53 @@
 		.jvm-argissues .issue { font-size: 11px; line-height: 1.4; display: flex; align-items: baseline; gap: 6px; margin-bottom: 2px; }
 		.jvm-argissues .issue::before { content: "\26A0"; color: #d6336c; flex: 0 0 auto; }
 		.jvm-argissues .issue .tok { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-weight: 700; text-decoration: underline wavy #d6336c; text-decoration-skip-ink: none; white-space: nowrap; }
-		.jvm-argissues .issue .why { color: #555; }
+		.jvm-argissues .issue .why { color: var(--vorpal-ink-700); }
 
 		/* Targets table + preview diff. Every state cue leads with a glyph or a
 		   word (= baseline / ≠ baseline, + − ~ markers, "kept"), never colour
 		   alone. */
 		.jvm-targets td.mono { font-size: 12px; }
-		.jvm-targets .members { font-size: 11px; color: #777; font-family: 'SFMono-Regular', Consolas, Menlo, monospace; }
-		.jvm-targets .base-same { color: #555; }
+		.jvm-targets .members { font-size: 11px; color: var(--vorpal-slate-600); font-family: 'SFMono-Regular', Consolas, Menlo, monospace; }
+		.jvm-targets .base-same { color: var(--vorpal-ink-700); }
 		.jvm-targets .base-diff { font-weight: 700; }
-		.jvm-targets .base-none { color: #999; font-style: italic; }
-		.jvm-target-detail { background: #f8f9fb; }
-		.jvm-target-detail pre { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 11px; white-space: pre-wrap; word-break: break-all; background: #fff; border: 1px solid #e2e2e8; padding: 6px 8px; margin: 0 0 8px; max-height: 160px; overflow: auto; }
+		.jvm-targets .base-none { color: var(--vorpal-slate-600); font-style: italic; }
+		.jvm-target-detail { background: var(--vorpal-surface); }
+		.jvm-target-detail pre { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 11px; white-space: pre-wrap; word-break: break-all; background: var(--vorpal-surface); border: 1px solid var(--vorpal-divider); padding: 6px 8px; margin: 0 0 8px; max-height: 160px; overflow: auto; }
 		.jvm-target-detail textarea.mono { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 11px; }
-		.jvm-target-detail textarea.mono.is-set { font-weight: 700; box-shadow: inset 3px 0 0 #2f6fed; background-color: #eef3ff; }
-		.jvm-diff-panel { border: 1px solid #ced4da; border-radius: 4px; margin-top: 12px; overflow: hidden; }
-		.jvm-diff-panel .hdr { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #f1f3f5; border-bottom: 1px solid #ced4da; font-size: 13px; }
-		.jvm-diff-panel .hdr .summary { color: #666; font-size: 12px; }
-		.jvm-diff-target { padding: 8px 12px; border-bottom: 1px solid #e9ecef; }
+		.jvm-target-detail textarea.mono.is-set { font-weight: 700; box-shadow: inset 3px 0 0 #2f6fed; background-color: var(--vorpal-surface-alt); }
+		.jvm-diff-panel { border: 1px solid var(--vorpal-slate-300); border-radius: 4px; margin-top: 12px; overflow: hidden; }
+		.jvm-diff-panel .hdr { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--vorpal-surface-alt); border-bottom: 1px solid var(--vorpal-slate-300); font-size: 13px; }
+		.jvm-diff-panel .hdr .summary { color: var(--vorpal-ink-700); font-size: 12px; }
+		.jvm-diff-target { padding: 8px 12px; border-bottom: 1px solid var(--vorpal-divider); }
 		.jvm-diff-target:last-child { border-bottom: 0; }
 		.jvm-diff-target .who { font-size: 13px; margin-bottom: 4px; }
-		.jvm-diff-target .who .kind { color: #777; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; margin-left: 4px; }
+		.jvm-diff-target .who .kind { color: var(--vorpal-slate-600); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; margin-left: 4px; }
 		.jvm-diff-lines { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 12px; line-height: 1.5; }
 		.jvm-diff-line { display: flex; white-space: pre-wrap; word-break: break-all; }
 		.jvm-diff-line .marker { flex: 0 0 18px; user-select: none; font-weight: 700; }
-		.jvm-diff-line.add { background: #eef8ee; }
-		.jvm-diff-line.del { background: #fbeeee; text-decoration: line-through; text-decoration-color: #999; }
+		.jvm-diff-line.add { background: var(--vorpal-surface-alt); }
+		.jvm-diff-line.del { background: var(--vorpal-surface-alt); text-decoration: line-through; text-decoration-color: #999; }
 		.jvm-diff-line.chg { background: #fff8e5; }
-		.jvm-diff-line.kept { color: #888; }
+		.jvm-diff-line.kept { color: var(--vorpal-slate-600); }
 		.jvm-diff-target .warn { margin: 6px 0; }
 		.jvm-history table td { vertical-align: top; }
-		.jvm-history pre { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 11px; white-space: pre-wrap; word-break: break-all; background: #fff; border: 1px solid #e2e2e8; padding: 6px 8px; margin: 4px 0 0; max-height: 200px; overflow: auto; }
+		.jvm-history pre { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 11px; white-space: pre-wrap; word-break: break-all; background: var(--vorpal-surface); border: 1px solid var(--vorpal-divider); padding: 6px 8px; margin: 4px 0 0; max-height: 200px; overflow: auto; }
 
-		/* ---- Dark-glass shell (opt-in via body.vorpal-glass) ----------
-		   "Dark shell, light document": brand.css turns the topbar + page
-		   backdrop dark/purple; the dense work content stays on LIGHT
-		   sheets. The Bootstrap cards keep their solid white background and
-		   dark text, now floating on the purple with a soft drop shadow so
-		   they read as intentional sheets rather than bleeding into it. The
-		   only bare-on-backdrop chrome text is the page H4 heading, which is
-		   lightened so it stays readable on the dark backdrop. */
-		.vorpal-glass > .container-fluid > h4 { color: #fff; }
+		/* ---- Page sheets ---------------------------------------------
+		   The Bootstrap cards are brand sheets on the page; the H4 page
+		   heading sits on the page itself. Both follow the theme. */
+		.vorpal-glass > .container-fluid > h4 { color: var(--vorpal-ink-900); }
 		.vorpal-glass .card {
-			background: var(--vorpal-surface, #fff);
+			background: var(--vorpal-surface, var(--vorpal-surface));
 			border-color: rgba(0, 0, 0, .08);
 			box-shadow: var(--vorpal-shadow-md, 0 6px 20px -8px rgba(0, 0, 0, .45));
 		}
 		.vorpal-glass .card-header,
-		.vorpal-glass .card-body { color: var(--vorpal-ink-900, #212529); }
+		.vorpal-glass .card-body { color: var(--vorpal-ink-900, var(--vorpal-ink-900)); }
 	</style>
 
-	<!-- Dark-glass theme applied via "dark shell, light document": only the
-	     chrome (topbar) + page backdrop go dark/purple (brand.css), while the
-	     dense card content stays on solid light sheets with dark text. The
-	     earlier 2026-05-24 attempt that failed put the work content ITSELF on
-	     glass (unreadable); see memory note [[glass-needs-visible-backdrop]]. -->
+	<!-- The light or dark admin theme (brand.css, set by theme.js): the
+	     dense card content sits on the theme's solid sheets. -->
 	<script>
 		if (new URLSearchParams(location.search).get('embed') === '1') {
 			document.addEventListener('DOMContentLoaded', () => document.body.classList.add('embedded'));
@@ -212,7 +205,7 @@
 <body class="vorpal-glass">
 
 	<header class="vorpal-topbar">
-		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+		<a class="vorpal-brand" href="/blade/dashboard/" title="Back to the dashboard">
 			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
 			<span class="vorpal-brand-text">
 				<span class="vorpal-brand-product">BLADE Admin Portal</span>
@@ -221,10 +214,10 @@
 		</a>
 		<a class="vorpal-appmark" href="/blade/tuning/">Tuning</a>
 		<nav class="vorpal-nav" aria-label="Primary">
-			<a href="index.html">Overview</a>
 			<a href="tuning.html" class="vorpal-active">Dashboard</a>
-			<a href="report.html">Report</a>
 			<a href="docs/index.html">Documentation</a>
+			<a href="docs/sections.html">Sections Reference</a>
+			<a href="docs/troubleshooting.html">Troubleshooting</a>
 		</nav>
 		<div class="vorpal-topbar-right">
 			<span class="vorpal-pill">Ready</span>

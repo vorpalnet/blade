@@ -42,6 +42,7 @@ public class BoardSettingsServlet extends HttpServlet {
 		out.put("liveRefreshSeconds", s.getLiveRefreshSeconds());
 		out.put("capacityCallsPerSecond", s.getCapacityCallsPerSecond());
 		out.put("capacitySessions", s.getCapacitySessions());
+		out.put("engineBaseUrl", s.getEngineBaseUrl());
 		out.put("analyticsRefreshSeconds", s.getAnalyticsRefreshSeconds());
 		out.put("ranges", s.getRanges());
 		out.put("defaultDays", s.getDefaultDays());

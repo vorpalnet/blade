@@ -3,7 +3,8 @@
    color only supplements. */
 
 .tc-controls {
-	border: 1px solid rgba(255, 255, 255, 0.12);
+	background: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-divider);
 	border-radius: 10px;
 	padding: 1rem 1.25rem 1.25rem;
 	margin-bottom: 1.5rem;
@@ -36,7 +37,8 @@
 }
 
 .tc-node {
-	border: 1px solid rgba(255, 255, 255, 0.12);
+	background: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-divider);
 	border-radius: 10px;
 	padding: 0.85rem 1rem;
 }
@@ -92,7 +94,7 @@ table.tc-table {
 table.tc-table th,
 table.tc-table td {
 	padding: 0.4rem 0.6rem;
-	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+	border-bottom: 1px solid var(--vorpal-divider);
 	text-align: right;
 	font-variant-numeric: tabular-nums;
 	white-space: nowrap;

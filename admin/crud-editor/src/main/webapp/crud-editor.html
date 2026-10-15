@@ -4,6 +4,7 @@
 	<meta charset="utf-8">
 	<title>CRUD rule preview</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<script src="/blade/portal/brand/theme.js"></script>
 	<link rel="stylesheet" href="/blade/portal/lib/blade-editor.css">
 	<style>
 		:root {
@@ -27,10 +28,10 @@
 			margin: 0;
 		}
 		.crud-content { max-width: 1400px; margin: 0 auto; padding: 24px; }
-		/* Page heading sits on the dark glass backdrop — keep it light. */
-		.vorpal-glass .crud-content > h1 { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); }
-		.vorpal-glass .crud-content > .subtitle { color: rgba(240, 242, 247, 0.92); }
-		.vorpal-glass .crud-content > .subtitle code { color: #fff; }
+		/* Page heading, on the page itself. */
+		.vorpal-glass .crud-content > h1 { color: var(--vorpal-ink-900); }
+		.vorpal-glass .crud-content > .subtitle { color: var(--vorpal-slate-600); }
+		.vorpal-glass .crud-content > .subtitle code { color: var(--vorpal-ink-900); }
 		h1 { margin: 0 0 8px; font-size: 20px; font-weight: 600; }
 		.subtitle { color: var(--muted); margin-bottom: 24px; }
 		.grid {
@@ -374,7 +375,7 @@
 </head>
 <body class="vorpal-glass">
 	<header class="vorpal-topbar">
-		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+		<a class="vorpal-brand" href="/blade/dashboard/" title="Back to the dashboard">
 			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
 			<span class="vorpal-brand-text">
 				<span class="vorpal-brand-product">BLADE Admin Portal</span>
@@ -383,9 +384,10 @@
 		</a>
 		<a class="vorpal-appmark" href="/blade/crud-editor/">CRUD</a>
 		<nav class="vorpal-nav" aria-label="Primary">
-			<a href="index.html">Overview</a>
 			<a href="crud-editor.html" class="vorpal-active">Editor</a>
 			<a href="docs/index.html">Documentation</a>
+			<a href="docs/api-contract.html">API Contract</a>
+			<a href="docs/troubleshooting.html">Troubleshooting</a>
 		</nav>
 		<div class="vorpal-topbar-right">
 			<span class="vorpal-pill">Ready</span>

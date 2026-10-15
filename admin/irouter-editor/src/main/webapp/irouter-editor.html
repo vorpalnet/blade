@@ -4,6 +4,7 @@
 	<meta charset="utf-8">
 	<title>iRouter pipeline &amp; routing</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<script src="/blade/portal/brand/theme.js"></script>
 	<link rel="stylesheet" href="/blade/portal/lib/blade-editor.css">
 	<link rel="icon" type="image/svg+xml" href="/blade/irouter-editor/favicon.svg">
 	<style>
@@ -27,9 +28,9 @@
 			margin: 0;
 		}
 		.page-content { max-width: 1400px; margin: 0 auto; padding: 24px; }
-		.vorpal-glass .page-content > h1 { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); }
-		.vorpal-glass .page-content > .subtitle { color: rgba(240, 242, 247, 0.92); }
-		.vorpal-glass .page-content > .subtitle code { color: #fff; }
+		.vorpal-glass .page-content > h1 { color: var(--vorpal-ink-900); }
+		.vorpal-glass .page-content > .subtitle { color: var(--vorpal-slate-600); }
+		.vorpal-glass .page-content > .subtitle code { color: var(--vorpal-ink-900); }
 		h1 { margin: 0 0 8px; font-size: 20px; font-weight: 600; }
 		.subtitle { color: var(--muted); margin-bottom: 24px; }
 		label {
@@ -136,7 +137,7 @@
 </head>
 <body class="vorpal-glass">
 	<header class="vorpal-topbar">
-		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+		<a class="vorpal-brand" href="/blade/dashboard/" title="Back to the dashboard">
 			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
 			<span class="vorpal-brand-text">
 				<span class="vorpal-brand-product">BLADE Admin Portal</span>
@@ -145,8 +146,8 @@
 		</a>
 		<a class="vorpal-appmark" href="/blade/irouter-editor/">IROUTER</a>
 		<nav class="vorpal-nav" aria-label="Primary">
-			<a href="index.html">Overview</a>
 			<a href="irouter-editor.html" class="vorpal-active">Editor</a>
+			<a href="/blade/configurator/configurator.html?schema=irouter">Configurator</a>
 		</nav>
 		<div class="vorpal-topbar-right">
 			<span class="vorpal-pill">Ready</span>

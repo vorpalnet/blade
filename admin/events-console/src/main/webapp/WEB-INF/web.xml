@@ -13,7 +13,7 @@
 	<display-name>events-console</display-name>
 
 	<welcome-file-list>
-		<welcome-file>index.html</welcome-file>
+		<welcome-file>catalog.html</welcome-file>
 	</welcome-file-list>
 
 	<!-- no security required: the login form and its assets -->

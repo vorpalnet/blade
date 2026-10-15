@@ -24,15 +24,15 @@
 }
 
 .ev-panel {
-	border: 1px solid var(--vorpal-slate-300, #cbd2da);
+	border: 1px solid var(--vorpal-slate-300, var(--vorpal-slate-300));
 	border-radius: 8px;
-	background: #fff;
+	background: var(--vorpal-surface);
 	overflow: hidden;
 }
 
 .ev-panel > header {
 	padding: .6rem .85rem;
-	border-bottom: 1px solid var(--vorpal-slate-300, #cbd2da);
+	border-bottom: 1px solid var(--vorpal-slate-300, var(--vorpal-slate-300));
 	font-weight: 600;
 	display: flex;
 	justify-content: space-between;
@@ -54,23 +54,23 @@
 	font-size: 12px;
 	line-height: 1.5;
 	white-space: pre;
-	background: var(--vorpal-slate-100, #f4f6f8);
+	background: var(--vorpal-slate-100, var(--vorpal-surface-alt));
 }
 
 .ev-tabs { display: flex; gap: .25rem; flex-wrap: wrap; }
 
 .ev-tab {
 	padding: .3rem .7rem;
-	border: 1px solid var(--vorpal-slate-300, #cbd2da);
+	border: 1px solid var(--vorpal-slate-300, var(--vorpal-slate-300));
 	border-radius: 6px 6px 0 0;
-	background: var(--vorpal-slate-100, #f4f6f8);
+	background: var(--vorpal-slate-100, var(--vorpal-surface-alt));
 	cursor: pointer;
 	font-size: 13px;
 }
 
 .ev-tab[aria-selected="true"] {
-	background: #fff;
-	border-bottom-color: #fff;
+	background: var(--vorpal-surface);
+	border-bottom-color: var(--vorpal-divider);
 	font-weight: 600;
 }
 
@@ -88,7 +88,7 @@ table.ev-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.ev-table th, table.ev-table td {
 	text-align: left;
 	padding: .45rem .6rem;
-	border-bottom: 1px solid var(--vorpal-slate-200, #e3e8ed);
+	border-bottom: 1px solid var(--vorpal-slate-200, var(--vorpal-divider));
 	vertical-align: top;
 }
 table.ev-table th { font-weight: 600; white-space: nowrap; }
@@ -101,7 +101,7 @@ table.ev-table td.ev-num { text-align: right; font-variant-numeric: tabular-nums
 	border-left: 4px solid var(--vorpal-slate-400, #9aa5b1);
 	padding: .5rem .75rem;
 	margin-bottom: .5rem;
-	background: var(--vorpal-slate-100, #f4f6f8);
+	background: var(--vorpal-slate-100, var(--vorpal-surface-alt));
 }
 .ev-finding.is-problem { border-left-width: 8px; }
 .ev-finding .ev-kind { font-weight: 600; }

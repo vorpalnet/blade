@@ -11,7 +11,7 @@
 	<display-name>analytics-console</display-name>
 
 	<welcome-file-list>
-		<welcome-file>index.html</welcome-file>
+		<welcome-file>audit.html</welcome-file>
 	</welcome-file-list>
 
 	<!-- no security required: the login form and its assets -->

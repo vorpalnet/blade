@@ -60,7 +60,7 @@
 	margin: 0;
 	max-height: calc(100vh - 260px);
 	overflow: auto;
-	background: #fbfbfd;
+	background: var(--vorpal-surface-alt);
 }
 .cf-code code.hljs {
 	font-family: var(--vorpal-font-mono, ui-monospace, Menlo, Consolas, monospace);
@@ -115,7 +115,7 @@
 	font: inherit;
 	font-size: 13px;
 	color: var(--vorpal-ink-900);
-	background: #fff;
+	background: var(--vorpal-surface);
 	border: 1px solid var(--vorpal-slate-300);
 	border-radius: 0;
 	padding: 5px 8px;
@@ -286,7 +286,7 @@
 	min-height: 160px;
 	overflow: auto;
 	padding: 14px 16px;
-	background: #fbfbfd;
+	background: var(--vorpal-surface-alt);
 }
 .tr-ladder-svg { display: block; }
 .tr-ladder-svg text {
@@ -317,7 +317,7 @@
 	max-height: calc(100vh - 300px);
 	min-height: 160px;
 	overflow: auto;
-	background: #fbfbfd;
+	background: var(--vorpal-surface-alt);
 	font-family: var(--vorpal-font-mono, ui-monospace, Menlo, Consolas, monospace);
 	font-size: 12px;
 	line-height: 1.5;

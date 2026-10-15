@@ -61,20 +61,20 @@ html, body {
    light sheet under the dark topbar and let Scalar paint its own light theme.
    --------------------------------------------------------------------------- */
 
-/* Service picker — readable on the dark glass topbar. */
+/* Service picker, in the top bar: the theme's own surface and ink. */
 .vorpal-glass .api-picker label {
-	color: rgba(232, 234, 239, 0.85);
+	color: var(--vorpal-slate-600);
 }
 
 .vorpal-glass .api-picker select {
-	color: rgba(232, 234, 239, 0.92);
-	background-color: rgba(255, 255, 255, 0.06);
-	border: 1px solid rgba(255, 255, 255, 0.18);
-	/* Native dropdown arrow is OS-themed (dark) and vanishes on dark glass;
-	   draw our own light chevron instead. */
+	color: var(--vorpal-ink-900);
+	background-color: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-divider);
+	border-radius: 9px;
 	-webkit-appearance: none;
 	appearance: none;
-	background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%23e8eaef' stroke-width='1.5'><path d='M1 1.5 6 6.5 11 1.5'/></svg>");
+	/* A neutral grey chevron reads on both themes. */
+	background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%238d8aa3' stroke-width='1.5'><path d='M1 1.5 6 6.5 11 1.5'/></svg>");
 	background-repeat: no-repeat;
 	background-position: right 10px center;
 	background-size: 11px;
@@ -82,8 +82,7 @@ html, body {
 }
 
 .vorpal-glass .api-picker select:hover:not(:disabled) {
-	border-color: rgba(124, 58, 144, 0.6);
-	background-color: rgba(124, 58, 144, 0.30);
+	border-color: var(--vorpal-slate-300);
 }
 
 .vorpal-glass .api-picker select:focus-visible {
@@ -92,18 +91,11 @@ html, body {
 }
 
 .vorpal-glass .api-picker select:disabled {
-	color: rgba(232, 234, 239, 0.5);
+	color: var(--vorpal-slate-400);
 }
 
-/* The expanded option list renders with OS chrome; pin it to dark-on-light so
-   it stays readable regardless of the dark closed control. */
-.vorpal-glass .api-picker select option {
-	color: var(--vorpal-ink-900);
-	background-color: var(--vorpal-surface);
-}
-
-/* Light document sheet: the Scalar reference (and the fallback notice) sit on a
-   clean light surface under the dark topbar, not bare on the purple backdrop. */
+/* Document sheet: the Scalar reference (and the fallback notice) sit on the
+   theme's surface. */
 .vorpal-glass .api-main {
 	background: var(--vorpal-surface);
 }

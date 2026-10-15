@@ -205,9 +205,9 @@
 	border: none;
 	padding: 18px 0 8px;
 }
-.vorpal-glass .section-head.on-glass .section-title { color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
-.vorpal-glass .section-head.on-glass .section-sub { color: rgba(240,242,247,0.85); }
-.vorpal-glass .section-head.on-glass .step { border-color: #fff; color: #fff; }
+.vorpal-glass .section-head.on-glass .section-title { color: var(--vorpal-ink-900); }
+.vorpal-glass .section-head.on-glass .section-sub { color: var(--vorpal-slate-600); }
+.vorpal-glass .section-head.on-glass .step { border-color: var(--vorpal-ink-900); color: var(--vorpal-ink-900); }
 .help-mini {
 	background: var(--panel);
 	color: var(--muted);

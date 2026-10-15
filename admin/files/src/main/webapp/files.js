@@ -63,7 +63,14 @@
 
 	function initEditor() {
 		editor = ace.edit('editor');
-		editor.setTheme('ace/theme/eclipse');
+		// The editor follows the admin theme (data-theme on <html>, set by
+		// /blade/portal/brand/theme.js and its top-bar switch).
+		var aceTheme = function () {
+			return 'ace/theme/' + (document.documentElement.getAttribute('data-theme') === 'dark' ? 'tomorrow_night' : 'eclipse');
+		};
+		editor.setTheme(aceTheme());
+		new MutationObserver(function () { editor.setTheme(aceTheme()); })
+			.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 		editor.session.setMode('ace/mode/text');
 		editor.setOptions({ fontSize: '13px', showPrintMargin: false, useWorker: false });
 		editor.on('change', function () { if (current) { setDirty(true); } });

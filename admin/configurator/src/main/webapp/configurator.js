@@ -13,7 +13,16 @@ let formIdCounter = 0;
 let jsonEditor;
 let schemaEditor;
 let currentData = {};
-let currentTheme = localStorage.getItem('blade-configurator-ace-theme') || 'eclipse';
+// The editors' Ace theme follows the admin theme (data-theme on <html>, set
+// by /blade/portal/brand/theme.js and its top-bar switch).
+function aceThemeFor() {
+    return document.documentElement.getAttribute('data-theme') === 'dark' ? 'tomorrow_night' : 'eclipse';
+}
+let currentTheme = aceThemeFor();
+new MutationObserver(function () {
+    currentTheme = aceThemeFor();
+    [jsonEditor, schemaEditor].forEach(function (e) { if (e) e.setTheme('ace/theme/' + currentTheme); });
+}).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 let currentSchemaName = null;
 let websocket = null;
 let pendingRequests = new Map();
@@ -41,7 +50,7 @@ let autoPublishEnabled = true;
 // Feature: Validation
 let validationErrors = new Map();
 
-// Initial selection driven by query string (?domain=…&schema=…&theme=…).
+// Initial selection driven by query string (?domain=…&schema=…).
 // Read once at DOMContentLoaded; consumed and cleared after the target +
 // schema lists arrive, so they only apply on the first WebSocket handshake.
 let urlInitialDomain = null;
@@ -4973,28 +4982,11 @@ function clearValidationErrors() {
 
 // Initialize the application when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
-    // ?domain=…&schema=…&theme=… on the page URL — read once, applied as the
-    // initial selection. The view-driven theme is NOT persisted to
-    // localStorage, so a link with ?theme=dark doesn't pin the saved
-    // preference for subsequent visits.
+    // ?domain=…&schema=… on the page URL — read once, applied as the
+    // initial selection.
     const urlParams = new URLSearchParams(window.location.search);
     urlInitialDomain = urlParams.get('domain');
     urlInitialSchema = urlParams.get('schema');
-    const urlTheme = urlParams.get('theme');
-
-    const knownThemes = ['light', 'dark', 'midnight', 'warm'];
-    const savedTheme = localStorage.getItem('blade-configurator-theme');
-    const effectiveTheme = (urlTheme && knownThemes.includes(urlTheme)) ? urlTheme : savedTheme;
-    if (effectiveTheme && effectiveTheme !== 'light') {
-        document.documentElement.setAttribute('data-theme', effectiveTheme);
-    }
-    if (effectiveTheme) {
-        currentTheme = aceThemeMap[effectiveTheme] || 'eclipse';
-    }
-    const themeSelect = document.getElementById('app-theme-select');
-    if (themeSelect && effectiveTheme) {
-        themeSelect.value = effectiveTheme;
-    }
 
     connectWebSocket();
     requestTargetDirectories(); // Request target directories (domain, clusters, servers)
@@ -5066,14 +5058,6 @@ function initializeJsonEditor() {
         autoScrollEditorIntoView: true
     });
 
-    // Set the (legacy) ace-editor theme selector if it's still in the HTML.
-    // The current build only ships an `app-theme-select` for the overall
-    // app theme; the standalone ace-editor theme dropdown was removed.
-    const aceThemeSelect = document.getElementById('theme-select');
-    if (aceThemeSelect) {
-        aceThemeSelect.value = currentTheme;
-    }
-
     // Set initial JSON content (empty until user selects a schema)
     jsonEditor.setValue('{\n  \n}', -1);
 
@@ -5092,37 +5076,6 @@ function initializeJsonEditor() {
     });
 
     // Schema editor will be initialized lazily when first shown
-}
-
-// App theme to Ace editor theme mapping
-const aceThemeMap = {
-    light: 'eclipse',
-    dark: 'tomorrow_night',
-    midnight: 'cobalt',
-    warm: 'chrome',
-    glossy: 'tomorrow_night'
-};
-
-function switchAppTheme(themeName) {
-    if (themeName === 'light') {
-        document.documentElement.removeAttribute('data-theme');
-    } else {
-        document.documentElement.setAttribute('data-theme', themeName);
-    }
-
-    // Update Ace editors to match
-    const aceTheme = aceThemeMap[themeName] || 'eclipse';
-    currentTheme = aceTheme;
-    if (jsonEditor) {
-        jsonEditor.setTheme('ace/theme/' + aceTheme);
-    }
-    if (schemaEditor) {
-        schemaEditor.setTheme('ace/theme/' + aceTheme);
-    }
-
-    // Persist
-    localStorage.setItem('blade-configurator-theme', themeName);
-    localStorage.setItem('blade-configurator-ace-theme', aceTheme);
 }
 
 function switchTab(tabName) {

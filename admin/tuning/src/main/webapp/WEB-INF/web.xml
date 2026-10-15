@@ -6,7 +6,7 @@
 	<display-name>tuning</display-name>
 
 	<welcome-file-list>
-		<welcome-file>index.html</welcome-file>
+		<welcome-file>tuning.html</welcome-file>
 	</welcome-file-list>
 
 	<!-- no security required -->

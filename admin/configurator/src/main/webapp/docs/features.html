@@ -5,13 +5,14 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Feature Reference · BLADE Configurator</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<script src="/blade/portal/brand/theme.js"></script>
 	<link rel="icon" type="image/svg+xml" href="/blade/configurator/favicon.svg">
 </head>
 <body class="vorpal-glass">
 <div class="vorpal-app">
 
 	<header class="vorpal-topbar">
-		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+		<a class="vorpal-brand" href="/blade/dashboard/" title="Back to the dashboard">
 			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
 			<span class="vorpal-brand-text">
 				<span class="vorpal-brand-product">BLADE Admin Portal</span>
@@ -20,9 +21,10 @@
 		</a>
 		<a class="vorpal-appmark" href="/blade/configurator/">Configurator</a>
 		<nav class="vorpal-nav" aria-label="Primary">
-			<a href="../index.html">Overview</a>
 			<a href="../configurator.html">Editor</a>
-			<a href="index.html" class="vorpal-active">Documentation</a>
+			<a href="../docs/index.html">Documentation</a>
+			<a href="../docs/features.html" class="vorpal-active">Feature Reference</a>
+			<a href="../docs/troubleshooting.html">Troubleshooting</a>
 		</nav>
 		<div class="vorpal-topbar-right">
 			<span class="vorpal-pill">Ready</span>
@@ -81,7 +83,7 @@
 						<dt>Dirty indicator</dt>
 						<dd>The orange dot + "Unsaved Changes" appears any time form state diverges from the last loaded JSON. Save or Load clears it.</dd>
 						<dt>Theme</dt>
-						<dd>Light, Dark, Midnight Blue, or Warm Sand. Theme is per-browser (localStorage), not per-user or per-deployment.</dd>
+						<dd>Light or dark, from the switch in the top bar that every admin app shares. It follows the computer&rsquo;s setting until you pick one; the pick is per-browser, not per-user or per-deployment.</dd>
 					</dl>
 
 					<h2>Tabs</h2>

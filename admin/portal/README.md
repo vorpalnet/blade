@@ -30,7 +30,9 @@ gets a bare card named from its context-root slug.
   never add a per-app login page (see [SECURITY.md](../../SECURITY.md)).
 - The **master `denied.jsp`**, injected the same way: each admin app's 403 page, naming the
   roles that open the app to someone signed in without one.
-- The brand assets under `/brand/*` that other admin apps reference.
+- The brand assets under `/brand/*` that other admin apps reference: `brand.css` (the
+  dashboard's look, in a light and a dark token set) and `theme.js`, which every admin page
+  loads beside it to pick the theme and put the light/dark switch in the top bar.
 - The **shared editor kit** under `/lib/*` (`blade-editor.js` + `blade-editor.css`):
   schema-driven form rendering, polymorphic card lists, and the help-dialog helper
   used by the purpose-built config editors
