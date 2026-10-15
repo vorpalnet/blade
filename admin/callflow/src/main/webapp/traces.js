@@ -61,7 +61,8 @@
 		report: document.getElementById('tr-report'),
 		recorded: document.getElementById('tr-recorded'),
 		like: document.getElementById('tr-like'),
-		around: document.getElementById('tr-around')
+		around: document.getElementById('tr-around'),
+		copy: document.getElementById('tr-copy')
 	};
 
 	var snapshot = window.BLADE_TRACE_SNAPSHOT || null;
@@ -332,6 +333,7 @@
 	function showVerdict(call) {
 		var found = verdictsOf(call.sessionId);
 		if (els.like) { els.like.hidden = !origin(call); }
+		if (els.copy) { els.copy.hidden = !found.length; }
 		if (!found.length) {
 			if (els.around) { els.around.hidden = true; }
 			aroundFor = null;
@@ -341,6 +343,39 @@
 		els.stepInfo.textContent = found.join('  ·  ');
 		els.sourcePath.hidden = true;
 		showAround(call);
+	}
+
+	// ---- the call as text ----
+	// What a person pastes into a ticket or sends a carrier: the verdict, each
+	// step with its time and far end, and what surrounded the call. Plain
+	// text, one fact a line, readable without the page.
+	function callText(call) {
+		var lines = ['Call ' + call.sessionId + (call.steps.length ? ', ' + new Date(call.firstMillis).toISOString() : '')];
+		verdictsOf(call.sessionId).forEach(function (v) { lines.push(v); });
+		lines.push('');
+		call.steps.forEach(function (s, i) {
+			lines.push('#' + (i + 1) + '  ' + hhmmss(s.epochMillis) + '  ' + s.app + (s.direction === 'in' ? ' <- ' : ' -> ')
+				+ s.label + (s.direction === 'in' ? ' from ' : ' to ') + (s.peer || 'the network'));
+		});
+		if (els.around && !els.around.hidden) {
+			lines.push('');
+			lines.push(els.around.innerText.replace(/ ↗/g, '').replace(/\n{2,}/g, '\n').trim());
+		}
+		return lines.join('\n') + '\n';
+	}
+
+	if (els.copy) {
+		els.copy.addEventListener('click', function () {
+			var call = currentCall();
+			if (!call) { return; }
+			var text = callText(call);
+			var done = function () { setStatus('copied call ' + call.sessionId + ' as text'); };
+			if (navigator.clipboard && navigator.clipboard.writeText) {
+				navigator.clipboard.writeText(text).then(done, function () { window.prompt('Copy the call:', text); });
+			} else {
+				window.prompt('Copy the call:', text);
+			}
+		});
 	}
 
 	// ---- around a recorded call ----
@@ -892,6 +927,7 @@
 				recordedMode = !recordedMode;
 				linkedCall = null;
 				if (els.like) { els.like.hidden = true; }
+				if (els.copy) { els.copy.hidden = true; }
 				selectedCall = null;
 				selectedStep = null;
 				refresh();

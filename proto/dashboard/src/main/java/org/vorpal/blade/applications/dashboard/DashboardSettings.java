@@ -24,6 +24,11 @@ public class DashboardSettings extends Configuration implements Serializable {
 	private java.util.List<Integer> ranges = new java.util.ArrayList<>(java.util.Arrays.asList(1, 7, 30));
 	private String analyticsDataSource = "jdbc/BladeAnalytics";
 	private int heapHighPercent = 85;
+	private int metaspaceGrowthPercent = 25;
+	private int certificateWarningDays = 30;
+	private int capacityCallsPerSecond;
+	private int capacitySessions;
+	private NotifySettings notify = new NotifySettings();
 	private int healthyPercent = 90;
 	private int unhealthyPercent = 60;
 	private int leakHours = 24;
@@ -84,6 +89,51 @@ public class DashboardSettings extends Configuration implements Serializable {
 
 	public void setHeapHighPercent(int heapHighPercent) {
 		this.heapHighPercent = clamp(heapHighPercent, 1, 100);
+	}
+
+	@JsonPropertyDescription("Who hears about trouble without watching the board: webhooks and email, and which kinds.")
+	public NotifySettings getNotify() {
+		return notify;
+	}
+
+	public void setNotify(NotifySettings notify) {
+		this.notify = notify == null ? new NotifySettings() : notify;
+	}
+
+	@JsonPropertyDescription("New calls per second one engine was measured to carry in a load test (TODO: the event-bus load tests). Servers › Headroom sets each engine's busiest minute against it; 0 until measured.")
+	public int getCapacityCallsPerSecond() {
+		return capacityCallsPerSecond;
+	}
+
+	public void setCapacityCallsPerSecond(int capacityCallsPerSecond) {
+		this.capacityCallsPerSecond = Math.max(0, capacityCallsPerSecond);
+	}
+
+	@JsonPropertyDescription("Calls one engine was measured to hold at once. Servers › Headroom sets each engine's most against it; 0 until measured.")
+	public int getCapacitySessions() {
+		return capacitySessions;
+	}
+
+	public void setCapacitySessions(int capacitySessions) {
+		this.capacitySessions = Math.max(0, capacitySessions);
+	}
+
+	@JsonPropertyDescription("Days before a TLS certificate expires at which it is raised as a problem under Operations › Issues. The dashboard reads the certificate every HTTPS and SIP-TLS listener presents, once an hour.")
+	public int getCertificateWarningDays() {
+		return certificateWarningDays;
+	}
+
+	public void setCertificateWarningDays(int certificateWarningDays) {
+		this.certificateWarningDays = clamp(certificateWarningDays, 1, 365);
+	}
+
+	@JsonPropertyDescription("Growth of a server's metaspace, in percent, since the dashboard first saw it after its start, at which Servers › Apps recommends restarting it. Every redeploy loads an application's classes again, and copies an old deployment still holds are freed only by a restart.")
+	public int getMetaspaceGrowthPercent() {
+		return metaspaceGrowthPercent;
+	}
+
+	public void setMetaspaceGrowthPercent(int metaspaceGrowthPercent) {
+		this.metaspaceGrowthPercent = clamp(metaspaceGrowthPercent, 1, 1000);
 	}
 
 	@JsonPropertyDescription("Share of calls, in percent, that must end completed for a place on the map to read healthy. Between this and unhealthyPercent the colour runs from healthy to unhealthy.")

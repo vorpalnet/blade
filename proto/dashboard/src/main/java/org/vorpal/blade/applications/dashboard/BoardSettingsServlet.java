@@ -40,6 +40,8 @@ public class BoardSettingsServlet extends HttpServlet {
 		out.put("healthyPercent", s.getHealthyPercent());
 		out.put("unhealthyPercent", Math.min(s.getUnhealthyPercent(), s.getHealthyPercent() - 1));
 		out.put("liveRefreshSeconds", s.getLiveRefreshSeconds());
+		out.put("capacityCallsPerSecond", s.getCapacityCallsPerSecond());
+		out.put("capacitySessions", s.getCapacitySessions());
 		out.put("analyticsRefreshSeconds", s.getAnalyticsRefreshSeconds());
 		out.put("ranges", s.getRanges());
 		out.put("defaultDays", s.getDefaultDays());

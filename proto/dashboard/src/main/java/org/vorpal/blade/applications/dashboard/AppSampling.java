@@ -75,6 +75,13 @@ final class AppSampling implements Runnable {
 			COUNTER + "sip.errors"));
 
 	private final AppSampler applications = new AppSampler();
+	/// The dashboard's current settings, read on each pass.
+	private final java.util.function.Supplier<DashboardSettings> settings;
+
+	AppSampling(java.util.function.Supplier<DashboardSettings> settings) {
+		this.settings = settings;
+	}
+
 	private final AppSampler servers = new AppSampler();
 
 	/// The held-session count each application last published, so the minute
@@ -84,11 +91,11 @@ final class AppSampling implements Runnable {
 
 	/// Schedule the sampling. Returns null, logged, when the container offers no
 	/// managed scheduler; the dashboard runs without it.
-	static ScheduledFuture<?> start() {
+	static ScheduledFuture<?> start(java.util.function.Supplier<DashboardSettings> settings) {
 		try {
 			ManagedScheduledExecutorService executor = (ManagedScheduledExecutorService) new InitialContext()
 					.lookup(EXECUTOR);
-			return executor.scheduleAtFixedRate(new AppSampling(), PERIOD_SECONDS, PERIOD_SECONDS, TimeUnit.SECONDS);
+			return executor.scheduleAtFixedRate(new AppSampling(settings), PERIOD_SECONDS, PERIOD_SECONDS, TimeUnit.SECONDS);
 		} catch (Exception e) {
 			logger.log(Level.WARNING, "application sampling not started: " + e);
 			return null;
@@ -106,8 +113,40 @@ final class AppSampling implements Runnable {
 				sample(dr, on, now, live);
 			}
 			sampleServers(dr, now);
+			DashboardSettings settings = this.settings == null ? null : this.settings.get();
+			Certificates.refresh(dr, settings == null ? 30 : settings.getCertificateWarningDays(), now);
+			parked(dr);
+			StuckThreads.check(dr);
 		} catch (Throwable t) {
 			logger.log(Level.WARNING, "application sampling pass failed", t);
+		}
+	}
+
+	/// Whether this dashboard raised the parked-events problem and has not
+	/// cleared it.
+	private boolean parkedRaised;
+
+	/// Events parked on the bus's error queue reached no report: raised as a
+	/// problem while any are there, so Issues shows it and [Notifier] sends it,
+	/// and cleared when the queue is empty (Servers › Bus deletes them).
+	private void parked(MBeanServer dr) {
+		long n = 0;
+		try {
+			for (ObjectName q : BusServlet.errorQueues(dr)) {
+				Object c = HealthServlet.get(dr, q, "MessagesCurrentCount");
+				n += c instanceof Number ? ((Number) c).longValue() : 0;
+			}
+		} catch (Exception e) {
+			return;
+		}
+		if (n > 0 && !parkedRaised) {
+			parkedRaised = true;
+			org.vorpal.blade.framework.v3.events.Problems.raise("bus:parked", n + (n == 1 ? " event" : " events")
+					+ " parked on the bus's error queue: a subscriber failed them, and they reached no report",
+					"/blade/dashboard/");
+		} else if (n == 0 && parkedRaised) {
+			parkedRaised = false;
+			org.vorpal.blade.framework.v3.events.Problems.clear("bus:parked");
 		}
 	}
 
@@ -380,7 +419,35 @@ final class AppSampling implements Runnable {
 			putReading(data, "threadsStuck", HealthServlet.lng(dr, tp, "StuckThreadCount"), tp != null);
 			putReading(data, "threadsHogging", HealthServlet.lng(dr, tp, "HoggingThreadCount"), tp != null);
 			putReading(data, "threadsPending", HealthServlet.lng(dr, tp, "PendingUserRequestCount"), tp != null);
+			// What redeploys leave behind: classes loaded again, and old copies a
+			// restart alone frees. Heap under G1 reads high either way.
+			long metaspace = metaspaceBytes(dr, d.node);
+			putReading(data, "metaspaceMb", metaspace < 0 ? -1 : metaspace / 1048576, metaspace >= 0);
+			long classes = classesLoaded(dr, d.node);
+			putReading(data, "classesLoaded", classes, classes >= 0);
 		});
+	}
+
+	/// A server's metaspace in use, through the domain runtime's view of its
+	/// JVM, or -1.
+	static long metaspaceBytes(MBeanServer dr, String node) {
+		try {
+			Object usage = dr.getAttribute(
+					new ObjectName("java.lang:Location=" + node + ",name=Metaspace,type=MemoryPool"), "Usage");
+			return ((Number) ((javax.management.openmbean.CompositeData) usage).get("used")).longValue();
+		} catch (Exception e) {
+			return -1;
+		}
+	}
+
+	/// The classes a server's JVM has loaded now, or -1.
+	static long classesLoaded(MBeanServer dr, String node) {
+		try {
+			return ((Number) dr.getAttribute(new ObjectName("java.lang:Location=" + node + ",type=ClassLoading"),
+					"LoadedClassCount")).longValue();
+		} catch (Exception e) {
+			return -1;
+		}
 	}
 
 	/// Omits a reading the server does not have, rather than recording a zero

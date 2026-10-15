@@ -39,7 +39,16 @@ it shows each server's last state, its peak heap and CPU, its restarts and its m
 stuck threads, from the minute samples. A view that can only show now (the connection
 pools, the network map, the live event feed) says "live" in its header. Operations in
 the past comes from the database: the issues open at some time in the range (down to
-back, raised to cleared), each queue's busy minutes, and every operations event.
+back, raised to cleared), each queue's busy minutes, and every operations event. Servers
+› Bus says whether the board can be trusted: how fresh the stored events are, each
+subscription's backlog, and the events the bus parked, which an Admin or Operator deletes.
+Servers › Apps lists each application's state and framework build per server, and says when a
+server's metaspace has grown enough from redeploys that a restart would pay. It also
+says whether each application runs its configuration file, and how long each TLS certificate has
+left. Operations › Trunks and Applications › Downstream follow each trunk and each server the
+calls were sent to over the range. Calls finds a phone number's calls; Servers ›
+Headroom sets each server's busiest minute against its measured capacity; and the `notify`
+settings send each problem, trunk, endpoint and remote change to webhooks and email.
 
 Traffic's **Network** tab is a map of the sites in the settings' `sites` list: where this
 domain's servers run (`cluster`), where calls arrive from (`inbound`) and where they are

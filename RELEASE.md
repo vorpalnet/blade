@@ -95,6 +95,79 @@ and a new report, `calls.causes`. It needs the SIP applications built on the fli
 A proxy such as iRouter reports where it sent a call, never how the call ended; Outcomes now
 counts such a call by the flight recorder's verdict, as failed (or dropped), instead of leaving it out.
 
+### Dashboard: can the board be trusted?
+
+Servers has a Bus tab: how fresh the newest stored event is (BEHIND after five quiet minutes, while
+every server samples itself each minute), each durable subscription with its consumer and what
+waits for it, and every event parked on the error queue, with its type, subject, server and time.
+An operator with the WebLogic Admin or Operator role deletes them there. Parked events are never
+replayed: one does not say which subscriber failed it, and a replay reaches every subscriber. The
+analytics service raises a problem, under Operations › Issues, the moment it cannot store a type,
+naming the types and the database's own message; it clears when that type stores again.
+
+### Dashboard: is every application deployed and current?
+
+Servers has an Apps tab, read live from the domain runtime: each application's WebLogic state on
+each server (ACTIVE, or stuck PREPARED, or FAILED), and the framework build it carries, from a new
+`FrameworkVersion` on its Metrics MBean (version, build mode and build time, so two dev builds
+differ). An application not ACTIVE, or built with another framework than most on its server, is
+listed first and marked. Each server shows its metaspace and classes loaded, and RESTART
+RECOMMENDED once metaspace has grown past `metaspaceGrowthPercent` (25 by default) from its first
+minute sample after the server started: every redeploy loads an application's classes again, and
+what old deployments hold is freed only by a restart. The minute samples now record metaspace and
+classes loaded (`metaspaceMb`, `classesLoaded`), and every artifact's manifest carries
+`Implementation-Version`.
+
+### Dashboard: notices, finding a call, headroom, the database, and the diagnosis path
+
+- **Notices.** A problem raised or cleared (an application's, a certificate near expiry, events
+  parked on the bus), an endpoint, trunk or remote going down or coming back: POSTed as JSON to
+  each webhook and emailed to each address in the dashboard settings (`notify`), on the change
+  only. SMTP is set in the settings, its password encrypted at rest.
+- **Find a number.** Calls takes a phone number as the complaint gives it and lists that number's
+  calls in the range (caller, callee, ANI or DNIS, matched on the last ten digits), each opening
+  in Trace. Needs the content grant. The number travels in a header, never the address, and the
+  audit records that a search happened, not the number.
+- **Servers › Headroom.** Each server's busiest minute in the range (new calls a second, calls
+  held, heap, CPU) against what one engine was measured to carry (`capacityCallsPerSecond`,
+  `capacitySessions`, set after a load test). NEAR CAPACITY past 80%.
+- **The database.** Servers › Bus says how big it is, how many events it holds, how many more a
+  day, and how far back it reaches; nothing deletes old rows yet.
+- **Usual rates.** Each outcome's share beside its usual one: the same hours of the same weekday
+  over the four weeks before (windows of a week or less). A bad outcome at twice its usual share
+  and five points over reads UNUSUAL.
+- **The onset.** Operations › Changes opens with when the range's calls began going wrong and the
+  change just before it, within the hour.
+- **Refusals before any application.** Applications › Causes lists, from the servers' samples,
+  what the container refused and what the App Router could not route; no call record exists for
+  these, so they are counted, not listed.
+- **Stuck threads.** While a server counts any, the dashboard reads its thread dump and raises
+  each stuck thread under Issues with how long, its state and the first frames of its own code.
+- **Trace: Copy as text.** A recorded call's verdict, steps and surroundings as plain text, for
+  a ticket or a carrier.
+
+### Dashboard: trunks, downstream servers, sends, configuration and certificates
+
+- **Operations › Trunks.** Each trunk a gateway registers, per server: its state at the end of the
+  range and since when, how often it registered and failed, and its last failure in words (401 is
+  credentials refused, 403 the account, 404 an account the registrar does not know). Down, or
+  failing and coming back, is marked FLAPPING and listed first. Registering again with no failure
+  is the gateway restarting, not a flap.
+- **Applications › Downstream.** Each server the calls were sent to that the flight recorder found
+  failing them: how many calls, what went wrong (`error 3`), the statuses it answered. A click
+  narrows Calls to its calls (`peer=` in the address, like `cause=`).
+- **Servers › Bus, publishing.** Events published in the last hour, sends the bus refused, and how
+  long a send held the publishing thread (the framework now times `MessageProducer.send` as
+  `events.publish.time`). An application refused or averaging a millisecond or more is listed.
+- **Servers › Apps, configuration.** Whether each application runs the AdminServer's file for it:
+  every value the file sets must be the value it runs (its defaults do not count, a list matches
+  by `id` or `name`, a hidden secret agrees). `differs at <path>` is a push that failed, a file
+  edited by hand or an application that never reloaded; `does not know <path>` is a setting the
+  application has no field for.
+- **Servers › Apps, certificates.** The certificate every HTTPS and SIP-TLS listener presents,
+  read from a handshake once an hour (no keystore opened), with the days left. Inside
+  `certificateWarningDays` (30) it is raised under Operations › Issues, cleared once renewed.
+
 ### Events about no call now name their publisher
 
 An event that is not about one call (a configuration saved or pushed, a trunk registering, an

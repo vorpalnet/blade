@@ -336,6 +336,8 @@ SELECT
    CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."threadsStuck"')) AS SIGNED) AS threads_stuck,
    CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."threadsHogging"')) AS SIGNED) AS threads_hogging,
    CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."threadsPending"')) AS SIGNED) AS threads_pending,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."metaspaceMb"')) AS SIGNED) AS metaspace_mb,
+   CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."classesLoaded"')) AS SIGNED) AS classes_loaded,
    a.domain AS domain
 FROM events e
 JOIN applications a ON a.id = e.application_id

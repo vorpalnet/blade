@@ -502,6 +502,7 @@
 						<packagingExcludes>%regex[WEB-INF/lib/(?!vorpal-blade-library-framework).*\.jar]</packagingExcludes>
 						<archive>
 							<manifestEntries>
+								<Implementation-Version>${project.version}</Implementation-Version>
 								<Implementation-Build-Date>${maven.build.timestamp}</Implementation-Build-Date>
 								<Blade-Build-Mode>${blade.mode}</Blade-Build-Mode>
 								<Copyright>${blade.copyright}</Copyright>
@@ -527,6 +528,7 @@
 						<forceCreation>true</forceCreation>
 						<archive>
 							<manifestEntries>
+								<Implementation-Version>${project.version}</Implementation-Version>
 								<Implementation-Build-Date>${maven.build.timestamp}</Implementation-Build-Date>
 								<Blade-Build-Mode>${blade.mode}</Blade-Build-Mode>
 								<Copyright>${blade.copyright}</Copyright>
@@ -543,6 +545,7 @@
 					<configuration>
 						<archive>
 							<manifestEntries>
+								<Implementation-Version>${project.version}</Implementation-Version>
 								<Implementation-Build-Date>${maven.build.timestamp}</Implementation-Build-Date>
 								<Blade-Build-Mode>${blade.mode}</Blade-Build-Mode>
 								<Copyright>${blade.copyright}</Copyright>

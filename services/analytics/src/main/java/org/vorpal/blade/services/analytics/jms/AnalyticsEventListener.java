@@ -22,6 +22,7 @@ import org.vorpal.blade.framework.v3.events.BladeEventTypes;
 import org.vorpal.blade.framework.v3.events.CloudEvent;
 import org.vorpal.blade.framework.v3.events.EventBus;
 import org.vorpal.blade.framework.v3.events.EventSubscriber;
+import org.vorpal.blade.framework.v3.events.Problems;
 import org.vorpal.blade.services.analytics.model.Event;
 import org.vorpal.blade.services.analytics.model.SessionKey;
 import org.vorpal.blade.services.analytics.model.SessionKeyPK;
@@ -197,6 +198,7 @@ public class AnalyticsEventListener implements EventSubscriber.Handler {
 			em.getTransaction().commit();
 			persisted.add(written);
 			count(persistedMeter, written);
+			stored(batch);
 
 		} catch (Exception ex) {
 			rollback(em);
@@ -213,6 +215,7 @@ public class AnalyticsEventListener implements EventSubscriber.Handler {
 			} else {
 				logSevere("AnalyticsEventListener: Persist error, batch of " + batch.size()
 						+ " will be redelivered: " + ex.getMessage(), ex);
+				unstored(batch, ex);
 			}
 			// Either way the batch is NOT acknowledged. This is the difference
 			// from the previous consumer, which logged and acknowledged — so a
@@ -224,6 +227,83 @@ public class AnalyticsEventListener implements EventSubscriber.Handler {
 				em.close();
 			}
 		}
+	}
+
+	// ───────────────────────────────────────────── events it cannot store
+
+	/// The types of the batches that failed and whose type has not stored since.
+	private static final java.util.Set<String> UNSTORED = new java.util.TreeSet<>();
+	private static String unstoredReason;
+	private static String raised;
+	static final String PROBLEM_KEY = "analytics:unstored";
+
+	/// A batch failed for something other than the database being down: its
+	/// events will be redelivered, and after the redelivery limit parked on the
+	/// bus's error queue. Raised as a problem on the dashboard, naming the types
+	/// and the database's own words, so a type that can never be stored is seen
+	/// the day it starts, not when someone looks for its rows.
+	///
+	/// **Why every type in the batch.** A batch commits whole, so a failure
+	/// cannot say which event caused it. The broker redelivers the batch one
+	/// event at a time, and each type that then stores is taken off the list
+	/// ([#stored]), so what remains is the type at fault.
+	private void unstored(List<CloudEvent> batch, Exception ex) {
+		synchronized (UNSTORED) {
+			for (CloudEvent event : batch) {
+				UNSTORED.add(name(event));
+			}
+			unstoredReason = rootMessage(ex);
+			raiseUnstored();
+		}
+	}
+
+	/// A batch stored: its types are not at fault. The problem clears when no
+	/// type is left.
+	private void stored(List<CloudEvent> batch) {
+		synchronized (UNSTORED) {
+			if (UNSTORED.isEmpty()) {
+				return;
+			}
+			for (CloudEvent event : batch) {
+				UNSTORED.remove(name(event));
+			}
+			raiseUnstored();
+		}
+	}
+
+	/// Raises, restates or clears the problem, only when its words change: each
+	/// call is an event on the bus.
+	private static void raiseUnstored() {
+		String summary = UNSTORED.isEmpty() ? null
+				: "Analytics cannot store " + String.join(", ", UNSTORED) + " events: " + unstoredReason;
+		if (java.util.Objects.equals(summary, raised)) {
+			return;
+		}
+		raised = summary;
+		if (summary == null) {
+			Problems.clear(PROBLEM_KEY);
+		} else {
+			Problems.raise(PROBLEM_KEY, summary, "/blade/logs/logs.html?server="
+					+ SettingsManager.getServerName() + "&app=analytics&q=Persist%20error");
+		}
+	}
+
+	/// The analytics name, or the wire type for one the catalog does not know.
+	private static String name(CloudEvent event) {
+		String name = BladeEventTypes.eventNameOf(event.getType());
+		return name != null ? name : String.valueOf(event.getType());
+	}
+
+	/// The innermost cause's first line: the database's own words, such as
+	/// `ORA-01400: cannot insert NULL into ("ADMIN"."APPLICATIONS"."NAME")`.
+	static String rootMessage(Throwable t) {
+		Throwable root = t;
+		while (root.getCause() != null && root.getCause() != root) {
+			root = root.getCause();
+		}
+		String m = String.valueOf(root.getMessage()).trim();
+		int nl = m.indexOf('\n');
+		return nl > 0 ? m.substring(0, nl).trim() : m;
 	}
 
 	private void rollback(EntityManager em) {

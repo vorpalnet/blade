@@ -8,8 +8,10 @@
 
 	/* fetch that copes with FORM auth: an expired session returns the login page
 	   (HTML, not JSON), so on anything but JSON we reload into the form. */
-	function getJson(url) {
-		return fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+	function getJson(url, extra) {
+		var headers = { 'Accept': 'application/json' };
+		Object.keys(extra || {}).forEach(function (k) { headers[k] = extra[k]; });
+		return fetch(url, { headers: headers, credentials: 'same-origin' })
 			.then(function (r) {
 				var ct = r.headers.get('content-type') || '';
 				if (r.status === 401 || r.status === 403 || ct.indexOf('text/html') >= 0) {

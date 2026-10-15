@@ -55,7 +55,8 @@ public class DashboardSettingsStartup implements ServletContextListener {
 		// this instance by its start time, and without one each would mint a
 		// new application row.
 		Analytics.applicationStart();
-		sampling = AppSampling.start();
+		Notifier.settings = () -> settingsManager == null ? null : settingsManager.getCurrent();
+		sampling = AppSampling.start(Notifier.settings);
 	}
 
 	@Override
@@ -64,6 +65,7 @@ public class DashboardSettingsStartup implements ServletContextListener {
 			sampling.cancel(false);
 			sampling = null;
 		}
+		Notifier.shutdown();
 		Analytics.applicationStop();
 		if (ops != null) {
 			ops.stop();

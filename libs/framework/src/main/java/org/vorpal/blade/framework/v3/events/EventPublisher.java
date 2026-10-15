@@ -116,6 +116,7 @@ public class EventPublisher {
 	/// Optional publish meters — see [#meter]. Null when nobody is counting.
 	private volatile Counter.Series published;
 	private volatile Counter.Series failed;
+	private volatile org.vorpal.blade.framework.v3.metrics.Histogram sendTime;
 
 	/// A session and its producer, borrowed and returned as one unit.
 	private final class Sender {
@@ -180,6 +181,14 @@ public class EventPublisher {
 	public void meter(Counter.Series published, Counter.Series failed) {
 		this.published = published;
 		this.failed = failed;
+	}
+
+	/// Time each send: how long `MessageProducer.send` holds the publishing
+	/// thread, which for a call event is the SIP container's. Under load this
+	/// is the number that says whether the broker keeps up; optional, as the
+	/// counters are.
+	public void time(org.vorpal.blade.framework.v3.metrics.Histogram sendTime) {
+		this.sendTime = sendTime;
 	}
 
 	/// Look up the connection factory and destination, open the shared
@@ -314,7 +323,12 @@ public class EventPublisher {
 				if (event.isCallScoped()) {
 					message.setBooleanProperty(PROP_CALL, true);
 				}
+				long started = System.nanoTime();
 				sender.producer.send(message);
+				org.vorpal.blade.framework.v3.metrics.Histogram timer = sendTime;
+				if (timer != null) {
+					timer.record((System.nanoTime() - started) / 1_000_000L);
+				}
 			} catch (JMSException e) {
 				discard(sender.from);
 				throw e;

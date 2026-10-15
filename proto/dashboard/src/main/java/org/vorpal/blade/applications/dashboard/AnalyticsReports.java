@@ -130,6 +130,13 @@ public class AnalyticsReports {
 		/// Calls the flight recorder found this cause on only, a key from
 		/// [#causeKey]; null for all.
 		String cause;
+		/// Calls the flight recorder found a downstream server at this address
+		/// failing; null for all.
+		String peer;
+		/// Calls whose caller, callee, ANI or DNIS carries these digits (the
+		/// last ten of what the operator typed); null for all. Content: it
+		/// finds a person's calls.
+		String number;
 		/// A recurring slice of the window, from the board's weekday-by-hour
 		/// grid: Monday is 1. Null for none.
 		Integer weekday;
@@ -168,6 +175,8 @@ public class AnalyticsReports {
 			c.outcome = outcome;
 			c.application = application;
 			c.cause = cause;
+			c.peer = peer;
+			c.number = number;
 			c.weekday = weekday;
 			c.hourOfDay = hourOfDay;
 			return c;
@@ -227,6 +236,24 @@ public class AnalyticsReports {
 		public Filter forCause(String cause) {
 			Filter c = copy();
 			c.cause = blank(cause);
+			return c;
+		}
+
+		/// This scope narrowed to the calls of one phone number: `typed` as the
+		/// operator wrote it, `+1 (212) 555-0100` or `2125550100`, matched on its
+		/// last ten digits. Fewer than four digits is no search.
+		public Filter forNumber(String typed) {
+			Filter c = copy();
+			String digits = typed == null ? "" : typed.replaceAll("[^0-9]", "");
+			c.number = digits.length() < 4 ? null : digits.substring(Math.max(0, digits.length() - 10));
+			return c;
+		}
+
+		/// This scope narrowed to the calls a downstream server at `peer` failed,
+		/// as the `calls.peers` report names it; null for all.
+		public Filter forPeer(String peer) {
+			Filter c = copy();
+			c.peer = blank(peer);
 			return c;
 		}
 
@@ -297,7 +324,7 @@ public class AnalyticsReports {
 					+ (account == null ? "" : account) + '|' + (from == null ? "" : from.getTime() + "-" + now.getTime())
 					+ '|' + (server == null ? "" : server) + '|' + (outcome == null ? "" : outcome) + '|'
 					+ (application == null ? "" : application) + '|' + (weekday == null ? "" : weekday + "@" + hourOfDay) + '|'
-					+ (cause == null ? "" : cause);
+					+ (cause == null ? "" : cause) + '|' + (peer == null ? "" : peer) + '|' + (number == null ? "" : number);
 		}
 	}
 
@@ -328,7 +355,7 @@ public class AnalyticsReports {
 			"calls.by-area",
 			"calls.domains",
 			"duration.summary", "duration.bands", "duration.daily", "duration.by-application",
-			"outcomes.summary", "outcomes.daily", "outcomes.ended", "outcomes.by-application",
+			"outcomes.summary", "outcomes.daily", "outcomes.ended", "outcomes.usual", "outcomes.by-application",
 			"sessions.summary", "sessions.open", "sessions.by-application",
 			"platform.summary", "platform.daily", "platform.by-application", "platform.versions",
 			"events.summary", "events.daily", "events.by-type", "events.by-type-application",
@@ -337,8 +364,8 @@ public class AnalyticsReports {
 			"conversation.summary", "conversation.daily", "conversation.by-intent", "conversation.by-addressed",
 			"conversation.intents",
 			"health.summary", "health.coverage", "health.chains", "health.split-calls", "health.publishing",
-			"health.publishing-daily", "platform.servers", "platform.latest", "platform.servers-hourly", "platform.heap", "platform.cpu",
-			"changes", "ops.events", "ops.issues", "ops.queues", "calls.list", "calls.causes", "metrics.summary",
+			"health.publishing-daily", "health.stored", "health.database", "platform.headroom", "platform.servers", "platform.latest", "platform.servers-hourly", "platform.heap", "platform.cpu",
+			"changes", "ops.events", "ops.issues", "ops.trunks", "ops.queues", "calls.list", "calls.causes", "calls.peers", "metrics.summary",
 			"metrics.counters", "metrics.timings", "risk.verdicts", "risk.calibration"));
 
 	// Lifecycle names as the views carry them: the short names, plus the camelCase
@@ -392,8 +419,29 @@ public class AnalyticsReports {
 	/// Runs one named report.
 	///
 	/// @throws IllegalArgumentException for a name not in [#NAMES]
+	/// A server's metaspace in its first minute sample at or after `since`
+	/// (when it started), in MiB, or null: the baseline Servers › Apps
+	/// measures redeploys' growth against.
+	public Long firstMetaspaceMb(String node, String domain, Date since) {
+		EntityManager em = factory.createEntityManager();
+		try {
+			TypedQuery<Long> q = em.createQuery("SELECT s.metaspaceMb FROM ServerSampleRow s WHERE s.node = :node"
+					+ (domain == null ? "" : " AND s.domain = :domain")
+					+ " AND s.sampledAt >= :since AND s.metaspaceMb IS NOT NULL ORDER BY s.sampledAt", Long.class)
+					.setParameter("node", node).setParameter("since", since).setMaxResults(1);
+			if (domain != null) {
+				q.setParameter("domain", domain);
+			}
+			List<Long> r = q.getResultList();
+			return r.isEmpty() ? null : r.get(0);
+		} finally {
+			em.close();
+		}
+	}
+
 	public Table run(String name, Filter f) {
-		if (f.access != null && !f.access.seesContent() && (f.account != null || CONTENT.contains(name))) {
+		if (f.access != null && !f.access.seesContent()
+				&& (f.account != null || f.number != null || CONTENT.contains(name))) {
 			throw new SecurityException("seeing individual calls and what was said needs a grant with content");
 		}
 		EntityManager em = factory.createEntityManager();
@@ -420,6 +468,7 @@ public class AnalyticsReports {
 			case "outcomes.summary": return outcomesSummary(em, f);
 			case "outcomes.daily": return outcomesDaily(em, f);
 			case "outcomes.ended": return outcomesEnded(em, f);
+			case "outcomes.usual": return outcomesUsual(em, f);
 			case "outcomes.by-application": return outcomesByApplication(em, f);
 			case "sessions.summary": return sessionsSummary(em, f);
 			case "sessions.open": return sessionsOpen(em, f);
@@ -450,7 +499,10 @@ public class AnalyticsReports {
 			case "health.split-calls": return healthSplitCalls(em, f);
 			case "health.publishing": return healthPublishing(em, f);
 			case "health.publishing-daily": return healthPublishingDaily(em, f);
+			case "health.stored": return healthStored(em, f);
+			case "health.database": return healthDatabase(em, f);
 			case "platform.servers": return platformServers(em, f);
+			case "platform.headroom": return platformHeadroom(em, f);
 			case "platform.latest": return platformLatest(em, f);
 			case "platform.servers-hourly": return platformServersHourly(em, f);
 			case "platform.heap": return platformPeak(em, f, "heapUsedPct", "peak heap %");
@@ -458,9 +510,11 @@ public class AnalyticsReports {
 			case "changes": return changes(em, f);
 			case "ops.events": return opsEvents(em, f);
 			case "ops.issues": return opsIssues(em, f);
+			case "ops.trunks": return opsTrunks(em, f);
 			case "ops.queues": return opsQueues(em, f);
 			case "calls.list": return callsList(em, f);
 			case "calls.causes": return callsCauses(em, f);
+			case "calls.peers": return callsPeers(em, f);
 			case "metrics.summary": return metricsSummary(em, f);
 			case "metrics.counters": return metricsCounters(em, f);
 			case "metrics.timings": return metricsTimings(em, f);
@@ -988,6 +1042,34 @@ public class AnalyticsReports {
 		Table t = new Table("outcome", "calls");
 		for (int i = 0; i < ENDINGS.length; i++) {
 			t.row(ENDINGS[i], n[i]);
+		}
+		return t;
+	}
+
+	/// What is usual for this window: each outcome's share of the calls that
+	/// ended in the same window one, two, three and four weeks back (same
+	/// weekday, same hours), added up. "Failed 11%" means little without
+	/// "usually 2%". Only for a window of a week or less: four weeks of a
+	/// month's window would read four months of rows. Null shares when those
+	/// weeks had no calls. Raw rows today; the hourly rollups of TODO 14 will
+	/// make it cheap at Optum's volume.
+	private Table outcomesUsual(EntityManager em, Filter f) {
+		Table t = new Table("outcome", "usual %", "calls");
+		long from = f.since().getTime(), until = f.now.getTime();
+		if (until - from > 7 * 86_400_000L + 60_000L) {
+			return t;
+		}
+		long[] n = new long[ENDINGS.length];
+		long total = 0;
+		for (int week = 1; week <= 4; week++) {
+			long back = week * 7 * 86_400_000L;
+			for (Object[] end : endings(em, f.window(new Date(from - back), new Date(until - back))).values()) {
+				n[(Integer) end[0]]++;
+				total++;
+			}
+		}
+		for (int i = 0; i < ENDINGS.length; i++) {
+			t.row(ENDINGS[i], total == 0 ? null : round(100.0 * n[i] / total), n[i]);
 		}
 		return t;
 	}
@@ -1724,8 +1806,19 @@ public class AnalyticsReports {
 		}
 		rows.sort(Comparator.comparing((Object[] r) -> -num(r[3])).thenComparing(r -> -num(r[2]))
 				.thenComparing(r -> label(r[0])));
+		// How long a send held the publishing thread, from the framework's
+		// `events.publish.time`: near 0 while the broker keeps up. An older
+		// framework does not time its sends, so the column is empty for it.
+		Map<String, Double> sendMs = new HashMap<>();
+		for (Object[] r : this.<Object[]>samples(em, "SELECT t.application, SUM(t.recordings), SUM(t.sumMillis) "
+				+ "FROM TimingRow t WHERE " + sampled("t", f) + " AND t.timing = 'events.publish.time' "
+				+ "GROUP BY t.application", f)) {
+			if (num(r[1]) > 0) {
+				sendMs.put(label(r[0]), round((double) num(r[2]) / num(r[1])));
+			}
+		}
 		Table t = new Table("application", "invites received", "calls recorded", "events published", "publishes failed",
-				"sip errors", "restarts", "sessions held", "last sample");
+				"sip errors", "restarts", "sessions held", "last sample", "mean send ms");
 		for (Object[] r : rows) {
 			String app = label(r[0]);
 			Long held = null;
@@ -1735,9 +1828,65 @@ public class AnalyticsReports {
 				}
 			}
 			t.row(app, num(r[1]), recorded.getOrDefault(app, 0L), num(r[2]), num(r[3]), num(r[4]),
-					restarts.getOrDefault(app, 0L), held, stamp(r[6], f));
+					restarts.getOrDefault(app, 0L), held, stamp(r[6], f), sendMs.get(app));
 		}
 		return t;
+	}
+
+	/// When analytics last stored an event, and how many it stored in the
+	/// window: the board's own freshness. Everything it shows from the database
+	/// is at most this old, so a stalled subscription or a full database shows
+	/// here before anyone wonders why a panel went quiet. Epoch millis.
+	private Table healthStored(EntityManager em, Filter f) {
+		Object[] r = list(em, "SELECT MAX(e.occurredAt), COUNT(e) FROM EventRow e"
+				+ where("e", "e.occurredAt", f), f, true).get(0);
+		Table t = new Table("newest", "events");
+		t.row(r[0] == null ? null : instant(r[0]).getTime(), num(r[1]));
+		return t;
+	}
+
+	/// The database's own growth: per kind of event, how many rows, how many a
+	/// day over the last seven, and the oldest, so how far back the reports
+	/// can see and how fast it fills. Plus the tables' size where the database
+	/// says (Oracle's `user_segments`; null elsewhere). The whole database,
+	/// whatever the board is narrowed to.
+	private Table healthDatabase(EntityManager em, Filter f) {
+		Date week = new Date(f.now.getTime() - 7 * 86_400_000L);
+		Map<String, Long> recent = new HashMap<>();
+		for (Object[] r : em.createQuery("SELECT e.eventType, COUNT(e) FROM EventRow e WHERE e.occurredAt >= :week"
+				+ " GROUP BY e.eventType", Object[].class).setParameter("week", week).getResultList()) {
+			recent.put(label(r[0]), num(r[1]));
+		}
+		List<Object[]> all = em.createQuery("SELECT e.eventType, COUNT(e), MIN(e.occurredAt) FROM EventRow e"
+				+ " GROUP BY e.eventType", Object[].class).getResultList();
+		all.sort(Comparator.comparing((Object[] r) -> -recent.getOrDefault(label(r[0]), 0L)).thenComparing(r -> label(r[0])));
+		Table t = new Table("event", "rows", "per day", "oldest", "bytes");
+		long rows = 0, perDay = 0;
+		Date oldest = null;
+		for (Object[] r : all) {
+			rows += num(r[1]);
+			perDay += recent.getOrDefault(label(r[0]), 0L);
+			Date at = instant(r[2]);
+			if (oldest == null || at.before(oldest)) {
+				oldest = at;
+			}
+		}
+		t.row("(all)", rows, round(perDay / 7.0), oldest == null ? null : oldest.getTime(), tableBytes(em));
+		for (Object[] r : all) {
+			t.row(label(r[0]), num(r[1]), round(recent.getOrDefault(label(r[0]), 0L) / 7.0), instant(r[2]).getTime(), null);
+		}
+		return t;
+	}
+
+	/// The analytics tables' size in bytes, from Oracle's `user_segments`
+	/// (tables and their indexes and LOBs); null on a database without it.
+	private static Long tableBytes(EntityManager em) {
+		try {
+			Object n = em.createNativeQuery("SELECT SUM(bytes) FROM user_segments").getSingleResult();
+			return n == null ? null : ((Number) n).longValue();
+		} catch (RuntimeException notOracle) {
+			return null;
+		}
 	}
 
 	/// Events published and publishes refused, per day, across every application.
@@ -1771,6 +1920,45 @@ public class AnalyticsReports {
 	/// handled by whatever came next, and no error was logged. The session
 	/// readings are the server's totals; which application holds them is in
 	/// `health.publishing`.
+	/// How close each server came to its limits in the window: its busiest
+	/// minute's new calls per second (application sessions created over the
+	/// sample's seconds) and when, its most sessions held at once, and its
+	/// highest heap and CPU. The board sets these beside the capacity the
+	/// settings record from a load test; without one, beside nothing.
+	private Table platformHeadroom(EntityManager em, Filter f) {
+		Map<String, Object[]> peak = new TreeMap<>();
+		for (Object[] r : this.<Object[]>samples(em, "SELECT s.domain, s.node, s.sampledAt, s.appSessionsCreated, "
+				+ "s.seconds, s.activeAppSessions, s.heapUsedPct, s.cpuPct FROM ServerSampleRow s WHERE "
+				+ sampled("s", f) + " ORDER BY s.sampledAt", f)) {
+			Object[] p = peak.computeIfAbsent(label(r[0]) + '/' + label(r[1]),
+					k -> new Object[] { label(r[0]), label(r[1]), 0.0, null, null, null, null });
+			long secs = r[4] == null ? 0 : num(r[4]);
+			if (r[3] != null && secs > 0) {
+				double cps = (double) num(r[3]) / secs;
+				if (cps > (Double) p[2] || p[3] == null) {
+					p[2] = cps;
+					p[3] = instant(r[2]).getTime();
+				}
+			}
+			p[4] = max(p[4], r[5]);
+			p[5] = max(p[5], r[6]);
+			p[6] = max(p[6], r[7]);
+		}
+		Table t = new Table("domain", "server", "peak calls per second", "at", "most sessions", "peak heap %",
+				"peak cpu %");
+		for (Object[] p : peak.values()) {
+			t.row(p[0], p[1], round((Double) p[2]), p[3], p[4], p[5], p[6]);
+		}
+		return t;
+	}
+
+	private static Object max(Object a, Object b) {
+		if (b == null) {
+			return a;
+		}
+		return a == null || num(b) > num(a) ? Long.valueOf(num(b)) : a;
+	}
+
 	private Table platformServers(EntityManager em, Filter f) {
 		// Keyed by domain and server: every domain has its own engine0.
 		List<Object[]> rows = samples(em, "SELECT s.domain, s.node, SUM(s.received), SUM(s.rejected), "
@@ -1861,16 +2049,28 @@ public class AnalyticsReports {
 	/// in. Null when neither is chosen, so a report counts in the database as
 	/// before; a set, and the report filters its rows by it here.
 	private Set<String> narrowed(EntityManager em, Filter f) {
-		if (f.outcome == null && f.application == null && f.cause == null) {
+		if (f.outcome == null && f.application == null && f.cause == null && f.peer == null && f.number == null) {
 			return null;
 		}
 		Set<String> calls = null;
-		if (f.cause != null) {
-			calls = new HashSet<>();
+		if (f.number != null) {
+			calls = new HashSet<>(em.createQuery("SELECT DISTINCT k.callId FROM KeyRow k WHERE k.keyName IN :names"
+					+ " AND k.keyValue LIKE :digits", String.class)
+					.setParameter("names", Arrays.asList("caller", "callee", "ani", "dnis"))
+					.setParameter("digits", "%" + f.number + "%").getResultList());
+		}
+		if (f.cause != null || f.peer != null) {
+			Set<String> found = new HashSet<>();
 			for (Object[] r : traced(em, f)) {
-				if (f.cause.equals(causeKey(r))) {
-					calls.add((String) r[0]);
+				if ((f.cause == null || f.cause.equals(causeKey(r)))
+						&& (f.peer == null || ("downstream".equals(r[1]) && f.peer.equals(r[5])))) {
+					found.add((String) r[0]);
 				}
+			}
+			if (calls == null) {
+				calls = found;
+			} else {
+				calls.retainAll(found);
 			}
 		}
 		if (f.outcome != null) {
@@ -1964,7 +2164,7 @@ public class AnalyticsReports {
 	/// [Filter#forCause] narrows Calls to. Follows the board's outcome and
 	/// application, never its own cause.
 	private Table callsCauses(EntityManager em, Filter f) {
-		Filter all = f.forCause(null);
+		Filter all = f.forCause(null).forPeer(null);
 		Set<String> only = narrowed(em, all);
 		Map<String, Object[]> causes = new LinkedHashMap<>();
 		Map<String, Set<String>> calls = new HashMap<>();
@@ -1993,6 +2193,49 @@ public class AnalyticsReports {
 			t.row(k, (long) calls.get(k).size(), r[1] == null ? "dropped" : r[1], r[2], r[3],
 					r[4] == null ? null : num(r[4]), k.substring(k.lastIndexOf('|') + 1), instant(c[1]).getTime(),
 					instant(c[2]).getTime());
+		}
+		return t;
+	}
+
+	/// Each downstream server the flight recorder found failing calls, the most
+	/// calls first: how many, what went wrong with them (`error 3 · timeout 2`),
+	/// the statuses it answered, and when first and last. Its `peer` is what
+	/// [Filter#forPeer] narrows Calls to. Follows the board's outcome and
+	/// application, never its own choice.
+	private Table callsPeers(EntityManager em, Filter f) {
+		Filter all = f.forPeer(null).forCause(null);
+		Set<String> only = narrowed(em, all);
+		Map<String, Set<String>> calls = new TreeMap<>();
+		Map<String, Map<String, Integer>> findings = new HashMap<>();
+		Map<String, Set<Long>> statuses = new HashMap<>();
+		Map<String, long[]> span = new HashMap<>();
+		for (Object[] r : traced(em, all)) {
+			String call = (String) r[0];
+			if (!"downstream".equals(r[1]) || r[5] == null || (only != null && !only.contains(call))) {
+				continue;
+			}
+			String peer = (String) r[5];
+			calls.computeIfAbsent(peer, k -> new HashSet<>()).add(call);
+			findings.computeIfAbsent(peer, k -> new TreeMap<>()).merge(label(r[2]), 1, Integer::sum);
+			if (r[4] != null) {
+				statuses.computeIfAbsent(peer, k -> new TreeSet<>()).add(num(r[4]));
+			}
+			long at = instant(r[8]).getTime();
+			span.merge(peer, new long[] { at, at }, (a, b) -> new long[] { Math.min(a[0], b[0]), Math.max(a[1], b[1]) });
+		}
+		List<String> peers = new ArrayList<>(calls.keySet());
+		peers.sort(Comparator.comparing((String p) -> -calls.get(p).size()).thenComparing(p -> p));
+		Table t = new Table("peer", "calls", "findings", "statuses", "first", "last");
+		for (String p : peers) {
+			StringBuilder what = new StringBuilder();
+			findings.get(p).entrySet().stream().sorted((a, b) -> b.getValue() - a.getValue())
+					.forEach(e -> what.append(what.length() == 0 ? "" : " · ").append(e.getKey()).append(' ').append(e.getValue()));
+			StringBuilder codes = new StringBuilder();
+			for (Long code : statuses.getOrDefault(p, Collections.emptySet())) {
+				codes.append(codes.length() == 0 ? "" : ", ").append(code);
+			}
+			t.row(p, (long) calls.get(p).size(), what.toString(), codes.length() == 0 ? null : codes.toString(),
+					span.get(p)[0], span.get(p)[1]);
 		}
 		return t;
 	}
@@ -2031,6 +2274,61 @@ public class AnalyticsReports {
 			if (t.rows.size() >= 500) {
 				break;
 			}
+		}
+		return t;
+	}
+
+	/// Each trunk a gateway registers, per server, over the window: its state
+	/// at the end of it and since when, how many times it registered and
+	/// failed, and its last failure's status and reason. Gateways publish on
+	/// the change, so each event is a transition; a trunk that registered
+	/// more than once in the window came back from something. Events up to
+	/// [#ISSUE_LOOKBACK_MS] before the window say the state it started in.
+	/// Most failures first.
+	private Table opsTrunks(EntityManager em, Filter f) {
+		Filter back = f.window(new Date(f.since().getTime() - ISSUE_LOOKBACK_MS), f.now);
+		TypedQuery<Object[]> q = em.createQuery("SELECT o.occurredAt, o.eventType, o.node, o.subject, o.detail,"
+				+ " o.registrar, o.statusCode FROM OpsEventRow o WHERE " + sampled("o", "o.occurredAt", "o.node", back)
+				+ " AND o.eventType IN :types ORDER BY o.occurredAt", Object[].class);
+		bindSampled(q, back);
+		q.setParameter("types", Arrays.asList("trunkRegistered", "trunkFailed", "trunkUnregistered"));
+		long from = f.since().getTime();
+		Map<String, Object[]> trunks = new TreeMap<>();
+		for (Object[] r : q.getResultList()) {
+			long at = instant(r[0]).getTime();
+			if (at > f.now.getTime()) {
+				continue;
+			}
+			String type = (String) r[1];
+			Object[] t = trunks.computeIfAbsent(label(r[3]) + '|' + label(r[2]),
+					k -> new Object[] { label(r[3]), label(r[2]), null, null, 0L, 0L, null, null, null });
+			// The state only changes on a transition: a repeat keeps its start.
+			String state = "trunkRegistered".equals(type) ? "registered" : "trunkFailed".equals(type) ? "failed" : "unregistered";
+			if (!state.equals(t[2])) {
+				t[2] = state;
+				t[3] = at;
+			}
+			if (at >= from && f.inSlice(Instant.ofEpochMilli(at))) {
+				if ("trunkRegistered".equals(type)) {
+					t[4] = (Long) t[4] + 1;
+				} else if ("trunkFailed".equals(type)) {
+					t[5] = (Long) t[5] + 1;
+				}
+			}
+			if ("trunkFailed".equals(type)) {
+				t[6] = r[6] == null ? null : num(r[6]);
+				t[7] = r[4];
+			}
+			if (r[5] != null) {
+				t[8] = r[5];
+			}
+		}
+		List<Object[]> rows = new ArrayList<>(trunks.values());
+		rows.sort(Comparator.comparing((Object[] t) -> -(Long) t[5]).thenComparing(t -> (String) t[0]));
+		Table t = new Table("trunk", "server", "state", "since", "registered", "failed", "last status", "last reason",
+				"registrar");
+		for (Object[] r : rows) {
+			t.row(r);
 		}
 		return t;
 	}

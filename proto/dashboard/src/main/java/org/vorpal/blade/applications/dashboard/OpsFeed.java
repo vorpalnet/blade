@@ -53,6 +53,11 @@ final class OpsFeed implements EventSubscriber.Handler {
 	/// an application reported with the page that fixes it.
 	private final Map<String, ObjectNode> problems = new ConcurrentHashMap<>();
 
+	/// `remote|application|node` for each breaker this feed saw open: only so
+	/// a notice goes out on the change. Which are open now, [OpsServlet] reads
+	/// from the applications.
+	private final java.util.Set<String> remotesCut = ConcurrentHashMap.newKeySet();
+
 	/// `queue|node` → the latest `queue.depth`.
 	private final Map<String, ObjectNode> queues = new ConcurrentHashMap<>();
 
@@ -86,23 +91,46 @@ final class OpsFeed implements EventSubscriber.Handler {
 		String node = data.path("node").asText("");
 		switch (event.getType()) {
 		case BladeEventTypes.ENDPOINT_DOWN:
-			endpointsDown.put(data.path("endpoint").asText() + "|" + node, stamped(event, data));
+			if (endpointsDown.put(data.path("endpoint").asText() + "|" + node, stamped(event, data)) == null) {
+				Notifier.notify("endpoint", true, data.path("endpoint").asText(), node, data.path("note").asText(null));
+			}
 			break;
 		case BladeEventTypes.ENDPOINT_UP:
-			endpointsDown.remove(data.path("endpoint").asText() + "|" + node);
+			if (endpointsDown.remove(data.path("endpoint").asText() + "|" + node) != null) {
+				Notifier.notify("endpoint", false, data.path("endpoint").asText(), node, data.path("note").asText(null));
+			}
 			break;
 		case BladeEventTypes.TRUNK_FAILED:
-			trunksFailing.put(data.path("gateway").asText() + "|" + node, stamped(event, data));
+			if (trunksFailing.put(data.path("gateway").asText() + "|" + node, stamped(event, data)) == null) {
+				Notifier.notify("trunk", true, data.path("gateway").asText(), node,
+						(data.hasNonNull("status") ? data.path("status").asText() + " " : "") + data.path("reason").asText(""));
+			}
 			break;
 		case BladeEventTypes.TRUNK_REGISTERED:
 		case BladeEventTypes.TRUNK_UNREGISTERED:
-			trunksFailing.remove(data.path("gateway").asText() + "|" + node);
+			if (trunksFailing.remove(data.path("gateway").asText() + "|" + node) != null) {
+				Notifier.notify("trunk", false, data.path("gateway").asText(), node, "registered again");
+			}
+			break;
+		case BladeEventTypes.REMOTE_DOWN:
+			if (remotesCut.add(data.path("remote").asText() + "|" + data.path("application").asText() + "|" + node)) {
+				Notifier.notify("remote", true, data.path("remote").asText(), node, data.path("note").asText(null));
+			}
+			break;
+		case BladeEventTypes.REMOTE_UP:
+			if (remotesCut.remove(data.path("remote").asText() + "|" + data.path("application").asText() + "|" + node)) {
+				Notifier.notify("remote", false, data.path("remote").asText(), node, null);
+			}
 			break;
 		case BladeEventTypes.PROBLEM_RAISED:
-			problems.put(problemKey(data, node), stamped(event, data));
+			if (problems.put(problemKey(data, node), stamped(event, data)) == null) {
+				Notifier.notify("problem", true, data.path("key").asText(), node, data.path("summary").asText(null));
+			}
 			break;
 		case BladeEventTypes.PROBLEM_CLEARED:
-			problems.remove(problemKey(data, node));
+			if (problems.remove(problemKey(data, node)) != null) {
+				Notifier.notify("problem", false, data.path("key").asText(), node, null);
+			}
 			break;
 		case BladeEventTypes.QUEUE_DEPTH:
 			queues.put(data.path("queue").asText() + "|" + node, stamped(event, data));

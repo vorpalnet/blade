@@ -67,6 +67,50 @@ public class MetricsControl implements MetricsMXBean {
 	}
 
 	@Override
+	public String getFrameworkVersion() {
+		return FRAMEWORK_VERSION;
+	}
+
+	/// Read once: the manifest of the JAR this class came from.
+	static final String FRAMEWORK_VERSION = frameworkVersion();
+
+	private static String frameworkVersion() {
+		try {
+			java.net.URL self = MetricsControl.class.getResource("MetricsControl.class");
+			String url = String.valueOf(self);
+			int bang = url.lastIndexOf("!/");
+			if (bang < 0) {
+				return "unknown (not from a JAR)";
+			}
+			// The loader's own URL for this JAR's manifest: a class inside a JAR
+			// inside a WAR has a nested URL that only its loader opens.
+			String jar = url.substring(0, bang + 2);
+			java.net.URL manifest = null;
+			for (java.util.Enumeration<java.net.URL> e = MetricsControl.class.getClassLoader()
+					.getResources("META-INF/MANIFEST.MF"); e.hasMoreElements();) {
+				java.net.URL candidate = e.nextElement();
+				if (String.valueOf(candidate).startsWith(jar)) {
+					manifest = candidate;
+					break;
+				}
+			}
+			if (manifest == null) {
+				return "unknown (no manifest beside " + jar + ")";
+			}
+			try (java.io.InputStream in = manifest.openStream()) {
+				java.util.jar.Attributes a = new java.util.jar.Manifest(in).getMainAttributes();
+				String version = a.getValue("Implementation-Version");
+				String mode = a.getValue("Blade-Build-Mode");
+				String built = a.getValue("Implementation-Build-Date");
+				return (version != null ? version : "unversioned") + (mode != null ? " " + mode : "")
+						+ (built != null ? ", built " + built : "");
+			}
+		} catch (Exception e) {
+			return "unknown (" + e.getClass().getSimpleName() + ")";
+		}
+	}
+
+	@Override
 	public String getReportJson() {
 		try {
 			return mapper.writeValueAsString(registry.report(app, node, cluster));

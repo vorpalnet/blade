@@ -32,7 +32,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /// The window is `days` back from now, `days=0` being the last hour (the
 /// board's Live), or `from` and `until` in epoch millis: a custom range, or a
 /// slice of a chart. The board narrows a panel further with `server`,
-/// `outcome`, `app` and `cause`, and with `dow` (Monday 1) and `hod` for a cell of its
+/// `outcome`, `app`, `cause` and `peer`, and with `dow` (Monday 1) and `hod` for a cell of its
 /// weekday-by-hour grid ([AnalyticsReports.Filter]).
 ///
 /// `tz` is the viewer's IANA time zone (`America/Chicago`): days and hours are
@@ -119,7 +119,10 @@ public class AnalyticsServlet extends HttpServlet {
 		}
 		filter = filter.forAccount(req.getParameter("account")).onServer(req.getParameter("server"))
 				.forCalls(req.getParameter("outcome"), req.getParameter("app"))
-				.forCause(req.getParameter("cause"))
+				.forCause(req.getParameter("cause")).forPeer(req.getParameter("peer"))
+				// A header, not a parameter: a phone number stays out of the
+				// address, the browser's history and the access log.
+				.forNumber(req.getHeader("X-Blade-Number"))
 				.atHour(longParam(req, "dow") == null ? null : longParam(req, "dow").intValue(),
 						longParam(req, "hod") == null ? null : longParam(req, "hod").intValue());
 		long reuse = (days == 0 && from == null) ? Math.min(ttl, LIVE_RANGE_TTL_MS) : ttl;
@@ -162,7 +165,7 @@ public class AnalyticsServlet extends HttpServlet {
 					continue;
 				}
 			}
-			if (AnalyticsReports.CONTENT.contains(name) || filter.account != null) {
+			if (AnalyticsReports.CONTENT.contains(name) || filter.account != null || filter.number != null) {
 				shown.add(name);
 			}
 			Map<String, Object> result = new LinkedHashMap<>();
@@ -192,7 +195,9 @@ public class AnalyticsServlet extends HttpServlet {
 				.put("forDomain", filter.domain)
 				.put("access", filter.access == null ? "everything (no grants configured)" : filter.access.key())
 				.put("refused", refused.isEmpty() ? null : String.join(",", refused))
-				.put("account", filter.account));
+				.put("account", filter.account)
+				// That a number was searched for, never the number.
+				.put("numberSearched", filter.number != null ? Boolean.TRUE : null));
 	}
 
 	/// Drops expired entries, so odd `days` values and retired domains do not

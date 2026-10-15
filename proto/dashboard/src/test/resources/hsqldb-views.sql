@@ -95,6 +95,10 @@ INSERT INTO v_server_samples VALUES ('v1', TIMESTAMP '2026-10-03 10:00:00', 'eng
 INSERT INTO v_server_samples VALUES ('v2', TIMESTAMP '2026-10-03 10:01:00', 'engine0', 'BEA_ENGINE_TIER_CLUST', 'RUNNING', 'false', 60, 500, 4, 6, 150, 2, 1, 0, 9, 0, 78, 1, 3, 2, 'east-1', 82);
 INSERT INTO v_server_samples VALUES ('v4', TIMESTAMP '2026-10-03 11:59:00', 'engine0', 'BEA_ENGINE_TIER_CLUST', 'RUNNING', 'false', 60, 10, 0, 1, 10, 0, 0, 0, 2, 2, 44, 0, 0, 0, 'west-1', 12);
 INSERT INTO v_server_samples VALUES ('v3', TIMESTAMP '2026-10-03 10:00:30', 'AdminServer', NULL, 'RUNNING', 'false', 60, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, 40, 0, 0, 0, 'east-1', 4);
+ALTER TABLE v_server_samples ADD COLUMN metaspace_mb BIGINT;
+ALTER TABLE v_server_samples ADD COLUMN classes_loaded BIGINT;
+UPDATE v_server_samples SET metaspace_mb = 2800, classes_loaded = 500000 WHERE event_id = 'v1';
+UPDATE v_server_samples SET metaspace_mb = 3100, classes_loaded = 560000 WHERE event_id = 'v2';
 
 CREATE TABLE v_app_counters (
    row_id VARCHAR(240) PRIMARY KEY, sampled_at TIMESTAMP, application VARCHAR(32), node VARCHAR(64),
@@ -111,6 +115,7 @@ INSERT INTO v_app_counters VALUES ('p2:sip.requests.INVITE', TIMESTAMP '2026-10-
 INSERT INTO v_app_counters VALUES ('p3:sip.requests.INVITE', TIMESTAMP '2026-10-02 09:00:00', 'agent', 'engine1', 'sip.requests.INVITE', 1, 'east-1');
 INSERT INTO v_app_timings VALUES ('p1:turn.latency', TIMESTAMP '2026-10-03 10:00:00', 'meetings', 'engine0', 'turn.latency', 2, 2400, 'east-1');
 INSERT INTO v_app_timings VALUES ('p2:turn.latency', TIMESTAMP '2026-10-03 10:01:00', 'meetings', 'engine0', 'turn.latency', 4, 6600, 'east-1');
+INSERT INTO v_app_timings VALUES ('p2:events.publish.time', TIMESTAMP '2026-10-03 10:01:00', 'meetings', 'engine0', 'events.publish.time', 40, 20, 'east-1');
 
 CREATE TABLE v_call_disposition (
    event_id VARCHAR(20) PRIMARY KEY, call_id VARCHAR(20), dispositioned_at TIMESTAMP, tenant VARCHAR(64),
@@ -227,6 +232,11 @@ INSERT INTO v_ops_events VALUES ('o4', TIMESTAMP '2026-10-03 11:00:00', 'queueDe
 INSERT INTO v_ops_events VALUES ('o5', TIMESTAMP '2026-10-03 11:01:00', 'queueDepth', 'engine0', 'queue', 'sales', NULL, NULL, NULL, NULL, 0, 1, 0, NULL, 'east-1');
 INSERT INTO v_ops_events VALUES ('o6', TIMESTAMP '2026-09-20 08:00:00', 'problemRaised', 'engine0', 'player', 'prompts', 'Prompt files missing', NULL, NULL, NULL, NULL, NULL, NULL, '/blade/configurator/', 'east-1');
 INSERT INTO v_ops_events VALUES ('o7', TIMESTAMP '2026-10-03 11:30:00', 'endpointDown', 'engine0', 'proxy-balancer', 'carrier-b', 'OPTIONS 503', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'west-1');
+INSERT INTO v_ops_events VALUES ('t1', TIMESTAMP '2026-09-10 08:00:00', 'trunkRegistered', 'engine0', 'gateway', 'trunk_a', NULL, NULL, 'sip.example.net', NULL, NULL, NULL, NULL, NULL, 'south-1');
+INSERT INTO v_ops_events VALUES ('t2', TIMESTAMP '2026-10-03 10:00:00', 'trunkFailed', 'engine0', 'gateway', 'trunk_a', 'Unauthorized', NULL, 'sip.example.net', 401, NULL, NULL, NULL, NULL, 'south-1');
+INSERT INTO v_ops_events VALUES ('t3', TIMESTAMP '2026-10-03 10:05:00', 'trunkRegistered', 'engine0', 'gateway', 'trunk_a', NULL, NULL, 'sip.example.net', NULL, NULL, NULL, NULL, NULL, 'south-1');
+INSERT INTO v_ops_events VALUES ('t4', TIMESTAMP '2026-10-03 10:30:00', 'trunkFailed', 'engine0', 'gateway', 'trunk_a', 'Unauthorized', NULL, 'sip.example.net', 401, NULL, NULL, NULL, NULL, 'south-1');
+INSERT INTO v_ops_events VALUES ('t5', TIMESTAMP '2026-10-03 10:30:00', 'trunkRegistered', 'engine0', 'gateway', 'trunk_b', NULL, NULL, 'sip.example.org', NULL, NULL, NULL, NULL, NULL, 'south-1');
 
 -- What the flight recorder found: c1 and c2 refused by one server, c2 also
 -- left unrelayed by listener, c3 never answered by another.

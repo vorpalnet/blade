@@ -386,6 +386,16 @@ public final class EventBus {
 		failedMeter = failed;
 	}
 
+	private static volatile org.vorpal.blade.framework.v3.metrics.Histogram publishTimer;
+
+	/// Remember the send timer to attach to publishers, now and after any rebuild.
+	public static void setPublishTimer(org.vorpal.blade.framework.v3.metrics.Histogram timer) {
+		publishTimer = timer;
+		for (EventPublisher p : PUBLISHERS.values()) {
+			p.time(timer);
+		}
+	}
+
 	/// Bring this node's default publisher into line with the configuration.
 	///
 	/// **Why this is a reconcile rather than a one-shot.** An application's
@@ -425,6 +435,7 @@ public final class EventBus {
 		EventPublisher publisher = new EventPublisher(connectionFactoryJndi, destination);
 		publisher.init();
 		publisher.meter(publishedMeter, failedMeter);
+		publisher.time(publishTimer);
 		PUBLISHERS.put(destination, publisher);
 		setDefaultDestinationJndi(destination);
 		return true;

@@ -444,6 +444,10 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// Handed to the bus rather than to one publisher, so a publisher rebuilt
 	/// by a later config reload is counted too. Metering the instance directly
 	/// counted only the publisher that happened to exist at startup.
+	/// A send is well under a millisecond while the broker keeps up, so the
+	/// buckets start at 1 ms, not the default 10.
+	static final long[] PUBLISH_BOUNDS_MS = { 1, 2, 5, 10, 25, 50, 100, 250, 1000, 5000 };
+
 	private void meterEventBus() {
 		try {
 			MetricsRegistry metrics = MetricsRegistry.from(getServletContext());
@@ -455,6 +459,8 @@ public abstract class AsyncSipServlet extends SipServlet
 					metrics.counter("events.publish.failures",
 							"Sends the bus refused — broker down or destination quota full. Each one is a dropped event.")
 							.series());
+			EventBus.setPublishTimer(metrics.histogram("events.publish.time",
+					"How long each send to the bus held the publishing thread, in milliseconds.", PUBLISH_BOUNDS_MS));
 		} catch (Throwable t) {
 			if (sipLogger != null) {
 				sipLogger.warning("AsyncSipServlet.meterEventBus - publish counters unavailable: " + t);

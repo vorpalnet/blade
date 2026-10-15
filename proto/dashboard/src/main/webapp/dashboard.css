@@ -496,3 +496,30 @@ table.report tr.row--link:hover td { text-decoration: underline; text-decoration
 .causes__whose { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .causes__whose--application { color: var(--bad); }
 .causes__text { overflow-wrap: anywhere; }
+
+/* Servers › Bus: the board's own freshness, the subscriptions, the parked
+   events. A bad line carries a word as well as the colour. */
+.bus { display: flex; flex-direction: column; gap: 6px; overflow: auto; min-height: 0; font-size: 12px; }
+.bus__line { margin: 0; font-size: 12px; display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: baseline; color: var(--ink-2); }
+.bus__word { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; color: var(--ink-3); }
+.bus__line--bad .bus__word { color: var(--bad); }
+.bus__table { width: 100%; border-collapse: collapse; }
+.bus__table th { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); text-align: left; padding: 2px 4px; }
+.bus__table td { padding: 3px 4px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.bus__table .num { text-align: right; font-family: var(--mono); }
+.bus__row--bad td:first-child { box-shadow: inset 2px 0 0 var(--bad); }
+.bus__del { font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; border-radius: 6px; padding: 1px 8px;
+	border: 1px solid var(--line-2); background: none; color: var(--ink-2); }
+.bus__del--armed { border-color: var(--bad); color: var(--bad); }
+.bus__note { margin: 0; color: var(--ink-3); }
+
+/* Applications › Downstream: an address, not a word, in the second column. */
+.causes--peers .causes__row { grid-template-columns: 4ch 21ch minmax(0, 1fr); }
+.causes--peers .causes__whose { font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0; color: var(--ink); }
+.bus__nowrap { white-space: nowrap; }
+
+/* Calls › find a number: one box, Enter searches. */
+.find { margin: 0 0 6px; }
+.find__input { width: 100%; box-sizing: border-box; font: inherit; font-size: 12px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--ink); }
+.causes__row--before { cursor: default; }
+.causes__row--before:hover .causes__text { text-decoration: none; }

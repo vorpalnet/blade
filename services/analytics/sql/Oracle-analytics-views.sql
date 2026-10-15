@@ -372,6 +372,8 @@ SELECT
    JSON_VALUE(e.payload, '$."threadsStuck"' RETURNING NUMBER) AS threads_stuck,
    JSON_VALUE(e.payload, '$."threadsHogging"' RETURNING NUMBER) AS threads_hogging,
    JSON_VALUE(e.payload, '$."threadsPending"' RETURNING NUMBER) AS threads_pending,
+   JSON_VALUE(e.payload, '$."metaspaceMb"' RETURNING NUMBER) AS metaspace_mb,
+   JSON_VALUE(e.payload, '$."classesLoaded"' RETURNING NUMBER) AS classes_loaded,
    a.domain AS domain
 FROM events e
 JOIN applications a ON a.id = e.application_id

@@ -84,4 +84,10 @@ public class ServerSampleRow implements Serializable {
 
 	@Column(name = "threads_pending")
 	private Long threadsPending;
+
+	@Column(name = "metaspace_mb")
+	private Long metaspaceMb;
+
+	@Column(name = "classes_loaded")
+	private Long classesLoaded;
 }

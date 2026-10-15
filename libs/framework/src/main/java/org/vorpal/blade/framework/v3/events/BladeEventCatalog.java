@@ -936,6 +936,8 @@ public final class BladeEventCatalog {
 		fields.add(field("threadsStuck", EventFieldType.LONG, false, "Stuck execute threads at the sample."));
 		fields.add(field("threadsHogging", EventFieldType.LONG, false, "Hogging execute threads at the sample."));
 		fields.add(field("threadsPending", EventFieldType.LONG, false, "Requests waiting for a thread at the sample."));
+		fields.add(field("metaspaceMb", EventFieldType.LONG, false, "Metaspace in use, in MiB: grows with every redeploy, and only a restart frees what old deployments hold."));
+		fields.add(field("classesLoaded", EventFieldType.LONG, false, "Classes the JVM has loaded now."));
 		declaration.setFields(fields);
 		return declaration;
 	}

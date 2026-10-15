@@ -24,4 +24,10 @@ public interface MetricsMXBean {
 	/// Zero every counter and histogram on this node. Gauges are read-through
 	/// and unaffected.
 	void reset();
+
+	/// The framework this application was built with: its version, build mode
+	/// and build time, from the framework JAR's manifest, such as
+	/// `3.0.8 dev, built 2026-10-15T07:53:12Z`. Two applications on one server
+	/// with different answers are a rollout half done.
+	String getFrameworkVersion();
 }

@@ -86,7 +86,7 @@
 	   range is 'live', a number of days, or 'custom' with from and until in
 	   epoch millis; slice is a time on a Traffic chart, {from, until}, or a
 	   cell of the weekday grid, {dow, hod} with Monday 1. */
-	var state = { range: 'live', from: null, until: null, server: null, slice: null, outcome: null, app: null, cause: null };
+	var state = { range: 'live', from: null, until: null, server: null, slice: null, outcome: null, app: null, cause: null, peer: null, number: null };
 
 	function isLive() { return state.range === 'live'; }
 	/* Operations is read from the event bus while the board shows the live
@@ -104,6 +104,9 @@
 		st.outcome = p.get('outcome') || null;
 		st.app = p.get('app') || null;
 		st.cause = p.get('cause') || null;
+		st.peer = p.get('peer') || null;
+		// Never in the address: a phone number stays in this page only.
+		st.number = state.number;
 		st.slice = null;
 		var s = p.get('slice');
 		var m = s && /^(\d+)-(\d+)$/.exec(s), w = s && /^([1-7])@(\d{1,2})$/.exec(s);
@@ -121,6 +124,7 @@
 		if (st.outcome) p.set('outcome', st.outcome);
 		if (st.app) p.set('app', st.app);
 		if (st.cause) p.set('cause', st.cause);
+		if (st.peer) p.set('peer', st.peer);
 		return p.toString();
 	}
 
@@ -157,7 +161,7 @@
 		if (prev.server !== next.server) { groups.traffic = 1; groups.ops = 1; }
 		if (sliceChanged) groups.ops = 1;
 		if (prev.outcome !== next.outcome) { groups.apps = 1; groups.calls = 1; }
-		if (prev.app !== next.app || prev.cause !== next.cause) groups.calls = 1;
+		if (prev.app !== next.app || prev.cause !== next.cause || prev.peer !== next.peer || prev.number !== next.number) groups.calls = 1;
 		if (rangeChanged) { buildRange(); labelRanges(); relinkAll(); scheduleAnalytics(); }
 		Object.keys(groups).forEach(function (g) { D[g] = undefined; loadGroup(g); });
 		drawAll();
@@ -327,10 +331,39 @@
 	}
 
 	/* Applications › Causes: the causes, most calls first; a click narrows Calls. */
+	/* Calls refused before any application took them, from the servers'
+	   minute samples: what the container refused (overload, its throttle),
+	   what no App Router rule matched, what it routed past an undeployed
+	   application, and routing loops. No call record exists for these, so
+	   they are counted, not listed, and cannot narrow Calls. */
+	function refusals() {
+		var t = D.servers && D.servers['platform.servers'];
+		if (!t || !t.rows || state.outcome || state.app) return [];
+		var col = function (n) { return t.columns.indexOf(n); }, out = [];
+		t.rows.forEach(function (r) {
+			if (state.server && r[col('server')] !== state.server) return;
+			var add = function (n, whose, text) { if (n > 0) out.push({ n: n, whose: whose, text: r[col('server')] + ' ' + text }); };
+			add(r[col('refused')], 'CONTAINER', 'refused the requests: overloaded, or its throttle');
+			add(r[col('no rule matched')], 'APP ROUTER', 'matched no rule: the default application took them');
+			add(r[col('routed past undeployed')], 'APP ROUTER', 'routed past an application that is not deployed');
+			add(r[col('routing loops')], 'APP ROUTER', 'found routing loops');
+		});
+		return out.sort(function (a, b) { return b.n - a.n; });
+	}
+
 	function drawCauses(body) {
 		guard(D.apps && D.apps['calls.causes'], body, function (res) {
-			if (!res.rows.length) return C.message(body, 'empty', 'No call in this range was recorded going wrong. Only applications built on the flight recorder record them.');
+			var before = refusals();
+			if (!res.rows.length && !before.length) return C.message(body, 'empty', 'No call in this range was recorded going wrong. Only applications built on the flight recorder record them.');
 			var list = el('div', 'causes');
+			before.forEach(function (f) {
+				var row = el('div', 'causes__row causes__row--before');
+				row.appendChild(el('span', 'causes__n', C.fmt(f.n)));
+				row.appendChild(el('span', 'causes__whose', f.whose));
+				row.appendChild(el('span', 'causes__text', f.text));
+				row.title = 'Refused before any application took the call, so there is no call to list: counted from the server\'s minute samples.';
+				list.appendChild(row);
+			});
 			res.rows.forEach(function (r) {
 				var key = r[0], on = state.cause === key;
 				var row = el('button', 'causes__row' + (on ? ' causes__row--on' : ''));
@@ -430,7 +463,9 @@
 		slice: function () { return state.slice && sliceLabel(); },
 		outcome: function () { return state.outcome && state.outcome.charAt(0).toUpperCase() + state.outcome.slice(1) + ' calls'; },
 		app: function () { return state.app; },
-		cause: function () { return state.cause && causeText(state.cause); }
+		cause: function () { return state.cause && causeText(state.cause); },
+		peer: function () { return state.peer && state.peer + ' failed them'; },
+		number: function () { return state.number && 'number ending ' + state.number.slice(-4); }
 	};
 	Panel.prototype.showChips = function () {
 		var view = this.view();
@@ -713,6 +748,331 @@
 		fitTable(body, { columns: ['server', 'pool', 'state', 'active', 'capacity', 'waiting', 'failures', 'last failure'], rows: rows });
 	}
 
+	/* ── the bus: can the board be trusted? ──────────────────────────────── */
+
+	/* /bus and the health.stored report, read on the live cycle while the tab
+	   shows. Everything the board draws from the database is at most as fresh
+	   as the newest stored event; a subscription with events waiting, or one
+	   with no consumer, is the board falling behind; a parked event was lost
+	   to every report. */
+	var lastBus = null, busArmed = null;
+	var BUS_STALE_MS = 5 * 60000;
+
+	function loadBus() {
+		if (!RIGHTS.platform || remoteScope()) return Promise.resolve();
+		return Promise.all([getJson('bus'),
+			getJson('data?r=health.stored&days=1&fresh=1&tz=' + encodeURIComponent(R.zone())).catch(function () { return null; }),
+			getJson('data?r=health.publishing&days=0&tz=' + encodeURIComponent(R.zone())).catch(function () { return null; }),
+			getJson('data?r=health.database&days=1&tz=' + encodeURIComponent(R.zone())).catch(function () { return null; })
+		]).then(function (a) {
+			lastBus = a[0];
+			lastBus.database = a[3] && a[3]['health.database'];
+			lastBus.publishing = a[2] && a[2]['health.publishing'];
+			var st = a[1] && a[1]['health.stored'];
+			lastBus.stored = st && st.rows && st.rows[0] ? { newest: st.rows[0][0], events: st.rows[0][1] } : null;
+			if (P.cluster.current === 'bus') P.cluster.draw();
+		});
+	}
+
+	function ago(ms) {
+		var s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+		return s < 90 ? s + ' s ago' : s < 5400 ? Math.round(s / 60) + ' min ago' : Math.round(s / 3600) + ' h ago';
+	}
+
+	function busDelete(which) {
+		return fetch('bus?delete=' + encodeURIComponent(which), { method: 'POST', credentials: 'same-origin',
+			headers: { 'X-Blade-Board': '1' } }).then(function (r) { return r.json(); }).then(function (j) {
+			busArmed = null;
+			if (j.error) setStatus('error', j.error);
+			return loadBus();
+		});
+	}
+
+	/* A delete asks twice, in place: the first click arms the button. */
+	function deleteButton(which, label) {
+		var b = el('button', 'bus__del' + (busArmed === which ? ' bus__del--armed' : ''),
+			busArmed === which ? 'Confirm' : label);
+		b.type = 'button';
+		b.addEventListener('click', function () {
+			if (busArmed === which) { busDelete(which); return; }
+			busArmed = which;
+			P.cluster.draw();
+		});
+		return b;
+	}
+
+	function drawBus(body) {
+		if (localOnly(body, 'The event bus')) return;
+		if (!lastBus) { C.message(body, 'empty', 'Loading…'); loadBus().catch(function () {}); return; }
+		if (lastBus.error) return C.message(body, 'error', lastBus.error);
+		var box = el('div', 'bus');
+		var st = lastBus.stored, stale = !st || !st.newest || Date.now() - st.newest > BUS_STALE_MS;
+		var fresh = el('p', 'bus__line' + (stale ? ' bus__line--bad' : ''));
+		fresh.appendChild(el('span', 'bus__word', stale ? 'BEHIND' : 'CURRENT'));
+		fresh.appendChild(document.createTextNode(!st ? 'The analytics database could not be read.'
+			: !st.newest ? 'Analytics stored no event in the last day.'
+			: 'Analytics stored its newest event ' + ago(st.newest) + ' (' + C.fmt(st.events) + ' today).'));
+		fresh.title = 'Every panel read from the database is at most this old. Behind: nothing stored for '
+			+ (BUS_STALE_MS / 60000) + ' minutes, while every server samples itself each minute.';
+		box.appendChild(fresh);
+
+		var subs = (lastBus.bus && lastBus.bus.subscriptions) || [];
+		var t = el('table', 'bus__table'), head = el('tr');
+		['subscription', 'server', 'consumer', 'waiting'].forEach(function (h, i) { head.appendChild(el('th', i === 3 ? 'num' : '', h)); });
+		t.appendChild(el('thead')).appendChild(head);
+		var tb = t.appendChild(el('tbody'));
+		subs.forEach(function (s) {
+			var tr = tb.appendChild(el('tr', !s.active || s.waiting > 0 ? 'bus__row--bad' : ''));
+			tr.appendChild(el('td', '', s.name));
+			tr.appendChild(el('td', '', s.server));
+			tr.appendChild(el('td', '', s.active ? 'attached' : 'NONE'));
+			tr.appendChild(el('td', 'num', C.fmt(s.waiting)));
+			tr.title = !s.active ? 'No application is consuming this subscription: its events pile up on the broker.'
+				: s.waiting > 0 ? 'Events waiting for this subscriber: it is falling behind.' : 'Keeping up.';
+		});
+		if (subs.length) box.appendChild(t);
+
+		/* Publishing over the last hour: what every application handed the bus,
+		   what the bus refused, and how long a send held the thread. Only the
+		   applications with a refusal or a slow send are listed. */
+		var pub = lastBus.publishing;
+		if (pub && pub.rows) {
+			var pc = function (n) { return pub.columns.indexOf(n); };
+			var total = 0, refused = 0, slow = [];
+			pub.rows.forEach(function (r) {
+				total += r[pc('events published')] || 0;
+				refused += r[pc('publishes failed')] || 0;
+				if ((r[pc('publishes failed')] || 0) > 0 || (r[pc('mean send ms')] || 0) >= 1) slow.push(r);
+			});
+			var pl = el('p', 'bus__line' + (slow.length ? ' bus__line--bad' : ''));
+			pl.appendChild(el('span', 'bus__word', refused ? 'REFUSED' : slow.length ? 'SLOW' : 'PUBLISHING'));
+			pl.appendChild(document.createTextNode(C.fmt(total) + ' events published in the last hour by ' + pub.rows.length
+				+ (pub.rows.length === 1 ? ' application' : ' applications') + (refused ? ', ' + C.fmt(refused) + ' refused by the bus (each one lost)' : '')
+				+ (slow.length ? '' : '; every send under 1 ms on average.')));
+			pl.title = 'A send holds the publishing thread, for a call event the SIP container\'s. Under 1 ms means the broker keeps up; applications built before sends were timed show no time.';
+			box.appendChild(pl);
+			if (slow.length) {
+				var st2 = el('table', 'bus__table'), sh = el('tr');
+				['application', 'published', 'refused', 'mean send'].forEach(function (h, i) { sh.appendChild(el('th', i ? 'num' : '', h)); });
+				st2.appendChild(el('thead')).appendChild(sh);
+				var sb = st2.appendChild(el('tbody'));
+				slow.forEach(function (r) {
+					var tr = sb.appendChild(el('tr', 'bus__row--bad'));
+					tr.appendChild(el('td', '', r[pc('application')]));
+					tr.appendChild(el('td', 'num', C.fmt(r[pc('events published')])));
+					tr.appendChild(el('td', 'num', C.fmt(r[pc('publishes failed')])));
+					var ms = r[pc('mean send ms')];
+					tr.appendChild(el('td', 'num', ms == null ? '—' : ms + ' ms'));
+				});
+				box.appendChild(st2);
+			}
+		}
+
+		/* The database itself: how much it holds, how fast it grows, how far
+		   back it reaches. Nothing deletes old rows yet (TODO 14). */
+		var db = lastBus.database;
+		if (db && db.rows && db.rows.length) {
+			var all = db.rows[0];
+			var dl = el('p', 'bus__line');
+			dl.appendChild(el('span', 'bus__word', 'DATABASE'));
+			var gb = all[4] != null ? (all[4] / 1073741824).toFixed(1) + ' GB, ' : '';
+			var days = all[3] ? Math.round((Date.now() - all[3]) / 86400000) : null;
+			dl.appendChild(document.createTextNode(gb + C.fmt(all[1]) + ' events, about ' + C.fmt(Math.round(all[2])) + ' more a day'
+				+ (days != null ? '; the oldest from ' + dayText(all[3]) + ', ' + days + ' days back' : '') + '.'));
+			dl.title = 'Every report reads these rows. The kinds that grow fastest are listed; old rows are not deleted yet, so the database grows until retention is set (TODO 14).';
+			box.appendChild(dl);
+			var dt = el('table', 'bus__table'), dh = el('tr');
+			['event', 'rows', 'a day'].forEach(function (h, i) { dh.appendChild(el('th', i ? 'num' : '', h)); });
+			dt.appendChild(el('thead')).appendChild(dh);
+			var dbody = dt.appendChild(el('tbody'));
+			db.rows.slice(1, 7).forEach(function (r) {
+				var tr = dbody.appendChild(el('tr'));
+				tr.appendChild(el('td', '', r[0]));
+				tr.appendChild(el('td', 'num', C.fmt(r[1])));
+				tr.appendChild(el('td', 'num', C.fmt(Math.round(r[2]))));
+			});
+			box.appendChild(dt);
+		}
+
+		var parked = lastBus.parked || [];
+		var ph = el('p', 'bus__line' + (parked.length ? ' bus__line--bad' : ''));
+		ph.appendChild(el('span', 'bus__word', parked.length ? 'PARKED' : 'NONE PARKED'));
+		ph.appendChild(document.createTextNode(parked.length
+			? parked.length + (parked.length === 1 ? ' event' : ' events') + ' failed processing and reached no report.'
+			: 'Nothing on the error queue.'));
+		if (parked.length && lastBus.mayDelete) ph.appendChild(deleteButton('all', 'Delete all'));
+		box.appendChild(ph);
+		if (parked.length) {
+			var pt = el('table', 'bus__table'), phd = el('tr');
+			['sent', 'event', 'subject', 'server', ''].forEach(function (h) { phd.appendChild(el('th', '', h)); });
+			pt.appendChild(el('thead')).appendChild(phd);
+			var pb = pt.appendChild(el('tbody'));
+			parked.forEach(function (m) {
+				var tr = pb.appendChild(el('tr'));
+				tr.appendChild(el('td', '', m.at ? dayText(m.at) + ' ' + clockText(m.at) : '—'));
+				tr.appendChild(el('td', '', String(m.type || '').replace(/^org\.vorpal\.blade\./, '')));
+				tr.appendChild(el('td', '', m.subject || '—'));
+				tr.appendChild(el('td', '', m.server || '—'));
+				var act = tr.appendChild(el('td'));
+				if (lastBus.mayDelete && m.id) act.appendChild(deleteButton(m.id, 'Delete'));
+				tr.title = (m.reason || '') + (m.eventId ? '\nevent ' + m.eventId : '')
+					+ '\nThe analytics log says why; a type it cannot store is raised under Operations › Issues.';
+			});
+			box.appendChild(pt);
+			if (!lastBus.mayDelete) box.appendChild(el('p', 'bus__note', 'Deleting needs the WebLogic Admin or Operator role.'));
+		}
+		body.appendChild(box);
+	}
+
+	/* Applications › Downstream: each server the flight recorder found
+	   failing calls, most calls first, with what went wrong and the statuses
+	   it answered. A click narrows Calls to its calls; its site on the map, if
+	   the dashboard knows the address. */
+	function drawPeers(body) {
+		guard(D.apps && D.apps['calls.peers'], body, function (res) {
+			if (!res.rows.length) return C.message(body, 'empty', 'No server the calls were sent to was recorded failing them in this range.');
+			var list = el('div', 'causes causes--peers');
+			res.rows.forEach(function (r) {
+				var peer = r[0], on = state.peer === peer;
+				var row = el('button', 'causes__row' + (on ? ' causes__row--on' : ''));
+				row.type = 'button';
+				row.appendChild(el('span', 'causes__n', C.fmt(r[1])));
+				row.appendChild(el('span', 'causes__whose', peer));
+				row.appendChild(el('span', 'causes__text', r[2] + (r[3] ? '  ·  answered ' + r[3] : '')));
+				row.title = C.fmt(r[1]) + (r[1] === 1 ? ' call' : ' calls') + ' failed by ' + peer + ', ' + dayText(r[4]) + ' ' + clockText(r[4])
+					+ (r[5] !== r[4] ? ' to ' + dayText(r[5]) + ' ' + clockText(r[5]) : '') + '\nClick: the Calls panel for these calls only';
+				row.addEventListener('click', function () { choose({ peer: on ? null : peer }); });
+				list.appendChild(row);
+			});
+			body.appendChild(list);
+		});
+	}
+
+	/* ── headroom ──────────────────────────────────────────────────────── */
+
+	/* What one engine was measured to carry (dashboard settings, from a load
+	   test); zero until measured. */
+	var CAPACITY = { cps: 0, sessions: 0 };
+
+	/* Servers › Headroom: each server's busiest minute in the range, set
+	   against what it was measured to carry. Past 80% of it is marked. */
+	function drawHeadroom(body) {
+		if (!RIGHTS.platform) return C.message(body, 'empty', 'Headroom is not in your grant.');
+		guard(D.servers && D.servers['platform.headroom'], body, function (res) {
+			var rows = res.rows.filter(function (r) { return !state.server || r[1] === state.server; });
+			if (!rows.length) return C.message(body, 'empty', 'No server sampled in this range.');
+			var box = el('div', 'bus');
+			if (!CAPACITY.cps && !CAPACITY.sessions) {
+				box.appendChild(el('p', 'bus__note', 'Capacity is not measured yet: the busiest minutes below stand alone until a load test sets capacityCallsPerSecond and capacitySessions in the dashboard settings.'));
+			}
+			var t = el('table', 'bus__table'), head = el('tr');
+			['server', 'peak calls/s', 'of capacity', 'most calls held', 'of capacity', 'heap', 'cpu'].forEach(function (h, i) { head.appendChild(el('th', i ? 'num' : '', h)); });
+			t.appendChild(el('thead')).appendChild(head);
+			var tb = t.appendChild(el('tbody'));
+			var share = function (v, cap) { return cap && v != null ? Math.round(v / cap * 100) : null; };
+			rows.forEach(function (r) {
+				var cpsShare = share(r[2], CAPACITY.cps), sesShare = share(r[4], CAPACITY.sessions);
+				var near = (cpsShare || 0) >= 80 || (sesShare || 0) >= 80;
+				var tr = tb.appendChild(el('tr', near ? 'bus__row--bad' : ''));
+				tr.appendChild(el('td', 'bus__nowrap', r[1] + (near ? ' · NEAR CAPACITY' : '')));
+				tr.appendChild(el('td', 'num bus__nowrap', r[2] == null ? '—' : String(r[2])));
+				tr.appendChild(el('td', 'num bus__nowrap', cpsShare == null ? '—' : cpsShare + '%'));
+				tr.appendChild(el('td', 'num bus__nowrap', r[4] == null ? '—' : C.fmt(r[4])));
+				tr.appendChild(el('td', 'num bus__nowrap', sesShare == null ? '—' : sesShare + '%'));
+				tr.appendChild(el('td', 'num bus__nowrap', r[5] == null ? '—' : r[5] + '%'));
+				tr.appendChild(el('td', 'num bus__nowrap', r[6] == null ? '—' : r[6] + '%'));
+				tr.title = (r[3] ? 'Busiest minute ' + dayText(r[3]) + ' ' + clockText(r[3]) + '. ' : '')
+					+ (CAPACITY.cps ? 'Measured to carry ' + CAPACITY.cps + ' new calls a second and ' + C.fmt(CAPACITY.sessions) + ' at once.' : 'Capacity not measured.');
+			});
+			box.appendChild(t);
+			body.appendChild(box);
+		});
+	}
+
+	/* ── apps: deployment health ───────────────────────────────────────── */
+
+	/* /apps, read on the live cycle while the tab shows: each server's
+	   metaspace against its size when first seen after the server started, and
+	   each application's WebLogic state and framework build. An application not
+	   ACTIVE, or built with another framework than most on its server, is
+	   marked in words. */
+	var lastApps = null;
+
+	function loadApps() {
+		if (!RIGHTS.platform || remoteScope()) return Promise.resolve();
+		return getJson('apps').then(function (a) {
+			lastApps = a;
+			if (P.cluster.current === 'apps') P.cluster.draw();
+		});
+	}
+
+	function mb(bytes) { return C.fmt(Math.round(bytes / 1048576)) + ' MB'; }
+
+	function drawApps(body) {
+		if (localOnly(body, 'Applications')) return;
+		if (!lastApps) { C.message(body, 'empty', 'Loading…'); loadApps().catch(function () {}); return; }
+		if (lastApps.error) return C.message(body, 'error', lastApps.error);
+		var box = el('div', 'bus');
+		(lastApps.servers || []).forEach(function (s) {
+			if (state.server && s.server !== state.server) return;
+			var apps = (lastApps.apps || []).filter(function (a) { return a.server === s.server; });
+			// The framework most applications on this server were built with; an
+			// application too old to say is a build of its own.
+			var OLD = 'older, unreported', count = {}, usual = null;
+			apps.forEach(function (a) { a.fw = a.framework || OLD; count[a.fw] = (count[a.fw] || 0) + 1; });
+			Object.keys(count).forEach(function (f) { if (!usual || count[f] > count[usual]) usual = f; });
+
+			var line = el('p', 'bus__line' + (s.restart ? ' bus__line--bad' : ''));
+			line.appendChild(el('span', 'bus__word', s.restart ? 'RESTART RECOMMENDED' : s.server.toUpperCase()));
+			var grew = s.metaspaceFirstSeen ? Math.round((s.metaspace / s.metaspaceFirstSeen - 1) * 100) : 0;
+			line.appendChild(document.createTextNode((s.restart ? s.server + ': ' : '')
+				+ (s.metaspace != null ? 'metaspace ' + mb(s.metaspace) + (grew > 0 ? ', up ' + grew + '% from ' + mb(s.metaspaceFirstSeen) + (s.baselineFrom === 'sample' ? ' in its first recorded sample since it started' : ' when the dashboard first saw it') : '') : '')
+				+ (s.classesLoaded != null ? ' · ' + C.fmt(s.classesLoaded) + ' classes loaded' : '')
+				+ (s.startedAt ? ' · up since ' + dayText(s.startedAt) + ' ' + clockText(s.startedAt) : '')));
+			line.title = 'Every redeploy loads an application\'s classes again; copies an old deployment still holds are freed only by a restart. Restart recommended past '
+				+ lastApps.growthPercent + '% growth (dashboard settings: metaspaceGrowthPercent).';
+			box.appendChild(line);
+			/* The certificate each TLS listener on the server presents. */
+			(lastApps.certificates || []).filter(function (c) { return c.server === s.server; }).forEach(function (c) {
+				var soon = c.daysLeft != null && c.daysLeft <= lastApps.certificateWarningDays;
+				var cl = el('p', 'bus__line' + (soon || c.error ? ' bus__line--bad' : ''));
+				cl.appendChild(el('span', 'bus__word', c.error ? 'UNREADABLE' : c.daysLeft < 0 ? 'EXPIRED' : soon ? 'EXPIRING' : String(c.protocol).toUpperCase()));
+				var cn = /CN=([^,]+)/.exec(c.subject || '');
+				cl.appendChild(document.createTextNode((soon || c.error ? String(c.protocol).toUpperCase() + ' ' : '') + c.address + ' · '
+					+ (c.error ? c.error : (c.daysLeft < 0 ? 'expired ' + -c.daysLeft + ' days ago' : c.daysLeft + ' days left')
+						+ ' (' + (cn ? cn[1] : c.subject) + ')')));
+				cl.title = c.error ? 'The handshake failed; the certificate could not be read.'
+					: 'Subject: ' + c.subject + '\nIssuer: ' + c.issuer + '\nExpires: ' + dayText(c.notAfter)
+					+ '\nRead from the handshake once an hour; raised under Issues at ' + lastApps.certificateWarningDays + ' days.';
+				box.appendChild(cl);
+			});
+			if (!apps.length) return;
+			var t = el('table', 'bus__table'), head = el('tr');
+			['application', 'state', 'framework', 'configuration'].forEach(function (h) { head.appendChild(el('th', '', h)); });
+			t.appendChild(el('thead')).appendChild(head);
+			var tb = t.appendChild(el('tbody'));
+			apps.sort(function (a, b) {
+				var drift = function (x) { return /^differs/.test(x.config || ''); };
+				var ba = a.state !== 'ACTIVE' || a.fw !== usual || drift(a), bb = b.state !== 'ACTIVE' || b.fw !== usual || drift(b);
+				return ba !== bb ? (ba ? -1 : 1) : a.app < b.app ? -1 : 1;
+			});
+			apps.forEach(function (a) {
+				var odd = a.fw !== usual, bad = a.state !== 'ACTIVE', drifted = /^differs/.test(a.config || '');
+				var tr = tb.appendChild(el('tr', bad || odd || drifted ? 'bus__row--bad' : ''));
+				tr.appendChild(el('td', '', a.app));
+				tr.appendChild(el('td', 'bus__nowrap', a.state));
+				tr.appendChild(el('td', '', a.fw + (odd ? '  ·  DIFFERS' : '')));
+				tr.appendChild(el('td', '', drifted ? a.config.toUpperCase().replace(/^DIFFERS AT /, 'DIFFERS at ') : (a.config || '—')));
+				tr.title = bad ? 'WebLogic has this application ' + a.state + ' here, not ACTIVE: it takes no calls.'
+					: odd ? 'Built with another framework than most applications on ' + s.server + ' (' + usual + '): a rollout half done.'
+					: drifted ? 'The configuration it runs is not the AdminServer\'s file (' + a.config + '): a push that failed, a file edited by hand, or an application that never reloaded.'
+					: 'Active.';
+			});
+			box.appendChild(t);
+		});
+		body.appendChild(box);
+	}
+
 	/* ── operations ────────────────────────────────────────────────────── */
 
 	var OPS_WORDS = {
@@ -952,6 +1312,38 @@
 		});
 	}
 
+	/* A trunk's last refusal in words: what the status says about whose
+	   problem it is. */
+	function trunkFailure(status, reason) {
+		var why = status === 401 || status === 407 ? 'credentials refused'
+			: status === 403 ? 'refused: the account or what it may do'
+			: status === 404 ? 'the registrar does not know the account'
+			: status === 408 ? 'the registrar did not answer'
+			: status >= 500 ? 'the registrar failed' : null;
+		return (status ? status + ' ' : '') + (why || reason || '—');
+	}
+
+	/* Each trunk over the range (ops.trunks): its state at the end of it and
+	   since when, how often it registered and failed, and its last failure in
+	   words. Down, or failing more than once, is marked and comes first. */
+	function drawTrunks(body) {
+		if (!RIGHTS.platform) return C.message(body, 'empty', 'Trunks are not in your grant.');
+		guard(D.ops && D.ops['ops.trunks'], body, function (res) {
+			if (!res.rows.length) return C.message(body, 'empty', 'No gateway registered a trunk in the month before this time.');
+			var col = function (n) { return res.columns.indexOf(n); };
+			var rows = res.rows.map(function (r) {
+				// Registering again with no failure is the gateway restarting, not a flap.
+				var state = r[col('state')], failed = r[col('failed')], flapping = failed > 1 || (failed > 0 && r[col('registered')] > 0);
+				return [r[col('trunk')], r[col('server')],
+					(state === 'registered' ? 'registered' : state.toUpperCase()) + (flapping ? ' · FLAPPING' : ''),
+					opsWhen(r[col('since')]), r[col('registered')], failed,
+					r[col('last status')] != null || r[col('last reason')] ? trunkFailure(r[col('last status')], r[col('last reason')]) : '—',
+					r[col('registrar')] || '—'];
+			});
+			fitTable(body, { columns: ['trunk', 'server', 'state', 'since', 'registered', 'failed', 'last failure', 'registrar'], rows: rows });
+		});
+	}
+
 	function drawRecent(body) {
 		if (!opsAllowed(body)) return;
 		if (liveFeed()) {
@@ -1023,6 +1415,33 @@
 		};
 	}
 
+	/* The onset: when the range's calls began going wrong (the earliest cause
+	   Applications › Causes found), and the change just before it, within the
+	   hour. What did we do?, answered before anyone opens a log. */
+	function onsetLine(body, res) {
+		var causes = D.apps && D.apps['calls.causes'];
+		if (!causes || !causes.rows || !causes.rows.length) return;
+		var first = null, cause = null;
+		causes.rows.forEach(function (r) { if (first == null || r[7] < first) { first = r[7]; cause = r[0]; } });
+		var col = function (n) { return res.columns.indexOf(n); }, before = null;
+		res.rows.forEach(function (r) {
+			var at = r[col('at')];
+			if (at <= first && first - at <= 3600000 && (!before || at > before[col('at')])) before = r;
+		});
+		var p = el('p', 'bus__line' + (before ? ' bus__line--bad' : ''));
+		p.appendChild(el('span', 'bus__word', 'ONSET'));
+		var change = before ? (function (r) {
+			var c = r[col('change')], srv = r[col('server')], what = r[col('what')], file = r[col('file')];
+			return c === 'server restarted' ? srv + ' restarted' : c === 'application restarted' ? what + ' restarted on ' + srv
+				: c === 'config pushed' ? file + ' pushed' : file + ' ' + String(what).split(' · ').reverse().join(' by ');
+		})(before) : null;
+		p.appendChild(document.createTextNode('Calls began going wrong at ' + clockText(first) + ' (' + causeText(cause) + '). '
+			+ (before ? 'Just before: ' + change + ', ' + Math.round((first - before[col('at')]) / 60000) + ' min earlier.'
+				: 'Nothing changed in the hour before.')));
+		p.title = 'The earliest cause in Applications › Causes, and the newest change at or before it, within an hour.';
+		body.appendChild(p);
+	}
+
 	function drawChanges(body) {
 		if (!RIGHTS.platform) return C.message(body, 'empty', 'Changes are not in your grant.');
 		guard(D.ops && D.ops.changes, body, function (res) {
@@ -1031,7 +1450,11 @@
 			var span = s && s.from ? s.until - s.from : (s ? 3600000 : rangeEnd() - rangeStart());
 			var t = changeDays(res, span <= 86400000 + 60000);
 			if (!t.rows.length) return C.message(body, 'empty', 'Nothing restarted and no configuration changed at this time.');
-			fitTable(body, t, { wrap: true, more: span <= 86400000 + 60000 ? 'more' : 'more days' });
+			onsetLine(body, res);
+			// The table draws into a box of its own: it clears what it draws into.
+			var box = el('div', 'panel__fill');
+			body.appendChild(box);
+			fitTable(box, t, { wrap: true, more: span <= 86400000 + 60000 ? 'more' : 'more days' });
 			body.querySelectorAll('tbody tr').forEach(function (tr, i) { tr.title = t.titles[i]; });
 		});
 	}
@@ -1101,12 +1524,12 @@
 	   which a hidden tab is not. */
 	var GROUPS = {
 		base: function () {
-			return { r: ['calls.summary', 'outcomes.summary', 'outcomes.ended', 'outcomes.daily', 'outcomes.by-application',
+			return { r: ['calls.summary', 'outcomes.summary', 'outcomes.ended', 'outcomes.usual', 'outcomes.daily', 'outcomes.by-application',
 				'duration.summary', 'risk.summary'], q: rangeQuery() + scopeQuery() };
 		},
 		/* Every domain's servers, so the Servers panel can offer each domain. */
 		servers: function () {
-			return { r: RIGHTS.platform ? ['platform.latest', 'platform.servers'] : [], q: rangeQuery() };
+			return { r: RIGHTS.platform ? ['platform.latest', 'platform.servers', 'platform.headroom'] : [], q: rangeQuery() };
 		},
 		traffic: function () {
 			var r = ['calls.by-outcome', 'calls.concurrent', 'calls.heatmap'];
@@ -1114,12 +1537,12 @@
 			return { r: r, q: rangeQuery() + scopeQuery() + (state.server ? '&server=' + encodeURIComponent(state.server) : '') };
 		},
 		ops: function () {
-			var r = RIGHTS.platform ? ['changes'] : [];
+			var r = RIGHTS.platform ? ['changes', 'ops.trunks'] : [];
 			if (RIGHTS.platform && !liveFeed()) r.push('ops.events', 'ops.issues', 'ops.queues');
 			return { r: r, q: sliceQuery() + scopeQuery() + (state.server ? '&server=' + encodeURIComponent(state.server) : '') };
 		},
 		apps: function () {
-			return { r: ['calls.by-application', 'duration.bands', 'health.coverage', 'calls.causes'],
+			return { r: ['calls.by-application', 'duration.bands', 'health.coverage', 'calls.causes', 'calls.peers'],
 				q: rangeQuery() + scopeQuery() + (state.outcome ? '&outcome=' + state.outcome : '') };
 		},
 		calls: function () {
@@ -1128,18 +1551,20 @@
 			if (P.risk && P.risk.current === 'list' && RIGHTS.content) r.push('calls.list');
 			return { r: r, q: rangeQuery() + scopeQuery() + (state.outcome ? '&outcome=' + state.outcome : '')
 				+ (state.app ? '&app=' + encodeURIComponent(state.app) : '')
-				+ (state.cause ? '&cause=' + encodeURIComponent(state.cause) : '') };
+				+ (state.cause ? '&cause=' + encodeURIComponent(state.cause) : '')
+				+ (state.peer ? '&peer=' + encodeURIComponent(state.peer) : ''),
+				headers: state.number ? { 'X-Blade-Number': state.number } : null };
 		}
 	};
 	/* The panels each group fills. */
-	var DRAWS = { base: ['outcomes'], servers: ['cluster'], traffic: ['traffic'], ops: ['ops'], apps: ['apps'], calls: ['risk'] };
+	var DRAWS = { base: ['outcomes'], servers: ['cluster', 'apps'], traffic: ['traffic'], ops: ['ops'], apps: ['apps', 'ops'], calls: ['risk'] };
 
 	var seq = {};
 	function loadGroup(name) {
 		var g = GROUPS[name]();
 		if (!g.r.length) { D[name] = {}; DRAWS[name].forEach(function (k) { P[k].draw(); }); return Promise.resolve(); }
 		var n = seq[name] = (seq[name] || 0) + 1;
-		return getJson('data?r=' + g.r.join(',') + g.q + '&tz=' + encodeURIComponent(R.zone())).then(function (d) {
+		return getJson('data?r=' + g.r.join(',') + g.q + '&tz=' + encodeURIComponent(R.zone()), g.headers).then(function (d) {
 			if (n !== seq[name]) return;   // a newer choice asked again
 			D[name] = d;
 			if (name === 'base') baseKpis(d);
@@ -1250,7 +1675,16 @@
 			{ key: 'servers', label: 'Servers', live: isLive,
 				sub: function () { return isLive() ? 'click one to narrow' : 'peaks in the range'; }, tip: 'Click a server to narrow Traffic and Operations to it',
 				draw: drawServers },
-			{ key: 'jdbc', label: 'JDBC', live: true, sub: 'connection pools', draw: drawJdbc }
+			{ key: 'jdbc', label: 'JDBC', live: true, sub: 'connection pools', draw: drawJdbc },
+			{ key: 'bus', label: 'Bus', live: true, sub: 'is the data arriving',
+				tip: 'Whether the board can be trusted: how fresh the stored events are, each subscription\'s backlog, and the events the bus parked',
+				draw: drawBus, fetch: function () { loadBus().catch(function () {}); } },
+			{ key: 'headroom', label: 'Headroom', sub: 'busiest minute against capacity',
+				tip: 'Each server\'s busiest minute in the range (new calls a second, calls held at once, heap, CPU) against what it was measured to carry',
+				draw: drawHeadroom },
+			{ key: 'apps', label: 'Apps', live: true, sub: 'deployed and current',
+				tip: 'Each application\'s WebLogic state and framework build on each server, and each server\'s metaspace: when a restart would free what redeploys left behind',
+				draw: drawApps, fetch: function () { loadApps().catch(function () {}); } }
 		]);
 		P.cluster.showRange = function () {
 			Panel.prototype.showRange.call(this);
@@ -1299,6 +1733,8 @@
 			{ key: 'queues', label: 'Queues', live: liveFeed,
 				sub: function () { return liveFeed() ? 'last minute' : 'minutes with callers'; }, tip: 'Per node: the minutes each queue held callers', draw: drawQueues },
 			{ key: 'recent', label: 'Recent', live: liveFeed, sub: 'newest first', draw: drawRecent },
+			{ key: 'trunks', label: 'Trunks', sub: 'down or flapping first',
+				tip: 'Each trunk a gateway registers: its state and since when, how often it registered and failed in the range, and its last failure in words', draw: drawTrunks },
 			{ key: 'changes', label: 'Changes', sub: 'newest first', tip: 'Restarts and configuration changes; hover a row for each one and its time', draw: drawChanges }
 		]);
 		/* Operations narrowed to a time shows that time, not the whole range. */
@@ -1318,16 +1754,32 @@
 					var total = Object.keys(by).reduce(function (n, k) { return n + by[k]; }, 0);
 					if (!total) return C.message(body, 'empty', 'No call ended in this range.');
 					var rows = OUTCOME_PARTS.map(function (p) { return [p.name, by[p.name.toLowerCase()] || 0, p]; });
-					C.hbar(body, rows, { valueWidth: 90,
+					/* The same window one to four weeks back: "usually 2%". A bad
+					   outcome well above its usual share says UNUSUAL. */
+					var usual = {};
+					((D.base['outcomes.usual'] || {}).rows || []).forEach(function (r) { if (r[1] != null) usual[r[0]] = r[1]; });
+					var unusual = function (r) {
+						var o = r[0].toLowerCase(), u = usual[o], share = 100 * r[1] / total;
+						return u != null && (o === 'failed' || o === 'dropped' || o === 'declined' || o === 'abandoned')
+							&& share >= 2 * u + 5;
+					};
+					C.hbar(body, rows, { valueWidth: Object.keys(usual).length ? 200 : 90,
 						pick: function (r) {
 							var o = r[0].toLowerCase();
 							choose({ outcome: state.outcome === o ? null : o });
 						},
 						picked: state.outcome ? state.outcome.charAt(0).toUpperCase() + state.outcome.slice(1) : null,
-						value: function (r) { return C.fmt(r[1]) + ' · ' + Math.round(100 * r[1] / total) + '%'; },
+						value: function (r) {
+							var u = usual[r[0].toLowerCase()];
+							return C.fmt(r[1]) + ' · ' + Math.round(100 * r[1] / total) + '%'
+								+ (u != null ? ' · usual ' + Math.round(u) + '%' : '') + (unusual(r) ? ' · UNUSUAL' : '');
+						},
 						color: function (r) { return r[2].color; },
 						title: function (r) {
-							return r[0] + ': ' + C.fmt(r[1]) + '\n' + r[2].explain + '\nClick: Applications and Calls for these calls only';
+							var u = usual[r[0].toLowerCase()];
+							return r[0] + ': ' + C.fmt(r[1]) + '\n' + r[2].explain
+								+ (u != null ? '\nUsually ' + u + '%: the same hours of the same weekday, over the four weeks before' : '')
+								+ '\nClick: Applications and Calls for these calls only';
 						} });
 				});
 			} },
@@ -1353,6 +1805,7 @@
 				});
 			} },
 			{ key: 'causes', label: 'Causes', sub: 'click one to narrow', tip: 'What the flight recorder found on the calls that went wrong, grouped by cause, most calls first. Click a cause to narrow Calls to it', draw: drawCauses },
+			{ key: 'peers', label: 'Downstream', sub: 'click one to narrow', tip: 'Each server the calls were sent to that the flight recorder found failing them, most calls first. Click one to narrow Calls to its calls', draw: drawPeers },
 			{ key: 'length', label: 'Length', sub: 'calls by duration', draw: function (body) {
 				guard(D.apps && D.apps['duration.bands'], body, function (res) { C.bar(body, res.rows); });
 			} },
@@ -1363,7 +1816,7 @@
 			} }
 		]);
 
-		P.risk = new Panel('risk', 'Calls', 'risk', true, ['outcome', 'app', 'cause']);
+		P.risk = new Panel('risk', 'Calls', 'risk', true, ['outcome', 'app', 'cause', 'peer', 'number']);
 		P.risk.setViews([
 			{ key: 'list', label: 'Calls', sub: 'click one for Trace', tip: 'Newest first. Click a call to open it in Trace', fetch: function () { loadGroup('calls'); },
 				draw: function (body) {
@@ -1375,11 +1828,26 @@
 						a.href = rec.href; a.target = rec.target;
 						body.appendChild(a);
 					}
+					/* A caller's number, as the complaint gives it: Calls narrows to
+					   that number's calls in the range. Kept out of the address. */
+					var find = el('form', 'find');
+					var input = el('input', 'find__input');
+					input.type = 'search'; input.placeholder = 'Find a number, such as +1 646 555 0100';
+					input.setAttribute('aria-label', 'Find the calls of a phone number');
+					input.autocomplete = 'off';
+					if (state.number) input.value = state.number;
+					find.appendChild(input);
+					find.addEventListener('submit', function (e) {
+						e.preventDefault();
+						var digits = input.value.replace(/[^0-9]/g, '');
+						choose({ number: digits.length >= 4 ? digits : null });
+					});
+					body.appendChild(find);
 					// The table draws into a box of its own: it clears what it draws into.
 					var box = el('div', 'panel__fill');
 					body.appendChild(box);
 					guard(D.calls && D.calls['calls.list'], box, function (res) {
-						if (!res.rows.length) return C.message(box, 'empty', 'No calls at this time.');
+						if (!res.rows.length) return C.message(box, 'empty', state.number ? 'No call to or from a number ending ' + state.number.slice(-4) + ' in this range. Widen the range to look further back.' : 'No calls at this time.');
 						fitTable(box, res, { rowOpen: function (row) { return L.to('call', { call: row[0] }); } });
 					});
 				} },
@@ -1628,12 +2096,15 @@
 	var live = function () {
 		loadHealth().catch(function () {}); loadOps().catch(function () {}); loadNow().catch(function () {});
 		if (P.traffic.current === 'network') loadNetwork().catch(function () {});
+		if (P.cluster.current === 'bus') loadBus().catch(function () {});
+		if (P.cluster.current === 'apps') loadApps().catch(function () {});
 	};
 	getJson('settings').catch(function () { return null; }).then(function (cfg) {
 		if (cfg) {
 			LIVE_MS = (cfg.liveRefreshSeconds || 5) * 1000;
 			ANALYTICS_MS = (cfg.analyticsRefreshSeconds || 60) * 1000;
 			HEAP_HIGH = cfg.heapHighPercent || HEAP_HIGH;
+			CAPACITY = { cps: cfg.capacityCallsPerSecond || 0, sessions: cfg.capacitySessions || 0 };
 			RIGHTS = { platform: cfg.platform !== false, content: cfg.content !== false };
 			/* The deployment's ranges, between Live and Custom. */
 			if (cfg.ranges && cfg.ranges.length) {

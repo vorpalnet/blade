@@ -366,6 +366,8 @@ SELECT
    TRY_CAST(JSON_VALUE(e.payload, '$."threadsStuck"') AS BIGINT) AS threads_stuck,
    TRY_CAST(JSON_VALUE(e.payload, '$."threadsHogging"') AS BIGINT) AS threads_hogging,
    TRY_CAST(JSON_VALUE(e.payload, '$."threadsPending"') AS BIGINT) AS threads_pending,
+   TRY_CAST(JSON_VALUE(e.payload, '$."metaspaceMb"') AS BIGINT) AS metaspace_mb,
+   TRY_CAST(JSON_VALUE(e.payload, '$."classesLoaded"') AS BIGINT) AS classes_loaded,
    a.domain AS domain
 FROM events e
 JOIN applications a ON a.id = e.application_id

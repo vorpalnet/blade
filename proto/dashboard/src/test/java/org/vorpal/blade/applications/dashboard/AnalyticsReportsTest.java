@@ -419,9 +419,10 @@ class AnalyticsReportsTest {
 	void publishingSetsDroppedEventsBesideWhatArrived() {
 		AnalyticsReports.Table t = run("health.publishing");
 		assertEquals(Arrays.asList("application", "invites received", "calls recorded", "events published",
-				"publishes failed", "sip errors", "restarts", "sessions held", "last sample"), t.columns);
-		assertEquals(Arrays.asList("meetings", 6L, 1L, 52L, 3L, 1L, 1L, 2L, "2026-10-03 10:01:00"), t.rows.get(0),
-				"most failures first; sessions held as of the latest sample");
+				"publishes failed", "sip errors", "restarts", "sessions held", "last sample", "mean send ms"), t.columns);
+		assertEquals(Arrays.asList("meetings", 6L, 1L, 52L, 3L, 1L, 1L, 2L, "2026-10-03 10:01:00", 0.5), t.rows.get(0),
+				"most failures first; sessions held as of the latest sample; 20 ms over 40 sends");
+		assertEquals(null, t.rows.get(1).get(9), "a framework that does not time its sends");
 		assertEquals(Arrays.asList("agent", 2L, 2L, 8L, 0L, 0L, 0L, null), t.rows.get(1).subList(0, 8),
 				"no reading, not zero");
 		AnalyticsReports.Table daily = run("health.publishing-daily");
@@ -616,6 +617,8 @@ class AnalyticsReportsTest {
 		assertEquals(0, reports.run("platform.servers", uhg).rows.size(), "no other tenant's load");
 		assertThrows(SecurityException.class, () -> reports.run("highrisk.calls", uhg),
 				"individual calls need content");
+		assertThrows(SecurityException.class, () -> reports.run("calls.by-outcome", uhg.forNumber("6465550100")),
+				"finding a person's calls by number needs content, whatever the report");
 	}
 
 	/// A department sees only the calls it took part in, and only its own part:
@@ -674,14 +677,16 @@ class AnalyticsReportsTest {
 
 	@Test
 	void applicationCountersAndTimingsKeepTheirHistory() {
-		assertEquals(Arrays.asList(2L, 2L, 1L, 6L), only(run("metrics.summary")));
+		assertEquals(Arrays.asList(2L, 2L, 2L, 46L), only(run("metrics.summary")), "turn.latency and the sends' timing");
 		AnalyticsReports.Table counters = run("metrics.counters");
 		assertEquals(Arrays.asList("agent", "sip.requests.INVITE", 1L), counters.rows.get(0).subList(0, 3));
 		assertEquals(Arrays.asList("meetings", "sip.requests.INVITE", 5L), counters.rows.get(1).subList(0, 3),
 				"most counted first within an application");
 		assertEquals(Arrays.asList("meetings", "ears.failures", 3L, "2026-10-03 10:01:00"), counters.rows.get(2));
-		assertEquals(Arrays.asList("meetings", "turn.latency", 6L, 1500.0, "2026-10-03 10:01:00"),
-				only(run("metrics.timings")), "(2400 + 6600) / 6");
+		AnalyticsReports.Table timings = run("metrics.timings");
+		assertEquals(Arrays.asList("meetings", "events.publish.time", 40L, 0.5, "2026-10-03 10:01:00"), timings.rows.get(0));
+		assertEquals(Arrays.asList("meetings", "turn.latency", 6L, 1500.0, "2026-10-03 10:01:00"), timings.rows.get(1),
+				"(2400 + 6600) / 6");
 	}
 
 	@Test
@@ -711,5 +716,104 @@ class AnalyticsReportsTest {
 	void medianOfEvenAndOdd() {
 		assertEquals(2.0, AnalyticsReports.median(Arrays.asList(1.0, 2.0, 3.0)));
 		assertEquals(2.5, AnalyticsReports.median(Arrays.asList(1.0, 2.0, 3.0, 4.0)));
+	}
+
+	@Test
+	void theNewestStoredEventSaysHowFreshTheBoardIs() {
+		AnalyticsReports.Table t = reports.run("health.stored", filter(7, false, "east-1"));
+		assertEquals(Arrays.asList("newest", "events"), t.columns);
+		assertEquals(1, t.rows.size());
+		assertTrue(((Number) t.rows.get(0).get(1)).longValue() > 0, "the fixture's events count");
+		assertTrue(t.rows.get(0).get(0) instanceof Long, "epoch millis");
+	}
+
+	@Test
+	void aServersMetaspaceBaselineIsItsFirstSampleSinceItStarted() {
+		assertEquals(Long.valueOf(2800), reports.firstMetaspaceMb("engine0", "east-1",
+				java.util.Date.from(Instant.parse("2026-10-03T09:00:00Z"))));
+		assertEquals(Long.valueOf(3100), reports.firstMetaspaceMb("engine0", "east-1",
+				java.util.Date.from(Instant.parse("2026-10-03T10:00:30Z"))), "started between the two samples");
+		assertEquals(null, reports.firstMetaspaceMb("engine0", "west-1",
+				java.util.Date.from(Instant.parse("2026-10-03T09:00:00Z"))), "no sample with metaspace there");
+	}
+
+	@Test
+	void eachTrunkSaysItsStateItsFlapsAndItsLastFailure() {
+		AnalyticsReports.Table t = reports.run("ops.trunks", filter(7, false, "south-1"));
+		assertEquals(Arrays.asList("trunk", "server", "state", "since", "registered", "failed", "last status",
+				"last reason", "registrar"), t.columns);
+		assertEquals(2, t.rows.size());
+		assertEquals(Arrays.asList("trunk_a", "engine0", "failed", Instant.parse("2026-10-03T10:30:00Z").toEpochMilli(),
+				1L, 2L, 401L, "Unauthorized", "sip.example.net"), t.rows.get(0), "most failures first; down since its last failure");
+		assertEquals("registered", t.rows.get(1).get(2));
+		assertEquals(0L, t.rows.get(1).get(5));
+	}
+
+	@Test
+	void eachDownstreamServerHasARecordAndNarrowsTheCalls() {
+		AnalyticsReports.Table t = reports.run("calls.peers", filter(7, false, "east-1"));
+		assertEquals(Arrays.asList("peer", "calls", "findings", "statuses", "first", "last"), t.columns);
+		assertEquals(Arrays.asList("198.51.100.20:5060", 2L, "error 2", "503"), t.rows.get(0).subList(0, 4),
+				"most calls first; the application's own fault is not a server's");
+		assertEquals(2, t.rows.size());
+		assertEquals(Arrays.asList("000000C2", "000000C1"),
+				reports.run("calls.list", filter(7, false, "east-1").forPeer("198.51.100.20:5060")).rows.stream()
+						.map(r -> r.get(0)).collect(java.util.stream.Collectors.toList()));
+		assertEquals(2, reports.run("calls.peers", filter(7, false, "east-1").forPeer("198.51.100.20:5060")).rows.size(),
+				"never narrows to its own choice");
+	}
+
+	@Test
+	void aNumberAsTypedFindsItsCalls() {
+		java.util.function.Function<String, List<Object>> find = typed -> reports
+				.run("calls.list", filter(7, false, "east-1").forNumber(typed)).rows.stream().map(r -> r.get(0))
+				.collect(java.util.stream.Collectors.toList());
+		assertEquals(Arrays.asList("000000C3"), find.apply("+1 (646) 555-0100"), "the caller's key, digits only");
+		assertEquals(Arrays.asList("000000C3"), find.apply("6465550100"));
+		assertTrue(find.apply("2125559999").isEmpty());
+		assertEquals(null, filter(7, false, "east-1").forNumber("55").number, "too short to be a search");
+	}
+
+	@Test
+	void headroomIsEachServersBusiestMinute() {
+		AnalyticsReports.Table t = reports.run("platform.headroom", filter(7, false, "east-1"));
+		assertEquals(Arrays.asList("domain", "server", "peak calls per second", "at", "most sessions", "peak heap %",
+				"peak cpu %"), t.columns);
+		List<Object> engine = t.rows.stream().filter(r -> "engine0".equals(r.get(1)) && "east-1".equals(r.get(0)))
+				.findFirst().get();
+		assertEquals(0.1, engine.get(2), "6 sessions created over the 60 s of its busier minute");
+		assertEquals(Instant.parse("2026-10-03T10:01:00Z").toEpochMilli(), engine.get(3));
+		assertEquals(Arrays.asList(12L, 78L, 82L), engine.subList(4, 7));
+	}
+
+	@Test
+	void theDatabaseSaysHowFastItFillsAndHowFarBackItSees() {
+		AnalyticsReports.Table t = reports.run("health.database", filter(7, false, "east-1"));
+		assertEquals(Arrays.asList("event", "rows", "per day", "oldest", "bytes"), t.columns);
+		assertEquals("(all)", t.rows.get(0).get(0));
+		long total = 0;
+		for (List<Object> r : t.rows.subList(1, t.rows.size())) {
+			total += n(r.get(1));
+		}
+		assertEquals(total, n(t.rows.get(0).get(1)), "the total is the kinds' sum");
+		assertEquals(null, t.rows.get(0).get(4), "no user_segments outside Oracle");
+	}
+
+	@Test
+	void usualIsTheSameWindowInTheFourWeeksBefore() {
+		AnalyticsReports.Filter weekLater = new AnalyticsReports.Filter(2, false, "east-1",
+				new java.util.Date(NOW.getTime() + 7 * 86_400_000L), ZoneOffset.UTC);
+		AnalyticsReports.Table t = reports.run("outcomes.usual", weekLater);
+		assertEquals(Arrays.asList("outcome", "usual %", "calls"), t.columns);
+		long calls = 0;
+		double share = 0;
+		for (List<Object> r : t.rows) {
+			calls += n(r.get(2));
+			share += r.get(1) == null ? 0 : ((Number) r.get(1)).doubleValue();
+		}
+		assertTrue(calls > 0, "the week before holds the fixture's calls");
+		assertEquals(100.0, share, 0.5);
+		assertTrue(reports.run("outcomes.usual", filter(30, false, "east-1")).rows.isEmpty(),
+				"no usual for a window longer than a week");
 	}
 }
