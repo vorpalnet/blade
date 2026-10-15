@@ -2,14 +2,16 @@
 
 Javadocs: `/blade/javadoc/portal/` on the Admin Portal
 
-The unified admin shell — a launcher for every admin app deployed on the AdminServer,
-served at `/blade/portal`. The card deck is built **live from JMX**: any app that
-registers a `SettingsMXBean` shows up automatically, with no portal redeploy and no
-manifest to maintain.
+The shared host behind every admin app, served at `/blade/portal`. Its launcher deck moved to
+the [dashboard](../../proto/dashboard/README.md)'s rail: `/blade/portal/` now forwards there,
+and the server's bare address goes there too ([Redirect](../redirect/README.md)). What stays
+here is what the other apps load from it: the login page, the brand assets, the editor kit, the
+card list the rail reads, the deployment inventory report and the service pages.
 
-## How the deck is built
+## The card list
 
-`PortalCardsResource` walks two JMX surfaces on every request:
+`PortalCardsResource` (`/blade/portal/api/v1/cards`) walks two JMX surfaces on every
+request; the dashboard's rail draws it:
 
 - **App cards** — WebLogic's `WebApplicationRuntimeMBean`s, kept when the context-root
   starts with `blade/` and the app is active. This is why every admin app's context-root
@@ -20,7 +22,9 @@ manifest to maintain.
   [Configurator](../configurator/README.md).
 
 The join key is the last segment of the context-root. An app with no `@SchemaAbout` still
-gets a bare card named from its context-root slug.
+gets a bare card named from its context-root slug. Each app card also carries `roles`: the
+roles its `web.xml` security constraints admit, read from the deployed archive, so the rail can
+say what a person must be granted to open it.
 
 ## What else lives here
 

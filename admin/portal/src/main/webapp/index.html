@@ -3,99 +3,15 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>BLADE Admin Portal</title>
-	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
-	<link rel="stylesheet" href="assets/portal.css">
+	<!-- The portal's launcher deck moved to the dashboard's rail. This application
+	     still serves the shared brand assets (/blade/portal/brand/), the editor
+	     library, the deployment inventory report and the service pages. -->
+	<meta http-equiv="refresh" content="0; url=/blade/dashboard/">
+	<title>BLADE Dashboard</title>
 	<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/favicon.svg">
+	<script>location.replace('/blade/dashboard/');</script>
 </head>
 <body>
-<div class="vorpal-app">
-
-	<!-- Portal's only chrome — a thin top band with brand + logout. The
-	     deployed admin apps are full-page navigation targets, each with
-	     their own header. Clicking the Vorpal Boy in any app's header
-	     navigates back here. -->
-	<header class="vorpal-topbar">
-		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
-			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
-			<span class="vorpal-brand-text">
-				<span class="vorpal-brand-product">BLADE Admin Portal</span>
-				<span class="vorpal-brand-tagline">Unified Administration</span>
-			</span>
-		</a>
-		<div class="vorpal-nav" aria-hidden="true"></div>
-		<div class="vorpal-topbar-right">
-			<a class="vorpal-topbar-link" href="report.html" title="Printable inventory of every deployed BLADE app and service.">Report</a>
-			<a class="vorpal-topbar-link" href="logout" title="Sign out">Logout</a>
-		</div>
-	</header>
-
-	<main class="vorpal-main">
-		<div class="vorpal-page">
-
-			<section class="vorpal-hero">
-				<div>
-					<h1>Welcome to the BLADE Admin Portal</h1>
-					<p>
-						Every administration tool and SIP service deployed in
-						this domain is listed below. Admin tools open their own
-						console; service cards open that service's documentation,
-						with a link through to its configuration. The
-						deck is generated live from the AdminServer's
-						deployment registry — what you see is what's actually
-						running.
-					</p>
-				</div>
-				<div class="vorpal-hero-meta">
-					<span>Discovery · live JMX</span>
-					<span id="p-card-count">Loading…</span>
-				</div>
-			</section>
-
-			<div class="vorpal-eyebrow">Administration Tools</div>
-				<section class="vorpal-card-grid" id="p-card-grid">
-				<!-- Cards rendered by shell.js from /api/v1/cards. -->
-			</section>
-
-			<!-- SIP services tier. Hidden by shell.js when none are deployed.
-				     Distinguished from the apps tier by this labelled heading and
-				     its position below them — not by color. -->
-				<section id="p-services-section" style="display:none; margin-top:40px;">
-					<div class="vorpal-eyebrow">SIP Services</div>
-					<p style="margin:4px 0 18px; max-width:60ch;">
-						SIP services deployed to the engine cluster. These have no
-						console of their own — each card opens that service's
-						documentation, which links through to its configuration in
-						the Configurator.
-					</p>
-					<section class="vorpal-card-grid" id="p-service-grid">
-						<!-- Service cards (kind:"service") rendered by shell.js. -->
-					</section>
-				</section>
-
-				<div id="p-empty-state" class="vorpal-callout vorpal-callout-note" style="display:none; margin-top:24px;">
-				<div class="vorpal-callout-title">No admin apps deployed</div>
-				<p>
-					This domain has no admin apps deployed to the AdminServer
-					(other than the portal itself). Deploy at least one admin
-					WAR via the WLS console and refresh this page to see it
-					appear here.
-				</p>
-			</div>
-
-		</div>
-
-		<footer class="vorpal-footer">
-			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
-				<img src="/blade/portal/brand/vorpal_logo_lightpurple.svg" alt="Vorpal Networks">
-			</a>
-			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
-			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
-		</footer>
-	</main>
-
-</div>
-
-<script src="shell.js"></script>
+	<p>The portal's applications and services are on the <a href="/blade/dashboard/">dashboard</a>.</p>
 </body>
 </html>

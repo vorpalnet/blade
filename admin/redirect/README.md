@@ -1,15 +1,16 @@
 # Redirect
 
 The virtual host's default web application. It 302-redirects `/`, `/blade`, and any
-otherwise-unowned path to `/blade/portal/`, so operators can type the bare hostname and
-land on the [Admin Portal](../portal/README.md).
+otherwise-unowned path to `/blade/dashboard/`, so operators can type the bare hostname and
+land on the [dashboard](../../proto/dashboard/README.md), whose rail lists every admin app
+and service.
 
 Two details worth knowing:
 
 - It uses a servlet mapped to `/*` rather than a welcome-file, because a welcome-file
   catches `/` but 404s on `/blade`.
-- It carries a loop guard: if the request is already for `/blade/portal` and still reached
-  this app, the portal WAR isn't deployed — it answers `503 "BLADE portal is not
+- It carries a loop guard: if the request is already for `/blade/dashboard` and still reached
+  this app, the dashboard WAR isn't deployed; it answers `503 "The BLADE dashboard is not
   available."` instead of redirecting forever.
 
 No Java dependencies, no configuration, no auth, no portal card — its context-root is `/`,

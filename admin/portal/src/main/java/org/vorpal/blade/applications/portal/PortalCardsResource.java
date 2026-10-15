@@ -80,6 +80,10 @@ public class PortalCardsResource {
 				n.put("hasMetadata", c.hasMetadata);
 				n.put("kind", c.kind);
 				if (c.configuratorDomain != null) n.put("configuratorDomain", c.configuratorDomain);
+				if (c.roles != null) {
+					ArrayNode roles = n.putArray("roles");
+					for (String r : c.roles) roles.add(r);
+				}
 				if (c.servers != null && !c.servers.isEmpty()) {
 					ArrayNode servers = n.putArray("servers");
 					for (String s : c.servers) servers.add(s);
@@ -102,7 +106,9 @@ public class PortalCardsResource {
 		try (CloseableContext ctx = new CloseableContext()) {
 			MBeanServer mbs = (MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
 
-			Map<String, TreeSet<String>> contextRoots = walkAdminContextRoots(mbs);
+			Map<String, String> deployments = new HashMap<>();
+			Map<String, TreeSet<String>> contextRoots = walkAdminContextRoots(mbs, deployments);
+			Map<String, List<String>> roles = deploymentRoles(mbs);
 			Map<String, ObjectName> settingsMBeans = walkSettingsMBeans(mbs);
 			Map<String, TreeSet<String>> serviceServers = new HashMap<>();
 
@@ -117,9 +123,11 @@ public class PortalCardsResource {
 				// context path ("blade/crud" → "blade-crud"), so the join is the
 				// same flatten — no display-name conventions, no special cases.
 				String settingsKey = SettingsManager.flatten(ctxRoot);
-				appCards.add(buildCard(mbs, settingsKey, ctxRoot,
+				Card card = buildCard(mbs, settingsKey, ctxRoot,
 						settingsMBeans.get(settingsKey), "app", null,
-						new ArrayList<>(entry.getValue())));
+						new ArrayList<>(entry.getValue()));
+				card.roles = roles.get(deployments.get(ctxRoot));
+				appCards.add(card);
 			}
 
 			// Pass 2 — SIP services. These have NO `blade/*` webapp to walk
@@ -160,7 +168,8 @@ public class PortalCardsResource {
 	/// always visited every ServerRuntime; keeping the server name (instead of
 	/// flattening to a set of roots) is what lets the deck — and the printable
 	/// Deployment Inventory report — say WHERE each app is running.
-	private Map<String, TreeSet<String>> walkAdminContextRoots(MBeanServer mbs) throws Exception {
+	private Map<String, TreeSet<String>> walkAdminContextRoots(MBeanServer mbs, Map<String, String> deployments)
+			throws Exception {
 		Map<String, TreeSet<String>> out = new LinkedHashMap<>();
 		ObjectName service = new ObjectName(
 				"com.bea:Name=DomainRuntimeService,Type=weblogic.management.mbeanservers.domainruntime.DomainRuntimeServiceMBean");
@@ -172,6 +181,8 @@ public class PortalCardsResource {
 			if (apps == null) continue;
 			for (ObjectName app : apps) {
 				if (!isActive(mbs, app)) continue;
+				String deployment = strAttr(mbs, app, "ApplicationName");
+				if (deployment == null) deployment = strAttr(mbs, app, "Name");
 				ObjectName[] components = arrAttr(mbs, app, "ComponentRuntimes");
 				if (components == null) continue;
 				for (ObjectName component : components) {
@@ -183,6 +194,7 @@ public class PortalCardsResource {
 							? contextRoot.substring(1)
 							: contextRoot;
 					if (normalized.startsWith(CTX_ROOT_PREFIX)) {
+						if (deployment != null) deployments.putIfAbsent(normalized, deployment);
 						TreeSet<String> where = out.computeIfAbsent(normalized, k -> new TreeSet<>());
 						if (serverName != null) where.add(serverName);
 					}
@@ -190,6 +202,71 @@ public class PortalCardsResource {
 			}
 		}
 		return out;
+	}
+
+	/// The roles each deployment's `web.xml` security constraints admit, by
+	/// deployment name: what a person needs to be granted to open it. Read
+	/// from the deployed archive (or exploded directory) through the domain
+	/// configuration's `AbsoluteSourcePath`, which the AdminServer can reach.
+	/// An empty list: no constraint names a role. Absent: unreadable.
+	static Map<String, List<String>> deploymentRoles(MBeanServer mbs) {
+		Map<String, List<String>> out = new HashMap<>();
+		try {
+			ObjectName service = new ObjectName(
+					"com.bea:Name=DomainRuntimeService,Type=weblogic.management.mbeanservers.domainruntime.DomainRuntimeServiceMBean");
+			ObjectName domain = (ObjectName) mbs.getAttribute(service, "DomainConfiguration");
+			ObjectName[] deployments = arrAttr(mbs, domain, "AppDeployments");
+			if (deployments == null) return out;
+			for (ObjectName d : deployments) {
+				String name = strAttr(mbs, d, "Name");
+				String path = strAttr(mbs, d, "AbsoluteSourcePath");
+				if (name == null || path == null) continue;
+				try {
+					String xml = webXml(new java.io.File(path));
+					if (xml != null) out.put(name, roles(xml));
+				} catch (Exception e) {
+					log.log(Level.FINE, "web.xml of " + name + " unreadable", e);
+				}
+			}
+		} catch (Exception e) {
+			log.log(Level.FINE, "deployment roles unreadable", e);
+		}
+		return out;
+	}
+
+	private static String webXml(java.io.File source) throws java.io.IOException {
+		if (source.isDirectory()) {
+			java.io.File f = new java.io.File(source, "WEB-INF/web.xml");
+			return f.isFile() ? new String(java.nio.file.Files.readAllBytes(f.toPath()), java.nio.charset.StandardCharsets.UTF_8) : null;
+		}
+		if (!source.isFile()) return null;
+		try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(source)) {
+			java.util.zip.ZipEntry e = zip.getEntry("WEB-INF/web.xml");
+			if (e == null) return null;
+			try (java.io.InputStream in = zip.getInputStream(e)) {
+				return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+			}
+		}
+	}
+
+	/// The role names inside a `web.xml`'s `auth-constraint` elements, sorted,
+	/// once each. Package-private for the test.
+	static List<String> roles(String webXml) throws Exception {
+		javax.xml.parsers.DocumentBuilderFactory f = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+		f.setNamespaceAware(true);
+		f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+		org.w3c.dom.Document doc = f.newDocumentBuilder()
+				.parse(new org.xml.sax.InputSource(new java.io.StringReader(webXml)));
+		TreeSet<String> names = new TreeSet<>();
+		org.w3c.dom.NodeList constraints = doc.getElementsByTagNameNS("*", "auth-constraint");
+		for (int i = 0; i < constraints.getLength(); i++) {
+			org.w3c.dom.NodeList r = ((org.w3c.dom.Element) constraints.item(i)).getElementsByTagNameNS("*", "role-name");
+			for (int j = 0; j < r.getLength(); j++) {
+				String n = r.item(j).getTextContent().trim();
+				if (!n.isEmpty()) names.add(n);
+			}
+		}
+		return new ArrayList<>(names);
 	}
 
 	private Map<String, ObjectName> walkSettingsMBeans(MBeanServer mbs) throws Exception {
@@ -364,7 +441,7 @@ public class PortalCardsResource {
 		}
 	}
 
-	private static ObjectName[] arrAttr(MBeanServer mbs, ObjectName on, String name) {
+	static ObjectName[] arrAttr(MBeanServer mbs, ObjectName on, String name) {
 		try {
 			return (ObjectName[]) mbs.getAttribute(on, name);
 		} catch (Exception e) {
@@ -372,7 +449,7 @@ public class PortalCardsResource {
 		}
 	}
 
-	private static String strAttr(MBeanServer mbs, ObjectName on, String name) {
+	static String strAttr(MBeanServer mbs, ObjectName on, String name) {
 		try {
 			Object v = mbs.getAttribute(on, name);
 			return v != null ? v.toString() : null;
@@ -396,6 +473,8 @@ public class PortalCardsResource {
 		/// Where it's running: server names the app was found ACTIVE on (apps)
 		/// or the engine nodes carrying its Configuration MBean (services).
 		final List<String> servers;
+		/// The roles that open it (apps only): from its `web.xml`. Null when unknown.
+		List<String> roles;
 
 		Card(String contextRoot, String name, String tagline, String description, boolean hasMetadata,
 				String kind, String configuratorDomain, List<String> servers) {

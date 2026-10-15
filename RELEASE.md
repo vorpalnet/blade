@@ -118,6 +118,18 @@ what old deployments hold is freed only by a restart. The minute samples now rec
 classes loaded (`metaspaceMb`, `classesLoaded`), and every artifact's manifest carries
 `Implementation-Version`.
 
+### The dashboard replaces the portal
+
+The server's bare address and `/blade/portal/` now land on the dashboard. A rail down its left
+lists every admin app and service deployed, names always under the icons, with a hover that
+says what each does, where it runs and which WebLogic roles open it (the portal's card list
+now carries each app's `roles`, read from its `web.xml`). Nothing is hidden by grants: knowing
+an app exists is how a person asks for access. A service with no page opens in the
+Configurator. Every icon is drawn in the rail's own ink, so none relies on colour; an app without
+an icon shows a plain window and a service a plug. Trace, Phone and the dashboard have new
+outline icons. The portal application stays deployed: it serves the login page, the brand
+assets, the editor kit, the card list, the deployment inventory and the service pages.
+
 ### Dashboard: notices, finding a call, headroom, the database, and the diagnosis path
 
 - **Notices.** A problem raised or cleared (an application's, a certificate near expiry, events

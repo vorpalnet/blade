@@ -4,13 +4,13 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>BLADE Dashboard</title>
-	<link rel="icon" href="/blade/portal/brand/favicon.svg" type="image/svg+xml">
+	<link rel="icon" href="favicon.svg" type="image/svg+xml">
 	<link rel="stylesheet" href="dashboard.css">
 </head>
 <body class="board">
 
 	<header class="topbar topbar--board">
-		<a class="brand" href="/blade/portal/">
+		<a class="brand" href="/blade/dashboard/">
 			<span class="brand__pill"><img class="brand__logo" src="/blade/portal/brand/VorpalBoy_lightpurple.svg" alt="Vorpal">Dashboard</span>
 		</a>
 		<div class="seg" id="range" title="The range every panel shows. Live is the last hour, as it happens."></div>
@@ -18,14 +18,11 @@
 		<span class="status" id="status"><span class="dot"></span><span id="statusText">loading…</span></span>
 		<span class="clock" id="clock"></span>
 		<select class="tz" id="tz" title="Time zone for every time on the board. The data is UTC."></select>
-		<nav class="nav">
-			<a href="/blade/portal/">Portal</a>
-			<a href="/blade/tuning/">Tuning</a>
-			<a href="/blade/balancer/">Balancer</a>
-		</nav>
 		<div class="acct" id="acct" hidden></div>
 	</header>
 
+	<div class="board__body">
+	<nav class="rail" id="rail" aria-label="Applications and services"></nav>
 	<main class="board__grid">
 		<section class="kpis" id="kpis"></section>
 
@@ -37,6 +34,7 @@
 		<section class="panel panel--apps" data-panel="apps"></section>
 		<section class="panel panel--risk" data-panel="risk"></section>
 	</main>
+	</div>
 
 	<script src="vendor/d3.min.js"></script>
 	<script src="vendor/topojson-client.min.js"></script>

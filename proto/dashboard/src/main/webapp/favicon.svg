@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Panels of a board: the dashboard. -->
+  <g fill="none" stroke="#1f3a66" stroke-width="2" stroke-linejoin="round">
+    <rect x="4" y="5" width="11" height="13" rx="2"/>
+    <rect x="18" y="5" width="10" height="7" rx="2"/>
+    <rect x="18" y="15" width="10" height="12" rx="2"/>
+    <rect x="4" y="21" width="11" height="6" rx="2"/>
+  </g>
+</svg>

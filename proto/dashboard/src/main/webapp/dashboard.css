@@ -292,7 +292,7 @@ body.board { height: 100vh; overflow: hidden; display: flex; flex-direction: col
 .clock { font-family: var(--mono); font-size: 12px; color: var(--ink-2); white-space: nowrap; }
 
 .board__grid {
-	flex: 1 1 auto; min-height: 0; max-width: none; margin: 0; padding: 10px 14px 14px;
+	flex: 1 1 auto; min-height: 0; min-width: 0; max-width: none; margin: 0; padding: 10px 14px 14px;
 	display: grid; gap: 10px;
 	grid-template-columns: repeat(12, minmax(0, 1fr));
 	grid-template-rows: auto minmax(0, 1.15fr) minmax(0, 1fr);
@@ -403,7 +403,6 @@ a.srv__name--link:hover, a.srv__n--link:hover { text-decoration-color: var(--acc
 	.kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.panel { grid-column: 1 / -1 !important; height: 320px; }
 	.topbar--board { flex-wrap: wrap; }
-	.topbar--board .nav { display: none; }
 }
 /* The account menu, far right of the board's top bar. */
 .acct { position: relative; }
@@ -523,3 +522,33 @@ table.report tr.row--link:hover td { text-decoration: underline; text-decoration
 .find__input { width: 100%; box-sizing: border-box; font: inherit; font-size: 12px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--ink); }
 .causes__row--before { cursor: default; }
 .causes__row--before:hover .causes__text { text-decoration: none; }
+
+/* The rail: every application and service, name always under its icon,
+   scrolling on its own so the board keeps its one screen. */
+.board__body { flex: 1 1 auto; min-height: 0; display: flex; }
+.rail {
+	flex: none; width: 112px; overflow-y: auto; overflow-x: hidden; padding: 10px 6px 14px 10px;
+	display: flex; flex-direction: column; gap: 2px; border-right: 1px solid var(--line);
+}
+.rail__head { font-size: 9.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); margin: 6px 4px 4px; }
+.rail__item {
+	display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 4px; border-radius: 8px;
+	color: var(--ink-2); text-decoration: none; text-align: center; font-size: 11px; line-height: 1.2;
+}
+.rail__item:hover { background: var(--panel-2); color: var(--ink); }
+.rail__item:hover .rail__name { text-decoration: underline; }
+.rail__item--here { box-shadow: inset 2px 0 0 var(--ink); color: var(--ink); font-weight: 700; }
+.rail__icon {
+	width: 22px; height: 22px; background-color: var(--ink-2);
+	-webkit-mask: center / contain no-repeat; mask: center / contain no-repeat;
+}
+.rail__item:hover .rail__icon, .rail__item--here .rail__icon { background-color: var(--ink); }
+.rail__name { overflow-wrap: anywhere; }
+.rail__foot { margin: 10px 4px 0; font-size: 10.5px; color: var(--ink-3); }
+.rail__note { font-size: 11px; color: var(--ink-3); margin: 4px; }
+@media (max-width: 900px) {
+	.board__body { flex-direction: column; }
+	.rail { width: auto; flex-direction: row; overflow-x: auto; overflow-y: hidden; border-right: 0; border-bottom: 1px solid var(--line); padding: 6px 10px; }
+	.rail__item { min-width: 76px; }
+	.rail__head { writing-mode: horizontal-tb; align-self: center; }
+}
