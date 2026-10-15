@@ -84,6 +84,17 @@ framework marks it persisted, without a domain having to declare it in `events.j
 makes the configuration events of the last release reach the database. Registrations, presence
 and SIP refusals stay on the bus only.
 
+### Dashboard: why the calls went wrong
+
+Applications has a Causes tab: what the flight recorder found on the range's bad calls, grouped
+into causes, most calls first. A cause says whose fault it was (DOWNSTREAM, a server the call was
+sent to, or the application's name) and what went wrong, in Trace's words: "10.20.1.7:5060
+failed: 503 to the INVITE". It follows the outcome chosen in Outcomes, and clicking a cause
+narrows Calls to its calls. Read through a new view, `v_call_traced`, in all three dialects,
+and a new report, `calls.causes`. It needs the SIP applications built on the flight recorder.
+A proxy such as iRouter reports where it sent a call, never how the call ended; Outcomes now
+counts such a call by the flight recorder's verdict, as failed (or dropped), instead of leaving it out.
+
 ### Dashboard: every problem opens the app that fixes it
 
 The board only shows problems; now each one opens, in a window of its own, the admin app that can

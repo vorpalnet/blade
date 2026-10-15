@@ -481,3 +481,18 @@ table.report tr.row--link:hover td { text-decoration: underline; text-decoration
 .custom__buttons .custom__ok { background: var(--accent-3); border-color: var(--accent-3); color: #fff; }
 /* Numbers printed on a cell or a bar let the click through to it. */
 .heat-n, text.value { pointer-events: none; }
+
+/* Applications › Causes: a cause a line, the number of calls, whose fault (a
+   word, or the application's name), then what went wrong. The chosen cause is outlined, not coloured. */
+.causes { display: flex; flex-direction: column; gap: 2px; overflow: auto; min-height: 0; }
+.causes__row {
+	display: grid; grid-template-columns: 4ch 11ch minmax(0, 1fr); gap: 8px; align-items: baseline;
+	font: inherit; font-size: 12px; color: var(--ink-2); text-align: left; cursor: pointer;
+	background: none; border: 0; border-bottom: 1px solid var(--line); padding: 5px 4px;
+}
+.causes__row:hover .causes__text { text-decoration: underline; }
+.causes__row--on { background: var(--panel-2); box-shadow: inset 2px 0 0 var(--ink); color: var(--ink); }
+.causes__n { font-family: var(--mono); font-weight: 700; text-align: right; color: var(--ink); }
+.causes__whose { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.causes__whose--application { color: var(--bad); }
+.causes__text { overflow-wrap: anywhere; }

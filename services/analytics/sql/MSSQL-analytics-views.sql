@@ -491,3 +491,32 @@ JOIN applications a ON a.id = e.application_id
 WHERE e.type IN ('queueDepth', 'endpointDown', 'endpointUp', 'remoteDown', 'remoteUp', 'problemRaised',
    'problemCleared', 'trunkRegistered', 'trunkFailed', 'trunkUnregistered');
 GO
+
+-- What the flight recorder found on each call that went wrong: one row per
+-- application that recorded the call. `fault` is downstream (a server the call
+-- was sent to) or application (this application); `finding` says what, the
+-- method and status say about which message, and `peer` names the server. A
+-- call dropped with no finding has only `dropped`. The dashboard groups these
+-- into causes, between how calls ended and the calls themselves.
+CREATE OR ALTER VIEW v_call_traced AS
+SELECT
+   CAST(e.id AS VARCHAR(20)) AS event_id,
+   CAST(e.session_id AS VARCHAR(20)) AS call_id,
+   e.created AS traced_at,
+   a.name AS application,
+   a.server AS server,
+   a.domain AS domain,
+   COALESCE(e.tenant, a.tenant) AS tenant,
+   e.department AS department,
+   s.cluster_name AS cluster_name,
+   RIGHT(CONVERT(VARCHAR(32), CONVERT(VARBINARY(8), s.vorpal_id), 2), 8) AS vorpal_id,
+   JSON_VALUE(e.payload, '$."fault"') AS fault,
+   JSON_VALUE(e.payload, '$."finding"') AS finding,
+   JSON_VALUE(e.payload, '$."method"') AS method,
+   TRY_CAST(JSON_VALUE(e.payload, '$."status"') AS BIGINT) AS status_code,
+   JSON_VALUE(e.payload, '$."peer"') AS peer,
+   JSON_VALUE(e.payload, '$."dropped"') AS dropped
+FROM events e
+JOIN applications a ON a.id = e.application_id
+LEFT JOIN sessions s ON s.id = e.session_id
+WHERE e.type = 'callTraced';

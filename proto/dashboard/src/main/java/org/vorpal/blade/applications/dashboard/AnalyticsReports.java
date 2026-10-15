@@ -127,6 +127,9 @@ public class AnalyticsReports {
 		String outcome;
 		/// Calls this application took part in only; null for all.
 		String application;
+		/// Calls the flight recorder found this cause on only, a key from
+		/// [#causeKey]; null for all.
+		String cause;
 		/// A recurring slice of the window, from the board's weekday-by-hour
 		/// grid: Monday is 1. Null for none.
 		Integer weekday;
@@ -164,6 +167,7 @@ public class AnalyticsReports {
 			c.server = server;
 			c.outcome = outcome;
 			c.application = application;
+			c.cause = cause;
 			c.weekday = weekday;
 			c.hourOfDay = hourOfDay;
 			return c;
@@ -215,6 +219,14 @@ public class AnalyticsReports {
 			Filter c = copy();
 			c.outcome = outcome != null && Arrays.asList(ENDINGS).contains(outcome) ? outcome : null;
 			c.application = blank(application);
+			return c;
+		}
+
+		/// This scope narrowed to the calls with one cause, a key from
+		/// [#causeKey] as the `calls.causes` report gives it; null for all.
+		public Filter forCause(String cause) {
+			Filter c = copy();
+			c.cause = blank(cause);
 			return c;
 		}
 
@@ -284,7 +296,8 @@ public class AnalyticsReports {
 					+ leakMs + '|' + splitMs + '|' + freshMs + '|' + (access == null ? "" : access.key()) + '|'
 					+ (account == null ? "" : account) + '|' + (from == null ? "" : from.getTime() + "-" + now.getTime())
 					+ '|' + (server == null ? "" : server) + '|' + (outcome == null ? "" : outcome) + '|'
-					+ (application == null ? "" : application) + '|' + (weekday == null ? "" : weekday + "@" + hourOfDay);
+					+ (application == null ? "" : application) + '|' + (weekday == null ? "" : weekday + "@" + hourOfDay) + '|'
+					+ (cause == null ? "" : cause);
 		}
 	}
 
@@ -325,7 +338,7 @@ public class AnalyticsReports {
 			"conversation.intents",
 			"health.summary", "health.coverage", "health.chains", "health.split-calls", "health.publishing",
 			"health.publishing-daily", "platform.servers", "platform.latest", "platform.servers-hourly", "platform.heap", "platform.cpu",
-			"changes", "ops.events", "ops.issues", "ops.queues", "calls.list", "metrics.summary",
+			"changes", "ops.events", "ops.issues", "ops.queues", "calls.list", "calls.causes", "metrics.summary",
 			"metrics.counters", "metrics.timings", "risk.verdicts", "risk.calibration"));
 
 	// Lifecycle names as the views carry them: the short names, plus the camelCase
@@ -447,6 +460,7 @@ public class AnalyticsReports {
 			case "ops.issues": return opsIssues(em, f);
 			case "ops.queues": return opsQueues(em, f);
 			case "calls.list": return callsList(em, f);
+			case "calls.causes": return callsCauses(em, f);
 			case "metrics.summary": return metricsSummary(em, f);
 			case "metrics.counters": return metricsCounters(em, f);
 			case "metrics.timings": return metricsTimings(em, f);
@@ -1046,6 +1060,11 @@ public class AnalyticsReports {
 	/// itself causes, is dropped. An application that tries a second
 	/// destination after a refusal would read as dropped too; no BLADE B2BUA
 	/// does.
+	///
+	/// **A proxy's call ends by the flight recorder's verdict.** A proxy (iRouter)
+	/// reports where it sent a call and never how the call ended. When an
+	/// application recorded a bad call (`callTraced`) and reported no end for
+	/// it, the call failed there, or dropped if the recorder says so.
 	private Map<String, Object[]> endings(EntityManager em, Filter f) {
 		Map<String, Object[]> byCall = new HashMap<>();
 		for (Object[] end : applicationEndings(em, f)) {
@@ -1107,6 +1126,19 @@ public class AnalyticsReports {
 					outcome = failure(refusals.get(call), at) ? FAILED_AT : DECLINED_AT;
 				}
 				out.add(new Object[] { call, app, outcome, at });
+			}
+		}
+		// A proxy reports where it sent a call, never how the call ended, so a call
+		// refused on a proxy-only path has no end above. The flight recorder's
+		// verdict is one: failed, or dropped when the recorder says so.
+		for (Object[] t : traced(em, f)) {
+			String call = (String) t[0], app = label(t[6]);
+			boolean reported = false;
+			for (Object[] end : ends.getOrDefault(call, Collections.emptyList())) {
+				reported |= app.equals(end[1]);
+			}
+			if (!reported) {
+				out.add(new Object[] { call, app, "true".equals(t[9]) ? DROPPED_AT : FAILED_AT, instant(t[8]) });
 			}
 		}
 		return out;
@@ -1829,17 +1861,30 @@ public class AnalyticsReports {
 	/// in. Null when neither is chosen, so a report counts in the database as
 	/// before; a set, and the report filters its rows by it here.
 	private Set<String> narrowed(EntityManager em, Filter f) {
-		if (f.outcome == null && f.application == null) {
+		if (f.outcome == null && f.application == null && f.cause == null) {
 			return null;
 		}
 		Set<String> calls = null;
+		if (f.cause != null) {
+			calls = new HashSet<>();
+			for (Object[] r : traced(em, f)) {
+				if (f.cause.equals(causeKey(r))) {
+					calls.add((String) r[0]);
+				}
+			}
+		}
 		if (f.outcome != null) {
 			int want = Arrays.asList(ENDINGS).indexOf(f.outcome);
-			calls = new HashSet<>();
+			Set<String> ended = new HashSet<>();
 			for (Map.Entry<String, Object[]> e : endings(em, f).entrySet()) {
 				if ((Integer) e.getValue()[0] == want) {
-					calls.add(e.getKey());
+					ended.add(e.getKey());
 				}
+			}
+			if (calls == null) {
+				calls = ended;
+			} else {
+				calls.retainAll(ended);
 			}
 		}
 		if (f.application != null) {
@@ -1891,6 +1936,63 @@ public class AnalyticsReports {
 			if (t.rows.size() >= 500) {
 				break;
 			}
+		}
+		return t;
+	}
+
+	/// What the flight recorder found on the window's bad calls, one row per
+	/// application that recorded a call: call id, fault, finding, method,
+	/// status, peer, application, server, when, dropped.
+	private List<Object[]> traced(EntityManager em, Filter f) {
+		return list(em, "SELECT t.callId, t.fault, t.finding, t.method, t.statusCode, t.peer, t.application, t.server,"
+				+ " t.tracedAt, t.dropped FROM TracedRow t" + where("t", "t.tracedAt", f)
+				+ (f.server != null ? " AND t.server = :server" : ""), f, true);
+	}
+
+	/// The cause a [#traced] row names: whose fault, what was found, about
+	/// which message, and who. A downstream fault is the server's address; an
+	/// application's fault (or a drop with no finding) is that application on
+	/// its server, since the peer there is the caller and differs on every call.
+	static String causeKey(Object[] r) {
+		String fault = r[1] == null ? "dropped" : (String) r[1];
+		String who = "downstream".equals(fault) ? label(r[5]) : label(r[6]) + " on " + label(r[7]);
+		return fault + '|' + label(r[2]) + '|' + label(r[3]) + '|' + (r[4] == null ? "" : num(r[4])) + '|' + who;
+	}
+
+	/// Why the window's calls went wrong: the flight recorder's findings grouped
+	/// into causes, the most calls first. Each row's `cause` is the key
+	/// [Filter#forCause] narrows Calls to. Follows the board's outcome and
+	/// application, never its own cause.
+	private Table callsCauses(EntityManager em, Filter f) {
+		Filter all = f.forCause(null);
+		Set<String> only = narrowed(em, all);
+		Map<String, Object[]> causes = new LinkedHashMap<>();
+		Map<String, Set<String>> calls = new HashMap<>();
+		for (Object[] r : traced(em, all)) {
+			String call = (String) r[0];
+			if (only != null && !only.contains(call)) {
+				continue;
+			}
+			String key = causeKey(r);
+			Object[] c = causes.computeIfAbsent(key, k -> new Object[] { r, r[8], r[8] });
+			Date at = instant(r[8]);
+			if (at.before(instant(c[1]))) {
+				c[1] = r[8];
+			}
+			if (at.after(instant(c[2]))) {
+				c[2] = r[8];
+			}
+			calls.computeIfAbsent(key, k -> new HashSet<>()).add(call);
+		}
+		List<String> keys = new ArrayList<>(causes.keySet());
+		keys.sort(Comparator.comparing((String k) -> -calls.get(k).size()).thenComparing(k -> k));
+		Table t = new Table("cause", "calls", "fault", "finding", "method", "status", "who", "first", "last");
+		for (String k : keys) {
+			Object[] c = causes.get(k);
+			Object[] r = (Object[]) c[0];
+			t.row(k, (long) calls.get(k).size(), r[1] == null ? "dropped" : r[1], r[2], r[3],
+					r[4] == null ? null : num(r[4]), k.substring(k.lastIndexOf('|') + 1), instant(c[1]).getTime(),
+					instant(c[2]).getTime());
 		}
 		return t;
 	}

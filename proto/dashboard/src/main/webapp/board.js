@@ -86,7 +86,7 @@
 	   range is 'live', a number of days, or 'custom' with from and until in
 	   epoch millis; slice is a time on a Traffic chart, {from, until}, or a
 	   cell of the weekday grid, {dow, hod} with Monday 1. */
-	var state = { range: 'live', from: null, until: null, server: null, slice: null, outcome: null, app: null };
+	var state = { range: 'live', from: null, until: null, server: null, slice: null, outcome: null, app: null, cause: null };
 
 	function isLive() { return state.range === 'live'; }
 	/* Operations is read from the event bus while the board shows the live
@@ -103,6 +103,7 @@
 		st.server = p.get('server') || null;
 		st.outcome = p.get('outcome') || null;
 		st.app = p.get('app') || null;
+		st.cause = p.get('cause') || null;
 		st.slice = null;
 		var s = p.get('slice');
 		var m = s && /^(\d+)-(\d+)$/.exec(s), w = s && /^([1-7])@(\d{1,2})$/.exec(s);
@@ -119,6 +120,7 @@
 		if (st.slice) p.set('slice', st.slice.dow ? st.slice.dow + '@' + st.slice.hod : st.slice.from + '-' + st.slice.until);
 		if (st.outcome) p.set('outcome', st.outcome);
 		if (st.app) p.set('app', st.app);
+		if (st.cause) p.set('cause', st.cause);
 		return p.toString();
 	}
 
@@ -155,7 +157,7 @@
 		if (prev.server !== next.server) { groups.traffic = 1; groups.ops = 1; }
 		if (sliceChanged) groups.ops = 1;
 		if (prev.outcome !== next.outcome) { groups.apps = 1; groups.calls = 1; }
-		if (prev.app !== next.app) groups.calls = 1;
+		if (prev.app !== next.app || prev.cause !== next.cause) groups.calls = 1;
 		if (rangeChanged) { buildRange(); labelRanges(); relinkAll(); scheduleAnalytics(); }
 		Object.keys(groups).forEach(function (g) { D[g] = undefined; loadGroup(g); });
 		drawAll();
@@ -298,6 +300,53 @@
 		e.tile.classList.toggle('kpi--alert', !!alert);
 	}
 
+	/* ── causes ────────────────────────────────────────────────────────── */
+
+	/* A cause in words, from its key (`fault|finding|method|status|who`, as the
+	   calls.causes report builds it). The same sentences as Trace's verdicts
+	   (admin/callflow traces.js, verdictText): keep the two alike. The finding
+	   names are the framework's (CallLadder.Verdict). */
+	function causeText(key) {
+		var k = String(key).split('|'), finding = k[1], m = k[2] || 'request', st = k[3] ? k[3] + ' ' : '', who = k[4];
+		switch (finding) {
+		case 'silent': return who + ' never answered the ' + m;
+		case 'timeout': return who + ' never answered the ' + m + '; the container gave up (' + st.trim() + ')';
+		case 'forgot': return who + ' no longer knew the call: ' + st + 'to the ' + m;
+		case 'error': return who + ' failed: ' + st + 'to the ' + m;
+		case 'credentials': return who + ' refused the credentials: ' + st + 'to the ' + m;
+		case 'unanswered': return who + ' never answered a ' + m;
+		case 'unrelayed': return who + ' never passed on a BYE';
+		default: return 'dropped in ' + who + ', nothing else found';
+		}
+	}
+
+	/* Whose fault, as Trace says it: an application's fault names the application. */
+	var WHOSE = { downstream: 'DOWNSTREAM', dropped: 'DROPPED' };
+	function whose(r) {
+		return r[2] === 'application' ? String(r[6]).split(' on ')[0] : WHOSE[r[2]] || String(r[2]).toUpperCase();
+	}
+
+	/* Applications › Causes: the causes, most calls first; a click narrows Calls. */
+	function drawCauses(body) {
+		guard(D.apps && D.apps['calls.causes'], body, function (res) {
+			if (!res.rows.length) return C.message(body, 'empty', 'No call in this range was recorded going wrong. Only applications built on the flight recorder record them.');
+			var list = el('div', 'causes');
+			res.rows.forEach(function (r) {
+				var key = r[0], on = state.cause === key;
+				var row = el('button', 'causes__row' + (on ? ' causes__row--on' : ''));
+				row.type = 'button';
+				row.appendChild(el('span', 'causes__n', C.fmt(r[1])));
+				row.appendChild(el('span', 'causes__whose causes__whose--' + r[2], whose(r)));
+				row.appendChild(el('span', 'causes__text', causeText(key)));
+				row.title = C.fmt(r[1]) + (r[1] === 1 ? ' call' : ' calls') + ', ' + dayText(r[7]) + ' ' + clockText(r[7])
+					+ (r[8] !== r[7] ? ' to ' + dayText(r[8]) + ' ' + clockText(r[8]) : '') + '\nClick: the Calls panel for these calls only';
+				row.addEventListener('click', function () { choose({ cause: on ? null : key }); });
+				list.appendChild(row);
+			});
+			body.appendChild(list);
+		});
+	}
+
 	/* ── panels ────────────────────────────────────────────────────────── */
 
 	/* views: [{ key, label, sub, live, narrow, first, draw(body) }]. The chosen
@@ -380,7 +429,8 @@
 		server: function () { return state.server; },
 		slice: function () { return state.slice && sliceLabel(); },
 		outcome: function () { return state.outcome && state.outcome.charAt(0).toUpperCase() + state.outcome.slice(1) + ' calls'; },
-		app: function () { return state.app; }
+		app: function () { return state.app; },
+		cause: function () { return state.cause && causeText(state.cause); }
 	};
 	Panel.prototype.showChips = function () {
 		var view = this.view();
@@ -1069,7 +1119,7 @@
 			return { r: r, q: sliceQuery() + scopeQuery() + (state.server ? '&server=' + encodeURIComponent(state.server) : '') };
 		},
 		apps: function () {
-			return { r: ['calls.by-application', 'duration.bands', 'health.coverage'],
+			return { r: ['calls.by-application', 'duration.bands', 'health.coverage', 'calls.causes'],
 				q: rangeQuery() + scopeQuery() + (state.outcome ? '&outcome=' + state.outcome : '') };
 		},
 		calls: function () {
@@ -1077,7 +1127,8 @@
 			if (P.risk && P.risk.current === 'flagged') r.push('highrisk.calls');
 			if (P.risk && P.risk.current === 'list' && RIGHTS.content) r.push('calls.list');
 			return { r: r, q: rangeQuery() + scopeQuery() + (state.outcome ? '&outcome=' + state.outcome : '')
-				+ (state.app ? '&app=' + encodeURIComponent(state.app) : '') };
+				+ (state.app ? '&app=' + encodeURIComponent(state.app) : '')
+				+ (state.cause ? '&cause=' + encodeURIComponent(state.cause) : '') };
 		}
 	};
 	/* The panels each group fills. */
@@ -1301,6 +1352,7 @@
 						title: function (r) { return r[0] + ': ' + C.fmt(r[1]) + ' calls\nClick: the Calls panel for ' + r[0] + "'s calls only"; } });
 				});
 			} },
+			{ key: 'causes', label: 'Causes', sub: 'click one to narrow', tip: 'What the flight recorder found on the calls that went wrong, grouped by cause, most calls first. Click a cause to narrow Calls to it', draw: drawCauses },
 			{ key: 'length', label: 'Length', sub: 'calls by duration', draw: function (body) {
 				guard(D.apps && D.apps['duration.bands'], body, function (res) { C.bar(body, res.rows); });
 			} },
@@ -1311,7 +1363,7 @@
 			} }
 		]);
 
-		P.risk = new Panel('risk', 'Calls', 'risk', true, ['outcome', 'app']);
+		P.risk = new Panel('risk', 'Calls', 'risk', true, ['outcome', 'app', 'cause']);
 		P.risk.setViews([
 			{ key: 'list', label: 'Calls', sub: 'click one for Trace', tip: 'Newest first. Click a call to open it in Trace', fetch: function () { loadGroup('calls'); },
 				draw: function (body) {

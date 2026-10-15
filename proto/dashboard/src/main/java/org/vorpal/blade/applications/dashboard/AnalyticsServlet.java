@@ -32,7 +32,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /// The window is `days` back from now, `days=0` being the last hour (the
 /// board's Live), or `from` and `until` in epoch millis: a custom range, or a
 /// slice of a chart. The board narrows a panel further with `server`,
-/// `outcome` and `app`, and with `dow` (Monday 1) and `hod` for a cell of its
+/// `outcome`, `app` and `cause`, and with `dow` (Monday 1) and `hod` for a cell of its
 /// weekday-by-hour grid ([AnalyticsReports.Filter]).
 ///
 /// `tz` is the viewer's IANA time zone (`America/Chicago`): days and hours are
@@ -119,6 +119,7 @@ public class AnalyticsServlet extends HttpServlet {
 		}
 		filter = filter.forAccount(req.getParameter("account")).onServer(req.getParameter("server"))
 				.forCalls(req.getParameter("outcome"), req.getParameter("app"))
+				.forCause(req.getParameter("cause"))
 				.atHour(longParam(req, "dow") == null ? null : longParam(req, "dow").intValue(),
 						longParam(req, "hod") == null ? null : longParam(req, "hod").intValue());
 		long reuse = (days == 0 && from == null) ? Math.min(ttl, LIVE_RANGE_TTL_MS) : ttl;

@@ -149,7 +149,7 @@ class AnalyticsReportsTest {
 			}
 			completed += n(row.get(1));
 		}
-		assertEquals(1, ended, "only c3 has an end and a call row; a call with no end is in no part");
+		assertEquals(3, ended, "c3 ended; c1 and c2 ended as the flight recorder judged them; a call with no end is in no part");
 		assertEquals(1, completed, "c3, completed (its decline by transfer gives way)");
 		assertEquals("day", month("calls.by-outcome").columns.get(0), "past a week, per day");
 	}
@@ -158,8 +158,8 @@ class AnalyticsReportsTest {
 	void callsByAreaPlaceTheCallerWithoutTheNumber() {
 		AnalyticsReports.Table t = run("calls.by-area");
 		assertEquals(Arrays.asList("area", "completed", "abandoned", "declined", "failed", "dropped"), t.columns);
-		assertEquals(Arrays.asList(Arrays.asList("312", 1L, 0L, 0L, 0L, 0L)), t.rows,
-				"c3, completed, placed by the area the framework recorded, not by parsing its caller key");
+		assertEquals(Arrays.asList(Arrays.asList(null, 0L, 0L, 0L, 1L, 1L), Arrays.asList("312", 1L, 0L, 0L, 0L, 0L)), t.rows,
+				"c3, completed, placed by the area the framework recorded, not by parsing its caller key; c1 and c2 recorded no area");
 	}
 
 	@Test
@@ -303,15 +303,17 @@ class AnalyticsReportsTest {
 	@Test
 	void outcomesAreHowCallsEndedEachCallOnce() {
 		assertEquals(Arrays.asList(Arrays.asList("completed", 2L), Arrays.asList("abandoned", 0L),
-				Arrays.asList("declined", 0L), Arrays.asList("failed", 0L), Arrays.asList("dropped", 0L)),
+				Arrays.asList("declined", 0L), Arrays.asList("failed", 1L), Arrays.asList("dropped", 1L)),
 				run("outcomes.ended").rows,
-				"c3 and c9 completed; transfer declined c3 before agent took it, and completed wins");
+				"c3 and c9 completed; transfer declined c3 before agent took it, and completed wins;"
+						+ " c1 and c2 reported no end, so the flight recorder's verdicts are theirs: failed, and dropped");
 		AnalyticsReports.Table byApp = run("outcomes.by-application");
 		assertEquals(Arrays.asList("application", "completed", "abandoned", "declined", "failed", "dropped"),
 				byApp.columns);
-		assertEquals(Arrays.asList("agent", 2L, 0L, 0L, 0L, 0L), byApp.rows.get(0));
-		assertEquals(Arrays.asList("transfer", 0L, 0L, 1L, 0L, 0L), byApp.rows.get(1),
-				"per application, transfer's refusal of c3 still counts");
+		assertEquals(Arrays.asList("transfer", 0L, 0L, 1L, 2L, 0L), byApp.rows.get(0),
+				"per application, transfer's refusal of c3 still counts, and the recorder's two failures (c1, c2) are transfer's");
+		assertEquals(Arrays.asList("agent", 2L, 0L, 0L, 0L, 0L), byApp.rows.get(1));
+		assertEquals(Arrays.asList("listener", 0L, 0L, 0L, 0L, 1L), byApp.rows.get(2), "listener dropped c2");
 		assertEquals(2L, run("outcomes.daily").rows.stream().mapToLong(row -> n(row.get(1))).sum());
 	}
 
@@ -543,6 +545,29 @@ class AnalyticsReportsTest {
 		assertEquals(Arrays.asList("flowroute", "prompts"), reports.run("ops.issues", filter(0, false, "east-1")).rows
 				.stream().map(r -> r.get(1)).collect(java.util.stream.Collectors.toList()),
 				"in the last hour: carrier-a was back long before");
+	}
+
+	@Test
+	void badCallsGroupIntoCausesAndACauseNarrowsTheCalls() {
+		AnalyticsReports.Table t = reports.run("calls.causes", filter(7, false, "east-1"));
+		assertEquals(Arrays.asList("cause", "calls", "fault", "finding", "method", "status", "who", "first", "last"),
+				t.columns);
+		assertEquals(3, t.rows.size());
+		assertEquals(Arrays.asList("downstream|error|INVITE|503|198.51.100.20:5060", 2L, "downstream", "error",
+				"INVITE", 503L, "198.51.100.20:5060"), t.rows.get(0).subList(0, 7), "two calls, one server: first");
+		assertEquals("listener on engine0", t.rows.stream().filter(r -> "application".equals(r.get(2))).findFirst()
+				.get().get(6), "our fault names the application and its server, not the caller");
+		assertEquals(Instant.parse("2026-10-03T08:01:00Z").toEpochMilli(), t.rows.get(0).get(7));
+		assertEquals(Instant.parse("2026-10-03T08:02:30Z").toEpochMilli(), t.rows.get(0).get(8));
+
+		String refused = (String) t.rows.get(0).get(0);
+		assertEquals(Arrays.asList("000000C2", "000000C1"),
+				reports.run("calls.list", filter(7, false, "east-1").forCause(refused)).rows.stream()
+						.map(r -> r.get(0)).collect(java.util.stream.Collectors.toList()));
+		assertEquals(1, reports.run("calls.causes", filter(7, false, "east-1").onServer("engine1")).rows.size(),
+				"engine1's one cause");
+		assertEquals(t.rows.size(), reports.run("calls.causes", filter(7, false, "east-1").forCause(refused)).rows
+				.size(), "the causes never narrow to their own choice");
 	}
 
 	@Test

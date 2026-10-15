@@ -34,6 +34,7 @@
 		<class>org.vorpal.blade.applications.dashboard.model.RoutingRow</class>
 		<class>org.vorpal.blade.applications.dashboard.model.ChangeRow</class>
 		<class>org.vorpal.blade.applications.dashboard.model.OpsEventRow</class>
+		<class>org.vorpal.blade.applications.dashboard.model.TracedRow</class>
 		<exclude-unlisted-classes>true</exclude-unlisted-classes>
 		<properties>
 			<property name="eclipselink.target-server" value="WebLogic" />

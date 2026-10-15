@@ -227,3 +227,15 @@ INSERT INTO v_ops_events VALUES ('o4', TIMESTAMP '2026-10-03 11:00:00', 'queueDe
 INSERT INTO v_ops_events VALUES ('o5', TIMESTAMP '2026-10-03 11:01:00', 'queueDepth', 'engine0', 'queue', 'sales', NULL, NULL, NULL, NULL, 0, 1, 0, NULL, 'east-1');
 INSERT INTO v_ops_events VALUES ('o6', TIMESTAMP '2026-09-20 08:00:00', 'problemRaised', 'engine0', 'player', 'prompts', 'Prompt files missing', NULL, NULL, NULL, NULL, NULL, NULL, '/blade/configurator/', 'east-1');
 INSERT INTO v_ops_events VALUES ('o7', TIMESTAMP '2026-10-03 11:30:00', 'endpointDown', 'engine0', 'proxy-balancer', 'carrier-b', 'OPTIONS 503', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'west-1');
+
+-- What the flight recorder found: c1 and c2 refused by one server, c2 also
+-- left unrelayed by listener, c3 never answered by another.
+CREATE TABLE v_call_traced (
+   event_id VARCHAR(20) PRIMARY KEY, call_id VARCHAR(20), traced_at TIMESTAMP, application VARCHAR(64),
+   server VARCHAR(64), domain VARCHAR(64), tenant VARCHAR(64), department VARCHAR(64), cluster_name VARCHAR(64),
+   vorpal_id VARCHAR(32), fault VARCHAR(16), finding VARCHAR(16), method VARCHAR(16), status_code BIGINT,
+   peer VARCHAR(128), dropped VARCHAR(8));
+INSERT INTO v_call_traced VALUES ('t1', 'c1', TIMESTAMP '2026-10-03 08:01:00', 'transfer', 'engine0', 'd', NULL, NULL, 'east-1', '000000C1', 'downstream', 'error', 'INVITE', 503, '198.51.100.20:5060', 'false');
+INSERT INTO v_call_traced VALUES ('t2', 'c2', TIMESTAMP '2026-10-03 08:02:30', 'transfer', 'engine0', 'd', NULL, NULL, 'east-1', '000000C2', 'downstream', 'error', 'INVITE', 503, '198.51.100.20:5060', 'false');
+INSERT INTO v_call_traced VALUES ('t3', 'c2', TIMESTAMP '2026-10-03 08:02:30', 'listener', 'engine0', 'd', NULL, NULL, 'east-1', '000000C2', 'application', 'unrelayed', 'BYE', NULL, '203.0.113.5:5060', 'true');
+INSERT INTO v_call_traced VALUES ('t4', 'c3', TIMESTAMP '2026-10-02 09:00:30', 'agent', 'engine1', 'd', 'uhg', NULL, 'east-1', '000000C3', 'downstream', 'silent', 'INVITE', NULL, '10.0.0.9:5060', 'false');

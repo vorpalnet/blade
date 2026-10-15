@@ -109,7 +109,7 @@
 		return (verdicts[sessionId] || []).map(function (x) {
 			var v = x.verdict, text = verdictText(x.app, v);
 			if (!text) { return null; }
-			var whose = v.fault === 'application' ? 'BLADE' : v.fault === 'downstream' ? 'DOWNSTREAM' : 'DROPPED';
+			var whose = v.fault === 'application' ? x.app : v.fault === 'downstream' ? 'DOWNSTREAM' : 'DROPPED';
 			return whose + ' · ' + text + (v.dropped && v.fault ? ' · dropped' : '');
 		}).filter(Boolean);
 	}

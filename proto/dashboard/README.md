@@ -24,7 +24,9 @@ doing (Traffic; which applications), the right what went wrong (Operations; the 
 themselves). Click a server and Traffic and Operations show only that server. Click an
 hour on a Traffic chart, or a cell of the weekday grid, and Operations shows only that
 time. Click Failed in Outcomes and Applications and Calls show only the failed calls;
-click an application and Calls shows only its calls, each one opening in Trace. A
+click an application and Calls shows only its calls, each one opening in Trace. Applications'
+Causes tab groups the bad calls by what the flight recorder found (whose fault, what went wrong, and
+which server or application); click a cause and Calls shows only its calls. A
 narrowed panel says so in its header, with a ✕ to undo it. The headline numbers never
 narrow. The choices are in the page's address, so Back undoes a step and a copied link
 opens the same view.
