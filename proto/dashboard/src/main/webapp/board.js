@@ -953,18 +953,9 @@
 	/* The applications and services deployed here, from the portal
 	   application's discovery (/blade/portal/api/v1/cards): apps open at their
 	   own address, services in the Configurator. Every one is listed whatever
-	   the viewer may open; the hover says which roles open it, so a request for
-	   access names the right thing. The name is always shown: an icon alone
-	   says little. */
-	var ADMIN_ROLES = ['Admin', 'Deployer', 'Monitor', 'Operator'];
-
-	function rolesText(roles) {
-		if (!roles) return '';
-		if (!roles.length) return 'Opens for anyone signed in.';
-		var all = ADMIN_ROLES.every(function (r) { return roles.indexOf(r) >= 0; });
-		return all ? 'Opens with any WebLogic administration role (Admin, Deployer, Monitor or Operator).'
-			: 'Opens with the ' + roles.join(' or ') + ' role' + (roles.length > 1 ? 's' : '') + ' only.';
-	}
+	   the viewer may open; an app that refuses the viewer shows its own page
+	   saying which roles open it (denied.jsp). The name is always shown: an
+	   icon alone says little. The dashboard itself is left out. */
 
 	/* Icons are drawn in the rail's own ink: each app's favicon is used as a
 	   mask, so a navy outline made for a light page reads on the dark rail,
@@ -977,6 +968,8 @@
 	}
 	var GLYPH_APP = glyph('<rect x="4" y="6" width="24" height="20" rx="2.5"/><path d="M4 11h24 M8 8.5h.01 M11 8.5h.01"/>');
 	var GLYPH_SERVICE = glyph('<path d="M12 4v6 M20 4v6 M8 10h16v5a8 8 0 0 1-16 0z M16 23v5"/>');
+	/* The deployment inventory: a clipboard with a list on it. */
+	var GLYPH_INVENTORY = glyph('<rect x="7" y="6" width="18" height="22" rx="2.5"/><path d="M12 4h8v4h-8z M11 14h.01 M15 14h6 M11 19h.01 M15 19h6 M11 24h.01 M15 24h6"/>');
 
 	function maskIcon(icon, url) {
 		var m = 'url("' + url + '")';
@@ -986,12 +979,10 @@
 
 	function railItem(card) {
 		var service = card.kind === 'service';
-		var self = !service && card.contextRoot === 'blade/dashboard';
-		var a = el('a', 'rail__item' + (self ? ' rail__item--here' : ''));
+		var a = el('a', 'rail__item');
 		a.href = service ? '/blade/configurator/configurator.html?schema=' + encodeURIComponent(card.configuratorDomain || card.name)
 			: '/' + card.contextRoot + '/';
-		if (!self) a.target = service ? 'blade-configurator' : 'blade-' + card.contextRoot.replace(/^.*\//, '');
-		if (self) a.setAttribute('aria-current', 'page');
+		a.target = service ? 'blade-configurator' : 'blade-' + card.contextRoot.replace(/^.*\//, '');
 		var icon = el('span', 'rail__icon');
 		icon.setAttribute('aria-hidden', 'true');
 		if (service) {
@@ -1005,11 +996,8 @@
 		}
 		a.appendChild(icon);
 		a.appendChild(el('span', 'rail__name', card.name));
-		a.title = [card.name + (card.tagline ? ': ' + card.tagline : ''), card.description,
-			service ? 'A service with no page of its own: opens in the Configurator.'
-				+ (card.servers && card.servers.length ? ' Runs on ' + card.servers.join(', ') + '.' : '')
-				: rolesText(card.roles) + (card.servers && card.servers.length ? ' Runs on ' + card.servers.join(', ') + '.' : ''),
-			self ? 'This page.' : ''].filter(Boolean).join('\n\n');
+		a.title = [card.name + (card.tagline ? ': ' + card.tagline : ''), card.description]
+			.filter(Boolean).join('\n\n');
 		return a;
 	}
 
@@ -1019,17 +1007,24 @@
 		getJson('/blade/portal/api/v1/cards').then(function (res) {
 			var cards = (res && res.cards) || [];
 			rail.textContent = '';
+			var inv = el('a', 'rail__item rail__item--first');
+			inv.href = '/blade/portal/report.html';
+			inv.target = 'blade-portal';
+			inv.title = 'Deployment Inventory\n\nEvery application and service, where each runs, in one printable page.';
+			var icon = el('span', 'rail__icon');
+			icon.setAttribute('aria-hidden', 'true');
+			maskIcon(icon, GLYPH_INVENTORY);
+			inv.appendChild(icon);
+			inv.appendChild(el('span', 'rail__name', 'Deployment Inventory'));
+			rail.appendChild(inv);
 			[['app', 'Apps'], ['service', 'Services']].forEach(function (g) {
-				var some = cards.filter(function (c) { return (c.kind === 'service') === (g[0] === 'service'); });
+				var some = cards.filter(function (c) {
+					return (c.kind === 'service') === (g[0] === 'service') && c.contextRoot !== 'blade/dashboard';
+				});
 				if (!some.length) return;
 				rail.appendChild(el('div', 'rail__head', g[1]));
 				some.forEach(function (c) { rail.appendChild(railItem(c)); });
 			});
-			var inv = el('a', 'rail__foot', 'Deployment inventory');
-			inv.href = '/blade/portal/report.html';
-			inv.target = 'blade-portal';
-			inv.title = 'Every application and service, where each runs, in one printable page.';
-			rail.appendChild(inv);
 		}).catch(function () {
 			rail.textContent = '';
 			rail.appendChild(el('p', 'rail__note', 'The application list is unavailable: the portal application serves it.'));
@@ -1995,6 +1990,47 @@
 		host.hidden = false;
 	}
 
+	/* ── about ─────────────────────────────────────────────────────────── */
+
+	/* The brand pill opens About: this build (from the WAR's manifest), what
+	   it runs on, the copyright and license. Built from /settings; without it
+	   the panel still names the product. */
+	function buildAbout(about) {
+		var host = document.getElementById('about');
+		var btn = host.querySelector('button');
+		var panel = el('div', 'about');
+		panel.hidden = true;
+		about = about || {};
+		panel.appendChild(el('div', 'about__name', 'BLADE Dashboard'));
+		if (about.version) {
+			var built = about.built ? about.built.replace('T', ' ').replace(/:\d\dZ$/, ' UTC') : '';
+			panel.appendChild(el('div', 'about__ver', 'Version ' + about.version
+				+ (about.mode === 'dev' ? ' · development build' : '') + (built ? ' · built ' + built : '')));
+		}
+		var rows = el('dl', 'about__rows');
+		function row(k, v) { if (!v) return; rows.appendChild(el('dt', '', k)); rows.appendChild(el('dd', '', v)); }
+		row('Server', about.server && about.domain ? about.server + ' · domain ' + about.domain : about.server);
+		var wls = about.weblogic && /WebLogic Server [\d.]+/.exec(about.weblogic);
+		row('WebLogic', wls ? wls[0].replace('WebLogic Server ', '') : about.weblogic);
+		row('Java', about.java);
+		if (rows.children.length) panel.appendChild(rows);
+		var links = el('div', 'about__links');
+		var docs = el('a', '', 'Documentation');
+		docs.href = '/blade/javadoc/'; docs.target = 'blade-javadoc';
+		var src = el('a', '', 'Source on GitHub');
+		src.href = 'https://github.com/vorpalnet/blade'; src.target = '_blank'; src.rel = 'noopener';
+		links.appendChild(docs); links.appendChild(src);
+		panel.appendChild(links);
+		if (about.copyright || about.license) {
+			panel.appendChild(el('div', 'about__legal', [about.copyright, about.license].filter(Boolean).join(' · ')));
+		}
+		host.appendChild(panel);
+		var open = function (yes) { panel.hidden = !yes; btn.setAttribute('aria-expanded', String(yes)); };
+		btn.addEventListener('click', function (e) { e.stopPropagation(); open(panel.hidden); });
+		document.addEventListener('click', function (e) { if (!host.contains(e.target)) open(false); });
+		document.addEventListener('keydown', function (e) { if (e.key === 'Escape') open(false); });
+	}
+
 	/* ── loading ───────────────────────────────────────────────────────── */
 
 	var statusEl = document.getElementById('status'), statusText = document.getElementById('statusText');
@@ -2202,6 +2238,7 @@
 			}
 			buildAccount(cfg);
 		}
+		buildAbout(cfg && cfg.about);
 		if (!RIGHTS.platform) {
 			live = function () { loadNow().catch(function () {}); };
 			hidePlatformKpis();

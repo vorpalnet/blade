@@ -56,7 +56,7 @@
 		<maven.build.timestamp.format>yyyy-MM-dd'T'HH:mm:ss'Z'</maven.build.timestamp.format>
 
 		<!-- Manifest metadata -->
-		<blade.copyright>Copyright 2024 Vorpal Networks, LLC. All Rights Reserved.</blade.copyright>
+		<blade.copyright>Copyright © 2021–2026 Vorpal Networks, LLC</blade.copyright>
 		<blade.license>MIT License</blade.license>
 
 		<!-- Dependency versions -->
@@ -1091,7 +1091,7 @@ fi
 <div class="blade-jd-links"><a href="/blade/portal/">Portal</a><a href="https://github.com/vorpalnet/blade">GitHub</a></div>
 </div>
 ]]></top>
-							<bottom><![CDATA[&#169; Vorpal Networks, LLC 2013&#8211;2026 &#183; MIT License; without warranty or liability of any kind.]]></bottom>
+							<bottom><![CDATA[&#169; Vorpal Networks, LLC 2021&#8211;2026 &#183; MIT License; without warranty or liability of any kind.]]></bottom>
 						</configuration>
 					</plugin>
 				</plugins>

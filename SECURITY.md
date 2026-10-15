@@ -67,6 +67,11 @@ stay consistent.
         <url-pattern>/login/*</url-pattern>
     </web-resource-collection>
 </security-constraint>
+<!-- signed in without a role that opens it: the master "not allowed" page -->
+<error-page>
+    <error-code>403</error-code>
+    <location>/login/denied.jsp</location>
+</error-page>
 <!-- everything else: an admin role. "/" is WebLogic's catch-all. -->
 <security-constraint>
     <web-resource-collection>
@@ -100,6 +105,15 @@ portal master and rebuild — **never create a per-app login page**; per-app
 copies are exactly the drift this arrangement exists to prevent. The page's
 assets (brand CSS, backdrop, logo) are served unauthenticated from
 `/blade/portal/` for all apps.
+
+The **"not allowed" page is single-sourced the same way.** `denied.jsp`, beside
+the master login page, is each admin WAR's 403 error page: someone signed in
+without a role that opens the app sees who they are signed in as and the roles
+that open it (read from the app's own `web.xml`), with links back to the
+dashboard and to sign in as someone else. A request that does not accept HTML
+gets the refusal as plain text, so an app's own API callers see what they did
+before. The pom injects it beside `login.jsp`; the `web.xml` maps
+`<error-code>403</error-code>` to it.
 
 `weblogic.xml` must also carry the four
 `<wls:security-role-assignment><wls:externally-defined/>` blocks. **Both halves

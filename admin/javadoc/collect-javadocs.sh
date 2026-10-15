@@ -283,7 +283,7 @@ cat >> "$DOCROOT/index.html" <<'FOOTER'
             <a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
                 <img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
             </a>
-            <span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+            <span>&copy; Vorpal Networks 2021&ndash;2026 &middot; MIT License</span>
             <a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
         </footer>
     </main>

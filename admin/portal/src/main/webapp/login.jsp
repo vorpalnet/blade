@@ -136,7 +136,7 @@
 	</div>
 
 	<footer class="login-copyright">
-		&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License
+		&copy; Vorpal Networks 2021&ndash;2026 &middot; MIT License
 	</footer>
 </body>
 </html>

@@ -121,11 +121,14 @@ classes loaded (`metaspaceMb`, `classesLoaded`), and every artifact's manifest c
 ### The dashboard replaces the portal
 
 The server's bare address and `/blade/portal/` now land on the dashboard. A rail down its left
-lists every admin app and service deployed, names always under the icons, with a hover that
-says what each does, where it runs and which WebLogic roles open it (the portal's card list
-now carries each app's `roles`, read from its `web.xml`). Nothing is hidden by grants: knowing
-an app exists is how a person asks for access. A service with no page opens in the
-Configurator. Every icon is drawn in the rail's own ink, so none relies on colour; an app without
+lists every other admin app and every service deployed, names always under the icons, with a
+hover that says what each does. Nothing is hidden by grants: knowing an app exists is how a
+person asks for access. An admin app that refuses someone signed in now shows a page naming
+the WebLogic roles that open it, with links back to the dashboard and to sign in as someone
+else, instead of a bare "Forbidden" (`denied.jsp`, single-sourced beside the master login
+page). A service opens in the Configurator. The dashboard is not in its own rail: its brand
+pill opens an About panel instead (version and build date from the WAR's manifest, the server,
+WebLogic and Java versions, copyright and license). Every icon is drawn in the rail's own ink, so none relies on colour; an app without
 an icon shows a plain window and a service a plug. Trace, Phone and the dashboard have new
 outline icons. The portal application stays deployed: it serves the login page, the brand
 assets, the editor kit, the card list, the deployment inventory and the service pages.

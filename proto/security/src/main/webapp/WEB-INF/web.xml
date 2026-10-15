@@ -33,6 +33,13 @@
 		</auth-constraint>
 	</security-constraint>
 
+	<!-- A person signed in without a role that opens this application gets
+	     the master page naming the roles that do (admin/portal/denied.jsp). -->
+	<error-page>
+		<error-code>403</error-code>
+		<location>/login/denied.jsp</location>
+	</error-page>
+
 	<login-config>
 		<auth-method>CLIENT-CERT,FORM</auth-method>
 		<realm-name>default</realm-name>

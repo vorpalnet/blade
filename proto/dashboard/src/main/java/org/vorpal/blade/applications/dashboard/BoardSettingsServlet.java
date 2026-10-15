@@ -54,9 +54,53 @@ public class BoardSettingsServlet extends HttpServlet {
 		out.put("sees", Access.describe(access));
 		out.put("platform", access == null || access.seesAnyPlatform());
 		out.put("content", access == null || access.seesContent());
+		out.put("about", about());
 		resp.setContentType("application/json");
 		resp.setCharacterEncoding("UTF-8");
 		MAPPER.writeValue(resp.getWriter(), out);
+	}
+
+	/// What the brand's About panel says: this build, from the WAR's own
+	/// manifest (version, build date and mode, copyright, license), and what it
+	/// runs on. Read on each request; it is a few attribute reads.
+	private Map<String, Object> about() {
+		Map<String, Object> out = new LinkedHashMap<>();
+		try (java.io.InputStream in = getServletContext().getResourceAsStream("/META-INF/MANIFEST.MF")) {
+			if (in != null) {
+				java.util.jar.Attributes a = new java.util.jar.Manifest(in).getMainAttributes();
+				out.put("version", a.getValue("Implementation-Version"));
+				out.put("built", a.getValue("Implementation-Build-Date"));
+				out.put("mode", a.getValue("Blade-Build-Mode"));
+				out.put("copyright", a.getValue("Copyright"));
+				out.put("license", a.getValue("License"));
+			}
+		} catch (Exception e) {
+			// The panel shows what it has.
+		}
+		String server = SettingsManager.getServerName();
+		out.put("server", server);
+		out.put("domain", SettingsManager.getDomainName());
+		out.put("weblogic", weblogicVersion(server));
+		out.put("java", System.getProperty("java.vendor") + " " + System.getProperty("java.version"));
+		return out;
+	}
+
+	/// The `WeblogicVersion` of the server this runs on, or null.
+	private static String weblogicVersion(String server) {
+		try (HealthServlet.CloseableContext ctx = new HealthServlet.CloseableContext()) {
+			javax.management.MBeanServer dr = (javax.management.MBeanServer) ctx
+					.lookup("java:comp/env/jmx/domainRuntime");
+			for (javax.management.ObjectName on : dr.queryNames(
+					new javax.management.ObjectName("com.bea:Type=ServerRuntime,Name=" + server + ",*"), null)) {
+				Object v = dr.getAttribute(on, "WeblogicVersion");
+				if (v != null) {
+					return v.toString();
+				}
+			}
+		} catch (Exception e) {
+			// Unknown: left out.
+		}
+		return null;
 	}
 
 	/// The person's name as the identity domain gives it, else the user name.

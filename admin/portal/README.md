@@ -22,14 +22,14 @@ request; the dashboard's rail draws it:
   [Configurator](../configurator/README.md).
 
 The join key is the last segment of the context-root. An app with no `@SchemaAbout` still
-gets a bare card named from its context-root slug. Each app card also carries `roles`: the
-roles its `web.xml` security constraints admit, read from the deployed archive, so the rail can
-say what a person must be granted to open it.
+gets a bare card named from its context-root slug.
 
 ## What else lives here
 
 - The **master `login.jsp`**. Every other admin WAR injects this one file at build time —
   never add a per-app login page (see [SECURITY.md](../../SECURITY.md)).
+- The **master `denied.jsp`**, injected the same way: each admin app's 403 page, naming the
+  roles that open the app to someone signed in without one.
 - The brand assets under `/brand/*` that other admin apps reference.
 - The **shared editor kit** under `/lib/*` (`blade-editor.js` + `blade-editor.css`):
   schema-driven form rendering, polymorphic card lists, and the help-dialog helper

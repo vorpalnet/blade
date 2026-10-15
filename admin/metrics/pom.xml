@@ -45,6 +45,7 @@
 							<directory>${project.basedir}/../portal/src/main/webapp</directory>
 							<includes>
 								<include>login.jsp</include>
+								<include>denied.jsp</include>
 							</includes>
 							<targetPath>login</targetPath>
 						</resource>

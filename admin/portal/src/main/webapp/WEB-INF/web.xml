@@ -47,6 +47,14 @@
 		</auth-constraint>
 	</security-constraint>
 
+	<!-- A person signed in without a role that opens an admin application gets
+	     this master page naming the roles that do. Each admin WAR copies it in
+	     beside login.jsp and maps its own 403 to it. -->
+	<error-page>
+		<error-code>403</error-code>
+		<location>/denied.jsp</location>
+	</error-page>
+
 	<login-config>
 		<auth-method>CLIENT-CERT,FORM</auth-method>
 		<realm-name>default</realm-name>

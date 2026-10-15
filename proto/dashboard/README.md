@@ -19,10 +19,12 @@ header instead of stacking more charts below. A tile that needs attention is
 outlined and says what is wrong in words.
 
 **The dashboard is the front door.** The server's bare address and `/blade/portal/` land
-here. A rail down the left lists every admin app and then every service, the name always
-under its icon; hovering says what it does, where it runs and which WebLogic roles open
-it, so someone without access knows what to ask for. An app opens at its own address; a
-service opens the Configurator at that service. The rail scrolls on its own and reads the
+here. A rail down the left lists every other admin app and then every service, the name
+always under its icon; hovering says what it does. An app opens at its own address; a
+service opens the Configurator at that service. Nothing is hidden by grants: an app that
+refuses someone shows a page naming the WebLogic roles that open it, so they know what to
+ask for. The Dashboard pill at the top left opens About: the build's version and date, the
+server, WebLogic and Java it runs on, and the copyright and license. The rail scrolls on its own and reads the
 portal application's card list.
 
 **Detail grows left to right, and a click narrows what is to its right.** The left

@@ -33,6 +33,7 @@
 		<web-resource-collection>
 			<web-resource-name>public-assets</web-resource-name>
 			<url-pattern>/login.jsp</url-pattern>
+			<url-pattern>/denied.jsp</url-pattern>
 			<url-pattern>/favicon.svg</url-pattern>
 		</web-resource-collection>
 	</security-constraint>
@@ -60,6 +61,13 @@
 			<role-name>Operator</role-name>
 		</auth-constraint>
 	</security-constraint>
+
+	<!-- A person signed in without a role that opens this application gets
+	     the master page naming the roles that do (admin/portal/denied.jsp). -->
+	<error-page>
+		<error-code>403</error-code>
+		<location>/denied.jsp</location>
+	</error-page>
 
 	<login-config>
 		<auth-method>CLIENT-CERT,FORM</auth-method>
