@@ -323,3 +323,13 @@
 	line-height: 1.5;
 	white-space: pre;
 }
+
+/* ---- Around a recorded call: the server that minute, the same cause,
+   the changes before it, the log. Terms left, facts right. ---- */
+.tr-around { margin-top: 14px; border-top: 1px solid var(--vorpal-slate-300); padding-top: 10px; }
+.tr-around-title { font-size: 13px; font-weight: 700; margin: 0 0 6px; color: var(--vorpal-ink-900); }
+.tr-around-list { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; margin: 0; font-size: 13px; }
+.tr-around-list dt { color: var(--vorpal-slate-600); }
+.tr-around-list dd { margin: 0; color: var(--vorpal-ink-900); overflow-wrap: anywhere; }
+.tr-around-changes { margin: 4px 0 0; padding-left: 18px; font-family: var(--vorpal-font-mono, ui-monospace, Menlo, Consolas, monospace); font-size: 12px; }
+@media (max-width: 640px) { .tr-around-list { grid-template-columns: 1fr; } .tr-around-list dd { margin-bottom: 6px; } }

@@ -497,7 +497,8 @@ WHERE e.type IN ('queueDepth', 'endpointDown', 'endpointUp', 'remoteDown', 'remo
 -- was sent to) or application (this application); `finding` says what, the
 -- method and status say about which message, and `peer` names the server. A
 -- call dropped with no finding has only `dropped`. The dashboard groups these
--- into causes, between how calls ended and the calls themselves.
+-- into causes, between how calls ended and the calls themselves. `payload` is the whole
+-- record, steps and all, which Trace draws as the call's ladder.
 CREATE OR REPLACE VIEW v_call_traced AS
 SELECT
    CAST(e.id AS VARCHAR2(20)) AS event_id,
@@ -515,7 +516,8 @@ SELECT
    JSON_VALUE(e.payload, '$."method"') AS method,
    JSON_VALUE(e.payload, '$."status"' RETURNING NUMBER) AS status_code,
    JSON_VALUE(e.payload, '$."peer"') AS peer,
-   JSON_VALUE(e.payload, '$."dropped"') AS dropped
+   JSON_VALUE(e.payload, '$."dropped"') AS dropped,
+   e.payload AS payload
 FROM events e
 JOIN applications a ON a.id = e.application_id
 LEFT JOIN sessions s ON s.id = e.session_id

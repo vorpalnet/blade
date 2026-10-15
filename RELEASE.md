@@ -95,6 +95,26 @@ and a new report, `calls.causes`. It needs the SIP applications built on the fli
 A proxy such as iRouter reports where it sent a call, never how the call ended; Outcomes now
 counts such a call by the flight recorder's verdict, as failed (or dropped), instead of leaving it out.
 
+### Events about no call now name their publisher
+
+An event that is not about one call (a configuration saved or pushed, a trunk registering, an
+endpoint or remote going down, a problem raised, a queue's minute) now carries the publishing
+application, domain, server and start time beside its own fields, as a call's events always have.
+The analytics service files every event under the application that published it; without a name
+the insert failed and the bus parked the event on its error queue, so none of these had ever been
+stored, and the dashboard's Changes showed restarts only. Subscribers see four more fields; the
+generated payload classes ignore fields they do not know.
+
+### Trace: around a recorded call
+
+A call opened from the dashboard shows, under its verdict, what surrounded it: the server that
+minute (state, heap, CPU, stuck threads, requests refused), how many calls went wrong the same
+way in the 12 hours either side (a link opens the dashboard narrowed to them), the changes in the
+hour before, and the application's log at that moment with the Vorpal-ID searched for. It reads
+the dashboard's reports; without the dashboard only the log link shows. A proxied call's ladder
+now keeps both far ends: iRouter's caller and callee share one SIP session, and the callee's
+side used to be drawn at the caller's address.
+
 ### Dashboard: every problem opens the app that fixes it
 
 The board only shows problems; now each one opens, in a window of its own, the admin app that can

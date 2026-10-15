@@ -196,6 +196,26 @@ public final class AnalyticsEventMapper {
 		return CloudEvent.create(type, source, subject, data, BladeEventCatalog.versionOf(type));
 	}
 
+	/// An event that is not about one call, laid out as [#callScoped] lays one
+	/// out with no correlator, under its own `subject`.
+	///
+	/// **The publisher rides on every event.** The analytics sink files each
+	/// event under the application instance that published it, found by
+	/// `appName`, `domain`, `server` and `appStartedAt`. Without them a trunk
+	/// registering or a configuration pushed could not be stored: the insert of
+	/// a nameless application failed, and the bus parked the event on its
+	/// error queue after the redeliveries ran out.
+	///
+	/// @param subject the CloudEvents `subject`; may be null
+	/// @param fields  the event's own facts; may be null
+	public static CloudEvent sessionless(String source, String type, String subject, String appName,
+			String domain, String server, Date appStarted, ObjectNode fields) {
+		CloudEvent event = callScoped(source, type, null, null, new Date(), appName, domain, server, appStarted,
+				fields);
+		event.setSubject(subject);
+		return event;
+	}
+
 	/// The payload names [#callScoped] reserves for the correlator, the
 	/// publishing application and the call's scope. A consumer that wants only
 	/// the event's own facts (the analytics sink's `payload` column) removes

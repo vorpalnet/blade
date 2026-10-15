@@ -255,4 +255,25 @@ class AnalyticsEventMapperTest {
 			}
 		}
 	}
+
+	/// An event about no call still names its publisher: the analytics sink
+	/// files every event under one, and a nameless one was refused and parked.
+	@Test
+	void anEventAboutNoCallNamesItsPublisher() {
+		com.fasterxml.jackson.databind.node.ObjectNode facts = MAPPER.createObjectNode();
+		facts.put("gateway", "trunk_a").put("node", "engine0").putNull("reason");
+		CloudEvent event = AnalyticsEventMapper.sessionless("/blade/gateway", BladeEventTypes.TRUNK_REGISTERED,
+				"trunk_a", "gateway", "domain_a", "engine0", APP_STARTED, facts);
+
+		assertEquals("trunk_a", event.getSubject(), "its own subject, not a call's");
+		JsonNode data = (JsonNode) event.getData();
+		assertEquals("gateway", data.path("appName").asText());
+		assertEquals("domain_a", data.path("domain").asText());
+		assertEquals("engine0", data.path("server").asText());
+		assertTrue(data.hasNonNull("appStartedAt"));
+		assertTrue(data.hasNonNull("occurredAt"));
+		assertFalse(data.has("vorpalId"), "about no call");
+		assertEquals("trunk_a", data.path("gateway").asText());
+		assertFalse(data.has("reason"), "nulls are dropped");
+	}
 }

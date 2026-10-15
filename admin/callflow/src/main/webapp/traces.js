@@ -60,7 +60,8 @@
 		file: document.getElementById('tr-file'),
 		report: document.getElementById('tr-report'),
 		recorded: document.getElementById('tr-recorded'),
-		like: document.getElementById('tr-like')
+		like: document.getElementById('tr-like'),
+		around: document.getElementById('tr-around')
 	};
 
 	var snapshot = window.BLADE_TRACE_SNAPSHOT || null;
@@ -125,7 +126,7 @@
 		lastSources.forEach(function (src) {
 			if (!src.recorded || !src.steps || !src.steps.length) { return; }
 			var id = src.steps[0].sessionId;
-			(verdicts[id] = verdicts[id] || []).push({ app: src.app, verdict: src.verdict || {} });
+			(verdicts[id] = verdicts[id] || []).push({ app: src.app, server: src.server, verdict: src.verdict || {} });
 		});
 		calls = aggregate(lastSources);
 		if (linkedCall && !selectedCall) {
@@ -331,10 +332,180 @@
 	function showVerdict(call) {
 		var found = verdictsOf(call.sessionId);
 		if (els.like) { els.like.hidden = !origin(call); }
-		if (!found.length) { return; }
+		if (!found.length) {
+			if (els.around) { els.around.hidden = true; }
+			aroundFor = null;
+			return;
+		}
 		els.title.textContent = 'Call ' + call.sessionId;
 		els.stepInfo.textContent = found.join('  ·  ');
 		els.sourcePath.hidden = true;
+		showAround(call);
+	}
+
+	// ---- around a recorded call ----
+	// What surrounded the call, read from the dashboard's reports (same site,
+	// same login): the server that minute, how many calls went wrong the same
+	// way, the changes in the hour before, and the log. Without the dashboard
+	// only the log link shows. Fetched once per call, not on every refresh.
+
+	var aroundFor = null;
+	var BOARD = '/blade/dashboard/';
+	var ZONE = (function () {
+		try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; }
+	})();
+
+	function report(name, query) {
+		return fetch(BOARD + 'data?r=' + name + '&tz=' + encodeURIComponent(ZONE) + query, { credentials: 'same-origin' })
+			.then(function (r) { return r.ok ? r.json() : null; })
+			.then(function (j) { var t = j && j[name]; return t && t.rows ? t : null; })
+			.catch(function () { return null; });
+	}
+
+	function hhmm(millis) { return hhmmss(millis).slice(0, 5); }
+
+	function el(tag, text, cls) {
+		var e = document.createElement(tag);
+		if (text != null) { e.textContent = text; }
+		if (cls) { e.className = cls; }
+		return e;
+	}
+
+	function link(text, href) {
+		var a = el('a', text + ' ↗');
+		a.href = href;
+		a.target = '_blank';
+		a.rel = 'noopener';
+		return a;
+	}
+
+	function boardLink(text, from, until, extra) {
+		return link(text, BOARD + 'index.html#range=custom&from=' + from + '&until=' + until + (extra || ''));
+	}
+
+	// A report's row by column name.
+	function cell(t, row, name) { return row[t.columns.indexOf(name)]; }
+
+	// calls.causes names a cause by its columns; the row for this verdict is
+	// found by them, so the dashboard's key is used as it built it.
+	function causeRow(t, rec) {
+		var v = rec.verdict;
+		function norm(x) { return x == null || x === '(none)' ? '' : String(x); }
+		var who = v.fault === 'downstream' ? v.peer : rec.app + ' on ' + rec.server;
+		return t.rows.find(function (r) {
+			return norm(cell(t, r, 'fault')) === norm(v.fault || 'dropped') && norm(cell(t, r, 'finding')) === norm(v.finding)
+				&& norm(cell(t, r, 'method')) === norm(v.method) && norm(cell(t, r, 'status')) === norm(v.status)
+				&& norm(cell(t, r, 'who')) === norm(who);
+		}) || null;
+	}
+
+	// One change in words, as the dashboard's Changes tab says it (board.js
+	// changeDays): keep the two alike.
+	function changeText(t, x) {
+		var change = cell(t, x, 'change'), server = cell(t, x, 'server'), what = cell(t, x, 'what');
+		var file = cell(t, x, 'file'), failed = cell(t, x, 'failed on');
+		failed = failed && failed !== '[]' ? String(failed).replace(/[\[\]"]/g, '') : '';
+		switch (change) {
+		case 'server restarted': return server + ' restarted';
+		case 'application restarted': return what + ' restarted on ' + server;
+		case 'config pushed': return file + ' pushed' + (failed ? ', FAILED on ' + failed : '');
+		default: return file + ' ' + String(what).split(' · ').reverse().join(' by ');
+		}
+	}
+
+	function showAround(call) {
+		var box = els.around;
+		if (!box) { return; }
+		var recs = verdicts[call.sessionId] || [];
+		if (!recs.length) { box.hidden = true; aroundFor = null; return; }
+		if (aroundFor === call.sessionId) { box.hidden = false; return; }
+		aroundFor = call.sessionId;
+		var rec = recs[0], server = rec.server, t = call.firstMillis;
+		var end = call.steps.length ? call.steps[call.steps.length - 1].epochMillis : t;
+		box.innerHTML = '';
+		box.appendChild(el('h2', 'Around this call', 'tr-around-title'));
+		var list = el('dl', null, 'tr-around-list');
+		box.appendChild(list);
+		box.hidden = false;
+		function row(term) {
+			var dd = el('dd');
+			list.appendChild(el('dt', term));
+			list.appendChild(dd);
+			return dd;
+		}
+		var minute = server ? row(server + ' that minute') : null;
+		var same = row('The same cause');
+		var changes = row('Changes in the hour before');
+		var logs = row('Its log');
+		if (server) {
+			logs.appendChild(link(rec.app + ' on ' + server + ' at ' + hhmmss(t) + ', searched for ' + call.sessionId,
+				'/blade/logs/logs.html?server=' + encodeURIComponent(server) + '&app=' + encodeURIComponent(rec.app)
+				+ '&at=' + t + '&q=' + encodeURIComponent(call.sessionId)));
+		} else {
+			logs.textContent = 'the record names no server';
+		}
+		[minute, same, changes].forEach(function (dd) { if (dd) { dd.textContent = 'reading…'; } });
+
+		var half = 12 * 3600000, from = t - half, until = Math.min(Date.now(), t + half);
+		var reads = [
+			server ? report('platform.servers', '&server=' + encodeURIComponent(server) + '&from=' + (t - 120000)
+				+ '&until=' + (end + 60000)) : Promise.resolve(null),
+			report('calls.causes', '&from=' + from + '&until=' + until),
+			report('changes', '&from=' + (t - 3600000) + '&until=' + t)
+		];
+		Promise.all(reads).then(function (r) {
+			if (aroundFor !== call.sessionId) { return; }
+			if (!r[0] && !r[1] && !r[2]) {
+				[minute, same, changes].forEach(function (dd) { if (dd) { dd.textContent = 'the dashboard is not reachable'; } });
+				return;
+			}
+			if (minute) {
+				var srv = r[0] && r[0].rows[0];
+				minute.textContent = '';
+				if (!srv) {
+					minute.textContent = 'no sample that minute';
+				} else {
+					var p = r[0];
+					minute.appendChild(document.createTextNode([
+						cell(p, srv, 'state'),
+						'heap at most ' + cell(p, srv, 'peak heap %') + '%',
+						'CPU at most ' + cell(p, srv, 'peak cpu %') + '%',
+						cell(p, srv, 'most stuck threads') + ' stuck threads',
+						cell(p, srv, 'refused') + ' requests refused'
+					].join(' · ') + '  '));
+					minute.appendChild(boardLink('on the board', t - 1800000, Math.min(Date.now(), end + 1800000),
+						'&server=' + encodeURIComponent(server)));
+				}
+			}
+			same.textContent = '';
+			var c = r[1] && causeRow(r[1], rec);
+			if (!c) {
+				same.textContent = r[1] ? 'no other call recorded it' : 'not known';
+			} else {
+				var n = cell(r[1], c, 'calls'), first = cell(r[1], c, 'first'), last = cell(r[1], c, 'last');
+				same.appendChild(boardLink(n === 1 ? 'only this call, in the 12 hours either side'
+					: n + ' calls, recorded ' + hhmmss(first).slice(0, 8) + ' to ' + hhmmss(last).slice(0, 8), from, until,
+					'&cause=' + encodeURIComponent(cell(r[1], c, 'cause'))));
+			}
+			changes.textContent = '';
+			var ch = r[2] ? r[2].rows.filter(function (x) { return cell(r[2], x, 'at') <= t; }) : null;
+			if (!ch) {
+				changes.textContent = 'not known';
+			} else if (!ch.length) {
+				changes.textContent = 'none';
+			} else {
+				ch.sort(function (a, b) { return cell(r[2], b, 'at') - cell(r[2], a, 'at'); });
+				var ul = el('ul', null, 'tr-around-changes');
+				ch.slice(0, 5).forEach(function (x) {
+					var at = cell(r[2], x, 'at');
+					ul.appendChild(el('li', hhmm(at) + '  ' + changeText(r[2], x) + ', '
+						+ Math.round((t - at) / 60000) + ' min before'));
+				});
+				changes.appendChild(document.createTextNode(ch.length + (ch.length === 1 ? ' change' : ' changes')
+					+ (ch.length > 5 ? ', the newest five:' : ':')));
+				changes.appendChild(ul);
+			}
+		});
 	}
 
 	// The address a recorded call came from: its first step is the INVITE

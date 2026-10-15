@@ -137,7 +137,9 @@ public final class Events {
 
 	/// Publish an event that is not about one call: a room's membership, a
 	/// recording closing, a browser's message relayed from a web session. The
-	/// payload is exactly what `fields` sets, less its nulls.
+	/// payload is what `fields` sets, less its nulls, beside the publisher
+	/// (`appName`, `domain`, `server`, `appStartedAt`) and `occurredAt`, as on
+	/// a call's events ([AnalyticsEventMapper#sessionless]).
 	///
 	/// @param subject the CloudEvents `subject`, the key a consumer correlates
 	///                on; may be null
@@ -156,9 +158,13 @@ public final class Events {
 			if (fields != null) {
 				fields.accept(data);
 			}
-			data.remove(nullFields(data));
-			return publish(CloudEvent.create(type, source(), subject, data,
-					(version != null) ? version : BladeEventCatalog.versionOf(type)));
+			CloudEvent event = AnalyticsEventMapper.sessionless(source(), type, subject,
+					SettingsManager.getApplicationName(), SettingsManager.getDomainName(),
+					SettingsManager.getServerName(), Analytics.getApplicationStartedAt(), data);
+			if (version != null) {
+				event.setDataversion(version);
+			}
+			return publish(event);
 		} catch (Throwable t) {
 			dropped(type, t);
 			return false;
@@ -193,16 +199,6 @@ public final class Events {
 			return settings.getSource();
 		}
 		return "/blade/" + SettingsManager.getApplicationName();
-	}
-
-	private static java.util.List<String> nullFields(ObjectNode data) {
-		java.util.List<String> nulls = new java.util.ArrayList<>();
-		data.fields().forEachRemaining(field -> {
-			if (field.getValue() == null || field.getValue().isNull()) {
-				nulls.add(field.getKey());
-			}
-		});
-		return nulls;
 	}
 
 	private static void unready(String type) {

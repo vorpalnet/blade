@@ -9,8 +9,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-/// A recorded call reads as a live trace source: same step shape, each leg
-/// named once, and the verdict alongside.
+/// A recorded call reads as a live trace source: same step shape, each step at
+/// its own far end, and the verdict alongside.
 class RecordedCallsTest {
 
 	@Test
@@ -40,5 +40,41 @@ class RecordedCallsTest {
 		assertEquals("pbx.example.net", steps.get(2).path("peer").asText(),
 				"the container's own 408 has no address; its leg's name keeps it on the callee's lane");
 		assertEquals(3, steps.get(3).path("order").asInt());
+	}
+
+	/// A proxy's caller and callee share one SIP session: one leg, two far ends.
+	@Test
+	void aProxiedCallKeepsBothFarEnds() throws Exception {
+		JsonNode payload = new ObjectMapper().readTree("{\"fault\":\"downstream\",\"finding\":\"timeout\","
+				+ "\"method\":\"INVITE\",\"status\":408,\"leg\":1,\"peer\":\"192.0.2.10:5091\",\"steps\":["
+				+ "{\"t\":1000,\"dir\":\"in\",\"leg\":1,\"method\":\"INVITE\",\"cseq\":1,\"peer\":\"192.0.2.10:5071\"},"
+				+ "{\"t\":1003,\"dir\":\"out\",\"leg\":1,\"method\":\"INVITE\",\"cseq\":1,\"peer\":\"192.0.2.10:5091\"},"
+				+ "{\"t\":33000,\"dir\":\"in\",\"leg\":1,\"method\":\"INVITE\",\"status\":408,\"cseq\":1},"
+				+ "{\"t\":33000,\"dir\":\"out\",\"leg\":1,\"method\":\"INVITE\",\"status\":408,\"cseq\":1,"
+				+ "\"peer\":\"192.0.2.10:5071\"}]}");
+		JsonNode steps = RecordedCalls.source("irouter", "D6E3ADDB", payload).path("steps");
+
+		assertEquals("192.0.2.10:5071", steps.get(0).path("peer").asText(), "the caller");
+		assertEquals("192.0.2.10:5091", steps.get(1).path("peer").asText(), "where the proxy sent it, not the caller");
+		assertEquals("192.0.2.10:5091", steps.get(2).path("peer").asText(),
+				"the container's own 408 sits with the INVITE it answers");
+		assertEquals("192.0.2.10:5071", steps.get(3).path("peer").asText());
+	}
+
+	/// A request sent to a host name is answered from its IP address; the
+	/// callee's later BYE comes from that address too. One lane.
+	@Test
+	void aHostAndItsAddressShareALane() throws Exception {
+		JsonNode payload = new ObjectMapper().readTree("{\"fault\":\"application\",\"finding\":\"unrelayed\","
+				+ "\"method\":\"BYE\",\"leg\":2,\"steps\":["
+				+ "{\"t\":1,\"dir\":\"in\",\"leg\":1,\"method\":\"INVITE\",\"cseq\":1,\"peer\":\"198.51.100.7:5060\"},"
+				+ "{\"t\":2,\"dir\":\"out\",\"leg\":2,\"method\":\"INVITE\",\"cseq\":1,\"peer\":\"pbx.example.net\"},"
+				+ "{\"t\":3,\"dir\":\"in\",\"leg\":2,\"method\":\"INVITE\",\"status\":200,\"cseq\":1,"
+				+ "\"peer\":\"203.0.113.9:5060\"},"
+				+ "{\"t\":9,\"dir\":\"in\",\"leg\":2,\"method\":\"BYE\",\"cseq\":2,\"peer\":\"203.0.113.9:5060\"}]}");
+		JsonNode steps = RecordedCalls.source("transfer", "0000ABCE", payload).path("steps");
+
+		assertEquals("pbx.example.net", steps.get(2).path("peer").asText(), "the 200 stands with its INVITE");
+		assertEquals("pbx.example.net", steps.get(3).path("peer").asText(), "the BYE from the address that answered");
 	}
 }

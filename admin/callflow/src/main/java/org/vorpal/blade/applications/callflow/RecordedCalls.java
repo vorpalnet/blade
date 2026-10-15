@@ -25,9 +25,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /// **What a recorded step lacks.** The recorder keeps no SIP text and no
 /// source position: a step is the time, direction, leg, method or status,
 /// CSeq and the far end's host and port. So a recorded call has no Message or
-/// Source tab, and its far ends are named by address. Each leg is named once,
-/// by the address of its first step, so a request sent to a host name and the
-/// response from that host's IP address stay on one lane.
+/// Source tab, and its far ends are named by address. Each step keeps its own
+/// far end, since a proxy's caller and callee share one SIP session (one leg,
+/// two far ends). A response stands with the request it answers, and an
+/// address a request's response came from is that request's far end from then
+/// on, so a request sent to a host name and the messages from that host's IP
+/// address stay on one lane.
 ///
 /// One source per application that recorded the call: every BLADE application
 /// on a call writes its own record under the same Vorpal-ID, and the page
@@ -45,9 +48,9 @@ final class RecordedCalls {
 	static ObjectNode read(String dataSource, String vorpalId, Long since, int limit)
 			throws NamingException, SQLException {
 		DataSource ds = (DataSource) new InitialContext().lookup(dataSource);
-		String sql = "SELECT application, vorpal_id, payload FROM v_events WHERE event_type = 'callTraced'"
-				+ (vorpalId == null ? "" : " AND vorpal_id = ?") + (since == null ? "" : " AND occurred_at >= ?")
-				+ " ORDER BY occurred_at DESC";
+		String sql = "SELECT application, vorpal_id, server, payload FROM v_call_traced WHERE 1 = 1"
+				+ (vorpalId == null ? "" : " AND vorpal_id = ?") + (since == null ? "" : " AND traced_at >= ?")
+				+ " ORDER BY traced_at DESC";
 		ObjectNode out = MAPPER.createObjectNode();
 		ArrayNode sources = out.putArray("sources");
 		try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
@@ -64,7 +67,12 @@ final class RecordedCalls {
 			try (ResultSet rs = ps.executeQuery()) {
 				while (rs.next()) {
 					try {
-						sources.add(source(rs.getString(1), rs.getString(2), MAPPER.readTree(rs.getString(3))));
+						ObjectNode src = source(rs.getString(1), rs.getString(2), MAPPER.readTree(rs.getString(4)));
+						if (src.path("server").isNull() && rs.getString(3) != null) {
+							// The application's row names its server; the record need not.
+							src.put("server", rs.getString(3));
+						}
+						sources.add(src);
 					} catch (java.io.IOException unreadable) {
 						// one bad row must not hide the rest
 					}
@@ -95,6 +103,9 @@ final class RecordedCalls {
 		}
 		verdict.put("dropped", payload.path("dropped").asBoolean(false));
 
+		// Far ends: the request each response answers, and the addresses that
+		// answered for a name (a host name's IP address).
+		Map<String, String> requestPeer = new HashMap<>(), alias = new HashMap<>();
 		Map<Integer, String> legName = new HashMap<>();
 		for (JsonNode s : payload.path("steps")) {
 			int leg = s.path("leg").asInt();
@@ -114,9 +125,28 @@ final class RecordedCalls {
 			o.put("kind", response ? "response" : "request");
 			o.put("label", response ? s.path("status").asText() + " " + s.path("method").asText()
 					: s.path("method").asText());
-			o.put("leg", s.path("leg").asInt());
-			String peer = legName.get(s.path("leg").asInt());
-			o.put("peer", peer != null ? peer : "leg " + s.path("leg").asInt());
+			int leg = s.path("leg").asInt();
+			o.put("leg", leg);
+			// A request and its responses: same leg, method and CSeq, opposite directions.
+			String request = leg + " " + s.path("method").asText() + " " + s.path("cseq").asLong() + " "
+					+ ("in".equals(s.path("dir").asText()) == response ? "out" : "in");
+			String own = s.hasNonNull("peer") ? s.get("peer").asText() : null, peer;
+			if (response) {
+				String asked = requestPeer.get(request);
+				if (asked != null && own != null && !own.equals(asked)) {
+					alias.put(own, asked);
+				}
+				peer = (asked != null) ? asked : own;
+			} else {
+				peer = (own == null) ? null : alias.getOrDefault(own, own);
+				if (peer != null) {
+					requestPeer.put(request, peer);
+				}
+			}
+			if (peer == null) {
+				peer = legName.get(leg);
+			}
+			o.put("peer", peer != null ? peer : "leg " + leg);
 		}
 		return src;
 	}
