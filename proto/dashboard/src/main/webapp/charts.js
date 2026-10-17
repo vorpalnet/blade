@@ -469,10 +469,13 @@
 	   the stoplight colour of its health AND a shape that says the same: a
 	   circle working, a diamond in trouble, a square down, a hollow circle for
 	   no data. Sites close enough to overlap share one mark, the worst of
-	   them; clicking it zooms in and spreads out every server there, named,
-	   with its state in words.
+	   them; clicking it zooms in: the servers and SIP peers there (members
+	   of kind 'server' and 'sip') on spokes, and beside them the other
+	   connections listed by kind, worst first, each with its state in words.
+	   Past networkMap.maxSpokes spokes the names no longer read: the place
+	   is drawn alone and everything goes in the list.
 	   model: { sites: [{ name, city, lat, lon, state, members: [{ label, state,
-	   note }] }], links: [{ from, to, state, note }] }; a state is up, warn,
+	   note, kind }] }], links: [{ from, to, state, note }] }; a state is up, warn,
 	   down or none. atlases: { us, world }. opts.zoomed: the key of the place
 	   to show zoomed in (kept by the caller across refreshes); opts.onZoom(key)
 	   is told when the viewer zooms in or out. opts.foot: a line under it. */
@@ -512,6 +515,39 @@
 			+ (my + dx / len * bow).toFixed(1) + ' ' + x2.toFixed(1) + ',' + y2.toFixed(1);
 	}
 
+	/* The connections at a zoomed-in place that are not drawn, by kind; the
+	   kind with the worst member comes first, and the worst member first in it. */
+	var NET_KINDS = { refusal: 'Refusals', server: 'Servers', sip: 'SIP peers', pool: 'Databases', remote: 'Services', bus: 'Event bus' };
+
+	function netList(list, p, rows) {
+		var head = document.createElement('div');
+		head.className = 'net__places';
+		head.textContent = p.sites.map(function (s) { return s.name; }).join(' · ');
+		list.appendChild(head);
+		var by = {}, order = Object.keys(NET_KINDS);
+		rows.forEach(function (r) { (by[r.kind] = by[r.kind] || []).push(r); });
+		var worst = function (rs) { return Math.max.apply(null, rs.map(function (r) { return NET_RANK[r.state] || 0; })); };
+		Object.keys(by).sort(function (a, b) { return worst(by[b]) - worst(by[a]) || order.indexOf(a) - order.indexOf(b); })
+			.forEach(function (k) {
+				var h = document.createElement('div');
+				h.className = 'net__group';
+				h.textContent = NET_KINDS[k] || k;
+				list.appendChild(h);
+				by[k].sort(function (a, b) { return (NET_RANK[b.state] || 0) - (NET_RANK[a.state] || 0) || (a.label < b.label ? -1 : 1); })
+					.forEach(function (r) {
+						var row = document.createElement('div');
+						row.className = 'net__row';
+						row.innerHTML = '<svg viewBox="-10 -10 20 20" width="12" height="12"><g></g></svg><span class="net__row-label"></span><span class="net__row-note"></span>';
+						netMark(d3.select(row.querySelector('g')), r.state, 6);
+						row.querySelector('.net__row-label').textContent = r.label;
+						row.querySelector('.net__row-note').textContent = r.where + NET_WORD[r.state] + (r.note ? ' · ' + r.note : '');
+						row.title = r.site + ' · ' + r.label + ': ' + NET_WORD[r.state] + (r.note ? ' · ' + r.note : '');
+						list.appendChild(row);
+					});
+			});
+		if (!rows.length) list.appendChild(document.createTextNode('No other connections reported here.'));
+	}
+
 	function networkMap(el, atlases, model, opts) {
 		opts = opts || {};
 		el.textContent = '';
@@ -525,7 +561,13 @@
 		var usProj = d3.geoAlbersUsa().scale(1300).translate([487.5, 305]);
 		var isUS = placed.length > 0 && placed.every(function (s) { return usProj([s.lon, s.lat]) != null; });
 		var W = 975, H = isUS ? 610 : 520, project;
-		var svg = d3.select(wrap).append('svg').attr('class', 'net__map').attr('viewBox', '0 0 ' + W + ' ' + H)
+		var stage = document.createElement('div');
+		stage.className = 'net__stage';
+		wrap.appendChild(stage);
+		var list = document.createElement('div');
+		list.className = 'net__list';
+		list.hidden = true;
+		var svg = d3.select(stage).append('svg').attr('class', 'net__map').attr('viewBox', '0 0 ' + W + ' ' + H)
 			.attr('preserveAspectRatio', 'xMidYMid meet').attr('role', 'img').attr('aria-label', 'Network map');
 		var zoom = svg.append('g');
 		if (isUS) {
@@ -586,6 +628,7 @@
 		back.hidden = true;
 		back.addEventListener('click', function () { zoomTo(null, true); });
 		wrap.appendChild(back);
+		stage.appendChild(list);
 		svg.on('click', function () { if (!back.hidden) zoomTo(null, true); });
 
 		function zoomTo(p, animate) {
@@ -594,21 +637,33 @@
 			(animate ? zoom.transition().duration(550) : zoom).attr('transform', t);
 			detail.selectAll('*').remove();
 			back.hidden = !p;
+			list.hidden = !p;
+			list.textContent = '';
+			wrap.classList.toggle('net--zoomed', !!p);
 			zoom.selectAll('.net-name, .net-count').style('opacity', p ? 0 : null);
 			if (opts.onZoom) opts.onZoom(p ? p.key : null);
-			if (!p) return;
-			var members = [];
+			if (!p) {
+				(animate ? svg.transition().duration(550) : svg).attr('viewBox', '0 0 ' + W + ' ' + H);
+				return;
+			}
+			var peers = [], others = [];
 			p.sites.forEach(function (s) {
-				(s.members.length ? s.members : [{ label: s.name, state: s.state, note: 'nothing reported' }]).forEach(function (m) {
-					members.push({ label: m.label, state: m.state, site: s.name, note: m.note || '',
-						where: p.sites.length > 1 ? s.name + ' · ' : '' });
+				(s.members.length ? s.members : [{ label: s.name, state: s.state, note: 'nothing reported', kind: 'server' }]).forEach(function (m) {
+					var row = { label: m.label, state: m.state, site: s.name, note: m.note || '', kind: m.kind,
+						where: p.sites.length > 1 ? s.name + ' · ' : '' };
+					(m.kind === 'sip' || m.kind === 'server' ? peers : others).push(row);
 				});
 			});
-			var cx = W / 2, cy = H / 2, ring = Math.min(210, 70 + members.length * 14);
+			var crowded = peers.length > networkMap.maxSpokes;
+			if (crowded) { others = peers.concat(others); peers = []; }
+			/* The spokes: the servers and SIP peers, framed tight so their names read. */
+			var cx = W / 2, cy = H / 2, ring = peers.length ? Math.min(170, 60 + peers.length * 16) : 0;
+			var hw = ring + 250, hh = Math.max(ring + 60, hw * 0.62);
+			(animate ? svg.transition().duration(550) : svg).attr('viewBox', (cx - hw) + ' ' + (cy - hh) + ' ' + 2 * hw + ' ' + 2 * hh);
 			var d = detail.attr('opacity', 0);
-			d.append('circle').attr('class', 'net-backdrop').attr('cx', cx).attr('cy', cy).attr('r', ring + 95);
-			members.forEach(function (m, i) {
-				var a = -Math.PI / 2 + 2 * Math.PI * i / members.length;
+			d.append('rect').attr('class', 'net-backdrop').attr('x', cx - hw).attr('y', cy - hh).attr('width', 2 * hw).attr('height', 2 * hh);
+			peers.forEach(function (m, i) {
+				var a = -Math.PI / 2 + 2 * Math.PI * i / peers.length;
 				var x = cx + ring * Math.cos(a), y = cy + ring * Math.sin(a);
 				d.append('line').attr('class', 'net-spoke').attr('x1', cx).attr('y1', cy).attr('x2', x).attr('y2', y)
 					.style('stroke', netColor(m.state));
@@ -623,16 +678,18 @@
 			});
 			var c = d.append('g').attr('transform', 'translate(' + cx + ',' + cy + ')');
 			netMark(c, p.state, 13);
-			c.append('text').attr('class', 'net-name net-name--center').attr('y', -(ring + 52)).text(p.sites.map(function (s) { return s.name; }).join(' · '));
+			c.append('text').attr('class', 'net-name net-name--center').attr('y', -26).text(p.label);
+			if (!peers.length) c.append('text').attr('class', 'net-member-note').attr('y', 34).attr('text-anchor', 'middle').text(crowded ? others.length + ' listed' : 'no servers or SIP peers here');
 			d.on('click', function (ev) { ev.stopPropagation(); });
 			(animate ? d.transition().delay(350).duration(300) : d).attr('opacity', 1);
+			netList(list, p, others);
 		}
 
 		var legend = document.createElement('div');
 		legend.className = 'net__legend';
 		legend.innerHTML = ['up', 'warn', 'down', 'none'].map(function (s) {
 			return '<span class="net__key"><svg viewBox="-10 -10 20 20" width="12" height="12"><g></g></svg>' + NET_WORD[s] + '</span>';
-		}).join('') + '<span class="net__note">a line is the route between two sites · click a site to see its servers</span>';
+		}).join('') + '<span class="net__note">a line is the route between two sites · click a site to see its servers and connections</span>';
 		wrap.appendChild(legend);
 		['up', 'warn', 'down', 'none'].forEach(function (s, i) {
 			netMark(d3.select(legend.querySelectorAll('.net__key g')[i]), s, 6);
@@ -646,6 +703,8 @@
 		var zoomed = opts.zoomed && places.filter(function (p) { return p.key === opts.zoomed; })[0];
 		if (zoomed) zoomTo(zoomed, false);
 	}
+
+	networkMap.maxSpokes = 16;
 
 	global.BladeCharts = {
 		bar: bar, stackBar: stackBar, hbar: hbar, line: line, multiLine: multiLine, heatmap: heatmap,

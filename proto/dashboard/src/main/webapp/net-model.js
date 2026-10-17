@@ -152,28 +152,35 @@
 		return out;
 	}
 
+	/* What a member is, for the zoomed-in view: the WebLogic servers
+	   ('server') and the SIP peers calls travel to and from ('sip': balancer
+	   endpoints, trunks, calls arriving) are drawn; the other connections
+	   (pools, remote services, the bus) and refusals are listed. */
+	function kind(m, k) { m.kind = k; return m; }
+
 	/* /network and /health into what the map draws: each site's members and
 	   state, and the lines between sites. */
 	function model(net, nodes, now) {
 		var cluster = [], sites = net.sites.map(function (s) {
-			var members = (s.servers || []).map(function (n) { return serverMember(n, nodes); }).concat(endpointMembers(s));
+			var members = (s.servers || []).map(function (n) { return kind(serverMember(n, nodes), 'server'); })
+				.concat(endpointMembers(s).map(function (m) { return kind(m, 'sip'); }));
 			(s.trunks || []).forEach(function (t) {
-				members.push({ label: 'trunk ' + t.gateway, state: 'down',
+				members.push({ label: 'trunk ' + t.gateway, state: 'down', kind: 'sip',
 					note: 'registration failing' + (t.status ? ': ' + t.status + (t.reason ? ' ' + t.reason : '') : '') });
 			});
-			datasourceMembers(s, nodes, now, net.windowMinutes || 15).forEach(function (m) { members.push(m); });
-			remoteMembers(s, now, net.windowMinutes || 15).forEach(function (m) { members.push(m); });
+			datasourceMembers(s, nodes, now, net.windowMinutes || 15).forEach(function (m) { members.push(kind(m, 'pool')); });
+			remoteMembers(s, now, net.windowMinutes || 15).forEach(function (m) { members.push(kind(m, 'remote')); });
 			var route = members.slice();
-			busMembers(s.bus).forEach(function (m) { members.push(m); });
+			busMembers(s.bus).forEach(function (m) { members.push(kind(m, 'bus')); });
 			failureMembers(s, net).forEach(function (f) {
-				members.push(f);
+				members.push(kind(f, 'refusal'));
 				if (f.route) route.push(f);
 			});
 			var inbound = null;
 			if ((s.roles || []).indexOf('inbound') >= 0) {
 				var last = s.inbound && s.inbound.last, q = s.quietMinutes;
 				var quiet = q != null && (!last || now - last > q * 60000);
-				inbound = { label: 'calls arriving', state: quiet ? 'warn' : last ? 'up' : 'none',
+				inbound = { label: 'calls arriving', kind: 'sip', state: quiet ? 'warn' : last ? 'up' : 'none',
 					note: last ? 'last ' + ago(last, now) : 'none in the last day' };
 				members.push(inbound);
 			}

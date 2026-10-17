@@ -297,7 +297,17 @@ table.report tr:hover td { background: var(--panel-2); }
 /* The network map (Traffic: Network). Land and borders quiet; marks and
    lines in the stoplight colours, each mark's shape saying the same. */
 .net { display: flex; flex-direction: column; height: 100%; position: relative; }
-.net__map { flex: 1 1 auto; min-height: 0; cursor: default; }
+.net__stage { flex: 1 1 auto; min-height: 0; display: flex; gap: 12px; }
+.net__map { flex: 1 1 auto; min-width: 0; min-height: 0; cursor: default; }
+/* Zoomed in: the SIP peers on spokes at the left, everything else listed at the right. */
+.net__list { flex: 0 0 46%; min-width: 0; overflow-y: auto; font-size: 12px; padding-right: 4px; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.net__places { font-size: 11px; color: var(--ink-3); margin: 2px 0 4px; }
+.net__group { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin: 8px 0 2px; }
+.net__row { display: grid; grid-template-columns: 12px 1fr; column-gap: 7px; align-items: baseline; padding: 3px 0; border-top: 1px solid var(--line); }
+.net__row svg { align-self: center; }
+.net__row .net-mark { stroke-width: 1; }
+.net__row-label { color: var(--ink); overflow-wrap: anywhere; }
+.net__row-note { grid-column: 2; color: var(--ink-2); font-size: 11px; overflow-wrap: anywhere; }
 .net-land { fill: var(--panel-2); }
 .net-borders { fill: none; stroke: var(--line-2); stroke-width: .7; }
 .net-link { fill: none; stroke-width: 2.5; stroke-linecap: round; opacity: .9; }
@@ -563,6 +573,9 @@ table.report tr.row--link:hover td { text-decoration: underline; text-decoration
 /* Servers › Bus: the board's own freshness, the subscriptions, the parked
    events. A bad line carries a word as well as the colour. */
 .bus { display: flex; flex-direction: column; gap: 6px; overflow: auto; min-height: 0; font-size: 12px; }
+/* Bus and Apps lists outgrow the panel: they fill the body and scroll in it
+   (the panel body itself clips), with a bar that shows without hovering. */
+.panel__body > .bus { position: absolute; inset: 0; padding-right: 4px; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
 .bus__line { margin: 0; font-size: 12px; display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: baseline; color: var(--ink-2); }
 .bus__word { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; color: var(--ink-3); }
 .bus__line--bad .bus__word { color: var(--bad); }

@@ -440,12 +440,19 @@
 	Panel.prototype.draw = function () {
 		var view = this.view();
 		if (!view) return;
+		// A live refresh redraws the view from scratch: a list the reader has
+		// scrolled keeps its place, unless the tab changed.
+		var list = this.body.querySelector(':scope > .bus, .net__list');
+		var top = list && this.drawn === view.key ? list.scrollTop : 0;
+		this.drawn = view.key;
 		this.body.textContent = '';
 		this.sub.textContent = typeof view.sub === 'function' ? view.sub() : (view.sub || '');
 		this.sub.title = (view.tip ? view.tip + '. ' : '') + this.sub.textContent;
 		this.showRange();
 		this.showChips();
 		try { view.draw(this.body); } catch (e) { C.message(this.body, 'error', String(e.message || e)); }
+		list = top && this.body.querySelector(':scope > .bus, .net__list');
+		if (list) list.scrollTop = top;
 	};
 
 	Panel.prototype.showRange = function () {
