@@ -50,10 +50,10 @@ source" row, or headless `./install.sh <env> datasource`); WLST helpers for prov
 MySQL, Oracle ADB, SQL Server, and the schema live in `notes/`.
 
 The reporting views (`sql/<Dialect>-analytics-views.sql`) are the contract a BI tool and
-the dashboard read, not the tables. Run the file after the schema, and again after every
-upgrade: it only replaces views and keeps every row. On Oracle ADB,
-`notes/run-oracle-schema.py` with `BLADE_VIEWS_ONLY=yes` does exactly that. Read `package-info.java`
-for the architecture.
+the dashboard read, not the tables. `upgrade.sh` builds the schema on an empty database,
+applies the changes in `sql/migrations/` that a database has not had, and replaces the views
+when they changed, through the domain's own data source; `--sql FILE` writes the same for a
+DBA instead ([UPGRADING.md](../../UPGRADING.md)). Read `package-info.java` for the architecture.
 
 A third dialect is cheap because **no key is assigned by the database**: nothing depends
 on what a given provider believes a given platform can generate. SQL Server needs **2016 or later** — `events.payload` relies on

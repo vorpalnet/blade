@@ -14,11 +14,13 @@
 # ── The driver ──────────────────────────────────────────────────────────────
 #
 # WebLogic ships a DataDirect SQL Server driver
-# (weblogic.jdbcx.sqlserver.SQLServerDataSource) and it is present without
+# (weblogic.jdbc.sqlserver.SQLServerDriver) and it is present without
 # installing anything. This script uses it FOR THAT REASON — it is the choice
-# that works on a fresh domain.
+# that works on a fresh domain. It is the jar's non-XA class: one-phase commit
+# below needs no XA driver, and the jar's XA class
+# (weblogic.jdbcx.sqlserver.SQLServerDataSource) would contradict it.
 #
-# Microsoft's own driver (com.microsoft.sqlserver.jdbc.SQLServerXADataSource,
+# Microsoft's own driver (com.microsoft.sqlserver.jdbc.SQLServerDriver,
 # from mssql-jdbc) is the alternative, and is what to reach for if the
 # deployment needs something DataDirect does not carry: Azure AD / Entra
 # authentication, Always Encrypted, or a TLS posture their DBAs mandate. It has
@@ -55,7 +57,7 @@ blade_url = os.environ.get(
     'DB_URL',
     'jdbc:weblogic:sqlserver://sqlserver.example_co.internal:1433;databaseName=vorpal;'
     'encryptionMethod=SSL;validateServerCertificate=true')
-blade_driver = os.environ.get('DB_DRIVER', 'weblogic.jdbcx.sqlserver.SQLServerDataSource')
+blade_driver = os.environ.get('DB_DRIVER', 'weblogic.jdbc.sqlserver.SQLServerDriver')
 
 if not db_user or not db_pass:
     raise Exception('set DB_USER and DB_PASS')
@@ -106,7 +108,12 @@ cmo.setTestConnectionsOnReserve(true)
 cmo.setSecondsToTrustAnIdlePoolConnection(0)
 
 cd('/JDBCSystemResources/BladeAnalytics')
-set('Targets', jarray.array([ObjectName('com.bea:Name=%s,Type=Cluster' % blade_cluster)], ObjectName))
+# Targets: the engine cluster (the analytics service) AND the AdminServer (the
+# dashboard and the other admin applications read the same data source).
+set('Targets', jarray.array([
+    ObjectName('com.bea:Name=%s,Type=Cluster' % blade_cluster),
+    ObjectName('com.bea:Name=AdminServer,Type=Server')
+], ObjectName))
 
 save()
 activate()

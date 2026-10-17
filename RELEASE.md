@@ -2,6 +2,63 @@
 
 ## Unreleased (branch analytics2)
 
+### upgrade.sh: a new BLADE onto a running domain, in one command
+
+`git pull && ./upgrade.sh <env>` builds, reconciles the event bus and the analytics data
+source, brings the analytics database current, and redeploys every deployed application this
+build has a changed copy of, on its current targets and in its current shape. It adds
+nothing, undeploys nothing and restarts nothing; what waits for a restart (a new application
+router) is listed at the end. See [UPGRADING.md](UPGRADING.md).
+
+- **The analytics database upgrades itself.** `SchemaUpgrade` (framework, `v3.jdbc`)
+  connects through the domain's own `jdbc/BladeAnalytics` data source and builds the schema
+  on an empty database, applies the numbered changes in `services/analytics/sql/migrations/`
+  a database has not had (recorded in `blade_schema_migrations`), and replaces the views
+  when their script changed. The two changes this file used to ask you to run by hand, the
+  call scope columns and the UTC defaults, are migrations 001 and 002; a database that
+  already has them is recognized and they are recorded, not run again.
+- **It asks first.** When the database needs a change, `upgrade.sh` lists it, warns
+  (live database, no undo, take a backup, a large table can hold up writes) and asks.
+  `--yes` answers for an unattended run; without a terminal and without `--yes` it stops.
+- **For a DBA, optionally,** `--sql FILE` writes exactly those changes in the database's own syntax
+  and stops; the next run finds them applied.
+- **Unchanged applications are left alone.** "Changed" is by content (`ArchiveDigest`):
+  every build differs in its timestamps, and every redeploy grows an engine's metaspace.
+- **`update.sh` is now `patch.sh`** (and `UPDATING.md` is `PATCHING.md`): it patches the
+  OCCAS binaries, and "update" beside "upgrade" said the same thing twice.
+
+### Oracle, MySQL and SQL Server, everywhere
+
+Every part of BLADE that keeps data in a database now runs on all three. Analytics and the
+dashboard already did; the call catalog, the recordings search, the agent console's caller
+history and block list, and the meetings' caller memory were written in Oracle's SQL and now
+use plain SQL, with the few real differences (paging, column types, the full-text index)
+taken from the framework's `v3.jdbc.Dialect`, which reads the database from the connection.
+
+- **The catalog's full-text search** uses Oracle Text on Oracle and a FULLTEXT index on
+  MySQL. SQL Server's full-text search is a separate server component, so there a search for
+  words scans, which is correct and slower; the log says which it is.
+- **The dashboard on MySQL** failed every report that reads a time through an aggregate:
+  MySQL's driver returns a `DATETIME` as a `LocalDateTime`, which the UTC converter did not
+  accept. It does now.
+- **The dashboard's database size** (Health) now reads MySQL's and SQL Server's catalogs as
+  well as Oracle's.
+- **`Oracle-database-schema.sql` runs in SQL*Plus.** Blank lines inside three CREATE TABLE
+  statements ended them early there; they are comment lines now.
+- **`retention.sql`** has the SQL Server deletes.
+- **The SQL Server data source** (`install.sh`, `notes/configure-mssql.py`) uses DataDirect's
+  non-XA driver, `weblogic.jdbc.sqlserver.SQLServerDriver`: the data source commits in one
+  phase, and the XA class it named before contradicted that. `configure-mssql.py` and
+  `configure-mysql.py` now target the AdminServer as well as the engine cluster, as
+  `install.sh` and the Oracle script already did; the dashboard reads the data source there.
+
+Proven against Oracle Database 23ai, MySQL 8.4 and SQL Server 2022 (with Microsoft's driver
+and with WebLogic's own DataDirect driver), each built from the shipped scripts: every
+dashboard report in four scopes gives the same output on all four, and the analytics write
+path passes on all three. Both checks are opt-in tests anyone can repeat:
+`ReportsOnDatabaseTest` (dashboard, `BLADE_REPORTS_URL`) and `AnalyticsWritePathTest`
+(analytics, `BLADE_ANALYTICS_URL`, which replaces `BLADE_MSSQL_URL`).
+
 ### Analytics: a call ends when the application holding it is gone
 
 A call row ended only when an application sent its stop, so an application that was

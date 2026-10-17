@@ -1,8 +1,9 @@
-# Updating OCCAS under a running cluster
+# Patching OCCAS under a running cluster
 
-`update.sh` changes the binaries a live cluster runs on: build a new home, prove
-it on one engine, flip, roll. It is the fourth verb beside `install.sh` (the
-server), `build.sh` (the artifacts) and `deploy.sh` (the push).
+`patch.sh` changes the binaries a live cluster runs on: build a new home, prove
+it on one engine, flip, roll. It is one of five verbs: `install.sh` (the server),
+`build.sh` (the artifacts), `deploy.sh` (the push), `upgrade.sh` (a new BLADE
+build onto a running domain) and this one, for the OCCAS binaries beneath it.
 
 ## The model
 
@@ -34,12 +35,12 @@ already guarantees this), so no flip can touch them.
 ## Patch day
 
 ```bash
-./update.sh <env> preflight            # manifests, disk, opatch JDK, patch dir
-./update.sh <env> build                # clone current -> <cur>_pN, patch, manifest
-./update.sh <env> distribute 8.3_p1    # ship to engine hosts (skip when shared)
-./update.sh <env> canary 8.3_p1        # one drained engine onto the new home
-./update.sh <env> flip 8.3_p1          # repoint current (refused if not canaried)
-./update.sh <env> roll                 # AdminServer, then drain-aware engines
+./patch.sh <env> preflight            # manifests, disk, opatch JDK, patch dir
+./patch.sh <env> build                # clone current -> <cur>_pN, patch, manifest
+./patch.sh <env> distribute 8.3_p1    # ship to engine hosts (skip when shared)
+./patch.sh <env> canary 8.3_p1        # one drained engine onto the new home
+./patch.sh <env> flip 8.3_p1          # repoint current (refused if not canaried)
+./patch.sh <env> roll                 # AdminServer, then drain-aware engines
 ```
 
 Every verb takes `-n` for a dry run. `status` at any time shows where every

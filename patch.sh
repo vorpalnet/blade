@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # ============================================================================
-# update.sh — the OCCAS binary lifecycle: build → canary → flip → roll.
+# patch.sh — the OCCAS binary lifecycle: build → canary → flip → roll.
 #
-# The fourth verb: install.sh stands up the server, build.sh makes artifacts,
-# deploy.sh pushes them, update.sh changes the BINARIES under a running
-# cluster and leaves nothing to chance.
+# One of five verbs: install.sh stands up the server, build.sh makes artifacts,
+# deploy.sh pushes them, upgrade.sh brings a domain up to a new BLADE build,
+# patch.sh changes the OCCAS BINARIES under a running cluster and leaves
+# nothing to chance.
 #
-# The model (see UPDATING.md for the full ceremony):
+# The model (see PATCHING.md for the full ceremony):
 #   <base>/8.3            blessed versioned home (immutable once it has run)
 #   <base>/8.3_p1         next home: a clone, patched, manifested, blessed
 #   <base>/current  ->    the symlink; ONLY a flip ever changes what runs next
@@ -25,23 +26,23 @@
 #     never touched and the servers keep running.
 #
 # Usage:
-#   ./update.sh <env> status                   where every link points; what every JVM runs
-#   ./update.sh <env> preflight                the fat-finger detector: manifests, JDK,
+#   ./patch.sh <env> status                   where every link points; what every JVM runs
+#   ./patch.sh <env> preflight                the fat-finger detector: manifests, JDK,
 #                                              space, inventory, patch dir — read-only
-#   ./update.sh <env> build [<ver>]            clone current -> <ver> (default <cur>_pN),
+#   ./patch.sh <env> build [<ver>]            clone current -> <ver> (default <cur>_pN),
 #                                              patch it in a private namespace, manifest,
 #                                              make it read-only. Never touches live.
-#   ./update.sh <env> distribute <ver>         ship <ver> to the engine hosts (sync-occas.sh);
+#   ./patch.sh <env> distribute <ver>         ship <ver> to the engine hosts (sync-occas.sh);
 #                                              a no-op once homes are on a shared mount
 #                                              (occas.homes.shared=true)
-#   ./update.sh <env> canary <ver> [engine]    drain one engine (default engine0), wait
+#   ./patch.sh <env> canary <ver> [engine]    drain one engine (default engine0), wait
 #                                              quiet, restart it PINNED to <ver>, report
-#   ./update.sh <env> flip <ver>               repoint 'current' everywhere; refused unless
+#   ./patch.sh <env> flip <ver>               repoint 'current' everywhere; refused unless
 #                                              <ver> is manifested AND canaried
-#   ./update.sh <env> roll [engine1,engine2]   restart the AdminServer, then drain-aware
+#   ./patch.sh <env> roll [engine1,engine2]   restart the AdminServer, then drain-aware
 #                                              rolling restart of the engines (default
 #                                              engine0) onto whatever 'current' points at
-#   ./update.sh <env> rollback                 flip back to the recorded previous home,
+#   ./patch.sh <env> rollback                 flip back to the recorded previous home,
 #                                              then roll
 #
 # Options: -n / --dry-run   print every action; change nothing.
@@ -71,7 +72,7 @@ UPD_A1="${UPD_POS[2]:-}"; UPD_A2="${UPD_POS[3]:-}"
 case "$UPD_ENV" in "") sed -n '2,58p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
 
 # --- The hidden inner verb runs FIRST, before the library load re-parses argv.
-# build re-executes itself as:  sudo unshare -m update.sh _patch-inner <env>
+# build re-executes itself as:  sudo unshare -m patch.sh _patch-inner <env>
 # <clone> <loc> <blade_home> <dry>  — root, in a private mount namespace. It
 # bind-mounts the clone at the registered path and drives install.sh's
 # do_patch at it. BLADE_HOME rides argv (not env: sudo's env_reset would strip
@@ -271,7 +272,7 @@ do_build() {
     info "build ${ver}: clone $(basename "$CUR_REAL") → ${ver}, patch at registered path ${loc} (private namespace)"
     if [ "$DRY" = "on" ]; then
         log "${C_DIM}  [dry-run] cp -a ${CUR_REAL} ${new}${C_RESET}"
-        log "${C_DIM}  [dry-run] sudo unshare -m update.sh … _patch-inner (bind-mount ${new} at ${loc}, do_patch there)${C_RESET}"
+        log "${C_DIM}  [dry-run] sudo unshare -m patch.sh … _patch-inner (bind-mount ${new} at ${loc}, do_patch there)${C_RESET}"
         # The inner verb dry-runs without sudo or a namespace — it mounts nothing.
         "$SELF" x _patch-inner "$NAME" "$new" "$loc" "$BLADE_HOME" on || true
         log "${C_DIM}  [dry-run] sha256 manifest -> $(manifest_of "$ver"); chmod -R a-w ${new}${C_RESET}"
@@ -293,8 +294,8 @@ do_build() {
         || { warn "manifest failed"; return 1; }
     as_install_user chmod -R a-w "$new" || true
     ok "built ${ver}: patched, manifested, read-only. The live home was never touched."
-    log "  ${C_DIM}next:  ./update.sh ${NAME} distribute ${ver}   (skip when homes are shared)${C_RESET}"
-    log "  ${C_DIM}then:  ./update.sh ${NAME} canary ${ver}${C_RESET}"
+    log "  ${C_DIM}next:  ./patch.sh ${NAME} distribute ${ver}   (skip when homes are shared)${C_RESET}"
+    log "  ${C_DIM}then:  ./patch.sh ${NAME} canary ${ver}${C_RESET}"
 }
 
 # ----------------------------------------------------------------------------
@@ -394,7 +395,7 @@ BLADE_OCCAS_HOME='${new}' exec bash '${domhome}/${BOOT_SCRIPT_SUBDIR}/start-admi
     if [ "$seen" = "$new" ]; then
         ok "canary ${eng} is RUNNING on ${ver} (verified from its cmdline)."
         [ "$DRY" = "on" ] || set_conf_prop "$DEPLOY_CONF" update.canary "${ver}:${eng}:$(date +%s)"
-        log "  ${C_DIM}watch it take traffic, then:  ./update.sh ${NAME} flip ${ver}${C_RESET}"
+        log "  ${C_DIM}watch it take traffic, then:  ./patch.sh ${NAME} flip ${ver}${C_RESET}"
     else
         warn "canary started but runs on '${seen:-?}' not ${new} — investigate before flipping."
         return 1
@@ -411,7 +412,7 @@ do_flip() {
     [ -f "$(manifest_of "$ver")" ] || die "refusing to flip: ${ver} has no manifest (not a blessed build)."
     case "$(read_prop "$DEPLOY_CONF" update.canary)" in
         "${ver}:"*) : ;;
-        *) die "refusing to flip: ${ver} has not been canaried (./update.sh ${NAME} canary ${ver})." ;;
+        *) die "refusing to flip: ${ver} has not been canaried (./patch.sh ${NAME} canary ${ver})." ;;
     esac
     lock_acquire || return 1
     trap lock_release EXIT
@@ -423,7 +424,7 @@ do_flip() {
     fi
     set_conf_prop "$DEPLOY_CONF" update.previous "$prev"
     "${SCRIPT_DIR}/sync-occas.sh" "$NAME" switch "$ver" --local || return 1
-    ok "flipped. Roll when ready:  ./update.sh ${NAME} roll"
+    ok "flipped. Roll when ready:  ./patch.sh ${NAME} roll"
 }
 
 # ----------------------------------------------------------------------------

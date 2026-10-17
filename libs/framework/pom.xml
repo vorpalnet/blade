@@ -75,6 +75,13 @@
 			<artifactId>junit-jupiter</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- Test scope only: SchemaUpgradeTest runs the analytics schema upgrade
+		     on an in-memory database. -->
+		<dependency>
+			<groupId>org.hsqldb</groupId>
+			<artifactId>hsqldb</artifactId>
+			<scope>test</scope>
+		</dependency>
 		<!-- Test scope only. Lets the mapper's output be validated against the
 		     schema the catalog declares for it — two files that must agree, and
 		     nothing else would notice if they stopped. At runtime this ships in

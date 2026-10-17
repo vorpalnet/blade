@@ -28,6 +28,10 @@
 --    WHERE created < SYS_EXTRACT_UTC(SYSTIMESTAMP) - INTERVAL '90' DAY
 --      AND ROWNUM <= 10000;
 
+-- SQL Server: the same window. Repeat until it reports zero rows.
+--   DELETE TOP (10000) FROM events
+--    WHERE created < DATEADD(DAY, -90, SYSUTCDATETIME());
+
 -- The per-minute samples (`applicationSampled`, `serverSampled`) are most of
 -- the rows on a quiet system: one per server a minute, one per busy
 -- application a minute. Their use is trends and a look back at a bad hour, so
@@ -36,6 +40,10 @@
 --    WHERE type IN ('applicationSampled', 'serverSampled')
 --      AND created < SYS_EXTRACT_UTC(SYSTIMESTAMP) - INTERVAL '30' DAY
 --      AND ROWNUM <= 10000;
+-- SQL Server, the same:
+--   DELETE TOP (10000) FROM events
+--    WHERE type IN ('applicationSampled', 'serverSampled')
+--      AND created < DATEADD(DAY, -30, SYSUTCDATETIME());
 -- Closed sessions whose events are already gone, and the application
 -- instances left with nothing under them:
 --   DELETE FROM sessions
@@ -51,6 +59,7 @@
 -- Dropping a partition is near-instant and does not touch the rest of the
 -- table, where a DELETE of the same rows writes as much undo as the rows it
 -- removes. The recipes and their trade-offs are in the headers of
--- MySQL-database-schema.sql and Oracle-database-schema.sql — including the
+-- MySQL-database-schema.sql and Oracle-database-schema.sql, and the end of
+-- MSSQL-database-schema.sql — including the
 -- one real cost on MySQL, where folding `created` into the unique key narrows
 -- redelivery de-duplication to within a partition.

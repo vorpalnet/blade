@@ -1,0 +1,3 @@
+-- The column defaults read the database's UTC clock (RELEASE.md, "Analytics:
+-- UTC throughout"). SQL Server's always did (SYSUTCDATETIME), so there is
+-- nothing to change; the file keeps the numbering the same on every database.

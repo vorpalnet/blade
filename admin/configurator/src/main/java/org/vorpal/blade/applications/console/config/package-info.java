@@ -47,19 +47,6 @@
 /// Includes functionality to query and discover available applications through the
 /// `queryApps` method using JNDI lookups for dynamic configuration management.
 ///
-/// ## Sub-packages
-///
-/// ### [org.vorpal.blade.applications.console.config.test]
-/// Provides a web-based console and configuration management system for Blade
-/// applications, including JMX integration through
-/// [BladeConsoleMXBean][org.vorpal.blade.applications.console.config.test.BladeConsoleMXBean]
-/// and [BladeConsole][org.vorpal.blade.applications.console.config.test.BladeConsole],
-/// servlet lifecycle management via
-/// [BladeConsoleListener][org.vorpal.blade.applications.console.config.test.BladeConsoleListener],
-/// and file-based configuration utilities with
-/// [ConfigHelper][org.vorpal.blade.applications.console.config.test.ConfigHelper].
-/// Several EJB components are included in an inactive test state for development purposes.
-///
 /// ## Related Packages
 ///
 /// The configurator module also contains the following packages outside this hierarchy:

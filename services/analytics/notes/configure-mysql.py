@@ -54,7 +54,12 @@ cd('/JDBCSystemResources/BladeAnalytics/JDBCResource/BladeAnalytics/JDBCDataSour
 cmo.setGlobalTransactionsProtocol('TwoPhaseCommit')
 
 cd('/JDBCSystemResources/BladeAnalytics')
-set('Targets',jarray.array([ObjectName('com.bea:Name=BEA_ENGINE_TIER_CLUST,Type=Cluster')], ObjectName))
+# Targets: the engine cluster (the analytics service) AND the AdminServer (the
+# dashboard and the other admin applications read the same data source).
+set('Targets',jarray.array([
+    ObjectName('com.bea:Name=BEA_ENGINE_TIER_CLUST,Type=Cluster'),
+    ObjectName('com.bea:Name=AdminServer,Type=Server')
+], ObjectName))
 
 save()
 activate()

@@ -23,16 +23,23 @@ import javax.persistence.Converter;
 /// converter to a parameter compared with that attribute, so a query binds the
 /// plain instant (`c.startedAt >= :since` with a `Date`). Binding the result of
 /// [#toDb] instead converts it twice and shifts the window by the JVM's offset.
+///
+/// **The database side is declared `Object`, not `Timestamp`,** because the
+/// driver decides what a column comes back as. MySQL's Connector/J returns a
+/// `DATETIME` as a `LocalDateTime`, and in an aggregate (`MIN(c.startedAt)`)
+/// EclipseLink passes the driver's value straight through: a converter typed
+/// `Timestamp` fails there with a cast it cannot see. [#fromDb] takes any of
+/// the three shapes.
 @Converter
-public class UtcTimestamp implements AttributeConverter<Date, Timestamp> {
+public class UtcTimestamp implements AttributeConverter<Date, Object> {
 
 	@Override
-	public Timestamp convertToDatabaseColumn(Date instant) {
+	public Object convertToDatabaseColumn(Date instant) {
 		return toDb(instant);
 	}
 
 	@Override
-	public Date convertToEntityAttribute(Timestamp column) {
+	public Date convertToEntityAttribute(Object column) {
 		return fromDb(column);
 	}
 
@@ -42,8 +49,16 @@ public class UtcTimestamp implements AttributeConverter<Date, Timestamp> {
 				: Timestamp.valueOf(LocalDateTime.ofInstant(instant.toInstant(), ZoneOffset.UTC));
 	}
 
-	/// The instant a UTC wall-clock timestamp stands for.
-	public static Date fromDb(Timestamp column) {
-		return column == null ? null : Date.from(column.toLocalDateTime().toInstant(ZoneOffset.UTC));
+	/// The instant a UTC wall-clock time stands for, as whichever type the
+	/// driver read it as: a `Timestamp`, a `LocalDateTime`, or a `Date`
+	/// already converted.
+	public static Date fromDb(Object column) {
+		if (column instanceof Timestamp) {
+			return Date.from(((Timestamp) column).toLocalDateTime().toInstant(ZoneOffset.UTC));
+		}
+		if (column instanceof LocalDateTime) {
+			return Date.from(((LocalDateTime) column).toInstant(ZoneOffset.UTC));
+		}
+		return (Date) column;
 	}
 }

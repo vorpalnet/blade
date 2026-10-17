@@ -49,8 +49,8 @@ SECRET="$(dirname "$0")/.nmsecret"          # one line:  NM_PASSWORD=...
 # config.xml's ServerStart carries paths through the 'current' symlink. Resolve
 # that link ONCE, here, and substitute the concrete versioned path into the
 # relayed ClassPath/Arguments — so a running JVM is pinned by path and a later
-# 'current' flip (update.sh) is inert to it, taking effect only at the next
-# start. BLADE_OCCAS_HOME overrides the resolution: update.sh's canary uses it
+# 'current' flip (patch.sh) is inert to it, taking effect only at the next
+# start. BLADE_OCCAS_HOME overrides the resolution: patch.sh's canary uses it
 # to start one server on a candidate home while 'current' still points at the
 # blessed one. Both the link path and today's resolved real path are rewritten,
 # because a hand-maintained ServerStart may carry either form.

@@ -17,6 +17,8 @@ import java.util.Map;
 import javax.naming.InitialContext;
 import javax.sql.DataSource;
 
+import org.vorpal.blade.framework.v3.jdbc.Dialect;
+
 /// A search over the call catalog: the rows the catalog application wrote
 /// from the archive, queried by the facts a supervisor has and by the words
 /// that were said.
@@ -92,9 +94,9 @@ final class CatalogSearch {
 	private CatalogSearch() {
 	}
 
-	/// Build the candidate query. `fullText` says whether the words go
-	/// through the full-text index or a scan.
-	static Prepared prepare(Query q, boolean fullText) {
+	/// Build the candidate query for this database. `fullText` says whether
+	/// the words go through the full-text index or a scan.
+	static Prepared prepare(Query q, Dialect d, boolean fullText) {
 		StringBuilder sql = new StringBuilder("SELECT c.CONVERSATION, c.CALL_ID, c.EPOCH_UTC, c.DURATION_MS, c.COMPLETE, "
 				+ "c.FROM_NUMBER, c.TO_NUMBER, c.UTTERANCES, c.HOLDS, c.MOVES, c.KINDS FROM BLADE_CONVERSATION c WHERE 1=1");
 		List<Object> params = new ArrayList<>();
@@ -136,9 +138,9 @@ final class CatalogSearch {
 		}
 		if (q.words != null && !q.words.trim().isEmpty()) {
 			if (fullText) {
-				sql.append(" AND EXISTS (SELECT 1 FROM BLADE_UTTERANCE u WHERE u.CONVERSATION = c.CONVERSATION"
-						+ " AND CONTAINS(u.TEXT, ?, 1) > 0)");
-				params.add(textQuery(q.words));
+				sql.append(" AND EXISTS (SELECT 1 FROM BLADE_UTTERANCE u WHERE u.CONVERSATION = c.CONVERSATION AND ")
+						.append(matches(d, "u.TEXT")).append(')');
+				params.add(textQuery(d, q.words));
 			} else {
 				for (String word : words(q.words)) {
 					sql.append(" AND EXISTS (SELECT 1 FROM BLADE_UTTERANCE u WHERE u.CONVERSATION = c.CONVERSATION"
@@ -147,7 +149,7 @@ final class CatalogSearch {
 				}
 			}
 		}
-		sql.append(" ORDER BY c.EPOCH_UTC DESC FETCH FIRST ? ROWS ONLY");
+		sql.append(" ORDER BY c.EPOCH_UTC DESC").append(d.firstRows("?"));
 		params.add(Math.max(1, Math.min(q.limit, MAX_HITS)));
 		return new Prepared(sql.toString(), params);
 	}
@@ -164,15 +166,22 @@ final class CatalogSearch {
 		return out;
 	}
 
-	/// The full-text form of a search: every word required, each escaped so
+	/// The full-text test on a column, its search bound as the one parameter:
+	/// Oracle Text's CONTAINS, or MySQL's MATCH in boolean mode.
+	static String matches(Dialect d, String column) {
+		return d == Dialect.MYSQL ? "MATCH(" + column + ") AGAINST (? IN BOOLEAN MODE)" : "CONTAINS(" + column + ", ?, 1) > 0";
+	}
+
+	/// The full-text form of a search: every word required, each quoted so
 	/// the query language's own operators inside a word are just characters.
-	static String textQuery(String text) {
+	static String textQuery(Dialect d, String text) {
 		StringBuilder q = new StringBuilder();
 		for (String w : words(text)) {
-			if (q.length() > 0) {
-				q.append(" AND ");
+			if (d == Dialect.MYSQL) {
+				q.append(q.length() > 0 ? " " : "").append("+\"").append(w.replace("\"", "")).append('"');
+			} else {
+				q.append(q.length() > 0 ? " AND " : "").append('{').append(w.replace("}", "")).append('}');
 			}
-			q.append('{').append(w.replace("}", "")).append('}');
 		}
 		return q.toString();
 	}
@@ -192,7 +201,8 @@ final class CatalogSearch {
 		DataSource ds = (DataSource) new InitialContext().lookup(dataSource);
 		List<Hit> hits = new ArrayList<>();
 		try (Connection c = ds.getConnection()) {
-			Prepared p = prepare(q, fullText);
+			Dialect d = Dialect.of(c);
+			Prepared p = prepare(q, d, fullText);
 			try (PreparedStatement s = c.prepareStatement(p.sql)) {
 				for (int i = 0; i < p.params.size(); i++) {
 					s.setObject(i + 1, p.params.get(i));
@@ -228,12 +238,9 @@ final class CatalogSearch {
 				}
 			}
 			if (q.words != null && !q.words.trim().isEmpty()) {
-				String snippetSql = fullText
-						? "SELECT SEQUENCE, START_MS, TEXT FROM BLADE_UTTERANCE WHERE CONVERSATION = ? AND CONTAINS(TEXT, ?, 1) > 0"
-								+ " ORDER BY SEQUENCE FETCH FIRST 1 ROWS ONLY"
-						: "SELECT SEQUENCE, START_MS, TEXT FROM BLADE_UTTERANCE WHERE CONVERSATION = ? AND UPPER(TEXT) LIKE ?"
-								+ " ORDER BY SEQUENCE FETCH FIRST 1 ROWS ONLY";
-				String needle = fullText ? textQuery(q.words)
+				String snippetSql = "SELECT SEQUENCE, START_MS, TEXT FROM BLADE_UTTERANCE WHERE CONVERSATION = ? AND "
+						+ (fullText ? matches(d, "TEXT") : "UPPER(TEXT) LIKE ?") + " ORDER BY SEQUENCE" + d.firstRows("1");
+				String needle = fullText ? textQuery(d, q.words)
 						: "%" + (words(q.words).isEmpty() ? "" : words(q.words).get(0).toUpperCase(Locale.ROOT)) + "%";
 				try (PreparedStatement s = c.prepareStatement(snippetSql)) {
 					for (Hit h : hits) {
@@ -265,11 +272,8 @@ final class CatalogSearch {
 		boolean indexed = false;
 		try {
 			DataSource ds = (DataSource) new InitialContext().lookup(dataSource);
-			try (Connection c = ds.getConnection();
-					PreparedStatement s = c.prepareStatement(
-							"SELECT COUNT(*) FROM USER_INDEXES WHERE INDEX_NAME = 'BLADE_UTTERANCE_TXT'");
-					ResultSet rs = s.executeQuery()) {
-				indexed = rs.next() && rs.getInt(1) > 0;
+			try (Connection c = ds.getConnection()) {
+				indexed = Dialect.of(c).indexExists(c, "BLADE_UTTERANCE", "BLADE_UTTERANCE_TXT");
 			}
 		} catch (Exception e) {
 			indexed = false;

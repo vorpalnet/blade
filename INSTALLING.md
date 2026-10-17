@@ -224,9 +224,9 @@ demo certificate on a live TLS port.
    This step also grows/shrinks the cluster, re-provisions engine hosts, verifies
    the cluster, deploys the WebLogic Remote Console, and opens firewall ports.
 
-   Patching a **running cluster** is `update.sh`'s job, not the dashboard's Patch
+   Patching a **running cluster** is `patch.sh`'s job, not the dashboard's Patch
    row (which patches this box's home in place, servers down): build → canary →
-   flip → roll, with rollback a symlink move. See [UPDATING.md](UPDATING.md).
+   flip → roll, with rollback a symlink move. See [PATCHING.md](PATCHING.md).
 
    On the front-door box it also owns the **edge nginx reverse proxy**. The
    **nginx** row sets the vhosts (admin → AdminServer, apps → engine0), the
@@ -452,5 +452,6 @@ comparing certificate names proves nothing.
 ## See also
 
 - [DEPLOYING.md](DEPLOYING.md) — pushing artifacts with `deploy.sh`.
+- [UPGRADING.md](UPGRADING.md) — a new BLADE onto a running domain with `upgrade.sh`.
 - [DEVELOPING.md](DEVELOPING.md) — building and extending BLADE.
 - [SECURITY.md](SECURITY.md) — the TLS and trust model in depth.

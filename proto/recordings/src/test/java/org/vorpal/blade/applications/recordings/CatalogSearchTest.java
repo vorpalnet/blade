@@ -10,6 +10,7 @@ import java.util.Arrays;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.vorpal.blade.framework.v3.jdbc.Dialect;
 import org.vorpal.blade.framework.v3.media.manifest.Redactor;
 
 /// The shape of a catalog query, and what the audit log is told about it.
@@ -26,19 +27,40 @@ class CatalogSearchTest {
 		q.kinds.add("card");
 		q.words = "cancel appointment";
 		q.limit = 20;
-		CatalogSearch.Prepared p = CatalogSearch.prepare(q, true);
+		CatalogSearch.Prepared p = CatalogSearch.prepare(q, Dialect.ORACLE, true);
 		assertTrue(p.sql.contains("c.EPOCH_UTC >= ?"));
 		assertTrue(p.sql.contains("c.EPOCH_UTC < ?"));
 		assertTrue(p.sql.contains("c.FROM_NUMBER LIKE ? OR c.TO_NUMBER LIKE ?"));
 		assertTrue(p.sql.contains("a.NAME = ? AND a.VALUE = ?"));
 		assertTrue(p.sql.contains("k.KINDS = ?"));
 		assertTrue(p.sql.contains("CONTAINS(u.TEXT, ?, 1) > 0"));
-		assertTrue(p.sql.endsWith("ORDER BY c.EPOCH_UTC DESC FETCH FIRST ? ROWS ONLY"));
+		assertTrue(p.sql.endsWith("ORDER BY c.EPOCH_UTC DESC OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY"));
 		assertEquals(Timestamp.valueOf("2026-09-08 00:00:00"), toLocal(p.params.get(0)));
 		assertEquals("816555%", p.params.get(2), "a number is matched by its digits, as a prefix");
 		assertEquals("cardiology", p.params.get(5));
 		assertEquals("{cancel} AND {appointment}", p.params.get(10), "full text: every word required");
 		assertEquals(20, p.params.get(p.params.size() - 1));
+	}
+
+	@Test
+	@DisplayName("MySQL: words through MATCH in boolean mode, each required, and LIMIT")
+	void mySqlFullText() {
+		CatalogSearch.Query q = new CatalogSearch.Query();
+		q.words = "cancel appointment";
+		CatalogSearch.Prepared p = CatalogSearch.prepare(q, Dialect.MYSQL, true);
+		assertTrue(p.sql.contains("MATCH(u.TEXT) AGAINST (? IN BOOLEAN MODE)"));
+		assertTrue(p.sql.endsWith("ORDER BY c.EPOCH_UTC DESC LIMIT ?"));
+		assertEquals("+\"cancel\" +\"appointment\"", p.params.get(0));
+	}
+
+	@Test
+	@DisplayName("SQL Server: a scan, paged by OFFSET FETCH")
+	void sqlServerScans() {
+		CatalogSearch.Query q = new CatalogSearch.Query();
+		q.words = "cancel";
+		CatalogSearch.Prepared p = CatalogSearch.prepare(q, Dialect.SQLSERVER, false);
+		assertTrue(p.sql.contains("UPPER(u.TEXT) LIKE ?"));
+		assertTrue(p.sql.endsWith("ORDER BY c.EPOCH_UTC DESC OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY"));
 	}
 
 	private static Timestamp toLocal(Object utc) {
@@ -51,7 +73,7 @@ class CatalogSearchTest {
 	void scansWithoutTheIndex() {
 		CatalogSearch.Query q = new CatalogSearch.Query();
 		q.words = "rent a car";
-		CatalogSearch.Prepared p = CatalogSearch.prepare(q, false);
+		CatalogSearch.Prepared p = CatalogSearch.prepare(q, Dialect.ORACLE, false);
 		assertEquals(3, p.sql.split("UPPER\\(u.TEXT\\) LIKE \\?").length - 1);
 		assertEquals(Arrays.asList("%RENT%", "%A%", "%CAR%", 100), p.params);
 	}
@@ -61,7 +83,7 @@ class CatalogSearchTest {
 	void searchesProtectedValuesByDigest() {
 		CatalogSearch.Query q = new CatalogSearch.Query();
 		q.protectedDigest = Redactor.digest("k", "KR742916");
-		CatalogSearch.Prepared p = CatalogSearch.prepare(q, true);
+		CatalogSearch.Prepared p = CatalogSearch.prepare(q, Dialect.ORACLE, true);
 		assertTrue(p.sql.contains("p.DIGEST = ?"));
 		assertFalse(p.sql.contains("KR742916"));
 		assertEquals(q.protectedDigest, p.params.get(0));

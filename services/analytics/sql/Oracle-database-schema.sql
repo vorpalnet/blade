@@ -71,7 +71,7 @@ CREATE TABLE applications(
    created   TIMESTAMP DEFAULT SYS_EXTRACT_UTC(SYSTIMESTAMP) NOT NULL,
    destroyed TIMESTAMP,
    comments  CLOB,
-
+   --
    -- The identity these four columns describe is what `id` above hashes.
    -- Retained so a hash collision fails the insert instead of merging two
    -- application instances into one row.
@@ -84,27 +84,27 @@ CREATE INDEX idx_application_tenant ON applications(tenant);
 CREATE TABLE sessions(
    id NUMBER(19) NOT NULL,                  -- hash of (cluster_name, vorpal_id, created)
    CONSTRAINT session_pk PRIMARY KEY(id),
-
+   --
    application_id NUMBER(19) NOT NULL,
    CONSTRAINT session_fk1 FOREIGN KEY (application_id)
       REFERENCES applications(id) ON DELETE CASCADE,
-
+   --
    -- cluster_name is the hosting-environment id, stamped by the analytics
    -- server from its service config (AnalyticsConfig.domainId). vorpal_id is
    -- the call's environment-unique X-Vorpal-ID. Together they keep a call
    -- unique when several environments share one analytics DB.
    cluster_name VARCHAR2(64 CHAR) NOT NULL,
    vorpal_id    NUMBER(19)        NOT NULL,
-
+   --
    -- Millisecond precision is load-bearing: this column is an input to the
    -- primary key, and it is what keeps the correlator unique over time, since
    -- the X-Vorpal-ID is 32 bits and is reused.
    created   TIMESTAMP DEFAULT SYS_EXTRACT_UTC(SYSTIMESTAMP) NOT NULL,
    destroyed TIMESTAMP,
-
+   --
    -- The call's tenant when it opened (X-Vorpal-ID `tn`); NULL if none.
    tenant    VARCHAR2(64 CHAR),
-
+   --
    CONSTRAINT session_natural_uk UNIQUE (cluster_name, vorpal_id, created)
 );
 
@@ -135,35 +135,35 @@ CREATE TABLE events(
    -- collides with its own row, so replay is a no-op rather than a duplicate.
    id NUMBER(19) NOT NULL,
    CONSTRAINT event_pk PRIMARY KEY(id),
-
+   --
    application_id NUMBER(19) NOT NULL,
    CONSTRAINT event_fk1 FOREIGN KEY (application_id)
       REFERENCES applications(id),                -- plain FK (no cascade)
-
+   --
    session_id     NUMBER(19),                     -- null for sessionless events
    CONSTRAINT event_fk2 FOREIGN KEY (session_id)
       REFERENCES sessions(id) ON DELETE CASCADE,
-
+   --
    -- The event name, inline. It lived in an event_types lookup table for a
    -- while; that saved a few bytes a row and cost an interning cache, a race
    -- between cluster members creating the same lookup row, and a join on every
    -- read.
    type VARCHAR2(64 CHAR) NOT NULL,
-
+   --
    -- The CloudEvent id this row was built from. NOT NULL, because the primary
    -- key is derived from it, and kept alongside because the derivation is one
    -- way.
    event_uid CHAR(36 CHAR) NOT NULL,
    CONSTRAINT event_uid_uk UNIQUE (event_uid),
-
+   --
    created TIMESTAMP DEFAULT SYS_EXTRACT_UTC(SYSTIMESTAMP) NOT NULL,
-
+   --
    -- Who may see this event: the call's tenant and department when it was
    -- published, from X-Vorpal-ID. NULL when the call carried none; a reader
    -- falls back to applications.tenant (the deployment's blade.tenant).
    tenant     VARCHAR2(64 CHAR),
    department VARCHAR2(64 CHAR),
-
+   --
    -- The event's attributes as one JSON object of name to value, replacing an
    -- attributes/attribute_names pair that cost one insert per attribute on
    -- write and a two-table join plus a cast on read.

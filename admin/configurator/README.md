@@ -193,10 +193,6 @@ This module is part of the admin subsystem and works closely with the console mo
 
 Core configuration management for console applications. Provides APIs for reading, writing, and validating configuration parameters for administrative interfaces.
 
-### [`org.vorpal.blade.applications.console.config.test`](#orgvorpalbladeapplicationsconsoleconfigtest)
-
-Testing utilities and mock implementations for configuration management. Contains unit test helpers and configuration validation tools for console applications.
-
 ### [`org.vorpal.blade.applications.console.webapp`](#orgvorpalbladeapplicationsconsolewebapp)
 
 Web application components for configuration management interfaces. Implements servlets, JSP support, and web-based configuration forms for administrative users.

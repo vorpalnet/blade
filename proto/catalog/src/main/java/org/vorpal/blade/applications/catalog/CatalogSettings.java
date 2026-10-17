@@ -39,9 +39,9 @@ public class CatalogSettings extends Configuration implements Serializable {
 		this.protectedValueKey = (protectedValueKey == null) ? "" : protectedValueKey;
 	}
 
-	@JsonPropertyDescription("Build a full-text index on the utterance text (Oracle Text) so a search for words is an "
-			+ "index lookup. When the database cannot create one, the catalog says so in the log and the review "
-			+ "application falls back to a scan, which is correct and slow.")
+	@JsonPropertyDescription("Build a full-text index on the utterance text (Oracle Text on Oracle, a FULLTEXT index on "
+			+ "MySQL) so a search for words is an index lookup. On SQL Server, or when the database cannot create one, "
+			+ "the catalog says so in the log and the review application falls back to a scan, which is correct and slow.")
 	public boolean isFullText() {
 		return fullText;
 	}

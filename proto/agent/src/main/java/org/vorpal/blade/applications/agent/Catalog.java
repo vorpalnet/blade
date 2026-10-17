@@ -4,6 +4,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
@@ -11,6 +13,8 @@ import java.util.logging.Logger;
 
 import javax.naming.InitialContext;
 import javax.sql.DataSource;
+
+import org.vorpal.blade.framework.v3.jdbc.Dialect;
 
 /// Read/write access to the BLADE call catalog for the console.
 ///
@@ -98,7 +102,13 @@ public final class Catalog {
 	/// open this long: the call ringing right now has an open row seconds old,
 	/// so the count stays "before", while a row a redeploy or a crash left open
 	/// forever (its stop never published) still counts as the call it was.
-	private static final String PRIOR = " AND (s.destroyed IS NOT NULL OR s.created < SYSTIMESTAMP - INTERVAL '2' MINUTE)";
+	private static final String PRIOR = " AND (s.destroyed IS NOT NULL OR s.created < ?)";
+
+	/// The bound for [#PRIOR]: two minutes ago, as the UTC wall-clock time the
+	/// analytics service writes `created` in.
+	private static Timestamp priorCutoff() {
+		return Timestamp.valueOf(LocalDateTime.now(ZoneOffset.UTC).minusMinutes(2));
+	}
 
 	/// Prior calls from this number, across every app that publishes a session
 	/// key named `ani`.
@@ -108,6 +118,7 @@ public final class Catalog {
 		try (PreparedStatement ps = c.prepareStatement(sql)) {
 			ps.setString(1, AgentSettingsSample.KEY_ANI);
 			ps.setString(2, ani);
+			ps.setTimestamp(3, priorCutoff());
 			try (ResultSet rs = ps.executeQuery()) {
 				return rs.next() ? rs.getInt(1) : 0;
 			}
@@ -120,12 +131,13 @@ public final class Catalog {
 		String sql = "SELECT DISTINCT s.id, s.created, s.destroyed, d.value FROM sessions s"
 				+ " JOIN session_keys k ON k.session_id = s.id AND k.name = ? AND k.value = ?"
 				+ " LEFT JOIN session_keys d ON d.session_id = s.id AND d.name = ?"
-				+ " WHERE 1 = 1" + PRIOR + " ORDER BY s.created DESC FETCH FIRST " + limit + " ROWS ONLY";
+				+ " WHERE 1 = 1" + PRIOR + " ORDER BY s.created DESC" + Dialect.of(c).firstRows(Integer.toString(limit));
 		List<CallerHistory.Call> out = new ArrayList<>();
 		try (PreparedStatement ps = c.prepareStatement(sql)) {
 			ps.setString(1, AgentSettingsSample.KEY_ANI);
 			ps.setString(2, ani);
 			ps.setString(3, AgentSettingsSample.KEY_DNIS);
+			ps.setTimestamp(4, priorCutoff());
 			try (ResultSet rs = ps.executeQuery()) {
 				while (rs.next()) {
 					Timestamp created = rs.getTimestamp(2);
@@ -148,9 +160,8 @@ public final class Catalog {
 	/// sink stored (attributes as JSON: text, party, labels). Two lines is enough
 	/// to recognise a story; the transcript pane shows the rest on request later.
 	private void said(Connection c, long sessionId, CallerHistory.Call call) {
-		String sql = "SELECT e.payload FROM events e WHERE e.session_id = ? AND e.type = 'callerSaid'"
-				+ " ORDER BY e.created FETCH FIRST 6 ROWS ONLY";
-		try (PreparedStatement ps = c.prepareStatement(sql)) {
+		try (PreparedStatement ps = c.prepareStatement("SELECT e.payload FROM events e WHERE e.session_id = ?"
+				+ " AND e.type = 'callerSaid' ORDER BY e.created" + Dialect.of(c).firstRows("6"))) {
 			ps.setLong(1, sessionId);
 			try (ResultSet rs = ps.executeQuery()) {
 				while (rs.next() && call.said.size() < 2) {
@@ -176,9 +187,8 @@ public final class Catalog {
 	/// The post-call review filed on a session, if any (`callReviewed`: labels,
 	/// the caller line that shows them).
 	private void reviewed(Connection c, long sessionId, CallerHistory.Call call) {
-		String sql = "SELECT e.payload FROM events e WHERE e.session_id = ? AND e.type = 'callReviewed'"
-				+ " ORDER BY e.created DESC FETCH FIRST 1 ROWS ONLY";
-		try (PreparedStatement ps = c.prepareStatement(sql)) {
+		try (PreparedStatement ps = c.prepareStatement("SELECT e.payload FROM events e WHERE e.session_id = ?"
+				+ " AND e.type = 'callReviewed' ORDER BY e.created DESC" + Dialect.of(c).firstRows("1"))) {
 			ps.setLong(1, sessionId);
 			try (ResultSet rs = ps.executeQuery()) {
 				if (rs.next() && rs.getString(1) != null) {
@@ -206,9 +216,8 @@ public final class Catalog {
 	/// under the event's short name. Best-effort; a call without one shows as it
 	/// did before.
 	private void disposition(Connection c, long sessionId, CallerHistory.Call call) {
-		String sql = "SELECT e.payload FROM events e WHERE e.session_id = ? AND e.type = ?"
-				+ " ORDER BY e.created DESC FETCH FIRST 1 ROWS ONLY";
-		try (PreparedStatement ps = c.prepareStatement(sql)) {
+		try (PreparedStatement ps = c.prepareStatement("SELECT e.payload FROM events e WHERE e.session_id = ? AND e.type = ?"
+				+ " ORDER BY e.created DESC" + Dialect.of(c).firstRows("1"))) {
 			ps.setLong(1, sessionId);
 			ps.setString(2, DispositionService.EVENT);
 			try (ResultSet rs = ps.executeQuery()) {
@@ -245,10 +254,10 @@ public final class Catalog {
 	}
 
 	private List<CallerHistory.Call> recent(Connection c, String ani, int limit) throws Exception {
-		// Newest first. FETCH FIRST is standard on Oracle/DB2/PostgreSQL; the
-		// query is read-only and its failure is caught by the caller.
+		// Newest first; the query is read-only and its failure is caught by
+		// the caller.
 		String sql = "SELECT EPOCH_UTC, DURATION_MS, TO_NUMBER, CONVERSATION FROM " + conversationTable
-				+ " WHERE FROM_NUMBER = ? ORDER BY EPOCH_UTC DESC FETCH FIRST " + limit + " ROWS ONLY";
+				+ " WHERE FROM_NUMBER = ? ORDER BY EPOCH_UTC DESC" + Dialect.of(c).firstRows(Integer.toString(limit));
 		List<CallerHistory.Call> out = new ArrayList<>();
 		try (PreparedStatement ps = c.prepareStatement(sql)) {
 			ps.setString(1, ani);
@@ -294,7 +303,7 @@ public final class Catalog {
 	private List<String> topics(Connection c, String ani, int limit) throws Exception {
 		String sql = "SELECT a.VALUE FROM BLADE_CONVERSATION_ATTR a JOIN " + conversationTable
 				+ " v ON v.CONVERSATION = a.CONVERSATION WHERE v.FROM_NUMBER = ? AND a.NAME = 'topic' "
-				+ "ORDER BY v.EPOCH_UTC DESC FETCH FIRST " + limit + " ROWS ONLY";
+				+ "ORDER BY v.EPOCH_UTC DESC" + Dialect.of(c).firstRows(Integer.toString(limit));
 		List<String> out = new ArrayList<>();
 		try (PreparedStatement ps = c.prepareStatement(sql)) {
 			ps.setString(1, ani);
@@ -383,9 +392,16 @@ public final class Catalog {
 	/// Best-effort: an existing table, or a schema that refuses DDL, leaves the
 	/// insert to fail on its own terms.
 	private void createBlockList(Connection c) {
-		String ddl = "CREATE TABLE " + spamTable + " (tn VARCHAR(15) NOT NULL PRIMARY KEY,"
-				+ " treatment VARCHAR(16) DEFAULT 'tarpit' NOT NULL, reason VARCHAR(64), marked_by VARCHAR(64),"
-				+ " marked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, expires_at TIMESTAMP NOT NULL)";
+		String ddl;
+		try {
+			Dialect d = Dialect.of(c);
+			ddl = "CREATE TABLE " + spamTable + " (tn VARCHAR(15) NOT NULL PRIMARY KEY,"
+					+ " treatment VARCHAR(16) DEFAULT 'tarpit' NOT NULL, reason " + d.text(64) + ", marked_by " + d.text(64) + ","
+					+ " marked_at " + d.timestamp() + " DEFAULT " + d.now() + " NOT NULL, expires_at " + d.timestamp() + " NOT NULL)";
+		} catch (Exception e) {
+			AgentConsoleRegistry.log("agent: block list table " + spamTable + " not created: " + e);
+			return;
+		}
 		try (java.sql.Statement st = c.createStatement()) {
 			st.executeUpdate(ddl);
 			AgentConsoleRegistry.log("agent: created the block list table " + spamTable);

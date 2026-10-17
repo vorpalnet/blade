@@ -25,6 +25,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.vorpal.blade.framework.v3.jdbc.Dialect;
 import org.vorpal.blade.framework.v3.events.BladeEventTypes;
 import org.vorpal.blade.framework.v3.events.CloudEvent;
 
@@ -51,21 +52,24 @@ class AnalyticsWritePathTest {
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 	private static final String CLUSTER = "test-cluster";
 
-	/// Point this at a real SQL Server and the whole suite runs against it
-	/// instead of HSQLDB — same assertions, same handler, a different engine
-	/// and a different JPA platform.
+	/// Point this at a real Oracle, MySQL or SQL Server and the whole suite
+	/// runs against it instead of HSQLDB, on that database's shipped schema
+	/// (`sql/<Dialect>-database-schema.sql`, the file a DBA runs) — same
+	/// assertions, same handler, a different engine and a different JPA
+	/// platform. It drops and recreates the four tables, so point it at a
+	/// scratch database.
 	///
 	/// **Opt-in, because CI must run offline.** Unset, everything below uses
 	/// the in-memory database and nothing reaches the network. Set, it proves
-	/// the thing HSQLDB structurally cannot: that EclipseLink's SQL Server
-	/// platform writes these entities correctly. That exact question went
+	/// the thing HSQLDB structurally cannot: that EclipseLink's platform for
+	/// that database writes these entities correctly. That exact question went
 	/// unasked on Oracle, where the provider quietly substituted a sequence
 	/// no schema created and the sink had never written a row.
 	///
-	///     BLADE_MSSQL_URL=jdbc:sqlserver://host:1433;databaseName=vorpal;encrypt=false
-	///     BLADE_MSSQL_USER=sa
-	///     BLADE_MSSQL_PASSWORD=...
-	private static final String MSSQL_URL = System.getenv("BLADE_MSSQL_URL");
+	///     BLADE_ANALYTICS_URL=jdbc:sqlserver://host:1433;databaseName=vorpal;encrypt=false
+	///     BLADE_ANALYTICS_USER=sa
+	///     BLADE_ANALYTICS_PASSWORD=...
+	private static final String DB_URL = System.getenv("BLADE_ANALYTICS_URL");
 
 	private EntityManagerFactory factory;
 	private AnalyticsEventListener listener;
@@ -80,15 +84,14 @@ class AnalyticsWritePathTest {
 		java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("America/Chicago"));
 		Map<String, Object> properties = new HashMap<>();
 
-		if (MSSQL_URL != null && !MSSQL_URL.isEmpty()) {
-			keepAlive = DriverManager.getConnection(MSSQL_URL,
-					System.getenv("BLADE_MSSQL_USER"), System.getenv("BLADE_MSSQL_PASSWORD"));
-			runSchema(keepAlive, "mssql-schema.sql");
-			properties.put("javax.persistence.jdbc.driver",
-					"com.microsoft.sqlserver.jdbc.SQLServerDriver");
-			properties.put("javax.persistence.jdbc.url", MSSQL_URL);
-			properties.put("javax.persistence.jdbc.user", System.getenv("BLADE_MSSQL_USER"));
-			properties.put("javax.persistence.jdbc.password", System.getenv("BLADE_MSSQL_PASSWORD"));
+		if (DB_URL != null && !DB_URL.isEmpty()) {
+			keepAlive = DriverManager.getConnection(DB_URL,
+					System.getenv("BLADE_ANALYTICS_USER"), System.getenv("BLADE_ANALYTICS_PASSWORD"));
+			runShippedSchema(keepAlive);
+			properties.put("javax.persistence.jdbc.driver", DriverManager.getDriver(DB_URL).getClass().getName());
+			properties.put("javax.persistence.jdbc.url", DB_URL);
+			properties.put("javax.persistence.jdbc.user", System.getenv("BLADE_ANALYTICS_USER"));
+			properties.put("javax.persistence.jdbc.password", System.getenv("BLADE_ANALYTICS_PASSWORD"));
 		} else {
 			// HSQLDB drops an in-memory database when the last connection
 			// closes. Holding one open keeps the schema alive between the
@@ -106,7 +109,7 @@ class AnalyticsWritePathTest {
 		if (factory != null && factory.isOpen()) {
 			factory.close();
 		}
-		if (MSSQL_URL == null || MSSQL_URL.isEmpty()) {
+		if (DB_URL == null || DB_URL.isEmpty()) {
 			try (Statement statement = keepAlive.createStatement()) {
 				statement.execute("SHUTDOWN");
 			}
@@ -315,7 +318,7 @@ class AnalyticsWritePathTest {
 		assertEquals(1, count("applications"),
 				"both samples resolve to the one dashboard instance, not a new row each");
 		com.fasterxml.jackson.databind.JsonNode payload = MAPPER
-				.readTree(text("SELECT payload FROM events FETCH FIRST 1 ROWS ONLY"));
+				.readTree(text("SELECT payload FROM events"));
 		assertEquals("meetings", payload.path("app").asText(), "the sampled application, as the view reads it");
 		assertEquals(2, payload.path("failures").asLong());
 		assertFalse(payload.has("appName"), "the publisher's identity is the row's, not the payload's");
@@ -483,6 +486,42 @@ class AnalyticsWritePathTest {
 			assertNotNull(in, resource + " is missing from the test resources");
 			sql = new String(in.readAllBytes(), StandardCharsets.UTF_8);
 		}
+		run(connection, sql);
+	}
+
+	/// The schema a DBA runs on this database, from `sql/`. Its own way of
+	/// dropping what is there (Oracle's PL/SQL block, SQL Server's `GO`
+	/// batches) is a script-runner's business; the tables are dropped here in
+	/// plain SQL instead.
+	private void runShippedSchema(Connection connection) throws Exception {
+		String file;
+		switch (Dialect.of(connection)) {
+		case ORACLE:
+			file = "Oracle-database-schema.sql";
+			break;
+		case MYSQL:
+			file = "MySQL-database-schema.sql";
+			break;
+		case SQLSERVER:
+			file = "MSSQL-database-schema.sql";
+			break;
+		default:
+			throw new IllegalStateException("no shipped schema for " + connection.getMetaData().getDatabaseProductName());
+		}
+		for (String table : new String[] { "events", "session_keys", "sessions", "applications" }) {
+			try (Statement statement = connection.createStatement()) {
+				statement.execute("DROP TABLE " + table);
+			} catch (java.sql.SQLException notThere) {
+				// nothing to drop
+			}
+		}
+		String sql = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get("sql", file)), StandardCharsets.UTF_8)
+				.replaceAll("(?ms)^BEGIN\\b.*?^/\\s*$", "")
+				.replaceAll("(?m)^\\s*(GO|/)\\s*$", "");
+		run(connection, sql.replaceAll("(?mi)^IF OBJECT_ID\\(.*$", ""));
+	}
+
+	private void run(Connection connection, String sql) throws Exception {
 		// Strip comments FIRST, then split.
 		//
 		// The other order splits a comment containing a semicolon in half and

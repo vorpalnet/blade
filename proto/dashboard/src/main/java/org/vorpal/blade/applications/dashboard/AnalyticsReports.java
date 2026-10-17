@@ -1878,15 +1878,30 @@ public class AnalyticsReports {
 		return t;
 	}
 
-	/// The analytics tables' size in bytes, from Oracle's `user_segments`
-	/// (tables and their indexes and LOBs); null on a database without it.
+	/// Where each database keeps the analytics tables' size in bytes (tables,
+	/// indexes and large values): Oracle's `user_segments`, MySQL's
+	/// `information_schema`, SQL Server's allocation units. Each is asked in
+	/// turn; the first the database understands answers.
+	private static final String[] TABLE_BYTES = {
+			"SELECT SUM(bytes) FROM user_segments",
+			"SELECT SUM(data_length + index_length) FROM information_schema.tables WHERE table_schema = DATABASE()"
+					+ " AND table_name IN ('applications', 'sessions', 'session_keys', 'events')",
+			"SELECT SUM(a.total_pages) * 8192 FROM sys.tables t JOIN sys.partitions p ON p.object_id = t.object_id"
+					+ " JOIN sys.allocation_units a ON a.container_id = p.partition_id"
+					+ " WHERE t.name IN ('applications', 'sessions', 'session_keys', 'events')" };
+
+	/// The analytics tables' size in bytes; null on a database that keeps it
+	/// none of the ways [#TABLE_BYTES] asks.
 	private static Long tableBytes(EntityManager em) {
-		try {
-			Object n = em.createNativeQuery("SELECT SUM(bytes) FROM user_segments").getSingleResult();
-			return n == null ? null : ((Number) n).longValue();
-		} catch (RuntimeException notOracle) {
-			return null;
+		for (String sql : TABLE_BYTES) {
+			try {
+				Object n = em.createNativeQuery(sql).getSingleResult();
+				return n == null ? null : ((Number) n).longValue();
+			} catch (RuntimeException notThisDatabase) {
+				// the next one
+			}
 		}
+		return null;
 	}
 
 	/// Events published and publishes refused, per day, across every application.
@@ -2956,7 +2971,7 @@ public class AnalyticsReports {
 	/// selected through its entity attribute arrives converted ([UtcTimestamp]);
 	/// one under an aggregate such as `MAX` may arrive as the raw column.
 	private static Date instant(Object o) {
-		return (o instanceof Timestamp) ? UtcTimestamp.fromDb((Timestamp) o) : (Date) o;
+		return UtcTimestamp.fromDb(o);
 	}
 
 	private static Object higher(Object a, Object b) {

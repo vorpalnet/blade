@@ -109,6 +109,29 @@ class SchemaAgreementTest {
 			"MySQL-database-schema.sql", "Oracle-database-schema.sql", "MSSQL-database-schema.sql" };
 
 	@Test
+	@DisplayName("every migration exists for every shipped dialect, and none for another")
+	void everyMigrationExistsForEveryDialect() {
+		// SchemaUpgrade applies sql/migrations/<NNN>-<name>.<Dialect>.sql in number
+		// order. A number missing for one database would leave that database a
+		// change behind, silently, and the next number would run on top of it.
+		File dir = new File("sql/migrations");
+		java.util.Map<String, java.util.Set<String>> byDialect = new java.util.TreeMap<>();
+		for (String d : new String[] { "Oracle", "MySQL", "MSSQL" }) {
+			byDialect.put(d, new java.util.TreeSet<>());
+		}
+		String[] files = dir.list();
+		assertNotNull(files, "sql/migrations is missing");
+		for (String f : files) {
+			Matcher m = Pattern.compile("^(\\d{3}-[a-z0-9-]+)\\.(\\w+)\\.sql$").matcher(f);
+			assertTrue(m.matches(), f + ": a migration is named <NNN>-<name>.<Dialect>.sql");
+			assertTrue(byDialect.containsKey(m.group(2)), f + ": no such dialect " + m.group(2));
+			byDialect.get(m.group(2)).add(m.group(1));
+		}
+		assertEquals(byDialect.get("Oracle"), byDialect.get("MySQL"), "MySQL's migrations");
+		assertEquals(byDialect.get("Oracle"), byDialect.get("MSSQL"), "SQL Server's migrations");
+	}
+
+	@Test
 	@DisplayName("every shipped dialect declares the same tables and columns")
 	void everyDialectDeclaresTheSameTablesAndColumns() throws IOException {
 		Map<String, Map<String, Integer>> reference = logical(SHIPPED[0]);

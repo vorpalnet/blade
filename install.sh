@@ -876,10 +876,11 @@ phase_db() {
     log ""; log "${C_BOLD}Analytics database (jdbc/BladeAnalytics)${C_RESET}"
     help <<'EOF'
 Where analytics events land: one WebLogic data source (jdbc/BladeAnalytics)
-pointing at YOUR database. install.sh never creates the database or its schema.
-Run services/analytics/sql/<Dialect>-database-schema.sql yourself, once, then
-<Dialect>-analytics-views.sql. Re-run the views file after every BLADE upgrade:
-it only replaces views, and new event types arrive with new views.
+pointing at YOUR database. install.sh never creates the database itself; once
+the data source exists, ./upgrade.sh builds the schema and keeps it current
+(new tables, columns and views) on every BLADE upgrade, after listing the
+changes and asking. If your DBA must make every change,
+./upgrade.sh <env> --sql FILE writes them out instead.
 Leave the URL blank to skip persistence for now: events still flow on the JMS
 topic and are held there (bounded by the topic quota and TTL) until a database
 comes up.
@@ -1265,8 +1266,7 @@ save_profile() {
         echo "# provisioned online by services/events/notes/configure-messaging-jms.py;"
         echo "# the jms.* knobs feed it. jdbc/BladeAnalytics points at YOUR database:"
         echo "# the password lives in this file as an ENC() secret, and the schema is"
-        echo "# yours to create once (services/analytics/sql/<Dialect>-database-schema.sql),"
-        echo "# then <Dialect>-analytics-views.sql, re-run after every upgrade."
+        echo "# built and kept current by ./upgrade.sh (or written for a DBA: --sql FILE)."
         echo "jms.quota.bytes=${JMS_QUOTA_BYTES}"
         echo "jms.event.ttl.millis=${JMS_EVENT_TTL}"
         echo "jms.redelivery.limit=${JMS_REDELIVERY}"
@@ -3106,10 +3106,10 @@ do_patch() {
     local real; real="$(readlink -f "$link" 2>/dev/null)"
     [ -n "$real" ] && [ -d "${real}/wlserver" ] || { warn "no Oracle home behind ${link} — install first."; return 1; }
 
-    # PATCH_TARGET (set by update.sh) redirects the whole patch at another home —
+    # PATCH_TARGET (set by patch.sh) redirects the whole patch at another home —
     # a clone bind-mounted at the inventory-registered path inside a private
     # mount namespace, so opatch accepts it and the live tree is never touched.
-    # In that mode the JDK leg is skipped (update.sh owns the JDK lifecycle
+    # In that mode the JDK leg is skipped (patch.sh owns the JDK lifecycle
     # separately) and the idle-server refusal below does not apply: the clone is
     # not the home any server runs from.
     [ -n "${PATCH_TARGET:-}" ] || patch_jdk
@@ -3220,9 +3220,9 @@ do_patch() {
     # copy, opatch it, flip 'current') can't work directly — opatch rejects an
     # unregistered copy with "RawInventory gets null OracleHomeInfo", and this
     # OCCAS build ships no tool to register one (opatch attachHome / FMW
-    # pasteBinary absent). update.sh squares that circle by bind-mounting the
+    # pasteBinary absent). patch.sh squares that circle by bind-mounting the
     # copy AT the registered path in a private mount namespace and pointing
-    # PATCH_TARGET here; without update.sh, opatch's own `rollback -id` is the
+    # PATCH_TARGET here; without patch.sh, opatch's own `rollback -id` is the
     # safety net the copy was trying to provide.
     local target="${PATCH_TARGET:-$real}"
     [ -d "${target}/wlserver" ] || { warn "PATCH_TARGET is not an Oracle home: ${target}"; rm -rf "$stage"; return 1; }
@@ -4889,9 +4889,9 @@ do_jms() {
 # the engine cluster AND the AdminServer (the analytics sink in the admin EAR
 # needs the datasource in the AdminServer's JNDI too). The dialect picks the
 # driver, transaction protocol and test SQL; URL and credentials come from the
-# profile ('db' page). The schema and its views are NEVER created here — they
-# live in the operator's database; the hand-off (schema once, views after every
-# upgrade) is printed on success. Credentials
+# profile ('db' page). The schema and its views are NEVER created here:
+# upgrade.sh builds and migrates them (SchemaUpgrade), and the hand-off to it is
+# printed on success. Credentials
 # reach WLST through the environment, never through the script file or argv.
 do_dbc() {
     if [ -z "$DB_URL" ]; then
@@ -4904,7 +4904,7 @@ do_dbc() {
                 proto="TwoPhaseCommit"; testsql="SQL SELECT 1" ;;
         oracle) driver="oracle.jdbc.OracleDriver"
                 proto="OnePhaseCommit"; testsql="SQL SELECT 1 FROM DUAL" ;;
-        mssql)  driver="weblogic.jdbcx.sqlserver.SQLServerDataSource"
+        mssql)  driver="weblogic.jdbc.sqlserver.SQLServerDriver"
                 proto="OnePhaseCommit"; testsql="SQL SELECT 1" ;;
         *) warn "unknown jdbc.analytics.dialect '${DB_DIALECT}' — mysql, oracle, or mssql."; return 1 ;;
     esac
@@ -4978,8 +4978,7 @@ PYDS
         printf '%s\n' "$out" | grep "DATASOURCE_READY" | sed 's/^/  /'
         ok "jdbc/BladeAnalytics ready on BEA_ENGINE_TIER_CLUST + AdminServer."
         local dialect; dialect="$(case "$DB_DIALECT" in mysql) echo MySQL;; oracle) echo Oracle;; mssql) echo MSSQL;; esac)"
-        log "  ${C_DIM}Schema is yours: run services/analytics/sql/${dialect}-database-schema.sql against ${DB_URL} once,${C_RESET}"
-        log "  ${C_DIM}then services/analytics/sql/${dialect}-analytics-views.sql, and the views file again after every upgrade.${C_RESET}"
+        log "  ${C_DIM}Next: ./upgrade.sh ${NAME} builds the ${dialect} schema and keeps it current (--sql FILE writes it for a DBA).${C_RESET}"
         return 0
     fi
     warn "data-source creation FAILED:"

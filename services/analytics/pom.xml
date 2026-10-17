@@ -40,14 +40,26 @@
 			<artifactId>hsqldb</artifactId>
 			<scope>test</scope>
 		</dependency>
-		<!-- Lets AnalyticsWritePathTest target a real SQL Server when one is
-		     reachable (BLADE_MSSQL_URL). Optional by design: the suite must run
-		     offline in CI, so without that variable the test uses HSQLDB and
-		     this driver is never loaded. -->
+		<!-- Let AnalyticsWritePathTest target a real Oracle, MySQL or SQL Server
+		     (BLADE_ANALYTICS_URL). Optional by design: the suite must run offline
+		     in CI, so without that variable the test uses HSQLDB and no driver
+		     here is loaded. -->
 		<dependency>
 			<groupId>com.microsoft.sqlserver</groupId>
 			<artifactId>mssql-jdbc</artifactId>
 			<version>12.8.1.jre11</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.mysql</groupId>
+			<artifactId>mysql-connector-j</artifactId>
+			<version>8.4.0</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.oracle.database.jdbc</groupId>
+			<artifactId>ojdbc11</artifactId>
+			<version>23.5.0.24.07</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
