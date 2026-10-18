@@ -18,7 +18,8 @@
 #   3. resources   the JMS event bus and the analytics data source
 #                  (install.sh's 'jms' and 'datasource', both re-runnable)
 #   4. database    SchemaUpgrade: the schema on an empty database, the
-#                  migrations it has not had, the views when they changed
+#                  migrations it has not had, the views when they changed,
+#                  then each directory in the profile's upgrade.sql.modules
 #   5. library     blade-shared, when this build's version is not deployed
 #   6. approuter   blade-fsmar.jar, when it differs from the one installed
 #   7. apps        every deployed application this build has a changed copy
@@ -96,6 +97,15 @@ WL_JAR="${ORACLE_HOME_DIR}/wlserver/server/lib/weblogic.jar"
 [ -f "$WL_JAR" ] || die "no weblogic.jar under ${ORACLE_HOME_DIR}: set oracle.home in the profile."
 ok "profile ${CONF}"
 ok "domain ${DOMAIN_DIR}"
+# Tables of applications built outside this checkout (Gryphon's meetings, say):
+# each directory holds a migrations/ of its own, applied after BLADE's.
+MODULE_ARGS=()
+IFS=',' read -r -a _mods <<< "$(read_prop "$CONF" upgrade.sql.modules)"
+for _m in ${_mods[@]+"${_mods[@]}"}; do
+    _m="$(printf '%s' "$_m" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"; [ -n "$_m" ] || continue
+    [ -d "${_m}/migrations" ] || die "upgrade.sql.modules names ${_m}, which has no migrations/ directory."
+    MODULE_ARGS+=(--module "$_m"); ok "database module ${_m}"
+done
 if git -C "$SCRIPT_DIR" rev-parse --git-dir >/dev/null 2>&1; then
     ok "BLADE $(git -C "$SCRIPT_DIR" describe --tags --always 2>/dev/null) on $(git -C "$SCRIPT_DIR" rev-parse --abbrev-ref HEAD)"
     [ -z "$(git -C "$SCRIPT_DIR" status --porcelain --untracked-files=no)" ] || warn "the checkout has uncommitted changes; they are in this build."
@@ -123,7 +133,7 @@ FW_JAR="${SCRIPT_DIR}/libs/framework/target/blade-framework.jar"
 [ -f "$FW_JAR" ] || die "no ${FW_JAR}: run ./build.sh (or drop --skip-build)."
 schema() {
     "${JAVA_DIR:+${JAVA_DIR}/bin/}java" -cp "${FW_JAR}:${WL_JAR}" org.vorpal.blade.framework.v3.jdbc.SchemaUpgrade \
-        --sql-dir "${SCRIPT_DIR}/services/analytics/sql" --domain "$DOMAIN_DIR" "$@"
+        --sql-dir "${SCRIPT_DIR}/services/analytics/sql" ${MODULE_ARGS[@]+"${MODULE_ARGS[@]}"} --domain "$DOMAIN_DIR" "$@"
 }
 src=0
 if [ -n "$SQL_OUT" ]; then

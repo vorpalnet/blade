@@ -22,20 +22,20 @@ location database, and initial INVITEs are forwarded to the registered contact.
 
 ## B2BUA vs. proxy drop-out
 
-The v2 `Proxy` API is gone. Whether the service stays in the signaling path is
-now decided by configuration, not code:
+Whether the service stays in the signaling path is configuration, not code:
 
-- `session:passthru = true` (the sample default) — after call setup the
-  framework stitches the endpoints' Contacts together and removes OCCAS from
-  the route set; the ACK and all in-dialog traffic flow directly between the
-  endpoints, like a proxy that drops out.
-- `session:passthru = false` — the service remains in the dialog as a full
+- `session:passthru = true` (the sample default): the caller's INVITE is
+  proxied, without Record-Route, to every registered contact at once. One
+  dialog runs from caller to callee, and the ACK and all in-dialog traffic
+  flow directly between them.
+- `session:passthru = false`: the service remains in the dialog as a full
   B2BUA, relaying in-dialog requests (re-INVITE, BYE, etc.).
 
-Provisional responses: the service sends its own 180 Ringing as soon as the
-fork starts (so the caller hears local ringback immediately), and real 18x
-from the dialogs — including 183 early media — is relayed upstream via the
-fan-out primitive's per-dialog observer.
+As a B2BUA, the service sends its own 180 Ringing as soon as the fork starts
+(so the caller hears local ringback immediately), and real 18x from the
+dialogs, including 183 early media, is relayed upstream. As a proxy, the
+caller hears each contact's own ringing, and if two contacts answer at once
+the caller gets both answers and ends the second.
 
 ## Configuration
 

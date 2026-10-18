@@ -18,9 +18,8 @@ import org.vorpal.blade.framework.v3.B2buaServlet;
 import org.vorpal.blade.services.proxy.balancer.config.BalancerConfig;
 import org.vorpal.blade.services.proxy.balancer.config.BalancerConfigSample;
 
-/// The Proxy Balancer — distributes initial INVITEs across the tiers of a
-/// configured [org.vorpal.blade.framework.v2.proxy.ProxyPlan], selected by
-/// the request URI's host. [InviteCallflow] forks each tier with the fan-out
+/// The Proxy Balancer — distributes initial INVITEs across the tiers of the
+/// plan its [BalancerConfig] holds for the request URI's host. [InviteCallflow] forks each tier with the fan-out
 /// primitives; the b2bua callflows inherited from [B2buaServlet] relay
 /// everything in-dialog. With `session:passthru` set in the config, the
 /// balancer stitches the endpoints' Contacts together and drops out of the

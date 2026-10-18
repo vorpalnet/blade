@@ -135,10 +135,16 @@ public class OptionsPingCallflow extends Callflow implements Serializable {
 						if (health.markDown("OPTIONS 408", null, "ping", -1)) {
 							BalancerEvents.down(name, health, null);
 						}
+					} else if (status == 503) {
+						// the endpoint said so: overloaded, draining, starting;
+						// its reason phrase says which. Down until a ping
+						// succeeds, whatever Retry-After says.
+						if (health.markRefused(status, response.getReasonPhrase(), null, "ping", rttMs)) {
+							BalancerEvents.down(name, health, null);
+						}
 					} else if (!PingVerdict.marksUp(status, require2xx)) {
-						// the endpoint said so (503: overloaded / draining /
-						// starting), or a require2xx engine answered non-2xx
-						// (it DID answer, so the round trip is real)
+						// a require2xx engine answered non-2xx (it DID answer,
+						// so the round trip is real)
 						if (health.markDown("OPTIONS " + status, null, "ping", rttMs)) {
 							BalancerEvents.down(name, health, null);
 						}

@@ -23,7 +23,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 ///   "plans": { "test1": [ { "tier": 0, "name": "primary", "strategy": "weighted", "timeout": 15,
 ///       "endpoints": [ { "name": "blade1", "uri": "sip:...", "weight": 3, "enabled": true,
 ///                        "site": "dc-east", "status": "up", "routable": true, "downUntil": null,
-///                        "lastChecked": 0, "note": "unchecked", "lastRttMs": 4,
+///                        "lastChecked": 0, "note": "unchecked", "refused": null, "lastRttMs": 4,
 ///                        "attempts": 120, "successes": 118, "failovers": 2 } ] } ] },
 ///   "endpointDetails": { "blade1": {
 ///       "samples": [ [ 1751700000000, 1, 4, "ping", "OPTIONS 200" ] ] } } }
@@ -92,6 +92,7 @@ public class EndpointHealthMBean implements EndpointHealthMXBean {
 							endpointMap.put("downUntil", health.getDownUntil());
 							endpointMap.put("lastChecked", health.getLastChecked());
 							endpointMap.put("note", health.getNote());
+							endpointMap.put("refused", health.getRefused());
 							endpointMap.put("lastRttMs", health.getLastRttMs());
 							endpointMap.put("attempts", health.getAttempts());
 							endpointMap.put("successes", health.getSuccesses());

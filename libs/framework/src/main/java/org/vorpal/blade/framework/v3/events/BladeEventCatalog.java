@@ -1022,6 +1022,7 @@ public final class BladeEventCatalog {
 		fields.add(field("key", EventFieldType.STRING, true, "What the problem is about, unique within the application."));
 		fields.add(field("summary", EventFieldType.STRING, true, "The problem, in words."));
 		fields.add(field("open", EventFieldType.STRING, false, "The admin page that fixes it: a path under /blade/."));
+		fields.add(field("kind", EventFieldType.STRING, false, "warning when nothing has failed yet; absent for a problem."));
 		fields.add(field("application", EventFieldType.STRING, false, "The application that raised it."));
 		fields.add(field("node", EventFieldType.STRING, true, "The server it was raised on."));
 		declaration.setFields(fields);

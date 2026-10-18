@@ -17,10 +17,12 @@ import org.vorpal.blade.framework.v3.media.manifest.ManifestArchive;
 /// comes back, and the batch is small so a redelivery repeats little. The
 /// handler replaces rows rather than inserting them, so a repeat is harmless.
 ///
-/// The application refuses to start without an archive reader on the
-/// classpath, the same way the audit sink refuses without a sink: a
-/// subscription that consumed events and could not read what they point at
-/// would drain the subscription and index nothing.
+/// Without an archive reader on the classpath the application starts idle: it
+/// loads its settings, logs one warning and never subscribes. A subscription
+/// that consumed events and could not read what they point at would drain them
+/// and index nothing; refusing to start instead would fail every application
+/// deployed beside it in the same EAR. The public WAR has no reader; a
+/// deployment overlay supplies one.
 public class CatalogSubscription implements ServletContextListener {
 
 	static final String SUBSCRIPTION = "blade-catalog";
@@ -47,8 +49,10 @@ public class CatalogSubscription implements ServletContextListener {
 			throw new IllegalStateException("blade-catalog could not load its settings", e);
 		}
 		if (ManifestArchive.installed() == null) {
-			throw new IllegalStateException("blade-catalog will not start without a ManifestArchive on the classpath: "
-					+ "conversation events would be consumed and nothing indexed");
+			java.util.logging.Logger.getLogger(CatalogSubscription.class.getName())
+					.warning("blade-catalog is idle: no recording archive reader is installed, so it does not subscribe "
+							+ "and indexes nothing. Deploy a build that includes one.");
+			return;
 		}
 		registrar = SubscriptionRegistrar.named(SUBSCRIPTION).typesFrom(CatalogSubscription::types).batch(BATCH_SIZE)
 				.start(event.getServletContext(), handler);

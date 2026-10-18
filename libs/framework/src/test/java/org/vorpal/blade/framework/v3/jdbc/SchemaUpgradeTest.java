@@ -148,6 +148,29 @@ class SchemaUpgradeTest {
 		assertEquals("CREATE TABLE a (x NUMBER)", s.get(1));
 	}
 
+	private static final List<Path> MODULE = Arrays.asList(Paths.get("src/test/resources/schema-upgrade-module"));
+
+	@Test
+	@DisplayName("a module's migrations run after BLADE's, on an empty database too")
+	void moduleOnAnEmptyDatabase() throws Exception {
+		List<String> plan = labels(SchemaUpgrade.plan(c, SQL, MODULE));
+		assertEquals("rooms-001-callers", plan.get(plan.size() - 2), "after the migrations, before the views");
+		SchemaUpgrade.apply(c, SchemaUpgrade.plan(c, SQL, MODULE), new PrintStream(new ByteArrayOutputStream()));
+		assertTrue(history().contains("rooms-001-callers"));
+		assertTrue(SchemaUpgrade.tableExists(c, "callers"));
+		assertEquals(Arrays.asList(), labels(SchemaUpgrade.plan(c, SQL, MODULE)), "the next run has nothing to do");
+	}
+
+	@Test
+	@DisplayName("applied-if table: a table its application already made is recorded, not made again")
+	void moduleTableAlreadyMade() throws Exception {
+		apply();
+		try (Statement s = c.createStatement()) {
+			s.execute("CREATE TABLE callers (caller_key VARCHAR(64) NOT NULL PRIMARY KEY, name VARCHAR(200))");
+		}
+		assertEquals(Arrays.asList("rooms-001-callers (already in place)"), labels(SchemaUpgrade.plan(c, SQL, MODULE)));
+	}
+
 	@Test
 	@DisplayName("statements: SQL Server's GO batches are sent whole")
 	void splitsSqlServerBatches() {

@@ -19,17 +19,69 @@ It answers `503` instead of `200 OK` in three situations:
 |---|---|---|
 | **Boot gate** | The server has not yet reached RUNNING — deployments still in progress (`unavailableUntilRunning: true`; see `ServerReady`) | `503 Starting` |
 | **Administrative drain** | Operator set `Drained=true` on this node's Drain MBean | `503 Draining` + `Retry-After: <drainRetryAfter>` (omitted when 0) |
-| **Queue pressure** | The `wlss.transport` or `wlss.timer` queue is at `queuePressurePercent` (default 80) of its capacity; see `QueuePressure` | `503 Busy` |
+| **Queue pressure** | The `wlss.transport` or `wlss.timer` queue is at `queuePressurePercent` (default 80) of its capacity; see `QueuePressure` | `503 Busy (transport 86%)`: the fuller queue and how full |
+| **Slowing** | 90% of the last second's SIP messages took half of `overload.refuseMillis` (default 50 ms) or more; see `OverloadMonitor` | `503 Busy (latency 60 ms)` |
 
 In every case, a load balancer that pings each engine individually stops offering NEW
 calls to this node; established dialogs continue (session state is cluster-replicated
-and fails over). The reason phrases (`Starting` / `Draining` / `Busy`) exist for the human
-reading a trace; load balancers treat them all the same.
+and fails over). The reason phrases (`Starting` / `Draining` / `Busy (...)`) say why to the human
+reading a trace, and BLADE's proxy-balancer shows them on the dashboard's Traffic map; load
+balancers treat them all the same.
+
+The app also publishes both queues, depth and capacity, as
+`vorpal.blade:Name=options,Type=SipQueues`, and the dashboard's Servers panel shows the fuller
+one for every engine.
 
 Queue pressure is the early warning. When either queue reaches 100% of its capacity,
 OCCAS answers every request `503 Server Busy` itself, calls and pings alike, and the
 options app never sees the ping. Answering `503 Busy` at 80% moves new calls elsewhere
 while the node can still finish the work it has.
+
+## Overload: refusing new calls before the queue fills
+
+A busy ping only steers the load balancers that ping. Traffic sent straight to an engine,
+by an SBC for example, keeps coming until the queue fills, and then OCCAS refuses
+everything, including the BYEs that would have drained it. So the options app also
+decides when its engine should refuse new calls, and hands that verdict to OCCAS overload
+protection.
+
+It decides on one number: how long the engine takes over a SIP message, from reading it
+off the socket to finishing with it, which the container measures for every message:
+
+```
+ 50 ms   pings answer 503 Busy          load balancers send new calls elsewhere
+100 ms   503 Server busy to new calls   for traffic no ping steers; calls already up carry on
+```
+
+The first line is half of `refuseMillis` (100), and it is also where a refusing engine takes
+new calls again, so below it the engine is healthy on both counts. The aim is that a pinging
+load balancer moves calls away at the first line, and the second is never reached. That
+holds when the ping interval is short next to how fast the engine slows: proxy-balancer
+pings every 60 seconds by default, so set its `pingInterval` to a few seconds for engines.
+A healthy engine takes a few milliseconds. The wait in the queue is part of the number, so
+there is nothing to tune to the hardware: a faster engine works the same queue off sooner.
+An engine with messages waiting and none finishing counts as slow.
+
+Two pieces put the verdict in front of the container, once per domain:
+
+```
+./deploy.sh <env> blade-overload.jar --domain-lib   # into <domain>/lib, then to each engine host
+./install.sh <env> overload                         # names its collector in sipserver.xml
+```
+
+then restart the AdminServer and the engines. Without them the app still decides and the
+dashboard still shows the verdict, worded as "nothing refuses new calls". After that,
+`refuseMillis` is ordinary configuration: change it in the Configurator and the next reading
+uses it.
+
+It also warns before calls slow about the usual causes: garbage collection taking a quarter
+of the time, an old generation that stays full after collection, and call-state lock
+failures. Warnings never refuse a call.
+
+Each change shows on the dashboard: under Issues (a refusal as a problem, a cause as a
+warning, each linked to this configuration), in its notifications, in analytics with the
+other operations events, and on the Servers panel, where the engine reads `refusing` and its
+hover gives the readings.
 
 ## Configuration (`options.json`)
 
@@ -40,6 +92,9 @@ while the node can still finish the work it has.
   if a node never leaves Starting.
 - `queuePressurePercent` — percent of work-manager queue capacity at which pings turn
   `503 Busy`. Absent = 80; `0` turns it off.
+- `overload` — `refuseMillis` (100; `0` turns refusing off), and the warnings
+  `gcWarnPercent` (25), `heapWarnPercent` (85), `lockFailuresWarnPerMinute` (10). Absent =
+  these defaults.
 - `drainRetryAfter` — seconds advertised on the drain 503; `0` omits the header (the
   default — BLADE's own proxy-balancer treats a ping 503 as sticky-down until a ping
   succeeds, so a backoff hint adds nothing there).
@@ -144,7 +199,9 @@ SIP-aware balancers can be configured to).
 ## Testing
 
 - `../../mvnw -f pom.xml test` — JUnit: `DrainControlTest` (state transitions plus a
-  real JMX round-trip against the platform MBeanServer) and `ServerReadyTest` (the boot
-  latch, driven through a fake `ServerRuntime` MBean).
+  real JMX round-trip against the platform MBeanServer), `ServerReadyTest` (the boot
+  latch, driven through a fake `ServerRuntime` MBean), `QueuePressureTest`, and
+  `OverloadVerdictTest` (the latency percentile, the two lines, a stall, and when a warning
+  raises and clears).
 - `test/uac-options.sh` — SIPp OPTIONS probe against a running node: expect `200 OK`
   in service, `503 Starting` during boot, `503 Draining` while drained.

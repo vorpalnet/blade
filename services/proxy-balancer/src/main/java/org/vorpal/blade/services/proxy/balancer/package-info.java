@@ -42,7 +42,7 @@
 /// routing filter. Every engine node keeps its own independent view — no
 /// shared cluster state — and publishes it as
 /// `vorpal.blade:Name=proxy-balancer,Type=EndpointHealth[,Cluster=...]`,
-/// which the `blade/balancer` admin app aggregates over federated JMX.
+/// which the dashboard reads from every node over federated JMX.
 ///
 /// Real 18x ringing from the dialogs is relayed upstream via the fan-out
 /// primitives' per-dialog observer, on top of the immediate 180 sent when the

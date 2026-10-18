@@ -183,6 +183,91 @@ CREATE INDEX idx_event_risk ON events(JSON_VALUE(payload, '$.riskScore' RETURNIN
 
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- The call catalog (proto/catalog)
+-- ─────────────────────────────────────────────────────────────────────────
+-- A searchable cache of the recording archive, rebuilt by reading the
+-- archive again; nothing here is the only copy. One row per conversation,
+-- attribute, utterance (redacted text), protected value (a keyed hash, never
+-- the value) and label. The full-text index on BLADE_UTTERANCE.TEXT is
+-- optional and made by the catalog itself when its fullText setting is on.
+CREATE TABLE BLADE_CONVERSATION (
+   CONVERSATION      VARCHAR2(64 CHAR) NOT NULL PRIMARY KEY,
+   CALL_ID           VARCHAR2(64 CHAR),
+   EPOCH_UTC         TIMESTAMP,
+   DURATION_MS       NUMBER(19),
+   COMPLETE          SMALLINT,
+   INCOMPLETE_REASON VARCHAR2(400 CHAR),
+   FROM_NUMBER       VARCHAR2(64 CHAR),
+   TO_NUMBER         VARCHAR2(64 CHAR),
+   UTTERANCES        NUMBER(19),
+   HOLDS             NUMBER(19),
+   MOVES             NUMBER(19),
+   KINDS             VARCHAR2(400 CHAR),
+   NODE              VARCHAR2(64 CHAR),
+   INDEXED_UTC       TIMESTAMP,
+   INDEX_VERSION     NUMBER(19)
+);
+CREATE INDEX BLADE_CONVERSATION_EPOCH ON BLADE_CONVERSATION (EPOCH_UTC);
+CREATE INDEX BLADE_CONVERSATION_CALL ON BLADE_CONVERSATION (CALL_ID);
+CREATE INDEX BLADE_CONVERSATION_FROM ON BLADE_CONVERSATION (FROM_NUMBER);
+CREATE INDEX BLADE_CONVERSATION_TO ON BLADE_CONVERSATION (TO_NUMBER);
+
+CREATE TABLE BLADE_CONVERSATION_ATTR (
+   CONVERSATION VARCHAR2(64 CHAR) NOT NULL,
+   NAME         VARCHAR2(64 CHAR) NOT NULL,
+   VALUE        VARCHAR2(400 CHAR),
+   PRIMARY KEY (CONVERSATION, NAME)
+);
+CREATE INDEX BLADE_CONVERSATION_ATTR_NV ON BLADE_CONVERSATION_ATTR (NAME, VALUE);
+
+CREATE TABLE BLADE_UTTERANCE (
+   CONVERSATION VARCHAR2(64 CHAR) NOT NULL,
+   TRANSCRIPT   VARCHAR2(32 CHAR) NOT NULL,
+   SEQUENCE     NUMBER(19) NOT NULL,
+   PARTY        VARCHAR2(64 CHAR),
+   START_MS     NUMBER(19),
+   END_MS       NUMBER(19),
+   TEXT         VARCHAR2(4000 CHAR),
+   KINDS        VARCHAR2(200 CHAR),
+   PRIMARY KEY (CONVERSATION, TRANSCRIPT, SEQUENCE)
+);
+
+CREATE TABLE BLADE_PROTECTED (
+   CONVERSATION VARCHAR2(64 CHAR) NOT NULL,
+   KIND         VARCHAR2(64 CHAR) NOT NULL,
+   DIGEST       VARCHAR2(64 CHAR) NOT NULL,
+   PRIMARY KEY (CONVERSATION, KIND, DIGEST)
+);
+CREATE INDEX BLADE_PROTECTED_DIGEST ON BLADE_PROTECTED (DIGEST);
+
+CREATE TABLE BLADE_LABEL (
+   CONVERSATION      VARCHAR2(64 CHAR) NOT NULL,
+   LABEL             VARCHAR2(64 CHAR) NOT NULL,
+   CONFIDENCE        NUMBER,
+   SOURCE            VARCHAR2(64 CHAR) NOT NULL,
+   EVIDENCE_SEQUENCE NUMBER(19),
+   PRIMARY KEY (CONVERSATION, LABEL, SOURCE)
+);
+CREATE INDEX BLADE_LABEL_LABEL ON BLADE_LABEL (LABEL);
+
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- The block list (services/proxy-block, written by proto/agent)
+-- ─────────────────────────────────────────────────────────────────────────
+-- Numbers an agent marked. proxy-block's spam connector refuses or tarpits
+-- them until expires_at passes; treatment is tarpit, review or decline.
+CREATE TABLE spam_numbers (
+   tn         VARCHAR(15) NOT NULL PRIMARY KEY,
+   treatment  VARCHAR(16) DEFAULT 'tarpit' NOT NULL,
+   reason     VARCHAR2(64 CHAR),
+   marked_by  VARCHAR2(64 CHAR),
+   marked_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+   expires_at TIMESTAMP NOT NULL
+);
+CREATE INDEX spam_numbers_expires ON spam_numbers (expires_at);
+
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- Time-based retention
 -- ─────────────────────────────────────────────────────────────────────────
 -- Either a scheduled time-based DELETE on events.created, or interval/range

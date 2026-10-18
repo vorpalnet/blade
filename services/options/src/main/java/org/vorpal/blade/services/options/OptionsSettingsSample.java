@@ -57,6 +57,10 @@ public class OptionsSettingsSample extends OptionsSettings implements Serializab
 		// Answer 503 Busy once a SIP work-manager queue passes 80% of its
 		// capacity, ahead of the container's own 503 at 100%.
 		queuePressurePercent = QueuePressure.DEFAULT_PERCENT;
+		// Refuse new calls once 90% of SIP messages take 100 ms or more, take
+		// them again below 50 ms; warn on GC, old-generation heap and lock
+		// failures first.
+		overload = new OverloadSettings();
 	}
 
 }

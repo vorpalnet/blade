@@ -322,8 +322,9 @@ public final class Catalog {
 	}
 
 	/// Add a number to the block list proxy-block reads, with a treatment and an
-	/// expiry (numbers rotate, so blocks expire). Columns per proxy-block's
-	/// `spam-numbers.sql`. A number already on the list is updated instead: the
+	/// expiry (numbers rotate, so blocks expire). The table is the analytics
+	/// schema's `spam_numbers` (migration `004-block-list`), which proxy-block
+	/// reads. A number already on the list is updated instead: the
 	/// newer treatment and reason win and the expiry restarts, so a second agent
 	/// blocking the same caller extends the block rather than bouncing off the
 	/// primary key. Returns true when a row was written, false (logged) on any
@@ -350,8 +351,6 @@ public final class Catalog {
 					if (ps.executeUpdate() > 0) {
 						return true;
 					}
-				} catch (Exception noTableYet) {
-					// No table to update: the insert below finds out and creates it.
 				}
 				try (PreparedStatement ps = c.prepareStatement(insert)) {
 					ps.setString(1, tn);
@@ -361,25 +360,11 @@ public final class Catalog {
 					ps.setTimestamp(5, expiry);
 					ps.executeUpdate();
 					return true;
-				} catch (Exception noTable) {
-					// The block list is proxy-block's table, applied by hand from its
-					// spam-numbers.sql, and a fresh schema does not have it. Create it
-					// from the same DDL and try once more; on a real failure the
-					// retry's exception is the one reported.
-					createBlockList(c);
-					try (PreparedStatement ps = c.prepareStatement(insert)) {
-						ps.setString(1, tn);
-						ps.setString(2, treatment);
-						ps.setString(3, reason);
-						ps.setString(4, markedBy);
-						ps.setTimestamp(5, expiry);
-						ps.executeUpdate();
-						return true;
-					}
 				}
 			}
 		} catch (Exception e) {
-			AgentConsoleRegistry.log("agent: could not block " + tn + ": " + e);
+			AgentConsoleRegistry.log("agent: could not block " + tn + ": " + e
+					+ " (the block list is part of the analytics schema; ./upgrade.sh <env> adds it)");
 			return false;
 		}
 	}
@@ -387,40 +372,11 @@ public final class Catalog {
 	/// Attach a label to a conversation: the catalog half of an agent report.
 	/// `BLADE_LABEL` is the calibration/label store; this is its first writer.
 	/// Returns true on a committed insert, false (logged) on any failure.
-	/// The block list's DDL, the same as proxy-block's `spam-numbers.sql`
-	/// (ten-digit number as the key, a treatment, who and why, and an expiry).
-	/// Best-effort: an existing table, or a schema that refuses DDL, leaves the
-	/// insert to fail on its own terms.
-	private void createBlockList(Connection c) {
-		String ddl;
-		try {
-			Dialect d = Dialect.of(c);
-			ddl = "CREATE TABLE " + spamTable + " (tn VARCHAR(15) NOT NULL PRIMARY KEY,"
-					+ " treatment VARCHAR(16) DEFAULT 'tarpit' NOT NULL, reason " + d.text(64) + ", marked_by " + d.text(64) + ","
-					+ " marked_at " + d.timestamp() + " DEFAULT " + d.now() + " NOT NULL, expires_at " + d.timestamp() + " NOT NULL)";
-		} catch (Exception e) {
-			AgentConsoleRegistry.log("agent: block list table " + spamTable + " not created: " + e);
-			return;
-		}
-		try (java.sql.Statement st = c.createStatement()) {
-			st.executeUpdate(ddl);
-			AgentConsoleRegistry.log("agent: created the block list table " + spamTable);
-		} catch (Exception e) {
-			AgentConsoleRegistry.log("agent: block list table " + spamTable + " not created: " + e);
-			return;
-		}
-		try (java.sql.Statement st = c.createStatement()) {
-			st.executeUpdate("CREATE INDEX " + spamTable + "_expires ON " + spamTable + " (expires_at)");
-		} catch (Exception ignore) {
-			// the index is a convenience for the reaper, not for the insert
-		}
-	}
-
 	public boolean label(String conversation, String label, double confidence, String source) {
 		if (!enabled() || conversation == null || conversation.isBlank() || label == null) {
 			return false;
 		}
-		// Columns per CatalogSchema: (CONVERSATION, LABEL, CONFIDENCE, SOURCE,
+		// Columns per the analytics schema's BLADE_LABEL: (CONVERSATION, LABEL, CONFIDENCE, SOURCE,
 		// EVIDENCE_SEQUENCE), PK (CONVERSATION, LABEL, SOURCE). EVIDENCE_SEQUENCE
 		// points at an utterance and is null for an agent report. A repeat report
 		// by the same agent on the same conversation hits the PK and is caught.

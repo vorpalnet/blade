@@ -64,6 +64,8 @@ public class OptionsSettings extends Configuration implements Serializable {
 
 	protected Integer queuePressurePercent;
 
+	protected OverloadSettings overload;
+
 	public String getAllow() {
 		return allow;
 	}
@@ -137,6 +139,15 @@ public class OptionsSettings extends Configuration implements Serializable {
 
 	public void setQueuePressurePercent(Integer queuePressurePercent) {
 		this.queuePressurePercent = queuePressurePercent;
+	}
+
+	@JsonPropertyDescription("When this server refuses new calls through OCCAS overload protection, and what it warns the dashboard about before that: garbage collection, old-generation heap, call-state lock failures. Absent: the defaults.")
+	public OverloadSettings getOverload() {
+		return overload;
+	}
+
+	public void setOverload(OverloadSettings overload) {
+		this.overload = overload;
 	}
 
 }

@@ -62,7 +62,9 @@ Everything below is how the installer delivers those five properties.
 ## 2. Prerequisites
 
 - **OS:** Linux (the server tier). `install.sh` itself also runs on macOS for
-  authoring a profile and dry-runs, but it installs onto Linux hosts.
+  authoring a profile and dry-runs, but it installs onto Linux hosts. A
+  development domain on a Windows PC runs in WSL2: see
+  [Windows, for development](#windows-for-development).
 - **OCCAS 8.3** (Oracle Communications Converged Application Server — WebLogic
   14.1.2 with SIP). `install.sh` can download the eDelivery media for you, or you
   point it at an existing install.
@@ -92,11 +94,44 @@ Everything below is how the installer delivers those five properties.
 - **Messaging + analytics (optional):** STEP 5 provisions the JMS event bus
   (`jms/BladeEventBusTopic` + its error queue) against the running AdminServer,
   and creates the `jdbc/BladeAnalytics` data source once you point it at your
-  database on the "Analytics database" page. The database and its schema are
-  yours: run `services/analytics/sql/<Dialect>-database-schema.sql` once, then
-  `<Dialect>-analytics-views.sql`. Re-run the views file after every upgrade: it
-  only replaces views, and new event types arrive with new views.
+  database on the "Analytics database" page. The database is yours; its schema
+  is built and kept current by `./upgrade.sh` ([UPGRADING.md](UPGRADING.md)).
   Headless: `./install.sh <env> jms` and `./install.sh <env> datasource`.
+
+### Windows, for development
+
+There is one installer, and on Windows it runs in WSL2, which is a Linux kernel
+in a virtual machine. `install.sh` sees Linux there and takes the same path it
+takes on a server. Git Bash, MSYS2 and Cygwin are not Linux and are not
+supported.
+
+1. In an administrator PowerShell: `wsl --install` (Ubuntu by default).
+2. In the WSL terminal, clone BLADE under your Linux home (`~/git/blade`), not
+   under `/mnt/c`: builds there are slow and file permissions are lost.
+3. Run `./install.sh <name> wsl`. It asks before each of three changes:
+   - turns on systemd in `/etc/wsl.conf`, which the boot services need;
+   - sets `networkingMode=mirrored` and `hostAddressLoopback=true` in
+     `%UserProfile%\.wslconfig`, keeping a `.wslconfig.blade-bak` copy;
+   - opens SIP (UDP and TCP 5060, TCP 5061) and the consoles (7001, 7002, 8001)
+     to WSL in the Hyper-V firewall. Windows asks for consent; the rules are
+     kept as `%UserProfile%\blade-wsl-firewall.ps1` to run again.
+4. In PowerShell, `wsl --shutdown`; open a new WSL terminal and carry on with
+   `./install.sh <name>`.
+
+**Softphones.** By default WSL2 sits behind NAT: only the PC itself can reach
+the engine, and the address the engine advertises in SIP is one nothing else
+can reach. Port forwarding (`netsh interface portproxy`) does not help, since it
+forwards TCP only. Mirrored networking needs Windows 11 22H2 or later; it gives
+Linux the PC's own addresses. Give the engine the PC's LAN address
+(`ip -4 addr`), not `127.0.0.1`, and register softphones to it, on the PC or
+elsewhere on the LAN. A laptop that changes networks changes that address, and
+the domain has to follow it. RTP does not pass through the engine; a media
+server run inside WSL needs its own UDP range opened.
+
+**Memory.** WSL2 takes half the PC's memory unless told otherwise. An
+AdminServer and an engine want about 10 GB: set `memory=12GB` under `[wsl2]` in
+`.wslconfig`. `install.sh` warns when WSL has less, when the checkout is under
+`/mnt`, when systemd is off, and when the network is still NAT.
 
 ---
 

@@ -731,6 +731,11 @@ fi
 			<activation><property><name>!skip.network-agent</name></property></activation>
 			<modules><module>libs/network-agent</module></modules>
 		</profile>
+		<profile>
+			<id>overload</id>
+			<activation><property><name>!skip.overload</name></property></activation>
+			<modules><module>libs/overload</module></modules>
+		</profile>
 
 		<!-- Service/test module profiles. Active by default; exclude with -Dskip.<name> -->
 		<profile>
@@ -941,7 +946,7 @@ fi
 		<profile>
 			<id>dashboard</id>
 			<activation><property><name>!skip.dashboard</name></property></activation>
-			<modules><module>proto/dashboard</module></modules>
+			<modules><module>admin/dashboard</module></modules>
 		</profile>
 		<profile>
 			<id>logs</id>
@@ -967,11 +972,6 @@ fi
 			<id>test-console</id>
 			<activation><property><name>!skip.test-console</name></property></activation>
 			<modules><module>proto/test-console</module></modules>
-		</profile>
-		<profile>
-			<id>balancer</id>
-			<activation><property><name>!skip.balancer</name></property></activation>
-			<modules><module>proto/balancer</module></modules>
 		</profile>
 		<profile>
 			<id>callflow</id>

@@ -58,10 +58,39 @@ final class QueuePressure {
 	/// True when either SIP work-manager queue is at or above `percent` of its
 	/// capacity. `percent` of 0 or less turns the check off.
 	static boolean isPressured(int percent) {
+		return busy(percent) != null;
+	}
+
+	/// The fuller queue at or above `percent` of its capacity, as the reason
+	/// phrase names it ("transport 86%"), or null when neither is. A 503's
+	/// reason then says which queue is filling and how far, which is what a
+	/// load balancer's operator needs to find out why the node said no.
+	static String busy(int percent) {
 		if (percent <= 0) {
-			return false;
+			return null;
 		}
-		return transport.over(percent) || timer.over(percent);
+		String worst = null;
+		long worstPct = -1;
+		for (Queue q : new Queue[] { transport, timer }) {
+			int cap = q.capacity();
+			int depth = q.depth();
+			if (cap > 0 && over(depth, cap, percent)) {
+				long pct = (long) depth * 100L / cap;
+				if (pct > worstPct) {
+					worstPct = pct;
+					worst = q.label() + " " + pct + "%";
+				}
+			}
+		}
+		return worst;
+	}
+
+	static Queue transport() {
+		return transport;
+	}
+
+	static Queue timer() {
+		return timer;
 	}
 
 	/// `depth` is at or above `percent` of `capacity`. Integer arithmetic in
@@ -86,6 +115,11 @@ final class QueuePressure {
 		Queue(String name, int defaultCapacity) {
 			this.name = name;
 			this.defaultCapacity = defaultCapacity;
+		}
+
+		/// "transport" or "timer": the work manager's name without `wlss.`.
+		String label() {
+			return name.startsWith("wlss.") ? name.substring(5) : name;
 		}
 
 		boolean over(int percent) {

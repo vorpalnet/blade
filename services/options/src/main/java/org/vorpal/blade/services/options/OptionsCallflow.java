@@ -54,9 +54,20 @@ public class OptionsCallflow extends Callflow implements Serializable {
 			// share of its capacity. At 100% the container answers 503 itself,
 			// to calls as well as pings; this 503 comes first. No Retry-After:
 			// the node rejoins as soon as a ping finds the queues below the line.
+			// The reason phrase names the fuller queue and how full it is,
+			// "Busy (transport 86%)", so the balancer that hears it can say why.
 			Integer pressure = settings.getQueuePressurePercent();
-			if (QueuePressure.isPressured(pressure != null ? pressure : QueuePressure.DEFAULT_PERCENT)) {
-				sendResponse(request.createResponse(503, "Busy"));
+			String busy = QueuePressure.busy(pressure != null ? pressure : QueuePressure.DEFAULT_PERCENT);
+			// Latency: past half of overload.refuseMillis the engine is slowing,
+			// and pings turn load balancers away so new calls stop arriving
+			// before OCCAS has to refuse them at refuseMillis itself. Half is
+			// also where a refusing engine takes calls again, so one line
+			// means "healthy" for both. "Busy (latency 60 ms)".
+			if (busy == null && OptionsSipServlet.overloadMonitor != null) {
+				busy = OptionsSipServlet.overloadMonitor.pingBusy();
+			}
+			if (busy != null) {
+				sendResponse(request.createResponse(503, "Busy (" + busy + ")"));
 				return;
 			}
 

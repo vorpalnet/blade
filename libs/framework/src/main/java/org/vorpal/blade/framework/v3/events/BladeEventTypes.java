@@ -277,7 +277,8 @@ public final class BladeEventTypes {
 	/// An application found a problem an operator should fix and says where it
 	/// is fixed: `key` (what the problem is about, unique within the
 	/// application), `summary` in words, `open` (the admin page that fixes it,
-	/// a path under `/blade/`), `application`, `node`. The dashboard shows it
+	/// a path under `/blade/`), `kind` (`warning` for a warning, absent for a
+	/// problem), `application`, `node`. The dashboard shows it
 	/// under Issues, linked to `open`, until [#PROBLEM_CLEARED] with the same
 	/// key arrives from the same node. Published on the change. See [Problems].
 	public static final String PROBLEM_RAISED = "org.vorpal.blade.problem.raised";

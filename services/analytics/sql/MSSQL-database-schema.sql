@@ -235,6 +235,93 @@ GO
 
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- The call catalog (proto/catalog)
+-- ─────────────────────────────────────────────────────────────────────────
+-- A searchable cache of the recording archive, rebuilt by reading the
+-- archive again; nothing here is the only copy. One row per conversation,
+-- attribute, utterance (redacted text), protected value (a keyed hash, never
+-- the value) and label. The full-text index on BLADE_UTTERANCE.TEXT is
+-- optional and made by the catalog itself when its fullText setting is on.
+CREATE TABLE BLADE_CONVERSATION (
+   CONVERSATION      NVARCHAR(64) NOT NULL PRIMARY KEY,
+   CALL_ID           NVARCHAR(64),
+   EPOCH_UTC         DATETIME2(3),
+   DURATION_MS       BIGINT,
+   COMPLETE          SMALLINT,
+   INCOMPLETE_REASON NVARCHAR(400),
+   FROM_NUMBER       NVARCHAR(64),
+   TO_NUMBER         NVARCHAR(64),
+   UTTERANCES        BIGINT,
+   HOLDS             BIGINT,
+   MOVES             BIGINT,
+   KINDS             NVARCHAR(400),
+   NODE              NVARCHAR(64),
+   INDEXED_UTC       DATETIME2(3),
+   INDEX_VERSION     BIGINT
+);
+CREATE INDEX BLADE_CONVERSATION_EPOCH ON BLADE_CONVERSATION (EPOCH_UTC);
+CREATE INDEX BLADE_CONVERSATION_CALL ON BLADE_CONVERSATION (CALL_ID);
+CREATE INDEX BLADE_CONVERSATION_FROM ON BLADE_CONVERSATION (FROM_NUMBER);
+CREATE INDEX BLADE_CONVERSATION_TO ON BLADE_CONVERSATION (TO_NUMBER);
+
+CREATE TABLE BLADE_CONVERSATION_ATTR (
+   CONVERSATION NVARCHAR(64) NOT NULL,
+   NAME         NVARCHAR(64) NOT NULL,
+   VALUE        NVARCHAR(400),
+   PRIMARY KEY (CONVERSATION, NAME)
+);
+CREATE INDEX BLADE_CONVERSATION_ATTR_NV ON BLADE_CONVERSATION_ATTR (NAME, VALUE);
+
+CREATE TABLE BLADE_UTTERANCE (
+   CONVERSATION NVARCHAR(64) NOT NULL,
+   TRANSCRIPT   NVARCHAR(32) NOT NULL,
+   SEQUENCE     BIGINT NOT NULL,
+   PARTY        NVARCHAR(64),
+   START_MS     BIGINT,
+   END_MS       BIGINT,
+   TEXT         NVARCHAR(4000),
+   KINDS        NVARCHAR(200),
+   PRIMARY KEY (CONVERSATION, TRANSCRIPT, SEQUENCE)
+);
+
+CREATE TABLE BLADE_PROTECTED (
+   CONVERSATION NVARCHAR(64) NOT NULL,
+   KIND         NVARCHAR(64) NOT NULL,
+   DIGEST       NVARCHAR(64) NOT NULL,
+   PRIMARY KEY (CONVERSATION, KIND, DIGEST)
+);
+CREATE INDEX BLADE_PROTECTED_DIGEST ON BLADE_PROTECTED (DIGEST);
+
+CREATE TABLE BLADE_LABEL (
+   CONVERSATION      NVARCHAR(64) NOT NULL,
+   LABEL             NVARCHAR(64) NOT NULL,
+   CONFIDENCE        DOUBLE PRECISION,
+   SOURCE            NVARCHAR(64) NOT NULL,
+   EVIDENCE_SEQUENCE BIGINT,
+   PRIMARY KEY (CONVERSATION, LABEL, SOURCE)
+);
+CREATE INDEX BLADE_LABEL_LABEL ON BLADE_LABEL (LABEL);
+GO
+
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- The block list (services/proxy-block, written by proto/agent)
+-- ─────────────────────────────────────────────────────────────────────────
+-- Numbers an agent marked. proxy-block's spam connector refuses or tarpits
+-- them until expires_at passes; treatment is tarpit, review or decline.
+CREATE TABLE spam_numbers (
+   tn         VARCHAR(15) NOT NULL PRIMARY KEY,
+   treatment  VARCHAR(16) DEFAULT 'tarpit' NOT NULL,
+   reason     NVARCHAR(64),
+   marked_by  NVARCHAR(64),
+   marked_at  DATETIME2(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+   expires_at DATETIME2(3) NOT NULL
+);
+CREATE INDEX spam_numbers_expires ON spam_numbers (expires_at);
+GO
+
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- Retention
 -- ─────────────────────────────────────────────────────────────────────────
 -- Nothing deletes rows automatically; see sql/retention.sql. At volume the

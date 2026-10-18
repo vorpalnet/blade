@@ -37,6 +37,9 @@
 #                    default <domain>/agent beside approuter.dir. install.sh's
 #                    domain copy carries it to each engine host it provisions;
 #                    servers load it from their start arguments (-javaagent)
+#   --domain-lib     copy <file> (blade-overload.jar) into the domain's lib/ on
+#                    THIS host (domain.lib.dir, default <domain>/lib beside
+#                    approuter.dir); every server reads it at start (restart)
 #   --name NAME      deployment name (default: filename without extension)
 #   --build VER      take <file> from dist/<VER>/ instead of the newest build
 #   --dry-run        print what would run; change nothing
@@ -64,6 +67,7 @@
 #   ./deploy.sh production blade-shared.war cluster1 --library
 #   ./deploy.sh production blade-fsmar.jar --approuter
 #   ./deploy.sh production blade-agent.jar --agent
+#   ./deploy.sh production blade-overload.jar --domain-lib
 #   ./deploy.sh production gateway.war cluster1 undeploy
 #   ./deploy.sh production ./dist/3.0.6-908/admin/blade-portal.war AdminServer --dry-run
 # ============================================================================
@@ -116,7 +120,7 @@ ENV_ARG=""
 FILE_ARG=""
 TARGET_ARG=""
 ACTION="deploy"
-MODE="app"          # app | library | approuter | agent
+MODE="app"          # app | library | approuter | agent | domainlib
 NAME_OVERRIDE=""
 BUILD_VER=""
 DRY_RUN=false
@@ -130,6 +134,7 @@ while [ $# -gt 0 ]; do
         --library)   MODE="library" ;;
         --approuter) MODE="approuter" ;;
         --agent)     MODE="agent" ;;
+        --domain-lib) MODE="domainlib" ;;
         --name)      shift; NAME_OVERRIDE="${1:-}"; [ -n "$NAME_OVERRIDE" ] || die "--name requires an argument" ;;
         --name=*)    NAME_OVERRIDE="${1#--name=}" ;;
         --build)     shift; BUILD_VER="${1:-}"; [ -n "$BUILD_VER" ] || die "--build requires a version argument" ;;
@@ -300,6 +305,8 @@ WLS_TARGET_DEFAULT=$(read_prop "$CONF_FILE" "wls.target")
 APPROUTER_DIR=$(read_prop  "$CONF_FILE" "approuter.dir")
 AGENT_DIR=$(read_prop      "$CONF_FILE" "agent.dir")
 [ -z "$AGENT_DIR" ] && [ -n "$APPROUTER_DIR" ] && AGENT_DIR="$(dirname "$APPROUTER_DIR")/agent"
+DOMAIN_LIB_DIR=$(read_prop "$CONF_FILE" "domain.lib.dir")
+[ -z "$DOMAIN_LIB_DIR" ] && [ -n "$APPROUTER_DIR" ] && DOMAIN_LIB_DIR="$(dirname "$APPROUTER_DIR")/lib"
 WLS_PLUGIN_VERSION=$(read_prop "$CONF_FILE" "wls.plugin.version")
 WLS_INSECURE=$(read_prop "$CONF_FILE" "wls.insecure")          # rest engine: skip TLS verify
 WLS_CACERT=$(read_prop "$CONF_FILE" "wls.cacert"); WLS_CACERT="${WLS_CACERT/#\~/$HOME}"  # rest engine: PEM to verify against
@@ -308,6 +315,7 @@ WLS_CACERT=$(read_prop "$CONF_FILE" "wls.cacert"); WLS_CACERT="${WLS_CACERT/#\~/
 NEEDS_WLS=true
 [ "$MODE" = "approuter" ] && NEEDS_WLS=false
 [ "$MODE" = "agent" ] && NEEDS_WLS=false
+[ "$MODE" = "domainlib" ] && NEEDS_WLS=false
 
 if [ "$NEEDS_WLS" = true ]; then
     [ -n "$WLS_ADMINURL" ] || die "${CONF_FILE}: missing wls.adminurl"
@@ -648,6 +656,7 @@ case "$MODE" in
     library)   log "  mode:         WebLogic shared library"; log "  target:       ${TARGET:-<none>}" ;;
     approuter) log "  mode:         approuter copy (FSMAR)"; log "  approuter:    ${APPROUTER_DIR:-<unset>}" ;;
     agent)     log "  mode:         agent copy (network agent)"; log "  agent dir:    ${AGENT_DIR:-<unset>}" ;;
+    domainlib) log "  mode:         domain lib copy"; log "  domain lib:   ${DOMAIN_LIB_DIR:-<unset>}" ;;
 esac
 [ "$NEEDS_WLS" = true ] && log "  WebLogic:     ${WLS_USER}@${WLS_ADMINURL}  (engine: ${ENGINE})"
 [ "$NEEDS_WLS" = true ] && [ "$ENGINE" = maven ] && log "  WLS plugin:   ${WLS_PLUGIN_VERSION} (${WLS_PLUGIN_VERSION_SOURCE})"
@@ -792,6 +801,24 @@ case "$MODE" in
                 warn "Remove -javaagent:${dest} from every server's start arguments and restart them FIRST:"
                 warn "  a JVM whose -javaagent JAR is missing does not start."
                 if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] rm -f ${dest}${C_RESET}"; else rm -f "$dest" || rc=$?; fi ;;
+            status)
+                if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] ls -l ${dest}${C_RESET}"; else ls -l "$dest" 2>&1 || warn "${ART_BASE} not present at ${dest}"; fi ;;
+        esac ;;
+
+    domainlib)
+        [ -n "$DOMAIN_LIB_DIR" ] || die "${CONF_FILE}: missing domain.lib.dir (or approuter.dir to derive it from)"
+        dest="${DOMAIN_LIB_DIR}/${ART_BASE}"
+        info "domain lib ${ACTION}: ${dest}"
+        case "$ACTION" in
+            deploy)
+                if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] cp ${ART} ${dest}${C_RESET}"
+                else mkdir -p "$DOMAIN_LIB_DIR" && cp "$ART" "$dest" || rc=$?; fi
+                warn "Every server reads <domain>/lib at start: copy ${ART_BASE} to each engine host's"
+                warn "  ${DOMAIN_LIB_DIR} (install.sh's domain copy does it for hosts it provisions), then restart."
+                [ "$ART_BASE" = "blade-overload.jar" ] && warn "  sipserver.xml must name its collector: ./install.sh <env> overload" ;;
+            undeploy)
+                if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] rm -f ${dest}${C_RESET}"; else rm -f "$dest" || rc=$?; fi
+                warn "Restart the servers to unload it; remove it from each engine host's ${DOMAIN_LIB_DIR} too." ;;
             status)
                 if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] ls -l ${dest}${C_RESET}"; else ls -l "$dest" 2>&1 || warn "${ART_BASE} not present at ${dest}"; fi ;;
         esac ;;

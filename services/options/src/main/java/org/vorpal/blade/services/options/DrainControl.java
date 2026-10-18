@@ -101,7 +101,7 @@ public class DrainControl implements DrainMXBean {
 	/// The cluster this node belongs to, or null on a non-clustered server.
 	/// Same discovery the SettingsManager and ProxyBalancerServlet do — the
 	/// ObjectNames must agree on the Cluster key.
-	private static String clusterName(MBeanServer server) {
+	static String clusterName(MBeanServer server) {
 		try {
 			String serverName = System.getProperty("weblogic.Name");
 			ObjectName managedServer = new ObjectName("com.bea:Name=" + serverName + ",Type=Server");

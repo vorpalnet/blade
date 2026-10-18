@@ -2,7 +2,7 @@
 
 The virtual host's default web application. It 302-redirects `/` and `/blade` to
 `/blade/dashboard/`, so operators can type the bare hostname and land on the
-[dashboard](../../proto/dashboard/README.md), whose rail lists every admin app and service.
+[dashboard](../dashboard/README.md), whose rail lists every admin app and service.
 Any other path no application on the server claims gets a 404 page that says so and links to
 the dashboard. It used to redirect those as well, which made a link to an engine-tier app on
 the admin address look like a link to the dashboard.
@@ -22,7 +22,7 @@ rest to their own WARs.
 
 ## Related modules
 
-- [proto/dashboard](../../proto/dashboard/README.md) — where the bare address redirects to
+- [admin/dashboard](../dashboard/README.md) — where the bare address redirects to
 - [BLADE](../../README.md) — project home
 
 ## Maven Coordinates

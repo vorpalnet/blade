@@ -47,6 +47,8 @@ public class OptionsSipServlet extends AsyncSipServlet {
 	/// `vorpal.blade:Name=<app>,Type=Drain[,Cluster=…]`. Static like
 	/// `settingsManager`: one per engine JVM, read by [OptionsCallflow].
 	public static DrainControl drainControl;
+	static SipQueues sipQueues;
+	static OverloadMonitor overloadMonitor;
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
@@ -74,6 +76,23 @@ public class OptionsSipServlet extends AsyncSipServlet {
 						+ " drained over JMX: " + ex.getMessage());
 			}
 		}
+
+		// SIP queue MBean, for the dashboard; never fatal either.
+		try {
+			SipQueues queues = new SipQueues();
+			queues.register(settingsManager != null ? settingsManager.getName() : "options");
+			sipQueues = queues;
+		} catch (Exception ex) {
+			if (sipLogger != null) {
+				sipLogger.warning("Options - SIP queue MBean not registered: " + ex.getMessage());
+			}
+		}
+
+		// Overload verdict for OCCAS overload protection, and the warnings
+		// before it; never fatal.
+		overloadMonitor = OverloadMonitor.start(
+				() -> settingsManager != null ? settingsManager.getCurrent() : null,
+				settingsManager != null ? settingsManager.getName() : "options");
 	}
 
 	@Override
@@ -83,6 +102,14 @@ public class OptionsSipServlet extends AsyncSipServlet {
 		if (drainControl != null) {
 			drainControl.unregister();
 			drainControl = null;
+		}
+		if (sipQueues != null) {
+			sipQueues.unregister();
+			sipQueues = null;
+		}
+		if (overloadMonitor != null) {
+			overloadMonitor.stop();
+			overloadMonitor = null;
 		}
 		try {
 			if (settingsManager != null) {

@@ -1393,6 +1393,22 @@ public abstract class AsyncSipServlet extends SipServlet
 				Callflow.setReferPending(sipSession, false);
 			}
 
+			// A second callee answering the same INVITE, through a forking proxy downstream:
+			// the first 2xx is the call, this one is acknowledged and ended. A proxy forwards
+			// every 2xx instead, so it is not ours to end.
+			if (method.equals(INVITE) && Callflow.successful(response) && !isProxy
+					&& isExtraAnswer(response, appSession)) {
+				sipLogger.warning(response,
+						"AsyncSipServlet.doResponse - another dialog of this INVITE answered first; ACK and BYE");
+				traced(Direction.RECEIVE, null, response, CallflowAckBye.class.getName(), "process");
+				try {
+					new CallflowAckBye().process(response);
+				} catch (Exception exExtra) {
+					sipLogger.warning(response, "AsyncSipServlet.doResponse - extra answer not ended: " + exExtra);
+				}
+				return;
+			}
+
 			// Check for the possibility that an INVITE response comes back *after* the call
 			// has been canceled
 			if (method.equals(INVITE) && Callflow.successful(response) && linkedSession != null && //
@@ -1425,8 +1441,8 @@ public abstract class AsyncSipServlet extends SipServlet
 							if (callback != null) {
 								isProxy = true;
 							} else if (response.getMethod().equals(INVITE)) {
-								// Sometimes a 180 Ringing comes back on a brand new SipSession
-								// because the tag on the To header changed due to a failure downstream.
+								// A new early dialog of our INVITE (forking downstream, or a
+								// changed To tag): it shares the original's callback.
 								callback = mergeEarlyDialogSession(response, sipSession, appSession, linkedSession);
 							} else {
 								// (An isProxy(response) re-check here was provably dead: isProxy
@@ -1557,87 +1573,66 @@ public abstract class AsyncSipServlet extends SipServlet
 		}
 	}
 
-	/// Sometimes a 180 Ringing comes back on a brand new SipSession because the
-	/// tag on the To header changed due to a failure downstream. Find the
-	/// original early-dialog session by Call-ID, move its INVITE response
-	/// callback and attributes onto the new session, relink the dialogs, and
-	/// invalidate the old session.
+	/// A response to our INVITE arrived on a new early dialog: a forking proxy
+	/// downstream sent the INVITE to more than one callee, or the callee changed
+	/// its To tag. The container gives each early dialog a session of its own,
+	/// and only the original one carries the INVITE's response callback.
 	///
-	/// @return the merged-in response callback, or null if no early-dialog
-	/// session matched
+	/// Copy the original session's attributes, the callback and the link to the
+	/// caller's leg among them, onto the new one, so every dialog reports to the
+	/// callflow. The original stays as it is: with forking it is a live early
+	/// dialog whose callee may still answer, and its 2xx must reach a session
+	/// that can acknowledge it. Which answer wins, and what happens to the
+	/// others, is [#doResponse]'s to decide (see `isExtraAnswer`).
+	///
+	/// @return the response callback, or null if no early dialog of this INVITE
+	///         carries one
 	@SuppressWarnings("unchecked")
 	protected static Callback<SipServletResponse> mergeEarlyDialogSession(SipServletResponse response,
 			SipSession sipSession, SipApplicationSession appSession, SipSession linkedSession) {
 
-		Callback<SipServletResponse> callback = null;
-
-		// Falling down a hole
 		Set<SipSession> sessions = (Set<SipSession>) appSession.getSessionSet("SIP");
-
-		if (sipLogger.isLoggable(Level.FINER)) {
-			sipLogger.finer(response, "AsyncSipServlet.doResponse - Rogue session id=" + response.getSession().getId());
-			sipLogger.finer(response, "AsyncSipServlet.doResponse - Number of SipSessions: " + sessions.size());
-		}
-
 		for (SipSession session : sessions) {
-
+			if (session == response.getSession() || !session.isValid()
+					|| !session.getCallId().equals(sipSession.getCallId())) {
+				continue;
+			}
+			Callback<SipServletResponse> callback = (Callback<SipServletResponse>) session
+					.getAttribute(RESPONSE_CALLBACK_INVITE);
+			if (callback == null) {
+				continue;
+			}
 			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer(response, "AsyncSipServlet.doResponse - Checking session id=" + session.getId());
+				sipLogger.finer(response, "AsyncSipServlet.doResponse - early dialog " + sipSession.getId()
+						+ " of the INVITE on " + session.getId() + "; sharing its callback");
 			}
-
-			if (session != response.getSession()) {
-
-				if (session.getCallId().equals(sipSession.getCallId())) {
-
-					callback = (Callback<SipServletResponse>) session.getAttribute(RESPONSE_CALLBACK_INVITE);
-
-					if (callback != null) {
-
-						if (sipLogger.isLoggable(Level.FINER)) {
-							sipLogger.finer(session,
-									"AsyncSipServlet.doResponse - Early dialog session detected, merge in progress...");
-							sipLogger.finer(response,
-									"AsyncSipServlet.doResponse - Setting RESPONSE_CALLBACK_INVITE on merged session...");
-							sipLogger.finer(response,
-									"AsyncSipServlet.doResponse - Removing RESPONSE_CALLBACK_INVITE from original session...");
-						}
-
-						sipSession.setAttribute(RESPONSE_CALLBACK_INVITE, callback);
-
-						session.removeAttribute(RESPONSE_CALLBACK_INVITE);
-
-						// link the sessions
-						if (sipLogger.isLoggable(Level.FINER)) {
-							sipLogger.finer(session, "AsyncSipServlet.doResponse - Linking sessions...");
-						}
-
-						session.removeAttribute(LINKED_SESSION);
-						Callflow.linkSession(linkedSession, sipSession);
-						Callflow.linkSession(sipSession, linkedSession);
-
-						for (String attr : session.getAttributeNameSet()) {
-							if (sipLogger.isLoggable(Level.FINER)) {
-								sipLogger.finer(session,
-										"AsyncSipServlet.doResponse - Copying session attribute: " + attr);
-							}
-							sipSession.setAttribute(attr, session.getAttribute(attr));
-						}
-
-						// invalidate the old session
-						if (sipLogger.isLoggable(Level.FINER)) {
-							sipLogger.finer(session, "AsyncSipServlet.doResponse - Invalidating early session...");
-						}
-						session.invalidate();
-						if (sipLogger.isLoggable(Level.FINER)) {
-							sipLogger.finer(response, "AsyncSipServlet.doResponse - Sessions successfully merged.");
-						}
-					}
-					break;
-				}
+			for (String attr : session.getAttributeNameSet()) {
+				sipSession.setAttribute(attr, session.getAttribute(attr));
 			}
+			return callback;
 		}
+		return null;
+	}
 
-		return callback;
+	private static final String ANSWERED_ = "org.vorpal.blade.answered.";
+
+	/// Is this 2xx a second answer to one of our initial INVITEs? A forking
+	/// proxy downstream can make several dialogs of one INVITE, all sharing its
+	/// Call-ID, and more than one callee can answer. The first 2xx is the call;
+	/// RFC 3261 section 13.2.2.4 has the UAC acknowledge every later one and
+	/// end it with a BYE. Records the first answering dialog per Call-ID.
+	static boolean isExtraAnswer(SipServletResponse response, SipApplicationSession appSession) {
+		if (!response.getRequest().isInitial()) {
+			return false;
+		}
+		String key = ANSWERED_ + response.getCallId();
+		String first = (String) appSession.getAttribute(key);
+		String dialog = response.getSession().getId();
+		if (first == null) {
+			appSession.setAttribute(key, dialog);
+			return false;
+		}
+		return !first.equals(dialog);
 	}
 
 	/// Error recovery when a response callback throws: send a 500 (with stack
@@ -1679,7 +1674,8 @@ public abstract class AsyncSipServlet extends SipServlet
 					CallflowAckBye callflow = new CallflowAckBye();
 					sipLogger.severe(response, "AsyncSipServlet.doResponse - invoking CallflowAckBye");
 					callflow.process(response);
-				} else if (Callflow.provisional(response)) {
+				} else if (Callflow.provisional(response)
+						&& Callflow.getLinkedSession(response.getSession()) != null) {
 					SipServletRequest rqst = Callflow.getLinkedSession(response.getSession())
 							.getActiveInvite(UAMode.UAS);
 					Callflow callflow = new Terminate(null);

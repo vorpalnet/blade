@@ -1,5 +1,8 @@
 package org.vorpal.blade.framework.v3;
 
+import java.io.IOException;
+
+import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
@@ -25,5 +28,27 @@ public abstract class AsyncSipServlet extends org.vorpal.blade.framework.AsyncSi
 	protected void traced(Direction direction, SipServletRequest request, SipServletResponse response, Object handler,
 			String methodHint) {
 		Callflow.traceEvent(direction, request, response, handler, methodHint, null);
+	}
+
+	/// A response to a passthru proxy goes to the callbacks [Callflow#proxyPassthru]
+	/// stored; the container has already decided what the caller gets. A
+	/// branch's final that is not the one the caller gets arrives here too:
+	/// `SipServlet.doResponse` is what would route it to `doBranchResponse`, and
+	/// the baseline overrides it, so [SipServletResponse#isBranchResponse] tells.
+	@Override
+	protected void doResponse(SipServletResponse response) throws ServletException, IOException {
+		if (proxied(response, response.isBranchResponse())) {
+			return;
+		}
+		super.doResponse(response);
+	}
+
+	private boolean proxied(SipServletResponse response, boolean branch) {
+		if (!Callflow.passthruResponse(response, branch)) {
+			return false;
+		}
+		Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "proxy");
+		traced(Direction.RECEIVE, null, response, "proxy", branch ? "branch" : "received");
+		return true;
 	}
 }

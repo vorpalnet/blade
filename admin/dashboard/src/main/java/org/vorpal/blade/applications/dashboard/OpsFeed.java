@@ -1,0 +1,189 @@
+package org.vorpal.blade.applications.dashboard;
+
+import java.util.ArrayDeque;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+import org.vorpal.blade.framework.v3.events.BladeEventTypes;
+import org.vorpal.blade.framework.v3.events.Problems;
+import org.vorpal.blade.framework.v3.events.CloudEvent;
+import org.vorpal.blade.framework.v3.events.EventSubscriber;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+/// The platform's operations events as the dashboard shows them: what is wrong
+/// now, and what just happened.
+///
+/// **What is wrong now** is kept as state, keyed so the latest event wins: an
+/// endpoint is down until its `endpoint.up`, a trunk is failing until its
+/// `trunk.registered`, and a queue's depth is its last minute's report, per node
+/// because every node keeps its own view. **What just happened** is the last
+/// [#RECENT] events, newest first, leaving out a queue's minute-by-minute depth,
+/// which the queues view shows already and which would push every change out of
+/// the list on a busy system. A service cut off
+/// by a breaker (`remote.down`) is in the feed only: [OpsServlet] reads which
+/// breakers are open now from the applications themselves.
+///
+/// Held in memory on this server only, fed by a subscription
+/// `DashboardSettingsStartup` opens once the settings exist. Live, not durable:
+/// a dashboard opened after an outage shows the outage from its next event, and
+/// the history belongs to whatever stores events, not to a screen.
+final class OpsFeed implements EventSubscriber.Handler {
+
+	/// This subscriber's name on the broker, and its metric key.
+	static final String SUBSCRIPTION = "blade-dashboard-ops";
+
+	/// The one feed this application keeps, read by [OpsServlet].
+	static final OpsFeed FEED = new OpsFeed();
+
+	/// How many recent events the feed keeps.
+	static final int RECENT = 100;
+
+	private static final ObjectMapper MAPPER = new ObjectMapper();
+
+	/// `endpoint|node` → the `endpoint.down` still in force.
+	private final Map<String, ObjectNode> endpointsDown = new ConcurrentHashMap<>();
+
+	/// `gateway|node` → the `trunk.failed` still in force.
+	private final Map<String, ObjectNode> trunksFailing = new ConcurrentHashMap<>();
+
+	/// `application|key|node` → the `problem.raised` still in force: a problem
+	/// an application reported with the page that fixes it.
+	private final Map<String, ObjectNode> problems = new ConcurrentHashMap<>();
+
+	/// `remote|application|node` for each breaker this feed saw open: only so
+	/// a notice goes out on the change. Which are open now, [OpsServlet] reads
+	/// from the applications.
+	private final java.util.Set<String> remotesCut = ConcurrentHashMap.newKeySet();
+
+	/// `queue|node` → the latest `queue.depth`.
+	private final Map<String, ObjectNode> queues = new ConcurrentHashMap<>();
+
+	private final ArrayDeque<ObjectNode> recent = new ArrayDeque<>();
+
+	/// The events the panel shows. A phone registering or publishing presence is
+	/// not among them: each is routine, one per phone every few minutes, and on a
+	/// system with thousands of phones they would be the whole feed. A dropped
+	/// call is: each one is a bug's footprint, and rare.
+	static final List<String> TYPES = java.util.Arrays.asList(BladeEventTypes.QUEUE_DEPTH,
+			BladeEventTypes.ENDPOINT_DOWN, BladeEventTypes.ENDPOINT_UP, BladeEventTypes.REMOTE_DOWN,
+			BladeEventTypes.REMOTE_UP, BladeEventTypes.TRUNK_REGISTERED, BladeEventTypes.TRUNK_FAILED,
+			BladeEventTypes.TRUNK_UNREGISTERED, BladeEventTypes.SIP_DENIED, BladeEventTypes.CONFIG_SAVED,
+			BladeEventTypes.CONFIG_PUBLISHED, BladeEventTypes.CALL_DROPPED, BladeEventTypes.PROBLEM_RAISED,
+			BladeEventTypes.PROBLEM_CLEARED);
+
+	@Override
+	public void handle(List<CloudEvent> batch) {
+		for (CloudEvent event : batch) {
+			apply(event);
+		}
+	}
+
+	/// Fold one event into the state and the feed. Package-private and free of
+	/// JMS, so it is tested directly.
+	void apply(CloudEvent event) {
+		if (event == null || event.getType() == null) {
+			return;
+		}
+		ObjectNode data = event.fields();
+		String node = data.path("node").asText("");
+		switch (event.getType()) {
+		case BladeEventTypes.ENDPOINT_DOWN:
+			if (endpointsDown.put(data.path("endpoint").asText() + "|" + node, stamped(event, data)) == null) {
+				Notifier.notify("endpoint", true, data.path("endpoint").asText(), node, data.path("note").asText(null));
+			}
+			break;
+		case BladeEventTypes.ENDPOINT_UP:
+			if (endpointsDown.remove(data.path("endpoint").asText() + "|" + node) != null) {
+				Notifier.notify("endpoint", false, data.path("endpoint").asText(), node, data.path("note").asText(null));
+			}
+			break;
+		case BladeEventTypes.TRUNK_FAILED:
+			if (trunksFailing.put(data.path("gateway").asText() + "|" + node, stamped(event, data)) == null) {
+				Notifier.notify("trunk", true, data.path("gateway").asText(), node,
+						(data.hasNonNull("status") ? data.path("status").asText() + " " : "") + data.path("reason").asText(""));
+			}
+			break;
+		case BladeEventTypes.TRUNK_REGISTERED:
+		case BladeEventTypes.TRUNK_UNREGISTERED:
+			if (trunksFailing.remove(data.path("gateway").asText() + "|" + node) != null) {
+				Notifier.notify("trunk", false, data.path("gateway").asText(), node, "registered again");
+			}
+			break;
+		case BladeEventTypes.REMOTE_DOWN:
+			if (remotesCut.add(data.path("remote").asText() + "|" + data.path("application").asText() + "|" + node)) {
+				Notifier.notify("remote", true, data.path("remote").asText(), node, data.path("note").asText(null));
+			}
+			break;
+		case BladeEventTypes.REMOTE_UP:
+			if (remotesCut.remove(data.path("remote").asText() + "|" + data.path("application").asText() + "|" + node)) {
+				Notifier.notify("remote", false, data.path("remote").asText(), node, null);
+			}
+			break;
+		case BladeEventTypes.PROBLEM_RAISED:
+			if (problems.put(problemKey(data, node), stamped(event, data)) == null) {
+				Notifier.notify(notifyKind(data), true, data.path("key").asText(), node, data.path("summary").asText(null));
+			}
+			break;
+		case BladeEventTypes.PROBLEM_CLEARED: {
+			ObjectNode was = problems.remove(problemKey(data, node));
+			if (was != null) {
+				Notifier.notify(notifyKind(was), false, data.path("key").asText(), node, null);
+			}
+			break;
+		}
+		case BladeEventTypes.QUEUE_DEPTH:
+			queues.put(data.path("queue").asText() + "|" + node, stamped(event, data));
+			return;
+		default:
+			break;
+		}
+		ObjectNode item = stamped(event, data);
+		item.put("type", event.getType());
+		synchronized (recent) {
+			recent.addFirst(item);
+			while (recent.size() > RECENT) {
+				recent.removeLast();
+			}
+		}
+	}
+
+	/// The snapshot `/ops` serves.
+	ObjectNode snapshot() {
+		ObjectNode out = MAPPER.createObjectNode();
+		out.set("endpointsDown", array(endpointsDown));
+		out.set("trunksFailing", array(trunksFailing));
+		out.set("queues", array(queues));
+		out.set("problems", array(problems));
+		ArrayNode feed = out.putArray("recent");
+		synchronized (recent) {
+			recent.forEach(feed::add);
+		}
+		return out;
+	}
+
+	/// `warning` for a problem raised as one ([Problems#warn]), else `problem`:
+	/// the kind a notification goes out as, so each can be chosen apart.
+	static String notifyKind(ObjectNode data) {
+		return Problems.WARNING.equals(data.path("kind").asText(null)) ? "warning" : "problem";
+	}
+
+	private static String problemKey(ObjectNode data, String node) {
+		return data.path("application").asText("") + "|" + data.path("key").asText() + "|" + node;
+	}
+
+	private static ObjectNode stamped(CloudEvent event, ObjectNode data) {
+		ObjectNode copy = data.deepCopy();
+		copy.put("time", event.getTime());
+		return copy;
+	}
+
+	private static ArrayNode array(Map<String, ObjectNode> state) {
+		ArrayNode out = MAPPER.createArrayNode();
+		state.values().forEach(out::add);
+		return out;
+	}
+}

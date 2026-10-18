@@ -27,6 +27,150 @@ router) is listed at the end. See [UPGRADING.md](UPGRADING.md).
 - **`update.sh` is now `patch.sh`** (and `UPDATING.md` is `PATCHING.md`): it patches the
   OCCAS binaries, and "update" beside "upgrade" said the same thing twice.
 
+### Telling one 503 from another
+
+A 503 now says why, as far as BLADE can know:
+- **The options app's "Busy" names the queue and how full it is,** `503 Busy (transport 86%)`, and
+  the app publishes both SIP work-manager queues as a `SipQueues` MBean.
+- **The dashboard's Servers panel has a queue column:** the fuller queue's share of the depth at
+  which OCCAS answers every request 503 itself, marked busy at the options app's line and full at
+  100%. A server whose queue is full is down on the Traffic map, with the reason.
+- **Requests OCCAS refused itself are counted.** The column also reads the SIP transport's own
+  `MessagesRejected`; when it rises between reads it shows "N refused", because the queue was
+  full a moment ago even if it has drained since.
+- **Refusals keep the reason phrase the server wrote.** The map's "server failures" and the
+  refusals no site claims show `503 server unavailable "Server Busy"`, not only the dashboard's
+  own meaning of the code.
+
+### Engines refuse new calls before the SIP queue fills
+
+When a SIP queue fills, OCCAS refuses every request, including the BYEs that would drain it. The
+options service now refuses new calls first, through OCCAS overload protection, while calls
+already up carry on:
+- **One number decides: how slow the engine may get.** The container times every SIP message from
+  socket to finish, queue wait included. When 90% of the last second's took `refuseMillis` (100 ms)
+  or more, the engine refuses new calls, and takes them again below half of it. Nothing to tune to
+  the hardware, since a faster engine works the same queue off sooner. It lives in `options.json`
+  under `overload` and changes in the Configurator without a restart.
+- **Pings turn load balancers away first.** At half of `refuseMillis` the options ping answers
+  `503 Busy (latency 60 ms)`, so a pinging load balancer moves new calls elsewhere and OCCAS never
+  has to refuse an INVITE. That needs a ping interval of seconds, not proxy-balancer's default 60.
+- **`blade-overload.jar` hands the verdict to OCCAS.** It goes in `<domain>/lib`
+  (`./deploy.sh <env> blade-overload.jar --domain-lib`), and `./install.sh <env> overload` names
+  its collector in `sipserver.xml`; a new domain gets that part already. A verdict lasts seconds
+  unless renewed, so a stopped options service never leaves an engine refusing.
+- **Warnings before the queue fills.** Garbage collection over a quarter of the time, an old
+  generation still full after collection, and call-state lock failures raise warnings. They never
+  refuse a call.
+- **The dashboard shows each change.** A refusal is a problem and a cause a warning under Issues,
+  both stored by analytics with the other operations events; the Servers panel reads `refusing`,
+  and an engine over the line without the JAR or the `sipserver.xml` part says so.
+- **Framework: `Problems.warn`** raises a warning the way `Problems.raise` raises a problem.
+
+### proxy-balancer retries only what another endpoint could fix
+
+- **`health.failoverOn`** (default 408, 502, 503, 504) decides which INVITE responses move a call
+  to the tier's next endpoint and then the next tier. A 404, 486, 500 or a challenge goes straight
+  back to the caller instead of being asked of every endpoint in turn. The hunt inside a tier used
+  to move on for any 4xx or worse.
+- **`health.markDownOn`** (default 503, 408) decides which take the endpoint out of service. A 408
+  counts only when nothing came back and the container made it, so a dead endpoint is out after
+  its first silent call instead of at the next ping, while one that answered 408 stays in.
+- **Parallel tiers race properly.** A 2xx that arrives after the winner (two branches answering
+  together, or one answering as our CANCEL reached it) is ACKed and ended with a BYE instead of
+  leaving that callee on a silent call. A 6xx ends the race. When every branch fails, a definite
+  failure answers over a retryable one, instead of whichever arrived last. Only the first branch's
+  early-media SDP reaches the caller. A cancelled branch's 487 no longer counts as a failed attempt.
+- **A 503 goes upstream as a 500,** without the endpoint's Retry-After, and nothing routable is a
+  500, so the caller's load balancer does not back off a healthy engine for a route's refusal.
+- **Framework:** the v3 `Callflow.sendRequestsInSerial` takes an `Advance` rule for which final
+  responses move the hunt on, and the new v3 `sendRequestsInParallel` race takes one for which
+  failures are retryable; the v2 versions are unchanged.
+
+### A second callee answering is ended, not left hanging
+
+When a forking proxy downstream (a carrier, an SBC, or a passthru parallel tier) sends one INVITE to
+several callees, every B2BUA application now handles the early dialogs it gets back. Each one
+reports to the callflow; the first 2xx is the call, and any later 2xx is acknowledged and ended with
+a BYE (RFC 3261 section 13.2.2.4). Before, the second early dialog took over the INVITE's callback
+and the first was discarded, so a callee answering on it was never acknowledged and kept resending
+its 200, while the application logged two NullPointerExceptions. Proven on the rig with two callees
+answering at once. Applications get it when rebuilt.
+
+### Passthru really leaves the call: it is a proxy now
+
+`session.passthru` used to keep the application as a B2BUA and copy each end's Contact onto the
+other. It never worked: the servlet API refuses both Contacts, and the container puts its own host
+and port on every 2xx a dialog's end sends, so the caller's ACK and BYE always came back to an
+application that had already let go, and the far leg hung until its no-ACK timer. Now, for an
+initial INVITE, the v3 `sendRequest`, `sendRequestsInSerial` and `sendRequestsInParallel` proxy the
+caller's INVITE without Record-Route, one branch per request, and the container does the forking.
+Proven on the rig: the ACK and BYE go caller to callee directly, through a serial hunt, a definite
+failure that stops it, a next tier, a parallel race, a caller's CANCEL, and between two B2BUA
+applications.
+
+- **The callbacks are the same.** The per-branch observer sees every response, the completion
+  callback gets the 2xx or the failure the caller would get, and a next tier started from inside
+  it joins the same proxy before the caller hears anything.
+- **The container answers the caller,** so a callflow checks `isPassthru()` before relaying or
+  answering itself: a response the application makes for a proxied request joins the proxy as a
+  branch of its own. `proxy-balancer` does.
+- **Proxy rules apply to a parallel tier:** every 2xx is forwarded and the caller ends the extra
+  one, and every branch's early media reaches the caller. A 503 still reaches the caller as a 500:
+  the container converts it, as RFC 3261 section 16.7 asks of a proxy.
+- **The baseline fan-out signatures take the same path.** A v3 callflow calling the four-argument
+  `sendRequestsInSerial` or `sendRequestsInParallel` proxies too under passthru; without passthru
+  they behave exactly as before. `proxy-registrar`, whose sample turns passthru on, now checks
+  `isPassthru()` like `proxy-balancer`, and leaves the call after forking to the registered
+  contacts.
+- **Each parallel batch gets its own timeout.** The container times a parallel proxy once, as a
+  whole, so a second batch would have had only what the first left. BLADE times each batch and
+  cancels only its branches; a next tier then starts at once, while they finish.
+
+### The balancer's health page is retired; the dashboard shows it
+
+`proto/balancer` (`blade-balancer.war`, `/blade/balancer`) moved to `retired/`. `proxy-balancer`
+now keeps the 503 an endpoint answered, reason phrase and all (`refused` in its health MBean),
+instead of folding it into a plain down. It was never a
+balancer: it showed `proxy-balancer`'s `EndpointHealth` MBeans, which the dashboard already reads
+for its Traffic map. What the dashboard lacked it now has: an endpoint that answered 503 is a
+warning that says so, with the reason phrase it gave ("refused: 503 Draining"), and how long until
+calls go back to it, not a failed ping; each endpoint carries the
+calls the engines offered it and how many failed over; and an endpoint no site claims is listed
+under the map instead of vanishing. Undeploy `blade-balancer` from a domain that has it.
+
+### The dashboard is an admin application
+
+`proto/dashboard` moved to `admin/dashboard` and into `blade-admin.ear`
+(`vorpal-blade-admin-dashboard`). The WAR, its context root `/blade/dashboard` and its target,
+the AdminServer, are unchanged; a domain that deploys it loose keeps deploying it loose, from
+`dist/admin/`.
+
+### Every table in the analytics database comes from upgrade.sh
+
+The call catalog's tables and the block list (`spam_numbers`, written by the agent console and
+read by proxy-block) used to be created by the applications themselves, or for the block list by
+hand from `proxy-block/sql/spam-numbers.sql`, now gone. They are now in the analytics schema and
+migrations `003-call-catalog` and `004-block-list`, for Oracle, MySQL and SQL Server. A database
+where the applications already made them is recognized and the migrations are recorded, not run.
+The applications only check the tables are there; the catalog still makes its optional full-text
+index. `SchemaUpgrade` takes `--module <dir>` for applications built outside BLADE, and
+`upgrade.sh` passes each directory named in the profile's `upgrade.sql.modules`.
+
+### The call catalog starts idle without an archive reader
+
+`blade-catalog.war` used to refuse to start when no recording archive reader was installed,
+which the public WAR never has; deployed in an EAR, that failed every application beside it.
+It now logs one warning, does not subscribe, and indexes nothing. It has a README.
+
+### A development domain on Windows, through WSL2
+
+`install.sh` runs unchanged in WSL2, which is Linux. `./install.sh <name> wsl` sets up the
+three things that differ: systemd on, mirrored networking so softphones on the PC and the LAN
+reach the engine at the PC's own address (WSL's NAT forwards no UDP), and Hyper-V firewall
+rules for SIP and the consoles. The scan and preflight warn about a checkout under `/mnt`,
+systemd off, NAT, and too little memory. See [INSTALLING.md](INSTALLING.md#windows-for-development).
+
 ### Oracle, MySQL and SQL Server, everywhere
 
 Every part of BLADE that keeps data in a database now runs on all three. Analytics and the

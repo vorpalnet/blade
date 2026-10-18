@@ -65,8 +65,9 @@ Deployed to the WebLogic AdminServer as skinny WARs that reference the `blade-sh
 
 | Module | Context Root | Description |
 | --- | --- | --- |
-| [Portal](admin/portal/README.md) | `/blade/portal` | Unified admin shell — a launcher deck built live from JMX; apps appear automatically |
-| [Redirect](admin/redirect/README.md) | `/` | 302s bare `/` and `/blade` to `/blade/portal/` |
+| [Dashboard](admin/dashboard/README.md) | `/blade/dashboard` | Cluster health, operations and call reports in one page; its rail lists every admin app and service |
+| [Portal](admin/portal/README.md) | `/blade/portal` | The login page, brand assets, editor kit and the card list the dashboard's rail reads; `/blade/portal/` forwards to the dashboard |
+| [Redirect](admin/redirect/README.md) | `/` | 302s bare `/` and `/blade` to the dashboard |
 | [Configurator](admin/configurator/README.md) | `/blade/configurator` | Configuration editor with JSON Schema forms, JMX-based schema discovery |
 | [Flow](admin/flow/README.md) | `/blade/flow` | Visual FSMAR callflow editor — design routing as state-machine diagrams |
 | [Tuning](admin/tuning/README.md) | `/blade/tuning` | JVM / SIP / OCCAS tuning over live JMX, with recommended presets and node drain/restart |
@@ -111,9 +112,8 @@ New apps start in `proto/`. They build with everything else and ship loose in `d
 | Module | Description |
 | --- | --- |
 | [ACL](proto/acl/README.md) | Allow or deny calls by remote IP address |
-| [Balancer](proto/balancer/README.md) | Load-balancer prototype |
+| [Catalog](proto/catalog/README.md) | Makes recorded calls searchable: an index of the recording archive, fed by the event bus |
 | [Demo](proto/demo/README.md) | Demo launcher and index of the BLADE demos |
-| [Dashboard](proto/dashboard/README.md) | Cluster health, operations and call reports in one page |
 | [Player](proto/player/README.md) | Vendor-neutral JSR-309 media player/recorder |
 | [Security](proto/security/README.md) | Admin-tier authentication configuration (JWT SSO) |
 | [Test Console](proto/test-console/README.md) | Cluster-wide control surface for the test apps |
@@ -151,7 +151,7 @@ libs/           Libraries
   shared/         blade-shared WebLogic shared library (3rd-party JARs only)
   fsmar/          Finite State Machine Application Router (fat JAR → approuter/)
 admin/          Admin tools (deployed to AdminServer)
-  portal/  redirect/  configurator/  flow/  crud-editor/  files/  tuning/
+  dashboard/  portal/  redirect/  configurator/  flow/  crud-editor/  files/  tuning/
   logs/  metrics/  api/  callflow/  phone/  analytics-console/
   events-console/  javadoc/
 services/       Services (one WAR each, deployed to the cluster)

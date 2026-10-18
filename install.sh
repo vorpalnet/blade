@@ -60,6 +60,8 @@
 #                                   add --purge to also remove product/dirs/user
 #   ./install.sh <name> status      one-shot health snapshot of the profile
 #   ./install.sh <name> backup      snapshot profile + domain config to a tgz
+#   ./install.sh <name> wsl         Windows: set up WSL2 (systemd, mirrored network, firewall)
+#   ./install.sh <name> overload    wire OCCAS overload protection to the options service's verdict
 #   flags: -y/--yes (assume yes)  -n/--dry-run  --no-backup  --purge
 #   ./install.sh -v | --version     print the BLADE version
 #   ./install.sh -h
@@ -368,6 +370,144 @@ ensure_gitignore() {
 # ============================================================================
 
 # What I found on this machine — the pre-interview environment scan.
+# ----- Windows: a development domain under WSL2 ------------------------------
+# WSL2 is a real Linux kernel in a VM, so everything here runs there unchanged.
+# Three things differ from a Linux host, and do_wsl sets each up:
+#   - systemd is off unless /etc/wsl.conf turns it on; the boot services need it.
+#   - the VM sits behind NAT by default, so a softphone elsewhere on the LAN
+#     cannot reach the engine, and the address the engine advertises is one only
+#     this PC can reach. Mirrored networking gives Linux the PC's own addresses.
+#   - mirrored traffic in from the LAN passes the Hyper-V firewall, which refuses
+#     it until a rule lets it in.
+# The NAT alternative, `netsh interface portproxy`, forwards TCP only; SIP over
+# UDP cannot go through it.
+WSL_VM_CREATOR='{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}'   # the WSL VM, for Hyper-V firewall rules
+
+is_wsl() { [ -n "${WSL_DISTRO_NAME:-}" ] || grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null; }
+
+# nat | mirrored | (empty when this WSL cannot say)
+wsl_netmode() { command -v wslinfo >/dev/null 2>&1 && wslinfo --networking-mode 2>/dev/null | tr -d '\r' || true; }
+
+# The Windows profile directory (%UserProfile%), as a Linux path.
+wsl_winhome() {
+    local w
+    w="$(cd /mnt/c 2>/dev/null && cmd.exe /c 'echo %UserProfile%' 2>/dev/null | tr -d '\r')"
+    [ -n "$w" ] && wslpath "$w"
+}
+
+# Set key=value in [section] of an INI file, keeping everything else.
+ini_set() {  # $1=file $2=section $3=key $4=value
+    local tmp; tmp="$(mktemp)"
+    { [ -f "$1" ] && tr -d '\r' < "$1"; true; } | awk -v sec="[$2]" -v key="$3" -v val="$4" '
+        function put() { if (!done) { print key "=" val; done = 1 } }
+        /^[[:space:]]*\[/ { if (insec) put(); insec = ($0 == sec); seen = seen || insec; print; next }
+        insec && $0 ~ "^[[:space:]]*" key "[[:space:]]*=" { put(); next }
+        { print }
+        END { if (insec) put(); if (!seen) { print ""; print sec; print key "=" val } }
+    ' > "$tmp"
+    cat "$tmp"; rm -f "$tmp"
+}
+
+# Warnings for a WSL host, at the scan and in preflight. Never fatal.
+wsl_check() {
+    is_wsl || return 0
+    local mode; mode="$(wsl_netmode)"
+    log "  ${C_BOLD}Windows (WSL2):${C_RESET} networking ${mode:-unknown}"
+    case "$SCRIPT_DIR" in
+        /mnt/*) warn "this checkout is on the Windows drive (${SCRIPT_DIR}): builds are slow there and permissions are lost. Clone it under ~ instead." ;;
+    esac
+    [ "$(ps -p 1 -o comm= 2>/dev/null)" = systemd ] \
+        || warn "systemd is off, so the boot services cannot be installed. Run: ./install.sh ${NAME:-<name>} wsl"
+    [ "$mode" = mirrored ] \
+        || warn "WSL is behind NAT: only this PC can reach SIP, and softphones on the LAN cannot. Run: ./install.sh ${NAME:-<name>} wsl"
+    local mem; mem="$(awk '/^MemTotal/ {print int($2/1048576)}' /proc/meminfo 2>/dev/null)"
+    [ -n "$mem" ] && [ "$mem" -lt 10 ] \
+        && warn "WSL has ${mem} GB; an AdminServer and an engine want about 10. Raise memory= in %UserProfile%\\.wslconfig."
+    return 0
+}
+
+# ./install.sh <name> wsl: set up this WSL2 instance for a development domain.
+do_wsl() {
+    is_wsl || die "this is not WSL; the wsl step is for a Windows PC."
+    local winhome cfg changed=0
+    winhome="$(wsl_winhome)" || true
+    [ -n "$winhome" ] && [ -d "$winhome" ] || die "cannot find the Windows profile directory (is Windows interop on?)."
+    info "Windows (WSL2) set-up"
+
+    # 1. systemd, for the Node Manager and AdminServer boot services.
+    if grep -qiE '^[[:space:]]*systemd[[:space:]]*=[[:space:]]*true' /etc/wsl.conf 2>/dev/null; then
+        ok "systemd is on in /etc/wsl.conf."
+    elif yesno "Turn on systemd in /etc/wsl.conf?" Y; then
+        if [ "$DRY" = on ]; then log "${C_DIM}  [dry-run] /etc/wsl.conf [boot] systemd=true${C_RESET}"
+        else ini_set /etc/wsl.conf boot systemd true | sudo tee /etc/wsl.conf.blade >/dev/null \
+                && sudo mv /etc/wsl.conf.blade /etc/wsl.conf && ok "systemd turned on." && changed=1
+        fi
+    fi
+
+    # 2. Mirrored networking: Linux gets the PC's own addresses, so SIP from the
+    #    LAN reaches the engine and the engine advertises an address the LAN can
+    #    reach. hostAddressLoopback lets a softphone on this PC call it at that
+    #    same address.
+    cfg="${winhome}/.wslconfig"
+    if grep -qi '^[[:space:]]*networkingMode[[:space:]]*=[[:space:]]*mirrored' "$cfg" 2>/dev/null \
+            && grep -qi '^[[:space:]]*hostAddressLoopback[[:space:]]*=[[:space:]]*true' "$cfg" 2>/dev/null; then
+        ok "networking is mirrored."
+    else
+        help <<'TXT'
+Mirrored networking needs Windows 11 22H2 or later. It replaces WSL's NAT for
+every distribution on this PC; a .wslconfig.blade-bak copy is kept beside it.
+TXT
+        if yesno "Set networkingMode=mirrored in ${cfg}?" Y; then
+            if [ "$DRY" = on ]; then log "${C_DIM}  [dry-run] ${cfg}: networkingMode=mirrored, hostAddressLoopback=true${C_RESET}"
+            else
+                [ -f "$cfg" ] && cp "$cfg" "${cfg}.blade-bak"
+                local t; t="$(ini_set "$cfg" wsl2 networkingMode mirrored)"; printf '%s\n' "$t" > "$cfg"
+                t="$(ini_set "$cfg" experimental hostAddressLoopback true)"; printf '%s\n' "$t" > "$cfg"
+                ok "wrote ${cfg}."; changed=1
+            fi
+        fi
+    fi
+
+    # 3. The Hyper-V firewall: let SIP and the consoles in from the LAN. The
+    #    rules are written as a script in the Windows profile and run elevated,
+    #    so Windows asks for consent (UAC); run it again any time.
+    local ps1="${winhome}/blade-wsl-firewall.ps1" sipu="${SIP_PLAIN_PORT:-5060}"
+    local tcp="${sipu},${SIP_PORT:-5061},${ENGINE_HTTP_PORT:-8001},7001,${SSL_PORT:-7002}"
+    {
+        echo "# Written by BLADE install.sh: lets SIP and the consoles reach WSL from the LAN."
+        echo "\$vm = '${WSL_VM_CREATOR}'"
+        echo "Remove-NetFirewallHyperVRule -Name BLADE-SIP-UDP,BLADE-TCP -ErrorAction SilentlyContinue"
+        echo "New-NetFirewallHyperVRule -Name BLADE-SIP-UDP -DisplayName 'BLADE SIP (UDP)' -Direction Inbound -VMCreatorId \$vm -Protocol UDP -LocalPorts ${sipu}"
+        echo "New-NetFirewallHyperVRule -Name BLADE-TCP -DisplayName 'BLADE SIP and consoles (TCP)' -Direction Inbound -VMCreatorId \$vm -Protocol TCP -LocalPorts ${tcp}"
+    } > "${ps1}.new"
+    if [ "$DRY" = on ]; then
+        log "${C_DIM}  [dry-run] Hyper-V firewall: UDP ${sipu}, TCP ${tcp}${C_RESET}"; rm -f "${ps1}.new"
+    elif yesno "Open UDP ${sipu} and TCP ${tcp} to WSL in the Windows firewall (asks Windows for consent)?" Y; then
+        mv "${ps1}.new" "$ps1"
+        local wps; wps="$(wslpath -w "$ps1")"
+        if (cd /mnt/c && powershell.exe -NoProfile -Command \
+                "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','\"${wps}\"'") ; then
+            ok "firewall rules written (${wps})."
+        else
+            warn "the firewall rules were not applied. Run ${wps} in an administrator PowerShell."
+        fi
+    else
+        rm -f "${ps1}.new"
+    fi
+    help <<'TXT'
+RTP is not in these rules: media flows between the phones and the media server,
+not through the engine. A media server inside WSL needs its own UDP range opened.
+TXT
+
+    if [ "$changed" = 1 ]; then
+        log ""
+        warn "WSL must restart for this to take effect: in PowerShell, run  wsl --shutdown"
+        log  "  then open a new WSL terminal and run ./install.sh ${NAME} again."
+        log  "  Use this PC's LAN address (ip -4 addr) for the engine, not 127.0.0.1;"
+        log  "  a softphone, here or on the LAN, registers to that address."
+    fi
+}
+
 env_scan() {
     local _os _envmw="${MW_HOME:-}" _jd
     _os="$(uname -s)"
@@ -384,6 +524,7 @@ env_scan() {
     fi
     _jd="$(jdk_describe "")" || true
     printf '  %-9s %s\n' "JDK:" "$_jd"
+    wsl_check
     log ""
     return 0
 }
@@ -5017,6 +5158,96 @@ enable_custom_approuter() {
         || warn "could not enable the FSMAR App Router in sipserver.xml."
 }
 
+# Point OCCAS overload protection at BLADE's verdict. The options service decides
+# when an engine refuses new calls (options.json "overload": refuseMillis and the
+# warnings, live-editable); blade-overload.jar in <domain>/lib
+# hands that verdict to the container as a statistics collector, and this block
+# wires it: one collector, one threshold at 0.5, reject-traffic going up and
+# accept-traffic coming down through the container's own ControlTrafficHandler.
+# Nothing here is ever tuned. Only an EMPTY <overload-protection> is filled (the
+# Config Wizard writes it empty); one an operator configured is left alone and
+# the block is printed to merge by hand. Takes effect when the AdminServer and
+# then the engines restart, and only on servers whose <domain>/lib holds
+# blade-overload.jar (./deploy.sh <env> blade-overload.jar --domain-lib).
+OVERLOAD_COLLECTOR="org.vorpal.blade.overload.OverloadCollector"
+OLP_TRAFFIC_HANDLER="com.bea.wcp.sip.engine.server.olp.handler.ControlTrafficHandler"
+overload_protection_block() {
+    cat <<XML
+<overload-protection>
+    <event-handlers>
+      <event-handler>
+        <event-handler-name>${OLP_TRAFFIC_HANDLER}</event-handler-name>
+      </event-handler>
+    </event-handlers>
+    <actions>
+      <action>
+        <action-name>blade-refuse</action-name>
+        <event-handler>${OLP_TRAFFIC_HANDLER}</event-handler>
+        <action-type>reject-traffic</action-type>
+      </action>
+      <action>
+        <action-name>blade-accept</action-name>
+        <event-handler>${OLP_TRAFFIC_HANDLER}</event-handler>
+        <action-type>accept-traffic</action-type>
+      </action>
+    </actions>
+    <collectors>
+      <collector>
+        <collector-name>blade-overload</collector-name>
+        <collector-type>${OVERLOAD_COLLECTOR}</collector-type>
+      </collector>
+    </collectors>
+    <thresholds>
+      <threshold>
+        <threshold-name>blade-overload</threshold-name>
+        <threshold-value>0.5</threshold-value>
+        <up-actions>blade-refuse</up-actions>
+        <down-actions>blade-accept</down-actions>
+        <sampling-mode>real-time</sampling-mode>
+        <algorithm-name>value</algorithm-name>
+        <collector>blade-overload</collector>
+        <enabled>true</enabled>
+      </threshold>
+    </thresholds>
+  </overload-protection>
+XML
+}
+enable_overload_protection() {
+    local sipxml="${DOMAINS_DIR}/${DOMAIN}/config/custom/sipserver.xml" block
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] fill <overload-protection> in ${sipxml} with:${C_RESET}"
+        overload_protection_block | sed 's/^/    /'
+        return 0
+    fi
+    as_install_user test -f "$sipxml" || { warn "sipserver.xml not found: overload protection not configured."; return 0; }
+    if as_install_user grep -q "$OVERLOAD_COLLECTOR" "$sipxml"; then
+        ok "Overload protection already names the BLADE collector"; return 0
+    fi
+    block="$(overload_protection_block)"
+    if as_install_user perl -0777 -ne 'exit((m{<overload-protection>\s*</overload-protection>|<overload-protection\s*/>}s) ? 0 : 1)' "$sipxml"; then
+        as_install_user env BLOCK="$block" perl -0777 -i -pe \
+            's{<overload-protection>\s*</overload-protection>|<overload-protection\s*/>}{$ENV{BLOCK}}s' "$sipxml" \
+            && ok "Overload protection: the container refuses new calls on the options service's verdict (restart the AdminServer, then the engines)" \
+            || warn "could not write overload protection into sipserver.xml."
+    else
+        warn "sipserver.xml already configures overload protection (or has no <overload-protection>); left alone."
+        warn "Merge this into its <overload-protection> by hand, or in the Remote Console:"
+        printf '%s\n' "$block" | sed 's/^/    /'
+    fi
+}
+
+# The 'overload' command: wire overload protection into an existing domain.
+do_overload() {
+    info "Overload protection for domain '${DOMAIN}'"
+    enable_overload_protection
+    help <<'TXT'
+Each server reads it at start, and refuses early only where <domain>/lib holds
+blade-overload.jar:  ./deploy.sh <env> blade-overload.jar --domain-lib  on the
+admin host, then copy it to each engine host's <domain>/lib (provisioning does).
+The lines themselves are options.json "overload", edited in the Configurator.
+TXT
+}
+
 # ----------------------------------------------------------------------------
 # Step 2 — dynamic-cluster domain from Oracle's template, parameterized.
 # Writes with OverwriteDomain=true (the template's default) — clobbers an
@@ -5208,6 +5439,9 @@ Machine${idx}NodemanagerNMType=${type}"
     write_user_overrides "${DOMAINS_DIR}/${domain}"
     # Route through the FSMAR out of the box — it is BLADE's App Router.
     enable_custom_approuter
+    # Refuse new calls early on the options service's verdict (needs
+    # blade-overload.jar in <domain>/lib to act; harmless without it).
+    enable_overload_protection
     # Enroll the new app domain into the standalone Node Manager so it can start
     # the AdminServer/engines. No-op-with-hint if the NM domain isn't built yet.
     register_domain_with_nm "$domain" "${DOMAINS_DIR}/${domain}" || true
@@ -5231,6 +5465,7 @@ do_preflight() {
     info "Preflight — host prerequisites (install user, group, dirs, Java)"
     log  "  MW_HOME: ${mwhome}    inventory: ${inv_loc}    group: ${inv_grp}"
     log ""
+    wsl_check
 
     # JDK — the silent installer runs `java -jar` and needs a full JDK (not a
     # JRE), version-matched to the OCCAS release. Prefer the profile's java.home.
@@ -6594,8 +6829,10 @@ else
         provision) _need_profile; load_profile; do_provision_engines; exit $? ;;
         jms)        _need_profile; load_profile; do_jms; exit $? ;;
         datasource) _need_profile; load_profile; do_dbc; exit $? ;;
+        wsl)        [ -f "$OCCAS_CONF" ] && load_profile; do_wsl; exit $? ;;
+        overload)   _need_profile; load_profile; do_overload; exit $? ;;
         ""|menu|dashboard) : ;;
-        *) die "unknown command '${JUMP}' — try: wizard, preflight, install, uninstall, status, backup, configure, provision, jms, datasource" ;;
+        *) die "unknown command '${JUMP}' — try: wizard, preflight, install, uninstall, status, backup, configure, provision, jms, datasource, wsl, overload" ;;
     esac
     dashboard
 fi

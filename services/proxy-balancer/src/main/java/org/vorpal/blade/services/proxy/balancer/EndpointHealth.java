@@ -65,6 +65,13 @@ public class EndpointHealth implements Serializable {
 	/// "503 Retry-After 120".
 	private volatile String note = "unchecked";
 
+	/// The refusal behind the current down state, "503 Draining" or "503 Busy":
+	/// the endpoint answered and asked not to be sent calls, which is not the
+	/// same as not answering. The reason phrase is kept because it names the
+	/// cause where the server sets one (BLADE's options app answers "Starting",
+	/// "Draining" or "Busy"). Null when the endpoint is up or simply silent.
+	private volatile String refused;
+
 	/// Most recent measured OPTIONS round-trip in millis, -1 before any.
 	private volatile int lastRttMs = -1;
 
@@ -97,6 +104,7 @@ public class EndpointHealth implements Serializable {
 		boolean changed = this.status != Status.up;
 		this.status = Status.up;
 		this.downUntil = null;
+		this.refused = null;
 		this.lastChecked = System.currentTimeMillis();
 		this.note = note;
 		if (rttMs >= 0) {
@@ -110,6 +118,22 @@ public class EndpointHealth implements Serializable {
 	///
 	/// @return true when this changed it from up
 	public boolean markDown(String note, Integer retryAfterSeconds, String source, int rttMs) {
+		this.refused = null;
+		return down(note, retryAfterSeconds, source, rttMs);
+	}
+
+	/// Record the endpoint down because it refused: it answered `status` (a
+	/// 503) with this reason phrase.
+	///
+	/// @return true when this changed it from up
+	public boolean markRefused(int status, String reason, Integer retryAfterSeconds, String source, int rttMs) {
+		this.refused = status + (reason == null || reason.isBlank() ? "" : " " + reason.trim());
+		String note = ("ping".equals(source) ? "OPTIONS " : "") + this.refused
+				+ (retryAfterSeconds != null && retryAfterSeconds > 0 ? " backoff " + retryAfterSeconds + "s" : "");
+		return down(note, retryAfterSeconds, source, rttMs);
+	}
+
+	private boolean down(String note, Integer retryAfterSeconds, String source, int rttMs) {
 		boolean changed = this.status != Status.down;
 		this.status = Status.down;
 		this.lastChecked = System.currentTimeMillis();
@@ -152,6 +176,10 @@ public class EndpointHealth implements Serializable {
 
 	public void recordFailover() {
 		failovers.incrementAndGet();
+	}
+
+	public String getRefused() {
+		return refused;
 	}
 
 	public Status getStatus() {

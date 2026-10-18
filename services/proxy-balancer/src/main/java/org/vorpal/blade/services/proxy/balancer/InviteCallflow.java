@@ -39,16 +39,16 @@ import org.vorpal.blade.services.proxy.balancer.config.Tier;
 /// `weighted` hunts in smooth weighted round-robin order (deterministic,
 /// same per-node counter).
 ///
-/// Failover is response-classified ([#shouldFailover]): route-level
-/// failures (408/timeout, 480, 404, 5xx, 3xx) escalate to the next tier;
-/// user-state and auth responses (486 busy, 401/407, 487 canceled, all 6xx
-/// — RFC 3261 §16.7 stops branching on a global failure) are relayed to the
-/// caller without touching a more expensive tier. Nothing routable answers
-/// 503.
+/// Failover is response-classified ([#shouldFailover], [FailoverPolicy]):
+/// the responses in `health.failoverOn` (default 408, 502, 503, 504) move the
+/// call to the tier's next endpoint, then to the next tier. Everything else,
+/// a 404, a 486, a challenge, a 6xx, goes straight back to the caller: every
+/// endpoint would answer it the same. Nothing routable answers 500, and a
+/// relayed 503 goes up as a 500 ([#upstreamStatus]).
 ///
 /// The per-dialog observer relays real 18x ringing upstream and passively marks
-/// endpoint health (2xx → up; 503 → down, honoring Retry-After, else the
-/// configured defaultBackoff). With `session:passthru` set, the winning dialog
+/// endpoint health (2xx up; `health.markDownOn`, default 503 and a 408 the
+/// container made because nothing came back, down). With `session:passthru` set, the winning dialog
 /// drops out of the dialog after setup.
 public class InviteCallflow extends Callflow implements Serializable {
 	private static final long serialVersionUID = 1L;
@@ -56,6 +56,10 @@ public class InviteCallflow extends Callflow implements Serializable {
 	/// Dialog-request attribute carrying the endpoint's registry NAME, so the
 	/// observer can mark health without reverse-mapping URIs.
 	static final String ENDPOINT_NAME_ATTR = "balancer.endpointName";
+
+	/// Caller-request attribute, suffixed with the tier index: the branch whose
+	/// early-media SDP the caller was given, in a parallel tier.
+	static final String EARLY_MEDIA_ATTR = "balancer.earlyMedia.";
 
 	/// Round-robin offsets, keyed by "planKey#tierIndex". Deliberately
 	/// per-node (static, per WAR classloader): every engine rotates
@@ -84,8 +88,11 @@ public class InviteCallflow extends Callflow implements Serializable {
 
 		// Ring the caller immediately; real 18x from the dialogs is also relayed
 		// (via the per-dialog observer), but until a dialog responds the caller's UA
-		// generates local ringback from this one.
-		sendResponse(aliceRequest.createResponse(180));
+		// generates local ringback from this one. Not under passthru: the call
+		// goes out as a proxy, and a proxy's caller hears only the callees.
+		if (!isPassthru()) {
+			sendResponse(aliceRequest.createResponse(180));
+		}
 
 		forwardTier(aliceRequest, new LinkedList<>(plan), planKey, 0); // copy; tiers are consumed
 	}
@@ -130,25 +137,72 @@ public class InviteCallflow extends Callflow implements Serializable {
 			if (!plan.isEmpty()) {
 				forwardTier(aliceRequest, plan, planKey, tierIndex + 1);
 			} else {
+				// 500, not 503: the routes are down, not this engine (see #upstreamStatus)
 				BalancerEvents.declined(aliceRequest, 503, tierIndex);
-				sendResponse(aliceRequest.createResponse(503));
+				if (!proxied(aliceRequest)) {
+					sendResponse(aliceRequest.createResponse(500));
+				} // else the proxy answers with the last tier's failure
 			}
 			return;
 		}
 
 		// Every response from every dialog: passive health marking, and relay of
 		// real ringing (180/183) upstream. 100 Trying is hop-by-hop.
+		//
+		// A parallel tier has one caller dialog and several branches, and a
+		// caller takes one early-media answer per early dialog: a second 183
+		// with different SDP, and a 200 with a third, leave many phones and SBCs
+		// playing the first and ignoring the rest. So only the first branch to
+		// offer early media gets its SDP relayed; the others' provisionals go up
+		// without a body (the caller still learns they are ringing). If that
+		// branch fails, the next one to offer SDP takes its place.
+		boolean parallel = tier.getStrategy() == Tier.Strategy.parallel;
+		String earlyMedia = EARLY_MEDIA_ATTR + tierIndex;
 		Callback<SipServletResponse> dialogObserver = (dialogResponse) -> {
 			trackHealth(dialogResponse);
+			if (isPassthru()) {
+				return; // the proxy relays every branch's ringing itself
+			}
 			int status = dialogResponse.getStatus();
+			String branch = dialogResponse.getSession().getId();
+			if (status >= 300 && branch.equals(aliceRequest.getAttribute(earlyMedia))) {
+				aliceRequest.removeAttribute(earlyMedia);
+			}
 			if (status > 100 && status < 200 && !aliceRequest.isCommitted()) {
 				SipServletResponse aliceRinging = aliceRequest.createResponse(status);
-				copyContentAndHeaders(dialogResponse, aliceRinging);
+				boolean relaySdp = true;
+				if (parallel && dialogResponse.getContentLength() > 0) {
+					Object owner = aliceRequest.getAttribute(earlyMedia);
+					if (owner == null) {
+						aliceRequest.setAttribute(earlyMedia, branch);
+					} else {
+						relaySdp = branch.equals(owner);
+					}
+				}
+				if (relaySdp) {
+					copyContentAndHeaders(dialogResponse, aliceRinging);
+				} else {
+					copyHeaders(dialogResponse, aliceRinging);
+				}
 				sendResponse(aliceRinging);
 			}
 		};
 
 		Callback<SipServletResponse> tierComplete = (bobResponse) -> {
+
+			// Passthru: the container answers the caller with what the proxy
+			// got. Ours are the next tier and the record; a caller's CANCEL
+			// arrives here as a 487, which never fails over.
+			if (isPassthru()) {
+				if (!successful(bobResponse) && !plan.isEmpty() && shouldFailover(bobResponse)) {
+					forwardTier(aliceRequest, plan, planKey, tierIndex + 1);
+				} else if (successful(bobResponse)) {
+					BalancerEvents.routed(aliceRequest, bobResponse, tier.getName(), tierIndex);
+				} else {
+					BalancerEvents.declined(aliceRequest, bobResponse.getStatus(), tierIndex);
+				}
+				return;
+			}
 
 			// The isCommitted() guard matters: a caller who CANCELed has
 			// already been answered 487 by Terminate — the losing dialog's 487
@@ -166,8 +220,14 @@ public class InviteCallflow extends Callflow implements Serializable {
 
 			if (!aliceRequest.isCommitted()) {
 
-				SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
+				int status = bobResponse.getStatus();
+				SipServletResponse aliceResponse = aliceRequest
+						.createResponse(successful(bobResponse) ? status : upstreamStatus(status));
 				copyContentAndHeaders(bobResponse, aliceResponse); // links alice to the winning dialog
+				if (status == 503) {
+					// the endpoint's backoff is for its own callers, not ours
+					aliceResponse.removeHeader("Retry-After");
+				}
 
 				if (successful(bobResponse)) {
 					BalancerEvents.routed(aliceRequest, bobResponse, tier.getName(), tierIndex);
@@ -187,12 +247,26 @@ public class InviteCallflow extends Callflow implements Serializable {
 		long timeoutMillis = ((timeout != null && timeout > 0) ? timeout : 180) * 1000L;
 
 		if (tier.getStrategy() == Tier.Strategy.parallel) {
-			sendRequestsInParallel(timeoutMillis, bobRequests, tierComplete, dialogObserver);
+			// the v3 race: first 2xx wins, a late 2xx is ended, a 6xx stops it,
+			// and a definite failure outranks one failoverOn would retry
+			sendRequestsInParallel(timeoutMillis, bobRequests, tierComplete, dialogObserver,
+					InviteCallflow::shouldFailover);
 		} else {
-			// all hunt strategies: the ordering above IS the strategy
-			sendRequestsInSerial(timeoutMillis, bobRequests, tierComplete, dialogObserver);
+			// all hunt strategies: the ordering above IS the strategy, and the
+			// same failoverOn list decides whether the hunt moves on
+			sendRequestsInSerial(timeoutMillis, bobRequests, tierComplete, dialogObserver,
+					InviteCallflow::shouldFailover);
 		}
 
+	}
+
+	/// Has the caller's INVITE already gone out as a passthru proxy?
+	private static boolean proxied(SipServletRequest aliceRequest) {
+		try {
+			return aliceRequest.getProxy(false) != null;
+		} catch (Exception e) {
+			return false;
+		}
 	}
 
 	/// The tier's endpoints this node will offer the call: resolved through
@@ -308,34 +382,31 @@ public class InviteCallflow extends Callflow implements Serializable {
 		return (weight != null && weight > 0) ? weight : 1;
 	}
 
-	/// Should this tier-final response escalate to the next (possibly more
-	/// expensive) tier? Route-level failures do. User-state and auth
-	/// responses do not: 486 is the called party busy, not a broken route;
-	/// 401/407 must reach the caller for auth to complete; 487 means the
-	/// caller canceled; and 6xx is a global failure — RFC 3261 §16.7 stops
-	/// trying other branches on 6xx.
+	/// The status the caller gets for an endpoint's failure: a 503 becomes a
+	/// 500. A 503 from this engine tells the caller's load balancer that this
+	/// engine is overloaded, and it backs off the engine, when it was one
+	/// endpoint, or every route, that refused. RFC 3261 §16.7 asks the same of
+	/// a proxy that forwards a 503 upstream.
+	static int upstreamStatus(int status) {
+		return status == 503 ? 500 : status;
+	}
+
+	/// Should this final response try the next endpoint or tier? The
+	/// balancer's `health.failoverOn` list decides; see [FailoverPolicy].
 	private static boolean shouldFailover(SipServletResponse response) {
-		int status = response.getStatus();
-		if (status >= 600) {
-			return false;
-		}
-		switch (status) {
-		case 401:
-		case 407:
-		case 486:
-		case 487:
-			return false;
-		default:
-			// 3xx, 404, 408, 480, 5xx, ... — try the next tier
-			return true;
-		}
+		BalancerConfig config = ProxyBalancerServlet.settingsManager.getCurrent();
+		return FailoverPolicy.failover(response.getStatus(), config != null ? config.getHealth() : null);
 	}
 
 	/// Passive health marking from a live dialog response: 2xx proves the
-	/// endpoint alive; 503 is the overload signal — Retry-After honored,
-	/// else the configured defaultBackoff. User responses (486 busy, 603
-	/// decline, other 4xx) say nothing about the endpoint and are ignored —
-	/// the OPTIONS ping cycle is the authoritative detector.
+	/// endpoint alive; a response in `health.markDownOn` takes it out of
+	/// service ([FailoverPolicy#markDown]). A 503 is a refusal, Retry-After
+	/// honored, else the configured defaultBackoff. A 408 counts only when the
+	/// container made it because nothing came back: such a response has no
+	/// sender address, while one that arrived from the endpoint names it. User
+	/// responses (486 busy, 603 decline, other 4xx) say nothing about the
+	/// endpoint and are ignored; the OPTIONS ping cycle is the authoritative
+	/// detector.
 	private void trackHealth(SipServletResponse dialogResponse) {
 		try {
 			String name = (String) dialogResponse.getRequest().getAttribute(ENDPOINT_NAME_ATTR);
@@ -353,7 +424,9 @@ public class InviteCallflow extends Callflow implements Serializable {
 			// traffic counters: every dialog-final response is one attempt on
 			// that endpoint (provisionals are not attempts); these power the
 			// dashboard's traffic-share bars and pulse animation
-			if (status >= 200) {
+			// A 487 is a branch we cancelled (it lost a race, or the caller
+			// hung up): not an attempt the endpoint failed.
+			if (status >= 200 && status != 487) {
 				health.recordAttempt();
 				if (successful(dialogResponse)) {
 					health.recordSuccess();
@@ -366,7 +439,8 @@ public class InviteCallflow extends Callflow implements Serializable {
 				if (health.markUp("INVITE " + status, "call", -1)) {
 					BalancerEvents.up(name, health);
 				}
-			} else if (status == 503) {
+			} else if (status >= 300
+					&& FailoverPolicy.markDown(status, dialogResponse.getRemoteAddr() != null, config.getHealth())) {
 				Integer backoff = null;
 				String header = dialogResponse.getHeader("Retry-After");
 				if (header != null) {
@@ -380,7 +454,11 @@ public class InviteCallflow extends Callflow implements Serializable {
 					Integer configured = config.getHealth().getDefaultBackoff();
 					backoff = (configured != null && configured > 0) ? configured : null;
 				}
-				if (health.markDown("503" + (backoff != null ? " backoff " + backoff + "s" : ""), backoff, "call", -1)) {
+				boolean changed = status == 503
+						? health.markRefused(status, dialogResponse.getReasonPhrase(), backoff, "call", -1)
+						: health.markDown("INVITE " + status + (dialogResponse.getRemoteAddr() == null ? ", no answer" : ""),
+								backoff, "call", -1);
+				if (changed) {
 					BalancerEvents.down(name, health, backoff);
 				}
 			}

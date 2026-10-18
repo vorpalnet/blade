@@ -296,7 +296,7 @@ class SchemaAgreementTest {
 	///
 	/// A type that genuinely is new fails [#parse]'s sanity check by making a
 	/// column disappear, which is the safe direction to fail in.
-	private static final String TYPES = "BIGINT|INT|INTEGER|SMALLINT|DECIMAL|NUMBER"
+	private static final String TYPES = "BIGINT|INT|INTEGER|SMALLINT|DECIMAL|NUMBER|DOUBLE"
 			+ "|VARCHAR|VARCHAR2|CHAR|TEXT|CLOB|JSON|DATETIME|TIMESTAMP|BLOB|DATE"
 			+ "|LONGVARCHAR|NVARCHAR|NCHAR|DATETIME2";
 

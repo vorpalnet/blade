@@ -133,4 +133,11 @@ class QueuePressureTest {
 		assertEquals(0, QueuePressure.readCapacity(mbs, "wlss.transport", 400));
 	}
 
+
+	@Test
+	void theBusyReasonNamesTheQueueWithoutItsPrefix() {
+		assertEquals("transport", QueuePressure.transport().label());
+		assertEquals("timer", QueuePressure.timer().label());
+		assertEquals(null, QueuePressure.busy(QueuePressure.DEFAULT_PERCENT), "no container, no queue, never busy");
+	}
 }

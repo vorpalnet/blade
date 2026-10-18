@@ -347,7 +347,7 @@
       <figcaption>${ani} is bound as a query parameter, never pasted into the SQL.</figcaption>
     </figure>
     <ul class="facts">
-      <li>The agent desktop inserts a row into <code>spam_numbers</code> with an expiry; <code>sql/spam-numbers.sql</code> creates the table.</li>
+      <li>The agent desktop inserts a row into <code>spam_numbers</code> with an expiry; <code>./upgrade.sh</code> creates the table, in the analytics database.</li>
       <li>A <code>jdbc</code> connector placed before the lists sets <code>${listed}</code>, so the allow list still wins.</li>
       <li>A circuit breaker skips the lookup for 30 seconds after a database failure, so an outage passes calls instead of holding each one.</li>
     </ul>

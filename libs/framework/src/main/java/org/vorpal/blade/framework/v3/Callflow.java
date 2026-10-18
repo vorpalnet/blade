@@ -7,7 +7,6 @@ import java.util.Collections;
 import java.util.List;
 
 import javax.servlet.ServletException;
-import javax.servlet.sip.Address;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
@@ -22,7 +21,6 @@ import org.vorpal.blade.framework.Callback;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
 import org.vorpal.blade.framework.v2.logging.Logger.Direction;
 import org.vorpal.blade.framework.sip.DetachedResponse;
-import org.vorpal.blade.framework.v3.configuration.routing.LooseRoutingHelper;
 import org.vorpal.blade.framework.v3.diagnostics.Diagnostics;
 import org.vorpal.blade.framework.v3.diagnostics.TraceLog;
 
@@ -53,24 +51,80 @@ import org.vorpal.blade.framework.v3.diagnostics.TraceLog;
 ///
 /// ## Passthru (proxy drop-out)
 ///
-/// When `session.passthru` is set (off by default), a forwarding callflow — an
-/// initial INVITE in, an initial INVITE out — behaves like a proxy that leaves
-/// the dialog after setup: the two endpoints' Contacts are stitched together and
-/// OCCAS is removed from the route set, so the ACK and every in-dialog message
-/// flow directly between caller and callee. The SAME callflow runs as a full
-/// B2BUA when passthru is false — the deciding vote is config, so an operator
-/// picks B2BUA vs. proxy per network. Deduced entirely from the initial INVITE
-/// (via [SipServletRequest#isInitial]); in-dialog sends are never touched.
+/// When `session.passthru` is set (off by default), a forwarding callflow's
+/// initial INVITE goes out as a **proxy** instead of a new dialog. The
+/// caller's INVITE is proxied, without Record-Route, to the Request-URIs of
+/// the requests the callflow built, so one dialog runs from caller to callee
+/// and the ACK, re-INVITEs and BYE never come back here. The SAME callflow
+/// runs as a full B2BUA when passthru is false: the deciding vote is config,
+/// so an operator picks B2BUA or proxy per network.
 ///
-/// Because no ACK or BYE ever reaches us after drop-out, OCCAS won't
-/// auto-invalidate — so we tear down both dialogs and the app session ourselves.
+/// **Why a proxy.** A B2BUA cannot leave a call. Its two legs are two dialogs
+/// with their own Call-IDs and tags, and the container writes its own host and
+/// port into the Contact of every 2xx a dialog's end sends, whatever the
+/// application set; the caller's ACK and BYE always come back. An earlier
+/// version copied each end's Contact onto the other and never worked (the
+/// servlet API refuses both Contacts). Only a proxy that does not
+/// record-route is out of the path by construction.
+///
+/// **Where it happens.** [#sendRequest], [#sendRequestsInSerial] and
+/// [#sendRequestsInParallel], in their v3 forms and the baseline signatures
+/// alike, hand an initial INVITE to [#proxyPassthru]; anything else is sent
+/// as before. The outbound requests are built exactly as for a B2BUA (that is
+/// what keeps one callflow for both modes); each becomes a proxy branch with
+/// its Request-URI and request attributes, and is never sent itself. Headers
+/// the callflow added to an outbound request do not travel: a proxy forwards
+/// the caller's INVITE. If the caller's INVITE cannot be found (the request is
+/// not linked to it), the requests go out as a B2BUA, logged.
+///
+/// **What the callbacks get.** The same as a B2BUA's, through the v3
+/// [AsyncSipServlet] response hook: the per-branch observer sees every
+/// response of every branch, provisional and final, once each; the
+/// completion callback gets the 2xx, or the failure the caller would get.
+///
+/// **What a callflow must not do.** Answer or relay to the caller while
+/// [#isPassthru]. The container forwards the callees' responses itself, and a
+/// response the application creates for a proxied request joins the proxy as
+/// a branch of its own; one it sends before proxying (an early 180) leaves the
+/// caller's session a user agent, which brings the Contact rewrite back.
+///
+/// **Serial, parallel, and tiers.** A serial hunt is a sequential proxy: each
+/// branch has `milliseconds`, any failure moves on, and a failure the
+/// `advance` rule does not accept cancels the rest, so the caller gets that
+/// failure. A parallel batch is a parallel proxy: the container cancels the
+/// other branches on a 2xx and picks the failure the caller gets when all fail
+/// (RFC 3261 section 16.7). A next batch (a next tier) started from inside the
+/// completion callback joins the same proxy before the caller hears the
+/// failure. It must start there, on that thread: once the callback returns
+/// with nothing new started, the failure goes to the caller and the proxy is
+/// finished. So a lookup that cannot finish inside the callback needs the
+/// B2BUA mode. Nothing can follow a 2xx, a 6xx or the caller's CANCEL. A
+/// proxy may try each destination once, so a later batch skips the ones an
+/// earlier batch tried; one left with nothing new fails at once with a 408.
+///
+/// **Timeouts.** The container times a parallel proxy once, as a whole, so a
+/// later batch would get only what the first left. Each parallel batch is
+/// timed here instead (see [#proxyPassthru]); when its time runs out its
+/// branches are cancelled and, unless a definite failure has come in, the
+/// completion callback gets a 408 at once, so a next batch can start while
+/// the old branches finish.
+///
+/// **What the caller sees differs from the B2BUA** where proxy rules say so:
+/// every 2xx is forwarded (two callees answering together means two answers,
+/// and the caller ACKs and ends the second, RFC 3261 section 13.2.2.4), every
+/// branch's early media reaches the caller, a 503 the caller would get goes up
+/// as a 500 (the container does this), and the caller's CANCEL is the
+/// container's to handle.
+///
+/// **After setup** nothing of the call reaches the application, so a callflow
+/// that needs to stay in the dialog (hold, transfer, recording) must not run
+/// with passthru. The application session ends when the proxy's transactions
+/// do.
 public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	private static final long serialVersionUID = 1L;
 
 	// INVITE is inherited (public) from v2.Callflow — do not redeclare it, or it
 	// shadows the inherited one and every subclass that uses INVITE breaks.
-	private static final String CONTACT = "Contact";
-
 	/// Every construction records the concrete class in this app's
 	/// [org.vorpal.blade.framework.v3.source.CallflowRegistry] — how the
 	/// Callflow Viewer knows which of the bundled framework callflows this app
@@ -121,10 +175,12 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 
 	// =============================================================== passthru
 
-	/// `SipApplicationSession` attribute (Boolean) — has this call engaged proxy
-	/// drop-out? Set on the initial-INVITE forward, read when the 2xx goes back.
-	/// On the app session (not a dialog) because it spans both dialogs.
-	public static final String PASSTHRU_ARMED_ATTR = "org.vorpal.blade.v3.passthru.armed";
+	/// Is `session.passthru` set? While it is, an initial INVITE goes out as a
+	/// proxy (see the class notes), and the callflow leaves answering the
+	/// caller to the container.
+	protected static boolean isPassthru() {
+		return passthruEnabled();
+	}
 
 	private static boolean passthruEnabled() {
 		SessionParameters p = getSessionParameters();
@@ -135,9 +191,6 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 		return request != null && request.isInitial() && INVITE.equalsIgnoreCase(request.getMethod());
 	}
 
-	private static boolean isPassthruArmed(SipApplicationSession app) {
-		return app != null && Boolean.TRUE.equals(app.getAttribute(PASSTHRU_ARMED_ATTR));
-	}
 
 	/// Clones an inbound request into an outbound one on the peer dialog, keeping its
 	/// destination. Shorthand for `createRequest(null, inboundRequest)` — see that
@@ -236,9 +289,12 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	// ================================================================ send API
 
 	/// Copied from v2 Callflow.sendRequest (Callflow.java:889–969) — sync
-	/// manually until the v1 hoist. Diffs vs v2: the passthru arm at the top,
-	/// and the [#traceEvent] beside the superArrow (fires AFTER the send, so the
-	/// recorded message carries every header v2 stamped on the way out).
+	/// manually until the v1 hoist. Diffs vs v2: the passthru hand-off at the
+	/// top (an initial INVITE becomes a one-branch proxy, see the class notes;
+	/// `lambdaFunction` then gets the branch's responses as it would the
+	/// dialog's), and the [#traceEvent] beside the superArrow (fires AFTER the
+	/// send, so the recorded message carries every header v2 stamped on the way
+	/// out).
 	@SuppressWarnings("serial")
 	@Override
 	public void sendRequest(SipServletRequest request, Callback<SipServletResponse> lambdaFunction)
@@ -248,8 +304,10 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 			return;
 		}
 
-		if (passthruEnabled() && isInitialInvite(request)) {
-			armPassthru(request);
+		if (passthruEnabled() && isInitialInvite(request)
+				&& proxyPassthru(new java.util.ArrayList<>(java.util.Collections.singletonList(request)), true, 0,
+						lambdaFunction, lambdaFunction, null)) {
+			return;
 		}
 
 		try {
@@ -362,8 +420,7 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	}
 
 	/// Copied from v2 Callflow.sendResponse (Callflow.java:1356–1432) — sync
-	/// manually until the v1 hoist. Diffs vs v2: the passthru drop-out
-	/// stitch/invalidate wrapping, and a [#traceEvent] beside each superArrow
+	/// manually until the v1 hoist. Diff vs v2: a [#traceEvent] beside each superArrow
 	/// (BEFORE the send, like the arrows — a final response can invalidate the
 	/// session, killing the trace attributes). The reliable-provisional branch
 	/// gets a traceEvent too, even though v2 draws no arrow there — arguably a
@@ -374,12 +431,6 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 
 		if (response == null || dropResponseToCancel(response)) {
 			return;
-		}
-
-		boolean dropOut = INVITE.equalsIgnoreCase(response.getMethod()) && successful(response)
-				&& isPassthruArmed(response.getApplicationSession());
-		if (dropOut) {
-			passthruStitchAndRoute(response); // must happen BEFORE the 2xx is sent
 		}
 
 		SipApplicationSession appSession = response.getApplicationSession();
@@ -472,103 +523,559 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 		// A final response releases the dialog: what was parked behind the request goes next.
 		replayParked(sipSession);
 
-		if (dropOut) {
-			passthruInvalidate(response); // must happen AFTER the 2xx is sent
+	}
+
+	// ============================================================ serial hunt
+
+	/// Decides whether a final response sends a serial hunt on to the next
+	/// request. Serializable, because the hunt's callbacks are stored with the
+	/// call and must survive failover with it.
+	@FunctionalInterface
+	public interface Advance extends java.io.Serializable {
+		boolean test(SipServletResponse response);
+	}
+
+	/// Request attribute marking a hunt request abandoned by its timer, so its
+	/// late final response (a 487 after our CANCEL) does not advance the hunt
+	/// a second time.
+	private static final String HUNT_ABANDONED = "org.vorpal.blade.v3.hunt.abandoned";
+
+	/// Sends `requests` (INVITEs) one at a time, like the v2 serial hunt,
+	/// except that `advance` decides which final responses move on to the
+	/// next request. Any other final response, success or failure, ends the
+	/// hunt and goes to `lambdaFunction`. The v2 hunt moves on for every 4xx
+	/// and up, so a 404 or a 486 is asked of every endpoint in turn and
+	/// answered the same way by each, multiplying the traffic of a call that
+	/// was never going to complete.
+	///
+	/// A request with no final response before `milliseconds` is cancelled
+	/// and the hunt moves on, as does one that cannot be sent. When the last
+	/// request times out, `lambdaFunction` gets a 408 made from it.
+	/// `dialogResponse` (may be null) sees every response every dialog
+	/// produces, provisional and final, before the hunt acts on it. Emptying
+	/// `requests` ends the hunt after the request in flight.
+	///
+	/// Under passthru an initial INVITE's hunt is a sequential proxy instead
+	/// (see the class notes): the same callbacks, the same `advance` rule, but
+	/// the container sends the caller the answer, and `requests` is emptied at
+	/// once.
+	///
+	/// @param milliseconds   how long each request may go without a final response
+	/// @param requests       the requests, in order; consumed as the hunt runs
+	/// @param lambdaFunction the response that ended the hunt
+	/// @param dialogResponse observer for every per-dialog response, or null
+	/// @param advance        true for a final response that should try the next request
+	public void sendRequestsInSerial(long milliseconds, List<SipServletRequest> requests,
+			Callback<SipServletResponse> lambdaFunction, Callback<SipServletResponse> dialogResponse, Advance advance)
+			throws ServletException, IOException {
+
+		if (requests.isEmpty()) {
+			sipLogger.warning("Callflow.sendRequestsInSerial - empty request list");
+			return;
+		}
+		if (passthruEnabled() && isInitialInvite(requests.get(0)) && proxyPassthru(
+				new java.util.ArrayList<>(requests), false, milliseconds, lambdaFunction, dialogResponse, advance)) {
+			requests.clear();
+			return;
 		}
 
+		SipServletRequest request = requests.remove(0);
+		String timerId = startTimer(request.getApplicationSession(), milliseconds, false, (timeout) -> {
+			request.setAttribute(HUNT_ABANDONED, Boolean.TRUE);
+			if (!Boolean.TRUE.equals(request.getSession().getAttribute(ATTR_CANCEL_SENT))) {
+				sendRequest(request.createCancel());
+				request.getSession().setAttribute(ATTR_CANCEL_SENT, true);
+			}
+			huntNextOr408(milliseconds, requests, lambdaFunction, dialogResponse, advance, request);
+		});
+
+		try {
+			sendRequest(request, (response) -> {
+				if (dialogResponse != null) {
+					dialogResponse.accept(response);
+				}
+				if (provisional(response)
+						|| Boolean.TRUE.equals(response.getRequest().getAttribute(HUNT_ABANDONED))) {
+					return;
+				}
+				stopTimer(response.getApplicationSession(), timerId);
+				if (successful(response) || requests.isEmpty() || !advance.test(response)) {
+					lambdaFunction.accept(response);
+				} else {
+					sendRequestsInSerial(milliseconds, requests, lambdaFunction, dialogResponse, advance);
+				}
+			});
+		} catch (Exception e) {
+			sipLogger.warning(request, "Callflow.sendRequestsInSerial - not sent: " + e.getMessage());
+			stopTimer(request.getApplicationSession(), timerId);
+			huntNextOr408(milliseconds, requests, lambdaFunction, dialogResponse, advance, request);
+		}
+	}
+
+	/// The baseline serial hunt, except under passthru: an initial INVITE then
+	/// goes out as a sequential proxy (see [#proxyPassthru]) that, like the
+	/// baseline hunt, moves on after any failure.
+	@Override
+	public void sendRequestsInSerial(long milliseconds, List<SipServletRequest> requests,
+			Callback<SipServletResponse> lambdaFunction, Callback<SipServletResponse> dialogResponse)
+			throws ServletException, IOException {
+		if (!requests.isEmpty() && passthruEnabled() && isInitialInvite(requests.get(0))) {
+			sendRequestsInSerial(milliseconds, requests, lambdaFunction, dialogResponse, (response) -> true);
+		} else {
+			super.sendRequestsInSerial(milliseconds, requests, lambdaFunction, dialogResponse);
+		}
+	}
+
+	private void huntNextOr408(long milliseconds, List<SipServletRequest> requests,
+			Callback<SipServletResponse> lambdaFunction, Callback<SipServletResponse> dialogResponse, Advance advance,
+			SipServletRequest last) throws ServletException, IOException {
+		if (!requests.isEmpty()) {
+			sendRequestsInSerial(milliseconds, requests, lambdaFunction, dialogResponse, advance);
+		} else {
+			lambdaFunction.accept(last.createResponse(408));
+		}
+	}
+
+	// ============================================================ parallel race
+
+	/// App-session attribute prefix for one race's state: the outstanding
+	/// requests by session id, then `.over` once the race is decided and
+	/// `.best` for the failure that would answer it.
+	private static final String RACE = "org.vorpal.blade.v3.race.";
+	private static final String OVER = ".over";
+	private static final String BEST = ".best";
+
+	/// Sends `requests` (INVITEs) all at once and gives `lambdaFunction` the one
+	/// response that decides the call. Unlike the v2 race:
+	///
+	/// - **The first 2xx wins and every other branch is cancelled,** the winner
+	///   excepted. A 2xx that arrives after that, because two branches answered
+	///   together or one answered as our CANCEL reached it, is acknowledged and
+	///   ended with a BYE, so that callee is not left holding an answered call
+	///   with nobody on it.
+	/// - **A 6xx ends the race at once** (RFC 3261 §16.7): the other branches are
+	///   cancelled and the 6xx is the answer.
+	/// - **When every branch fails, a definite failure outranks a retryable one.**
+	///   `retryable` says which failures another destination might fix (a 503, a
+	///   408); any other (a 404, a 486, a challenge) is the same everywhere, so
+	///   the earliest of those answers the call. Only when every failure is
+	///   retryable does the earliest retryable one. The v2 race answers with
+	///   whichever failure happened to arrive last.
+	/// - **At `timeout`** the branches still out are cancelled; the answer is the
+	///   best definite failure so far, else a 408.
+	///
+	/// `dialogResponse` (may be null) sees every response every branch produces,
+	/// provisional and final, before the race acts on it.
+	///
+	/// Under passthru an initial INVITE's race is a parallel proxy instead (see
+	/// the class notes): the same callbacks and timeout, but every 2xx reaches
+	/// the caller and the container picks the failure the caller gets;
+	/// `retryable` then only decides whether a timeout hands `lambdaFunction` a
+	/// 408 or waits for the definite failure already in.
+	///
+	/// @param timeout        milliseconds before unanswered branches are cancelled; 0 for none
+	/// @param requests       the branches
+	/// @param lambdaFunction the response that decides the call; called once
+	/// @param dialogResponse observer for every per-branch response, or null
+	/// @param retryable      true for a failure another destination might not repeat
+	public void sendRequestsInParallel(long timeout, List<SipServletRequest> requests,
+			Callback<SipServletResponse> lambdaFunction, Callback<SipServletResponse> dialogResponse,
+			Advance retryable) throws ServletException, IOException {
+
+		if (requests.isEmpty()) {
+			sipLogger.warning("Callflow.sendRequestsInParallel - empty request list");
+			return;
+		}
+		if (passthruEnabled() && isInitialInvite(requests.get(0)) && proxyPassthru(
+				new java.util.ArrayList<>(requests), true, timeout, lambdaFunction, dialogResponse, retryable)) {
+			return;
+		}
+		SipServletRequest firstRequest = requests.get(0);
+		SipApplicationSession appSession = firstRequest.getApplicationSession();
+		String id = RACE + Math.abs(java.util.concurrent.ThreadLocalRandom.current().nextInt());
+
+		java.util.HashMap<String, SipServletRequest> outstanding = new java.util.HashMap<>();
+		for (SipServletRequest request : requests) {
+			outstanding.put(request.getSession().getId(), request);
+		}
+		appSession.setAttribute(id, outstanding);
+
+		final String timerId = (timeout > 0) ? startTimer(appSession, timeout, false, (timer) -> {
+			if (Boolean.TRUE.equals(appSession.getAttribute(id + OVER))) {
+				return;
+			}
+			appSession.setAttribute(id + OVER, Boolean.TRUE);
+			cancelBranches(appSession, id, null);
+			SipServletResponse best = (SipServletResponse) appSession.getAttribute(id + BEST);
+			appSession.removeAttribute(id + BEST);
+			lambdaFunction.accept(best != null && !retryable.test(best) ? best : firstRequest.createResponse(408));
+		}) : null;
+
+		for (SipServletRequest request : requests) {
+			sendRequest(request, (response) -> {
+				if (dialogResponse != null) {
+					dialogResponse.accept(response);
+				}
+				if (provisional(response)) {
+					return;
+				}
+				boolean over = Boolean.TRUE.equals(appSession.getAttribute(id + OVER));
+
+				if (successful(response)) {
+					if (over) {
+						endExtraAnswer(response);
+						return;
+					}
+					appSession.setAttribute(id + OVER, Boolean.TRUE);
+					stopTimer(appSession, timerId);
+					cancelBranches(appSession, id, response.getSession().getId());
+					appSession.removeAttribute(id + BEST);
+					lambdaFunction.accept(response);
+					return;
+				}
+
+				if (over) {
+					return; // a cancelled branch's 487, after the race
+				}
+				@SuppressWarnings("unchecked")
+				java.util.Map<String, SipServletRequest> left = (java.util.Map<String, SipServletRequest>) appSession
+						.getAttribute(id);
+				if (left == null) {
+					return;
+				}
+				left.remove(response.getSession().getId());
+
+				if (response.getStatus() >= 600) {
+					appSession.setAttribute(id + OVER, Boolean.TRUE);
+					stopTimer(appSession, timerId);
+					appSession.setAttribute(id, left);
+					cancelBranches(appSession, id, null);
+					appSession.removeAttribute(id + BEST);
+					lambdaFunction.accept(response);
+					return;
+				}
+
+				SipServletResponse best = (SipServletResponse) appSession.getAttribute(id + BEST);
+				if (best == null || outranks(retryable.test(response), retryable.test(best))) {
+					best = response;
+					appSession.setAttribute(id + BEST, best);
+				}
+				if (left.isEmpty()) {
+					appSession.setAttribute(id + OVER, Boolean.TRUE);
+					stopTimer(appSession, timerId);
+					appSession.removeAttribute(id);
+					appSession.removeAttribute(id + BEST);
+					lambdaFunction.accept(best);
+				} else {
+					appSession.setAttribute(id, left);
+				}
+			});
+		}
+	}
+
+	/// The baseline race, except under passthru: an initial INVITE then goes out
+	/// as a parallel proxy (see [#proxyPassthru]), where the container picks
+	/// the failure the caller gets.
+	@Override
+	public void sendRequestsInParallel(long timeout, List<SipServletRequest> requests,
+			Callback<SipServletResponse> lambdaFunction, Callback<SipServletResponse> dialogResponse)
+			throws ServletException, IOException {
+		if (!requests.isEmpty() && passthruEnabled() && isInitialInvite(requests.get(0))) {
+			sendRequestsInParallel(timeout, requests, lambdaFunction, dialogResponse, (response) -> true);
+		} else {
+			super.sendRequestsInParallel(timeout, requests, lambdaFunction, dialogResponse);
+		}
+	}
+
+	/// A failure replaces the best so far only when it is definite and the best
+	/// is retryable; otherwise the earlier one stands.
+	static boolean outranks(boolean candidateRetryable, boolean bestRetryable) {
+		return !candidateRetryable && bestRetryable;
+	}
+
+	/// CANCELs every branch still outstanding in race `id`, except `keep`, and
+	/// forgets them.
+	private void cancelBranches(SipApplicationSession appSession, String id, String keep) {
+		@SuppressWarnings("unchecked")
+		java.util.Map<String, SipServletRequest> left = (java.util.Map<String, SipServletRequest>) appSession
+				.getAttribute(id);
+		appSession.removeAttribute(id);
+		if (left == null) {
+			return;
+		}
+		for (java.util.Map.Entry<String, SipServletRequest> branch : left.entrySet()) {
+			if (branch.getKey().equals(keep)) {
+				continue;
+			}
+			SipServletRequest request = branch.getValue();
+			try {
+				if (request.getSession().isValid()
+						&& !Boolean.TRUE.equals(request.getSession().getAttribute(ATTR_CANCEL_SENT))) {
+					sendRequest(request.createCancel());
+					request.getSession().setAttribute(ATTR_CANCEL_SENT, true);
+				}
+			} catch (Exception e) {
+				sipLogger.fine(request, "Callflow.cancelBranches - not cancelled: " + e.getMessage());
+			}
+		}
+	}
+
+	/// A 2xx from a branch that lost the race: acknowledge it, as every 2xx to
+	/// an INVITE must be, then end that dialog.
+	private void endExtraAnswer(SipServletResponse response) {
+		try {
+			sendRequest(response.createAck());
+			sendRequest(response.getSession().createRequest(BYE));
+		} catch (Exception e) {
+			sipLogger.warning(response, "Callflow.endExtraAnswer - " + e.getMessage());
+		}
 	}
 
 	// ------------------------------------------------------------ passthru impl
 
-	/// Arm drop-out for this call and do the first half of the symmetric Contact
-	/// stitch: put the CALLER's Contact on the outbound INVITE, so the callee
-	/// sends its in-dialog requests straight to the caller.
-	private void armPassthru(SipServletRequest outboundInvite) {
-		try {
-			SipApplicationSession app = outboundInvite.getApplicationSession();
-			if (app != null) {
-				app.setAttribute(PASSTHRU_ARMED_ATTR, Boolean.TRUE);
-			}
-			Address callerContact = peerContact(outboundInvite);
-			if (callerContact != null) {
-				outboundInvite.setAddressHeader(CONTACT, callerContact);
-			}
-		} catch (Exception ignore) {
-			// passthru is best-effort at the framework layer; never break the send
-		}
+	/// App-session attribute holding the [PassthruProxy] of a call that went
+	/// out as a proxy.
+	static final String PASSTHRU_PROXY_ATTR = "org.vorpal.blade.v3.passthru.proxy";
+
+	/// What a passthru proxy reports to, kept with the call so it survives
+	/// failover like any other callback.
+	static final class PassthruProxy implements java.io.Serializable {
+		private static final long serialVersionUID = 1L;
+		Callback<SipServletResponse> complete;
+		Callback<SipServletResponse> observer;
+		Advance advance;
+		boolean parallel;
+		boolean answered;
+		/// The batch in flight (one per [#proxyPassthru] call), and the last
+		/// batch `complete` has already been told about.
+		int batch;
+		int completedBatch;
+		/// A failure no other branch would fix has arrived in this batch.
+		boolean definite;
+		String batchTimer;
+		/// Every destination this call's proxy has tried: a proxy may try a
+		/// destination only once.
+		java.util.HashSet<String> tried = new java.util.HashSet<>();
+		/// Finals already given to `observer`: the container reports a branch's
+		/// final once as a branch response and may report it again as the best.
+		java.util.HashSet<String> seen = new java.util.HashSet<>();
 	}
 
-	/// Second half of the stitch and the route-set drop-out, done just before the
-	/// 2xx is sent: put the CALLEE's Contact on the answer (so the caller's ACK
-	/// goes straight to the callee), and pull OCCAS out of the route set (works
-	/// even after the proxy has started — reflection via [LooseRoutingHelper]).
-	private void passthruStitchAndRoute(SipServletResponse toCaller) {
-		try {
-			Address calleeContact = peerContact(toCaller);
-			if (calleeContact != null) {
-				toCaller.setAddressHeader(CONTACT, calleeContact);
-			}
-			SipServletRequest inbound = toCaller.getRequest();
-			if (inbound != null) {
-				LooseRoutingHelper.disableRecordRoute(inbound);
-			}
-		} catch (Exception ignore) {
-		}
-	}
-
-	/// Tear down after the 2xx is on the wire. No ACK or BYE will ever reach us —
-	/// the dialog is caller↔callee now — so OCCAS won't auto-invalidate; we
-	/// invalidate the callee dialog, the caller dialog, and the app session ourselves.
-	/// (Jeff: this is also what we're counting on to settle the caller-dialog INVITE
-	/// transaction so OCCAS stops retransmitting the 200 — to be confirmed live.)
-	private void passthruInvalidate(SipServletResponse toCaller) {
-		try {
-			SipSession caller = toCaller.getSession();
-			SipSession callee = getLinkedSession(caller);
-			SipApplicationSession app = toCaller.getApplicationSession();
-			invalidate(callee);
-			invalidate(caller);
-			if (app != null && app.isValid()) {
-				app.invalidate();
-			}
-		} catch (Exception ignore) {
-		}
-	}
-
-	private static void invalidate(SipSession ss) {
-		try {
-			if (ss != null && ss.isValid()) {
-				ss.invalidate();
-			}
-		} catch (Exception ignore) {
-		}
-	}
-
-	/// The peer endpoint's Contact — the address the OTHER UA should be reached at
-	/// for in-dialog messages, which is what the symmetric stitch writes.
+	/// Sends an initial INVITE's `requests` as branches of a proxy on the
+	/// caller's INVITE, without Record-Route, instead of as new dialogs. Each
+	/// branch gets its request's Request-URI and attributes; the requests
+	/// themselves are never sent, and their sessions are invalidated.
 	///
-	/// Derived from the LINKED dialog's remote target: once a dialog's dialog is up,
-	/// OCCAS stores the peer's Contact as that session's remote target (the URI it
-	/// uses for in-dialog requests). So the peer dialog's remote target IS the peer's
-	/// Contact — read via [LooseRoutingHelper#remoteTarget] (the container's own
-	/// remote target for the session, read by reflection). Null safely
-	/// degrades to record-route-only drop-out. NEEDS LIVE VERIFICATION — the
-	/// remote target must already be populated at the moment of each stitch (the
-	/// caller dialog's at the outbound-INVITE send; the callee dialog's at the 2xx).
-	private Address peerContact(javax.servlet.sip.SipServletMessage message) {
-		try {
-			if (message == null || sipFactory == null) {
-				return null;
-			}
-			SipSession peer = getLinkedSession(message.getSession());
-			if (peer == null) {
-				return null;
-			}
-			javax.servlet.sip.URI target = LooseRoutingHelper.remoteTarget(peer);
-			return target != null ? sipFactory.createAddress(target) : null;
-		} catch (Exception e) {
-			return null;
+	/// `parallel` forks to all branches at once, otherwise one after another
+	/// (`timeoutMillis` then limits each branch; for a parallel batch, the
+	/// batch). The container cancels the rest on a 2xx, sends every 2xx to
+	/// the caller, and picks the failure the caller gets (RFC 3261 section
+	/// 16.7). `observer` sees every response of every branch, provisional and
+	/// final; `complete` gets the 2xx, or the failure the caller would get. A
+	/// next tier started from inside `complete` is added to the same proxy, and
+	/// the caller then hears from it instead. `advance`, for a sequential proxy,
+	/// stops the search on a failure it does not accept; for a parallel one it
+	/// says which failures are retryable.
+	///
+	/// A parallel batch with a `timeoutMillis` gets its own timer, and the
+	/// proxy's own timeout is set out of reach (see [#passthruBatchTimeout]). A
+	/// sequential proxy's timeout is per branch, so it is the container's.
+	/// Called again for a next tier, it replaces the callbacks, stops the old
+	/// batch's timer, and starts the new branches on the same proxy. A proxy
+	/// may try a destination only once, so one already tried, or listed twice,
+	/// is skipped; a batch left with nothing new hands `complete` a 408 at
+	/// once, so a later tier still gets its turn.
+	///
+	/// @return false when there is no caller INVITE to proxy (the requests are
+	///         then sent as a B2BUA, as without passthru)
+	private boolean proxyPassthru(List<SipServletRequest> requests, boolean parallel, long timeoutMillis,
+			Callback<SipServletResponse> complete, Callback<SipServletResponse> observer, Advance advance)
+			throws ServletException, IOException {
+		SipServletRequest first = requests.get(0);
+		SipSession callerLeg = getLinkedSession(first.getSession());
+		SipServletRequest inbound = (callerLeg != null) ? callerLeg.getActiveInvite(UAMode.UAS) : null;
+		if (inbound == null) {
+			sipLogger.warning(first, "Callflow.proxyPassthru - no caller INVITE to proxy; sending as a B2BUA");
+			return false;
 		}
+
+		SipApplicationSession appSession = inbound.getApplicationSession();
+		PassthruProxy state = (PassthruProxy) appSession.getAttribute(PASSTHRU_PROXY_ATTR);
+		javax.servlet.sip.Proxy proxy = inbound.getProxy();
+		if (state == null) {
+			proxy.setRecordRoute(false);
+			proxy.setSupervised(true);
+			state = new PassthruProxy();
+		}
+		proxy.setParallel(parallel);
+		if (parallel) {
+			// The container times a parallel proxy as a whole, once: a batch started
+			// after the first would get only what is left of its time. Each batch is
+			// timed here instead, see the timer below.
+			proxy.setProxyTimeout(PASSTHRU_NO_TIMEOUT_SECONDS);
+		} else if (timeoutMillis > 0) {
+			proxy.setProxyTimeout((int) Math.max(1, (timeoutMillis + 999) / 1000));
+		}
+		stopTimer(appSession, state.batchTimer);
+		state.complete = complete;
+		state.observer = observer;
+		state.advance = advance;
+		state.parallel = parallel;
+		state.answered = false;
+		state.definite = false;
+		state.batchTimer = null;
+		final int batch = ++state.batch;
+		if (parallel && timeoutMillis > 0) {
+			state.batchTimer = startTimer(appSession, timeoutMillis, false,
+					(timer) -> passthruBatchTimeout(inbound, batch));
+		}
+
+		// A proxy refuses a destination it has tried before, or one listed twice:
+		// skip those, so an endpoint in two tiers does not stop the second.
+		List<URI> targets = new java.util.ArrayList<>();
+		List<SipServletRequest> sending = new java.util.ArrayList<>();
+		for (SipServletRequest request : requests) {
+			if (state.tried.add(request.getRequestURI().toString())) {
+				targets.add(request.getRequestURI());
+				sending.add(request);
+			} else {
+				sipLogger.fine(request, "Callflow.proxyPassthru - already tried " + request.getRequestURI());
+			}
+		}
+		for (SipServletRequest request : requests) {
+			SipSession unsent = request.getSession();
+			if (unsent != null && unsent.isValid()) {
+				unsent.invalidate();
+			}
+		}
+		if (targets.isEmpty()) {
+			// nothing new to try: this batch fails at once, as if every branch timed out
+			stopTimer(appSession, state.batchTimer);
+			state.batchTimer = null;
+			state.completedBatch = batch;
+			appSession.setAttribute(PASSTHRU_PROXY_ATTR, state);
+			appSession.setAttribute(IS_PROXY_ATTR, Boolean.TRUE);
+			if (complete != null) {
+				complete.accept(new DetachedResponse(inbound, 408));
+			}
+			return true;
+		}
+		List<javax.servlet.sip.ProxyBranch> branches = proxy.createProxyBranches(targets);
+		for (int i = 0; i < branches.size() && i < sending.size(); i++) {
+			SipServletRequest request = sending.get(i);
+			SipServletRequest branchRequest = branches.get(i).getRequest();
+			for (String name : request.getAttributeNameSet()) {
+				branchRequest.setAttribute(name, request.getAttribute(name));
+			}
+			sipLogger.superArrow(Direction.SEND, false, branchRequest, null, this.getClass().getSimpleName(), null);
+		}
+
+		appSession.setAttribute(PASSTHRU_PROXY_ATTR, state);
+		appSession.setAttribute(IS_PROXY_ATTR, Boolean.TRUE); // the caller's CANCEL is the container's to handle
+		proxy.startProxy();
+		return true;
+	}
+
+	/// A parallel proxy's own timeout, in seconds: long enough never to fire, so
+	/// that each batch's timer decides.
+	static final int PASSTHRU_NO_TIMEOUT_SECONDS = 24 * 60 * 60;
+
+	/// A parallel batch ran out of time: cancel what is still ringing. Unless a
+	/// failure no other branch would fix has come in, `complete` gets a 408 now,
+	/// made here rather than by the container, because the container sends the
+	/// 408 it makes for cancelled branches to the caller even when a next batch
+	/// has started. A next batch started from `complete` goes out while the old
+	/// branches finish, so the caller hears only from it.
+	private static void passthruBatchTimeout(SipServletRequest inbound, int batch) {
+		SipApplicationSession appSession = inbound.getApplicationSession();
+		PassthruProxy state = (PassthruProxy) appSession.getAttribute(PASSTHRU_PROXY_ATTR);
+		if (state == null || state.batch != batch || state.completedBatch == batch) {
+			return;
+		}
+		try {
+			javax.servlet.sip.Proxy proxy = inbound.getProxy(false);
+			if (proxy != null) {
+				for (javax.servlet.sip.ProxyBranch branch : proxy.getProxyBranches()) {
+					SipServletResponse last = branch.getResponse();
+					if (last == null || last.getStatus() < 200) {
+						try {
+							branch.cancel();
+						} catch (IllegalStateException finished) {
+							// answered or already cancelled
+						}
+					}
+				}
+			}
+			state.batchTimer = null;
+			if (!state.definite) {
+				state.completedBatch = batch;
+				appSession.setAttribute(PASSTHRU_PROXY_ATTR, state);
+				if (state.complete != null) {
+					state.complete.accept(new DetachedResponse(inbound, 408));
+				}
+			} else {
+				appSession.setAttribute(PASSTHRU_PROXY_ATTR, state);
+			}
+		} catch (Exception e) {
+			sipLogger.severe(inbound, "Callflow.passthruBatchTimeout - " + e);
+			sipLogger.severe(inbound, e);
+		}
+	}
+
+	/// Hands a response of a passthru proxy to its callbacks; the v3
+	/// [AsyncSipServlet] calls it for every response. `branch` is true for a
+	/// branch's final that is not (yet) the one the caller gets. Returns false
+	/// for any other response, which the servlet then handles as usual.
+	///
+	/// The observer sees each response once: the container may report a
+	/// branch's final twice, as a branch response and then as the best, so
+	/// finals are remembered by Via, To tag and status. The completion callback
+	/// sees the best response once per batch, and not at all when the batch
+	/// timer has already given it a 408, unless the late one is a 2xx. A 487 is
+	/// a cancel's echo, ours or the caller's, never a definite failure.
+	static boolean passthruResponse(SipServletResponse response, boolean branch) {
+		SipApplicationSession appSession = response.getApplicationSession();
+		PassthruProxy state = (appSession != null && appSession.isValid())
+				? (PassthruProxy) appSession.getAttribute(PASSTHRU_PROXY_ATTR)
+				: null;
+		if (state == null || !INVITE.equals(response.getMethod())) {
+			return false;
+		}
+		try {
+			boolean fresh = provisional(response) || state.seen.add(response.getHeader("Via") + "|"
+					+ response.getTo().getParameter("tag") + "|" + response.getStatus());
+			if (fresh && state.observer != null) {
+				state.observer.accept(response);
+			}
+
+			// a 487 is a cancel's echo (ours, or the caller's), not a callee's verdict
+			boolean definite = !provisional(response) && !successful(response) && response.getStatus() != 487
+					&& state.advance != null && !state.advance.test(response);
+			if (branch) {
+				state.definite |= definite;
+				// a sequential search moves on by itself; stop it on a failure no other branch would fix
+				if (!state.parallel && definite) {
+					response.getProxy().cancel();
+				}
+			} else if (!provisional(response) && !state.answered) {
+				state.answered = successful(response);
+				stopTimer(appSession, state.batchTimer);
+				state.batchTimer = null;
+				boolean told = state.completedBatch == state.batch; // by the batch timer
+				state.completedBatch = state.batch;
+				appSession.setAttribute(PASSTHRU_PROXY_ATTR, state);
+				if (state.complete != null && state.complete != state.observer && (!told || state.answered)) {
+					state.complete.accept(response);
+				}
+			}
+			if (appSession.isValid()) {
+				appSession.setAttribute(PASSTHRU_PROXY_ATTR, state);
+			}
+		} catch (Exception e) {
+			sipLogger.severe(response, "Callflow.passthruResponse - " + e);
+			sipLogger.severe(response, e);
+		}
+		return true;
 	}
 
 	// ================================================================= capture

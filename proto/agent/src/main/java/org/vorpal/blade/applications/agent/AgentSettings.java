@@ -63,7 +63,7 @@ public class AgentSettings extends Configuration implements Serializable {
 		this.dataSource = dataSource;
 	}
 
-	@JsonPropertyDescription("Table an agent report writes a blocked number into (see proxy-block's spam-numbers.sql). Default spam_numbers.")
+	@JsonPropertyDescription("Table an agent report writes a blocked number into (the analytics schema's block list, which proxy-block reads). Default spam_numbers.")
 	public String getSpamTable() {
 		return spamTable;
 	}

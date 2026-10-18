@@ -53,10 +53,20 @@ import java.util.stream.Stream;
 ///
 ///     -- applied-if: column events.department
 ///     -- applied-if: index events.idx_event_scope
+///     -- applied-if: table BLADE_LABEL
 ///
 /// When every such line holds, the migration is recorded without running. A
 /// migration without them must be safe to run on a database that already has
 /// it, such as setting a default.
+///
+/// ## Tables of applications outside BLADE
+///
+/// An application built outside this repository that keeps a table in the
+/// same database brings its own `migrations/` directory, passed as a module
+/// (`--module <dir>`, repeatable). Its files are named with the module first,
+/// `<module>-<NNN>-<name>.<Dialect>.sql`, so their history ids cannot collide
+/// with BLADE's, and they run after BLADE's. A module has no whole-schema
+/// script: on an empty database its migrations simply run.
 ///
 /// ## Applied here, or by a DBA
 ///
@@ -73,9 +83,9 @@ public final class SchemaUpgrade {
 	/// The table that records each migration applied.
 	public static final String HISTORY = "blade_schema_migrations";
 
-	private static final Pattern APPLIED_IF = Pattern.compile("^\\s*--\\s*applied-if:\\s*(column|index)\\s+(\\w+)\\.(\\w+)\\s*$",
+	private static final Pattern APPLIED_IF = Pattern.compile("^\\s*--\\s*applied-if:\\s*(column|index|table)\\s+(\\w+)(?:\\.(\\w+))?\\s*$",
 			Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
-	private static final Pattern MIGRATION = Pattern.compile("^(\\d+-[\\w-]+)\\.(\\w+)\\.sql$");
+	private static final Pattern MIGRATION = Pattern.compile("^((?:[a-z][a-z0-9]*-)?\\d+-[\\w-]+)\\.(\\w+)\\.sql$");
 
 	private SchemaUpgrade() {
 	}
@@ -112,10 +122,17 @@ public final class SchemaUpgrade {
 
 	/// What this database needs, in order.
 	public static List<Step> plan(Connection c, Path sqlDir) throws SQLException, IOException {
+		return plan(c, sqlDir, Collections.emptyList());
+	}
+
+	/// What this database needs, in order, BLADE's tables first and then each
+	/// module's.
+	public static List<Step> plan(Connection c, Path sqlDir, List<Path> modules) throws SQLException, IOException {
 		Dialect d = Dialect.of(c);
 		String p = prefix(d);
 		List<Step> steps = new ArrayList<>();
 		List<String[]> migrations = migrations(sqlDir, p);
+		Set<String> applied = new HashSet<>();
 		if (!tableExists(c, "events")) {
 			steps.add(new Step("schema (empty database)", statements(d, read(sqlDir.resolve(p + "-database-schema.sql"))), null));
 			steps.add(new Step("migration history", Collections.singletonList(historyTable(d)), null));
@@ -123,7 +140,6 @@ public final class SchemaUpgrade {
 				steps.add(new Step(m[0] + " (in the schema)", Collections.emptyList(), m[0]));
 			}
 		} else {
-			Set<String> applied = new HashSet<>();
 			if (tableExists(c, HISTORY)) {
 				try (Statement s = c.createStatement(); ResultSet rs = s.executeQuery("SELECT id FROM " + HISTORY)) {
 					while (rs.next()) {
@@ -133,17 +149,10 @@ public final class SchemaUpgrade {
 			} else {
 				steps.add(new Step("migration history", Collections.singletonList(historyTable(d)), null));
 			}
-			for (String[] m : migrations) {
-				if (applied.contains(m[0])) {
-					continue;
-				}
-				String sql = read(Paths.get(m[1]));
-				if (alreadyInPlace(c, d, sql)) {
-					steps.add(new Step(m[0] + " (already in place)", Collections.emptyList(), m[0]));
-				} else {
-					steps.add(new Step(m[0], statements(d, sql), m[0]));
-				}
-			}
+			pending(c, d, migrations, applied, steps);
+		}
+		for (Path module : modules) {
+			pending(c, d, migrations(module, p), applied, steps);
 		}
 		String views = read(sqlDir.resolve(p + "-analytics-views.sql"));
 		String viewsId = viewsId(views);
@@ -151,6 +160,23 @@ public final class SchemaUpgrade {
 			steps.add(new Step("views", statements(d, views), viewsId));
 		}
 		return steps;
+	}
+
+	/// A step for each of these migrations the history does not record: none
+	/// to run when its `applied-if` lines hold, else its statements.
+	private static void pending(Connection c, Dialect d, List<String[]> migrations, Set<String> applied, List<Step> steps)
+			throws SQLException, IOException {
+		for (String[] m : migrations) {
+			if (applied.contains(m[0])) {
+				continue;
+			}
+			String sql = read(Paths.get(m[1]));
+			if (alreadyInPlace(c, d, sql)) {
+				steps.add(new Step(m[0] + " (already in place)", Collections.emptyList(), m[0]));
+			} else {
+				steps.add(new Step(m[0], statements(d, sql), m[0]));
+			}
+		}
 	}
 
 	/// The history id of a views script: its content, so a changed file differs.
@@ -200,8 +226,21 @@ public final class SchemaUpgrade {
 		boolean any = false;
 		while (m.find()) {
 			any = true;
-			boolean holds = "column".equalsIgnoreCase(m.group(1)) ? columnExists(c, m.group(2), m.group(3))
-					: indexExists(c, d, m.group(2), m.group(3));
+			String kind = m.group(1).toLowerCase(Locale.ROOT);
+			if (!kind.equals("table") && m.group(3) == null) {
+				throw new IllegalArgumentException("applied-if: " + kind + " wants <table>.<name>, not " + m.group(2));
+			}
+			boolean holds;
+			switch (kind) {
+			case "table":
+				holds = tableExists(c, m.group(2));
+				break;
+			case "column":
+				holds = columnExists(c, m.group(2), m.group(3));
+				break;
+			default:
+				holds = indexExists(c, d, m.group(2), m.group(3));
+			}
 			if (!holds) {
 				return false;
 			}
@@ -434,7 +473,7 @@ public final class SchemaUpgrade {
 
 	// ── the command ─────────────────────────────────────────────────────────
 
-	/// `SchemaUpgrade --sql-dir <dir> (--domain <dir> | --url <url> --user <user>) [--sql <file>] [--status]`
+	/// `SchemaUpgrade --sql-dir <dir> [--module <dir>]... (--domain <dir> | --url <url> --user <user>) [--sql <file>] [--status]`
 	///
 	/// With `--url`, the password is read from `BLADE_DB_PASSWORD`, never an
 	/// argument. With `--domain`, everything comes from the domain's own
@@ -443,10 +482,14 @@ public final class SchemaUpgrade {
 	public static void main(String[] args) {
 		String sqlDir = null, domain = null, url = null, user = null, out = null;
 		boolean status = false;
+		List<Path> modules = new ArrayList<>();
 		for (int i = 0; i < args.length; i++) {
 			switch (args[i]) {
 			case "--sql-dir":
 				sqlDir = args[++i];
+				break;
+			case "--module":
+				modules.add(Paths.get(args[++i]));
 				break;
 			case "--domain":
 				domain = args[++i];
@@ -486,7 +529,7 @@ public final class SchemaUpgrade {
 			DomainDataSource.loadDrivers();
 			try (Connection c = DriverManager.getConnection(url, user, password)) {
 				Dialect d = Dialect.of(c);
-				List<Step> steps = plan(c, Paths.get(sqlDir));
+				List<Step> steps = plan(c, Paths.get(sqlDir), modules);
 				System.out.println("Analytics database: " + d + " at " + url);
 				if (status) {
 					for (Step s : steps) {

@@ -33,14 +33,63 @@ programmatically (`Callflow.enableTrace`) or by rule over JMX from the
 capture, and `CallTraceAggregator` merges the per-app buffers into one `CallTrace`.
 A trace session is "arm, reproduce, disarm" — nothing is persisted.
 
-## Passthru drop-out
+## Passthru: leave the call after routing it
 
-A forwarding callflow — an initial INVITE in, an initial INVITE out — can behave like a
-proxy that leaves the dialog after setup: the endpoints' Contacts are stitched together and
-OCCAS is removed from the route set. The same callflow runs as a full B2BUA when passthru
-is off. The deciding vote is configuration, so an operator picks B2BUA vs. proxy per
-network without touching code. Because no ACK or BYE reaches OCCAS after drop-out, the
-framework tears down both dialogs and the application session itself.
+A forwarding callflow (an initial INVITE in, an initial INVITE out) can route a call and then
+leave it. With `session.passthru` set in the application's configuration, the caller's INVITE
+is proxied to the destinations the callflow chose, so a single dialog runs from caller to
+callee and the ACK, re-INVITEs and BYE never reach the application. With it off, the same
+callflow is a full B2BUA. An operator picks one or the other per network, without a code
+change.
+
+**Writing a callflow that works both ways.** Build the outbound requests as for a B2BUA and
+send them with `sendRequest`, `sendRequestsInSerial` or `sendRequestsInParallel`. Under
+passthru each request becomes one destination of the proxy, and the callbacks receive the
+same responses they would as a B2BUA: the per-dialog observer sees every response from every
+destination, and the completion callback gets the answer or the failure. What changes is who
+answers the caller. Under passthru it is the container, so the callflow checks `isPassthru()`
+before ringing, relaying or answering the caller itself:
+
+```java
+if (!isPassthru()) {
+    sendResponse(aliceRequest.createResponse(180)); // our own ringback, B2BUA only
+}
+
+sendRequestsInParallel(timeout, bobRequests, (bobResponse) -> {
+    if (isPassthru()) {
+        return; // the caller already has this response
+    }
+    SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
+    copyContentAndHeaders(bobResponse, aliceResponse);
+    sendResponse(aliceResponse, (aliceAck) -> sendAcknowledgement(aliceAck, bobResponse));
+}, dialogObserver, retryable);
+```
+
+`proxy-balancer` and `proxy-registrar` are written this way.
+
+**Serial and parallel.** A serial hunt tries one destination at a time; the `advance` rule
+still decides which failures move on and which end the hunt. A parallel race tries them all;
+the first answer wins and the others are cancelled. Each batch gets its `timeout`.
+
+**Trying more destinations before the caller hears a failure.** Send the next batch from
+inside the completion callback, as `proxy-balancer` does for its next tier. The caller then
+hears from the new batch instead of the failure. It has to happen inside the callback: once
+the callback returns without sending anything, the failure goes to the caller. A lookup that
+cannot finish there (a database query, a REST call) needs the B2BUA mode. Nothing can follow
+an answer, a 6xx, or the caller's CANCEL. Each destination is tried at most once per call: a
+later batch skips the ones an earlier batch already tried.
+
+**What the caller sees** follows RFC 3261's proxy rules where they differ from a B2BUA:
+
+- If two destinations answer at the same moment, the caller gets both answers and ends the
+  second one, as every SIP user agent must.
+- Ringing and early media from every destination reach the caller.
+- A 503 reaches the caller as a 500.
+- The caller's CANCEL cancels every destination still ringing.
+
+**When not to use it.** After setup nothing of the call reaches the application, so a
+callflow that needs to stay in the dialog (hold, transfer, recording) must run without
+passthru.
 
 ## Final responses without ceremony
 

@@ -1,0 +1,2341 @@
+/* BLADE Dashboard board: everything on one screen, nothing below the fold.
+
+   A row of headline numbers, then six panels. Each panel shows one view at a
+   time and switches between views with the tabs in its header, rather than
+   stacking more charts beneath it. A panel's title opens its full report
+   (report.html), which is where the scrolling detail lives.
+
+   Detail grows left to right. The left column says whether things work
+   (servers; how calls ended), the middle what they are doing (traffic; which
+   applications), the right what went wrong (operations; the calls
+   themselves). Choosing something in a panel narrows the panels to its
+   right: a server narrows Traffic and Operations, a time on a Traffic chart
+   narrows Operations, an outcome narrows Applications and Calls, an
+   application narrows Calls. A narrowed panel says so in its header, with a
+   ✕ to undo it, and the headline numbers never narrow: the top of the board
+   always tells the whole truth.
+
+   Everything shows the range chosen in the top bar: Live (the last hour), a
+   number of days, or a custom range. A view that can only show now, such as
+   the connection pools, says "live" in its header instead.
+
+   The range and every choice live in the URL's hash, so Back undoes a step
+   and a link reproduces the view. This domain's servers and operations are
+   read live (runtime MBeans and the event bus, every 5 s); everything over a
+   range comes from the reporting views. Charts are drawn by charts.js; the
+   report definitions are in reports.js. */
+(function () {
+	'use strict';
+	var C = window.BladeCharts, R = window.BladeReports, getJson = R.getJson;
+	/* Replaced by the dashboard's settings (/settings) when the board opens. */
+	var LIVE_MS = 5000, ANALYTICS_MS = 60000, HEAP_HIGH = 85;
+	/* How often the range's numbers are re-read while the board shows Live. */
+	var LIVE_ANALYTICS_MS = 15000;
+	/* What this viewer's grants show, from /settings. The server enforces it;
+	   the board only says so instead of showing empty panels. */
+	var RIGHTS = { platform: true, content: true };
+	/* The range buttons between Live and Custom, in days; replaced by the
+	   settings' ranges (/settings) when the board opens. */
+	var RANGES = ['1', '7', '30'];
+	function rangeLabel(d) { return d === '1' ? 'Last day' : d + ' days'; }
+	/* Lines that are peers (servers, applications) take colours that rank
+	   nothing; the good/fair/bad tokens are kept for outcomes. Each line is
+	   named at its end, so the colour is never the only channel. */
+	var LINE_COLORS = function () { return [C.token('--accent'), C.token('--info'), C.token('--ink-2')]; };
+	var WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+	function store(key, value) {
+		try {
+			if (value === undefined) return localStorage.getItem('blade.board.' + key);
+			localStorage.setItem('blade.board.' + key, value);
+		} catch (e) { /* private window: the board works without it */ }
+		return null;
+	}
+
+	/* The domain shown: '' is every domain. localDomain is the one this board
+	   runs in, the only one it can read live. */
+	var scope = store('domain') || '', localDomain = null;
+	function remoteScope() { return !!scope && !!localDomain && scope !== localDomain; }
+	function scopeQuery() { return scope ? '&domain=' + encodeURIComponent(scope) : ''; }
+
+	function el(tag, cls, text) {
+		var e = document.createElement(tag);
+		if (cls) e.className = cls;
+		if (text != null) e.textContent = text;
+		return e;
+	}
+
+	function cell(result, column) {
+		if (!result || !result.rows || !result.rows.length) return null;
+		var i = result.columns.indexOf(column);
+		return i < 0 ? null : result.rows[0][i];
+	}
+
+	function rowsOf(result) { return (result && result.rows) || []; }
+
+	function seriesOf(result, names) {
+		return names.map(function (name) {
+			var i = result.columns.indexOf(name);
+			return { name: name, values: result.rows.map(function (r) { return [r[0], r[i]]; }) };
+		});
+	}
+
+	/* ── what the board shows ──────────────────────────────────────────── */
+
+	/* The range in the top bar and what the viewer chose to narrow by:
+	   range is 'live', a number of days, or 'custom' with from and until in
+	   epoch millis; slice is a time on a Traffic chart, {from, until}, or a
+	   cell of the weekday grid, {dow, hod} with Monday 1. */
+	var state = { range: 'live', from: null, until: null, server: null, slice: null, outcome: null, app: null, cause: null, peer: null, number: null };
+
+	function isLive() { return state.range === 'live'; }
+	/* Operations is read from the event bus while the board shows the live
+	   hour with no time chosen; any other time comes from the database. */
+	function liveFeed() { return isLive() && !state.slice; }
+
+	function readHash() {
+		var p = new URLSearchParams(location.hash.replace(/^#/, '')), st = {};
+		var range = p.get('range') || 'live';
+		st.range = range === 'live' || range === 'custom' || /^\d+$/.test(range) ? range : 'live';
+		st.from = +p.get('from') || null;
+		st.until = +p.get('until') || null;
+		if (st.range === 'custom' && !(st.from && st.until && st.from < st.until)) st.range = 'live';
+		st.server = p.get('server') || null;
+		st.outcome = p.get('outcome') || null;
+		st.app = p.get('app') || null;
+		st.cause = p.get('cause') || null;
+		st.peer = p.get('peer') || null;
+		// Never in the address: a phone number stays in this page only.
+		st.number = state.number;
+		st.slice = null;
+		var s = p.get('slice');
+		var m = s && /^(\d+)-(\d+)$/.exec(s), w = s && /^([1-7])@(\d{1,2})$/.exec(s);
+		if (m) st.slice = { from: +m[1], until: +m[2] };
+		else if (w) st.slice = { dow: +w[1], hod: +w[2] };
+		return st;
+	}
+
+	function hashOf(st) {
+		var p = new URLSearchParams();
+		if (st.range !== 'live') p.set('range', st.range);
+		if (st.range === 'custom') { p.set('from', st.from); p.set('until', st.until); }
+		if (st.server) p.set('server', st.server);
+		if (st.slice) p.set('slice', st.slice.dow ? st.slice.dow + '@' + st.slice.hod : st.slice.from + '-' + st.slice.until);
+		if (st.outcome) p.set('outcome', st.outcome);
+		if (st.app) p.set('app', st.app);
+		if (st.cause) p.set('cause', st.cause);
+		if (st.peer) p.set('peer', st.peer);
+		return p.toString();
+	}
+
+	/* A choice: the hash changes (a step Back can undo), then the board follows. */
+	function choose(changes) {
+		var next = {};
+		Object.keys(state).forEach(function (k) { next[k] = k in changes ? changes[k] : state[k]; });
+		var h = hashOf(next);
+		if (h === location.hash.replace(/^#/, '')) { apply(next); return; }
+		location.hash = h;
+	}
+
+	/* Where the range opens, in epoch millis, as the server cuts it. */
+	function rangeStart(st) {
+		st = st || state;
+		if (st.range === 'custom') return st.from;
+		if (st.range === 'live') return Date.now() - 3600000;
+		if (st.range === '1') return Date.now() - 86400000;
+		var d = new Date(Date.now() - (+st.range - 1) * 86400000);
+		var parts = d.toLocaleDateString('en-CA', { timeZone: R.zone() }).split('-');
+		return R.zonedMs(+parts[0], +parts[1], +parts[2], 0, 0);
+	}
+	function rangeEnd(st) { st = st || state; return st.range === 'custom' ? st.until : Date.now(); }
+
+	function apply(next) {
+		var prev = state;
+		/* A time chosen outside the new range goes; the rest of the choice stays. */
+		if (next.slice && next.slice.from && (next.slice.until < rangeStart(next) || next.slice.from > rangeEnd(next))) next.slice = null;
+		state = next;
+		var rangeChanged = prev.range !== next.range || prev.from !== next.from || prev.until !== next.until;
+		var sliceChanged = JSON.stringify(prev.slice) !== JSON.stringify(next.slice);
+		var groups = {};
+		if (rangeChanged) { ['base', 'servers', 'traffic', 'ops', 'apps', 'calls'].forEach(function (g) { groups[g] = 1; }); }
+		if (prev.server !== next.server) { groups.traffic = 1; groups.ops = 1; }
+		if (sliceChanged) groups.ops = 1;
+		if (prev.outcome !== next.outcome) { groups.apps = 1; groups.calls = 1; }
+		if (prev.app !== next.app || prev.cause !== next.cause || prev.peer !== next.peer || prev.number !== next.number) groups.calls = 1;
+		if (rangeChanged) { buildRange(); labelRanges(); relinkAll(); scheduleAnalytics(); }
+		Object.keys(groups).forEach(function (g) { D[g] = undefined; loadGroup(g); });
+		drawAll();
+	}
+
+	/* "Thu 10/8" in the viewer's zone. */
+	function dayText(ms) {
+		return new Date(ms).toLocaleDateString([], { timeZone: R.zone(), weekday: 'short', month: 'numeric', day: 'numeric' }).replace(',', '');
+	}
+	function clockText(ms) { return R.time(ms, { hour: '2-digit', minute: '2-digit' }); }
+	/* "Thu 10/8 14:00–14:15", or across days "Thu 10/8 14:00 – Fri 10/9 09:00". */
+	function spanText(from, until) {
+		var end = until + 1;
+		if (dayText(from) === dayText(until)) return dayText(from) + ' ' + clockText(from) + '–' + clockText(end);
+		return dayText(from) + ' ' + clockText(from) + ' – ' + dayText(until) + ' ' + clockText(end);
+	}
+
+	/* The range as a phrase on a tile or panel. One day is a rolling 24 hours;
+	   longer ranges are whole days, today's included (AnalyticsReports.since). */
+	function rangePhrase() {
+		if (state.range === 'live') return 'last hour';
+		if (state.range === 'custom') return spanText(state.from, state.until - 1);
+		return state.range === '1' ? 'last 24 hours' : 'last ' + state.range + ' days';
+	}
+
+	function rangeQuery() {
+		if (state.range === 'custom') return '&from=' + state.from + '&until=' + state.until;
+		return '&days=' + (state.range === 'live' ? 0 : state.range);
+	}
+
+	/* The range narrowed to the time chosen on a Traffic chart, for Operations. */
+	function sliceQuery() {
+		var s = state.slice;
+		if (!s) return rangeQuery();
+		if (s.dow) return rangeQuery() + '&dow=' + s.dow + '&hod=' + s.hod;
+		return '&from=' + s.from + '&until=' + s.until;
+	}
+
+	function sliceLabel() {
+		var s = state.slice;
+		if (!s) return '';
+		if (s.dow) return 'every ' + WEEKDAYS[s.dow - 1] + ' ' + (s.hod < 10 ? '0' : '') + s.hod + ':00';
+		return spanText(s.from, s.until);
+	}
+
+	/* The time a chart bucket spans: "2026-10-08" is a day, "2026-10-08 14:15"
+	   starts a minute, a quarter-hour or an hour, as the report's first column
+	   (`grain`) says. Read in the viewer's zone, as the server cut it. */
+	function sliceOf(bucket, grain) {
+		var m = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}))?$/.exec(bucket);
+		if (!m) return null;
+		var from = R.zonedMs(+m[1], +m[2], +m[3], +(m[4] || 0), +(m[5] || 0));
+		var until = grain === 'day' ? R.zonedMs(+m[1], +m[2], +m[3] + 1, 0, 0) - 1
+			: from + ({ minute: 1, quarter: 15, hour: 60 }[grain] || 60) * 60000 - 1;
+		return { from: from, until: until };
+	}
+
+	/* A Traffic chart's buckets as choices: clicking one narrows Operations
+	   to it, clicking it again lets it go. */
+	function bucketPick(res) {
+		var grain = res.columns[0];
+		var picked = null;
+		if (state.slice && state.slice.from) {
+			res.rows.forEach(function (r) { var s = sliceOf(r[0], grain); if (s && s.from === state.slice.from) picked = r[0]; });
+		}
+		return {
+			pick: function (bucket) {
+				var s = sliceOf(bucket, grain);
+				choose({ slice: picked === bucket || !s ? null : s });
+			},
+			picked: picked,
+			pickLabel: when
+		};
+	}
+
+	function mergeOpts(a, b) { Object.keys(b).forEach(function (k) { a[k] = b[k]; }); return a; }
+
+	/* ── headline numbers ──────────────────────────────────────────────── */
+
+	/* Each tile: a label, the number, and a line in words. The word carries any
+	   state ("all running", "2 down"), never the colour alone. */
+	var KPI = [
+		{ id: 'nodes', label: 'Servers running', platform: true },
+		{ id: 'now', label: 'Calls now' },
+		{ id: 'calls', label: 'Calls', ranged: true },
+		{ id: 'answered', label: 'Answered', ranged: true },
+		{ id: 'duration', label: 'Median call', ranged: true },
+		{ id: 'flagged', label: 'Calls flagged', ranged: true },
+		{ id: 'queued', label: 'Queued now', platform: true }
+	];
+	var kpiEls = {};
+
+	function buildKpis() {
+		var host = document.getElementById('kpis');
+		KPI.forEach(function (k) {
+			var t = el('div', 'kpi');
+			var l = el('div', 'kpi__l', k.label);
+			if (k.ranged) { var r = el('span', 'kpi__range'); l.appendChild(r); k.rangeEl = r; }
+			var v = el('div', 'kpi__v', '—');
+			var s = el('div', 'kpi__s', '');
+			t.appendChild(l); t.appendChild(v); t.appendChild(s);
+			host.appendChild(t);
+			kpiEls[k.id] = { tile: t, v: v, s: s, k: k };
+		});
+		host.style.setProperty('--kpis', KPI.length);
+		labelRanges();
+	}
+
+	function labelRanges() {
+		var word = rangePhrase();
+		KPI.forEach(function (k) { if (k.rangeEl) k.rangeEl.textContent = ' · ' + word; });
+		Object.keys(P).forEach(function (k) { P[k].showRange(); });
+	}
+
+	/* A viewer without the platform grant gets no server tiles at all, rather
+	   than tiles that say so: the strip closes up around the call numbers. */
+	function hidePlatformKpis() {
+		var shown = 0;
+		KPI.forEach(function (k) {
+			var hide = k.platform === true;
+			kpiEls[k.id].tile.style.display = hide ? 'none' : '';
+			if (!hide) shown++;
+		});
+		document.getElementById('kpis').style.setProperty('--kpis', shown);
+	}
+
+	/* 65 -> "1:05", 3725 -> "1:02:05": a call length as people read one. */
+	function clock(seconds) {
+		if (seconds == null) return null;
+		var t = Math.round(seconds), h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, sec = t % 60;
+		var mm = h ? (m < 10 ? '0' : '') + m : String(m);
+		return (h ? h + ':' : '') + mm + ':' + (sec < 10 ? '0' : '') + sec;
+	}
+
+	/* alert: the tile is outlined and its line says what is wrong. */
+	function kpi(id, value, sub, alert) {
+		var e = kpiEls[id];
+		e.v.textContent = value == null ? '—' : (typeof value === 'number' ? C.fmt(value) : value);
+		e.s.textContent = sub || '';
+		e.tile.classList.toggle('kpi--alert', !!alert);
+	}
+
+	/* ── causes ────────────────────────────────────────────────────────── */
+
+	/* A cause in words, from its key (`fault|finding|method|status|who`, as the
+	   calls.causes report builds it). The same sentences as Trace's verdicts
+	   (admin/callflow traces.js, verdictText): keep the two alike. The finding
+	   names are the framework's (CallLadder.Verdict). */
+	function causeText(key) {
+		var k = String(key).split('|'), finding = k[1], m = k[2] || 'request', st = k[3] ? k[3] + ' ' : '', who = k[4];
+		switch (finding) {
+		case 'silent': return who + ' never answered the ' + m;
+		case 'timeout': return who + ' never answered the ' + m + '; the container gave up (' + st.trim() + ')';
+		case 'forgot': return who + ' no longer knew the call: ' + st + 'to the ' + m;
+		case 'error': return who + ' failed: ' + st + 'to the ' + m;
+		case 'credentials': return who + ' refused the credentials: ' + st + 'to the ' + m;
+		case 'unanswered': return who + ' never answered a ' + m;
+		case 'unrelayed': return who + ' never passed on a BYE';
+		default: return 'dropped in ' + who + ', nothing else found';
+		}
+	}
+
+	/* Whose fault, as Trace says it: an application's fault names the application. */
+	var WHOSE = { downstream: 'DOWNSTREAM', dropped: 'DROPPED' };
+	function whose(r) {
+		return r[2] === 'application' ? String(r[6]).split(' on ')[0] : WHOSE[r[2]] || String(r[2]).toUpperCase();
+	}
+
+	/* Applications › Causes: the causes, most calls first; a click narrows Calls. */
+	/* Calls refused before any application took them, from the servers'
+	   minute samples: what the container refused (overload, its throttle),
+	   what no App Router rule matched, what it routed past an undeployed
+	   application, and routing loops. No call record exists for these, so
+	   they are counted, not listed, and cannot narrow Calls. */
+	function refusals() {
+		var t = D.servers && D.servers['platform.servers'];
+		if (!t || !t.rows || state.outcome || state.app) return [];
+		var col = function (n) { return t.columns.indexOf(n); }, out = [];
+		t.rows.forEach(function (r) {
+			if (state.server && r[col('server')] !== state.server) return;
+			var add = function (n, whose, text) { if (n > 0) out.push({ n: n, whose: whose, text: r[col('server')] + ' ' + text }); };
+			add(r[col('refused')], 'CONTAINER', 'refused the requests: overloaded, or its throttle');
+			add(r[col('no rule matched')], 'APP ROUTER', 'matched no rule: the default application took them');
+			add(r[col('routed past undeployed')], 'APP ROUTER', 'routed past an application that is not deployed');
+			add(r[col('routing loops')], 'APP ROUTER', 'found routing loops');
+		});
+		return out.sort(function (a, b) { return b.n - a.n; });
+	}
+
+	function drawCauses(body) {
+		guard(D.apps && D.apps['calls.causes'], body, function (res) {
+			var before = refusals();
+			if (!res.rows.length && !before.length) return C.message(body, 'empty', 'No call in this range was recorded going wrong. Only applications built on the flight recorder record them.');
+			var list = el('div', 'causes');
+			before.forEach(function (f) {
+				var row = el('div', 'causes__row causes__row--before');
+				row.appendChild(el('span', 'causes__n', C.fmt(f.n)));
+				row.appendChild(el('span', 'causes__whose', f.whose));
+				row.appendChild(el('span', 'causes__text', f.text));
+				row.title = 'Refused before any application took the call, so there is no call to list: counted from the server\'s minute samples.';
+				list.appendChild(row);
+			});
+			res.rows.forEach(function (r) {
+				var key = r[0], on = state.cause === key;
+				var row = el('button', 'causes__row' + (on ? ' causes__row--on' : ''));
+				row.type = 'button';
+				row.appendChild(el('span', 'causes__n', C.fmt(r[1])));
+				row.appendChild(el('span', 'causes__whose causes__whose--' + r[2], whose(r)));
+				row.appendChild(el('span', 'causes__text', causeText(key)));
+				row.title = C.fmt(r[1]) + (r[1] === 1 ? ' call' : ' calls') + ', ' + dayText(r[7]) + ' ' + clockText(r[7])
+					+ (r[8] !== r[7] ? ' to ' + dayText(r[8]) + ' ' + clockText(r[8]) : '') + '\nClick: the Calls panel for these calls only';
+				row.addEventListener('click', function () { choose({ cause: on ? null : key }); });
+				list.appendChild(row);
+			});
+			body.appendChild(list);
+		});
+	}
+
+	/* ── panels ────────────────────────────────────────────────────────── */
+
+	/* views: [{ key, label, sub, live, narrow, first, draw(body) }]. The chosen
+	   tab is remembered per panel; until one is, the view marked `first` shows,
+	   else the leftmost. A panel built with ranged shows the top bar's range
+	   in its head; a view whose `live` is true (or returns true) can only show
+	   now, and says "live" instead. `narrows` names the choices made to the
+	   left that this panel follows; each shows as a chip in its head, unless the
+	   view says `narrow: false`. */
+	function Panel(name, title, family, ranged, narrows) {
+		this.name = name;
+		this.host = document.querySelector('[data-panel="' + name + '"]');
+		var head = el('div', 'panel__head');
+		var t = family ? el('a', 'panel__title', title) : el('span', 'panel__title', title);
+		if (family) { t.title = 'Open the full report'; this.link = t; this.family = family; }
+		this.ranged = !!ranged;
+		this.narrows = narrows || [];
+		this.range = el('span', 'panel__range');
+		this.chips = el('span', 'panel__chips');
+		this.sub = el('span', 'panel__sub', '');
+		this.tabs = el('div', 'tabs');
+		head.appendChild(t); head.appendChild(this.range); head.appendChild(this.chips); head.appendChild(this.sub);
+		head.appendChild(this.tabs);
+		this.body = el('div', 'panel__body');
+		this.host.appendChild(head); this.host.appendChild(this.body);
+		this.views = [];
+		this.current = store('tab.' + name);
+		this.relink();
+	}
+
+	Panel.prototype.view = function () {
+		var self = this;
+		return this.views.filter(function (v) { return v.key === self.current; })[0];
+	};
+
+	Panel.prototype.setViews = function (views) {
+		var self = this;
+		this.views = views;
+		if (!views.some(function (v) { return v.key === self.current; })) {
+			this.current = (views.filter(function (v) { return v.first; })[0] || views[0]).key;
+		}
+		this.tabs.textContent = '';
+		if (views.length > 1) {
+			views.forEach(function (v) {
+				var b = el('button', v.key === self.current ? 'on' : '', v.label);
+				b.type = 'button';
+				b.addEventListener('click', function () {
+					self.current = v.key; store('tab.' + self.name, v.key);
+					Array.prototype.forEach.call(self.tabs.children, function (c) { c.className = c === b ? 'on' : ''; });
+					self.draw();
+					if (v.fetch) v.fetch();
+				});
+				self.tabs.appendChild(b);
+			});
+		}
+	};
+
+	Panel.prototype.draw = function () {
+		var view = this.view();
+		if (!view) return;
+		// A live refresh redraws the view from scratch: a list the reader has
+		// scrolled keeps its place, unless the tab changed.
+		var list = this.body.querySelector(':scope > .bus, .net__list');
+		var top = list && this.drawn === view.key ? list.scrollTop : 0;
+		this.drawn = view.key;
+		this.body.textContent = '';
+		this.sub.textContent = typeof view.sub === 'function' ? view.sub() : (view.sub || '');
+		this.sub.title = (view.tip ? view.tip + '. ' : '') + this.sub.textContent;
+		this.showRange();
+		this.showChips();
+		try { view.draw(this.body); } catch (e) { C.message(this.body, 'error', String(e.message || e)); }
+		list = top && this.body.querySelector(':scope > .bus, .net__list');
+		if (list) list.scrollTop = top;
+	};
+
+	Panel.prototype.showRange = function () {
+		var view = this.view();
+		var live = view && (typeof view.live === 'function' ? view.live() : view.live);
+		this.range.className = 'panel__range' + (live ? ' panel__range--live' : '');
+		this.range.textContent = live ? 'live' : (this.ranged ? rangePhrase() : '');
+		this.range.title = live ? 'Read now: this view has no history' : 'The range chosen in the top bar';
+		this.range.hidden = !live && !this.ranged;
+	};
+
+	/* What the panel is narrowed to, each with a ✕ that lets it go. */
+	var CHIP = {
+		server: function () { return state.server; },
+		slice: function () { return state.slice && sliceLabel(); },
+		outcome: function () { return state.outcome && state.outcome.charAt(0).toUpperCase() + state.outcome.slice(1) + ' calls'; },
+		app: function () { return state.app; },
+		cause: function () { return state.cause && causeText(state.cause); },
+		peer: function () { return state.peer && state.peer + ' failed them'; },
+		number: function () { return state.number && 'number ending ' + state.number.slice(-4); }
+	};
+	Panel.prototype.showChips = function () {
+		var view = this.view();
+		this.chips.textContent = '';
+		if (view && view.narrow === false) return;
+		var self = this;
+		this.narrows.forEach(function (key) {
+			var text = CHIP[key]();
+			if (!text) return;
+			var chip = el('span', 'chip');
+			chip.appendChild(el('span', 'chip__text', text));
+			var x = el('button', 'chip__x', '✕');
+			x.type = 'button';
+			x.title = 'Show all again';
+			x.setAttribute('aria-label', 'Stop narrowing to ' + text);
+			x.addEventListener('click', function () { var c = {}; c[key] = null; choose(c); });
+			chip.appendChild(x);
+			self.chips.appendChild(chip);
+		});
+	};
+
+	/* The full report, over the board's range. */
+	Panel.prototype.relink = function () {
+		if (!this.link) return;
+		var q = state.range === 'custom'
+			? '&days=' + Math.max(1, Math.ceil((state.until - state.from) / 86400000)) + '&from=' + state.from + '&until=' + state.until
+			: '&days=' + (state.range === 'live' ? 1 : state.range);
+		this.link.href = 'report.html?r=' + this.family + q + scopeQuery();
+	};
+
+	function relinkAll() { Object.keys(P).forEach(function (k) { P[k].relink(); }); }
+
+	/* A report result into a panel body, or its error. */
+	function guard(result, body, fn) {
+		if (!result) return C.message(body, 'empty', 'Loading…');
+		if (result.error) return C.message(body, 'error', result.error);
+		return fn(result);
+	}
+
+	/* A table cut to the rows that fit, with the count of the rest. Nothing on
+	   the board scrolls: the full list is one click away in the report. */
+	function fitTable(body, result, opts) {
+		opts = opts || {};
+		C.table(body, result, { limit: 40, wrap: opts.wrap, rowOpen: opts.rowOpen });
+		var wrap = body.querySelector('.table-wrap');
+		if (!wrap) return;
+		var rows = wrap.querySelectorAll('tbody tr');
+		// The body is the table's offset parent: anything above the table (a
+		// link line) takes room too, and so does the "more" line under it.
+		var room = body.clientHeight - wrap.offsetTop - (wrap.querySelector('thead') ? wrap.querySelector('thead').offsetHeight : 0) - 28;
+		var used = 0, shown = 0;
+		for (var i = 0; i < rows.length; i++) {
+			used += rows[i].offsetHeight;
+			if (used > room) { rows[i].style.display = 'none'; } else { shown++; }
+		}
+		var total = result.rows.length;
+		if (shown < total) body.appendChild(el('div', 'panel__more', (total - shown) + ' ' + (opts.more || 'more in the full report')));
+	}
+
+	/* Only the named columns of a report, in that order. */
+	function pick(result, keep) {
+		var idx = keep.map(function (c) { return result.columns.indexOf(c); });
+		return { columns: keep, rows: result.rows.map(function (r) { return idx.map(function (i) { return r[i]; }); }) };
+	}
+
+	/* ── servers ───────────────────────────────────────────────────────── */
+
+	var lastNodes = [], lastOps = null;
+
+	function stateWord(n) {
+		if (n.drained) return 'DRAINING';
+		return String(n.state || 'UNKNOWN').toUpperCase();
+	}
+
+	function stateClass(n) {
+		if (n.drained) return 'state-draining';
+		switch (stateWord(n)) {
+			case 'RUNNING': return 'state-running';
+			case 'SHUTDOWN': case 'FAILED': case 'FORCE_SHUTTING_DOWN': return 'state-down';
+			default: return 'state-starting';
+		}
+	}
+
+	function num(v) { return (v == null || v < 0) ? 'n/a' : C.fmt(v); }
+
+	/* Every domain's servers: this domain's from the runtime MBeans, every
+	   other domain's from its latest minute sample (platform.latest), marked
+	   with the sample's age. The Servers panel lists them all, so a domain can
+	   be chosen there; the headline tile counts the domain in scope. */
+	function allServers() {
+		var out = [];
+		lastNodes.forEach(function (n) { n.domain = localDomain; out.push(n); });
+		rowsOf(D.servers && D.servers['platform.latest']).forEach(function (r) {
+			var domain = r[0];
+			if (domain === localDomain) return;
+			out.push({ domain: domain, server: r[1], cluster: r[2], state: r[3], heapUsedPct: r[4], appSessions: r[5],
+				sipSessions: r[6], threadsStuck: r[7], threadsHogging: r[8], sampled: r[9], cpuPct: r[10] });
+		});
+		return out;
+	}
+
+	function visibleServers() {
+		return allServers().filter(function (n) { return !scope || n.domain === scope; });
+	}
+
+	function byDomainThenName(a, b) {
+		return String(a.domain || '').localeCompare(String(b.domain || '')) || String(a.cluster || '').localeCompare(String(b.cluster || ''))
+			|| String(a.server).localeCompare(String(b.server));
+	}
+
+	/* A domain's heading: choosing it scopes the whole board to it, headline
+	   numbers included; choosing it again shows every domain. */
+	function domainRow(list, domain, note) {
+		var on = scope === domain;
+		var head = el('button', 'srv__domain' + (on ? ' srv__domain--on' : ''));
+		head.type = 'button';
+		head.appendChild(el('span', 'srv__domain-name', (on ? '▸ ' : '') + (domain || 'unnamed domain')));
+		if (note) head.appendChild(el('span', 'srv__domain-note', note));
+		head.title = on ? 'Showing ' + domain + ' only. Click to show every domain.' : 'Show ' + domain + ' only, everywhere on the board';
+		head.addEventListener('click', function () { scopeChanged(on ? '' : domain); });
+		list.appendChild(head);
+	}
+
+	/* A server's name: choosing it narrows Traffic and Operations to it. A
+	   server in another domain than the one in scope brings its domain in. */
+	function serverName(row, n) {
+		var on = state.server === n.server && (!scope || scope === n.domain);
+		var name = el('button', 'srv__name' + (on ? ' srv__name--on' : ''), (on ? '▸ ' : '') + n.server);
+		name.type = 'button';
+		name.title = (n.cluster || 'standalone') + '\n' + (on ? 'Click: every server again' : 'Click: Traffic and Operations for ' + n.server + ' only');
+		name.addEventListener('click', function () {
+			if (on) return choose({ server: null });
+			if (scope && scope !== n.domain) scopeChanged(n.domain);
+			choose({ server: n.server });
+		});
+		var cellEl = el('span', 'srv__who');
+		cellEl.appendChild(name);
+		/* This domain's servers open their own log; another domain's are read
+		   by that domain's Logs. */
+		var log = n.domain === localDomain ? L.to('log', { server: n.server, at: Date.now() }) : null;
+		if (log) {
+			var go = el('a', 'srv__go', '↗');
+			go.href = log.href; go.target = log.target;
+			go.title = 'Open ' + n.server + "'s server log";
+			cellEl.appendChild(go);
+		}
+		row.appendChild(cellEl);
+		if (on) row.classList.add('srv__row--on');
+	}
+
+	/* One line per server: state word, name, heap bar with its number, sessions
+	   and threads. Grouped by domain, then cluster, in name order; a domain read
+	   from its samples says how old the sample is. */
+	function drawServersNow(body) {
+		var nodes = allServers();
+		if (!nodes.length) return C.message(body, 'empty', 'Reading the runtime MBeans…');
+		var list = el('div', 'srv');
+		nodes.sort(byDomainThenName);
+		var head = el('div', 'srv__row srv__row--head');
+		srvHead(head, [['state'], ['server'], ['heap'], ['cpu'], ['sessions', 'SIP sessions now'], ['threads', 'stuck, pending or hogging threads'],
+			['queue', 'The fuller SIP work queue (transport or timer) as a share of the depth at which OCCAS answers every request 503']]);
+		list.appendChild(head);
+		var shownDomain;
+		nodes.forEach(function (n) {
+			if (n.domain !== shownDomain) {
+				shownDomain = n.domain;
+				var age = n.sampled ? Math.max(0, Math.round((Date.now() - n.sampled) / 1000)) : null;
+				domainRow(list, n.domain, n.domain === localDomain ? 'this domain · live' : (age == null ? '' : 'sampled ' + age + ' s ago'));
+			}
+			var row = el('div', 'srv__row');
+			var st = el('span', 'srv__state ' + stateClass(n)); st.appendChild(el('i')); st.appendChild(document.createTextNode(stateWord(n)));
+			row.appendChild(st);
+			serverName(row, n);
+			if (n.up === false) {
+				['', '', '', '', ''].forEach(function () { row.appendChild(el('span', 'srv__n', '—')); });
+				list.appendChild(row);
+				return;
+			}
+			row.appendChild(heapCell(n.heapUsedPct, n.heapUsedPct != null ? n.heapUsedPct + '%' : 'n/a'));
+			row.appendChild(el('span', 'srv__n', n.cpuPct == null ? '—' : n.cpuPct + '%'));
+			row.appendChild(el('span', 'srv__n', num(n.sipSessions)));
+			var threads = n.sampled ? '' : num(n.threadsTotal);
+			if (n.threadsStuck > 0) threads += (threads ? ' · ' : '') + n.threadsStuck + ' stuck';
+			else if (n.threadsPending > 0) threads += ' · ' + n.threadsPending + ' pending';
+			else if (n.threadsHogging > 0) threads += (threads ? ' · ' : '') + n.threadsHogging + ' hogging';
+			if (!threads) threads = 'none';
+			/* Stuck threads open the log at the container's stuck-thread warning
+			   (BEA-000337). */
+			var stuck = n.threadsStuck > 0 && n.domain === localDomain
+				? L.to('log', { server: n.server, at: Date.now() - 15 * 60000, q: 'BEA-000337' }) : null;
+			var th = el(stuck ? 'a' : 'span', 'srv__n' + (n.threadsStuck > 0 ? ' warn' : '') + (stuck ? ' srv__n--link' : ''), threads);
+			if (stuck) { th.href = stuck.href; th.target = stuck.target; th.title = 'The stuck-thread warnings in ' + n.server + "'s server log"; }
+			row.appendChild(th);
+			row.appendChild(queueCell(n));
+			list.appendChild(row);
+		});
+		body.appendChild(list);
+	}
+
+	/* The fuller SIP work queue's fill. At the options app's line the health
+	   ping answers 503 Busy; at 100% OCCAS answers every request 503 itself,
+	   before any application runs, which is why it is worth watching here. */
+	/* Requests OCCAS refused itself since the previous read (MessagesRejected
+	   rising): the queue was full a moment ago, even if it has drained since. */
+	var lastRejected = {};
+	function rejectedSince(n) {
+		if (n.sipRejected == null) return 0;
+		// Keyed by the reading, so a redraw of the same reading keeps its delta.
+		var key = n.domain + '/' + n.server, seen = lastRejected[key];
+		if (seen && seen.value === n.sipRejected) return seen.delta;
+		var delta = !seen || n.sipRejected < seen.value ? 0 : n.sipRejected - seen.value;
+		lastRejected[key] = { value: n.sipRejected, delta: delta };
+		return delta;
+	}
+
+	function queueCell(n) {
+		var f = window.BladeNetwork.queueFill(n);
+		var refused = rejectedSince(n);
+		var o = n.sipQueues && n.sipQueues.overload;
+		var refusing = o && o.refusing;
+		if (!f && !refused && !refusing) return el('span', 'srv__n', '—');
+		var full = refused > 0 || (f && f.pct >= 100), busy = f && f.busy && f.pct >= f.busy;
+		var c = el('span', 'srv__n' + (full || busy || refusing ? ' warn' : ''),
+			refused ? refused + ' refused' : refusing ? 'refusing' : f.pct + '%' + (full ? ' full' : busy ? ' busy' : ''));
+		c.title = (f ? f.queue + ' queue: ' + f.depth + ' waiting of ' + f.capacity + '. ' : '')
+			+ (refused ? 'OCCAS refused ' + refused + ' request' + (refused === 1 ? '' : 's') + ' with 503 since the last read: a SIP queue was full. '
+				: full ? 'OCCAS is answering every request 503. '
+				: refusing ? 'Over the overload line since ' + new Date(o.since).toLocaleTimeString() + ': '
+					+ (o.protection === 'active' ? 'new calls get 503 Server busy, calls already up carry on. ' : 'nothing refuses yet (' + o.protection + '). ')
+				: busy ? 'The health ping answers 503 Busy at ' + f.busy + '%. ' : '')
+			+ overloadLine(o)
+			+ (n.sipRejected != null ? n.sipRejected + ' refused since the server started.' : '');
+		return c;
+	}
+
+	/* The overload settings and readings, for a hover: where it refuses and
+	   resumes, whether the container acts on it, and the warning readings. */
+	function overloadLine(o) {
+		if (!o) return '';
+		var bits = [];
+		if (o.latencyMillis != null) bits.push('SIP messages taking ' + o.latencyMillis + ' ms (90th percentile)');
+		if (o.refuseMillis) bits.push('refuses new calls at ' + o.refuseMillis + ' ms, resumes below ' + Math.floor(o.refuseMillis / 2) + ' ms (protection ' + o.protection + ')');
+		else bits.push('overload refusing off');
+		if (o.gcPercent != null) bits.push('GC ' + o.gcPercent + '% of the time');
+		if (o.heapAfterGcPercent != null) bits.push('old gen ' + o.heapAfterGcPercent + '% after GC');
+		if (o.lockFailuresPerMinute != null) bits.push(o.lockFailuresPerMinute + ' lock failures a minute');
+		return 'Overload: ' + bits.join(', ') + '. ' + (o.warnings && o.warnings.length ? 'Warning: ' + o.warnings.join('; ') + '. ' : '');
+	}
+
+	/* The servers table's head: one short word a column, the long meaning on
+	   hover, the number columns aligned with their numbers. */
+	function srvHead(head, cols) {
+		cols.forEach(function (c, i) {
+			var h = el('span', i >= 3 ? 'srv__n' : '', c[0]);
+			if (c[1]) h.title = c[1];
+			head.appendChild(h);
+		});
+	}
+
+	function heapCell(pct, text) {
+		var heap = el('span', 'srv__heap' + (pct >= HEAP_HIGH ? ' hot' : ''));
+		if (pct != null) {
+			var bar = el('span', 'srv__bar'); var fill = el('span', 'srv__fill'); fill.style.width = Math.min(100, pct) + '%';
+			bar.appendChild(fill); heap.appendChild(bar);
+			heap.appendChild(el('b', '', text + (pct >= HEAP_HIGH ? ' high' : '')));
+		} else heap.appendChild(el('b', '', 'n/a'));
+		return heap;
+	}
+
+	/* Each server over the range, from its minute samples (platform.servers):
+	   how it stood at its last sample, the highest heap and CPU, how often it
+	   restarted, and the most threads stuck at once. */
+	function drawServersPast(body) {
+		guard(D.servers && D.servers['platform.servers'], body, function (res) {
+			var col = function (n) { return res.columns.indexOf(n); };
+			var rows = res.rows.map(function (r) {
+				return { domain: r[col('domain')], server: r[col('server')], state: r[col('state')], heap: r[col('peak heap %')],
+					cpu: r[col('peak cpu %')], restarts: r[col('restarts')], stuck: r[col('most stuck threads')],
+					refused: r[col('refused')] };
+			});
+			if (!rows.length) return C.message(body, 'empty', 'No server samples in this range.');
+			rows.sort(byDomainThenName);
+			var list = el('div', 'srv');
+			var head = el('div', 'srv__row srv__row--head');
+			srvHead(head, [['state', 'the last state in the range'], ['server'], ['heap', 'the highest heap reading in the range'],
+				['cpu', 'the busiest minute in the range'], ['restarts'], ['stuck', 'the most threads stuck at once']]);
+			list.appendChild(head);
+			var shownDomain;
+			rows.forEach(function (n) {
+				if (n.domain !== shownDomain) { shownDomain = n.domain; domainRow(list, n.domain, n.domain === localDomain ? 'this domain' : ''); }
+				var row = el('div', 'srv__row');
+				var st = el('span', 'srv__state ' + stateClass(n)); st.appendChild(el('i')); st.appendChild(document.createTextNode(stateWord(n)));
+				row.appendChild(st);
+				serverName(row, n);
+				row.appendChild(heapCell(n.heap == null ? null : Math.round(n.heap), n.heap == null ? 'n/a' : Math.round(n.heap) + '%'));
+				row.appendChild(el('span', 'srv__n', n.cpu == null ? '—' : Math.round(n.cpu) + '%'));
+				row.appendChild(el('span', 'srv__n' + (n.restarts > 0 ? ' warn' : ''), n.restarts ? n.restarts + '×' : 'none'));
+				row.appendChild(el('span', 'srv__n' + (n.stuck > 0 ? ' warn' : ''), n.stuck > 0 ? n.stuck + ' stuck' : 'none'));
+				list.appendChild(row);
+			});
+			body.appendChild(list);
+		});
+	}
+
+	function drawServers(body) {
+		if (!RIGHTS.platform) return C.message(body, 'empty', 'Servers are not in your grant.');
+		if (isLive()) drawServersNow(body); else drawServersPast(body);
+	}
+
+	/* A view that only this domain's runtime can answer. */
+	function localOnly(body, what) {
+		if (!RIGHTS.platform) {
+			C.message(body, 'empty', what + ' are not in your grant.');
+			return true;
+		}
+		if (!remoteScope()) return false;
+		C.message(body, 'empty', what + ' come from this domain, ' + localDomain + ', read live. Choose it, or every domain, to see them.');
+		return true;
+	}
+
+	function drawJdbc(body) {
+		if (localOnly(body, 'Connection pools')) return;
+		var rows = [];
+		lastNodes.forEach(function (n) {
+			if (state.server && n.server !== state.server) return;
+			(n.jdbc || []).forEach(function (d) {
+				rows.push([n.server, d.name, d.state || '—', d.active, d.capacity, d.waiting, d.failures,
+					d.failuresAt ? R.time(d.failuresAt) : '—']);
+			});
+		});
+		if (!rows.length) return C.message(body, 'empty', 'No JDBC pools reported.');
+		fitTable(body, { columns: ['server', 'pool', 'state', 'active', 'capacity', 'waiting', 'failures', 'last failure'], rows: rows });
+	}
+
+	/* ── the bus: can the board be trusted? ──────────────────────────────── */
+
+	/* /bus and the health.stored report, read on the live cycle while the tab
+	   shows. Everything the board draws from the database is at most as fresh
+	   as the newest stored event; a subscription with events waiting, or one
+	   with no consumer, is the board falling behind; a parked event was lost
+	   to every report. */
+	var lastBus = null, busArmed = null;
+	var BUS_STALE_MS = 5 * 60000;
+
+	function loadBus() {
+		if (!RIGHTS.platform || remoteScope()) return Promise.resolve();
+		return Promise.all([getJson('bus'),
+			getJson('data?r=health.stored&days=1&fresh=1&tz=' + encodeURIComponent(R.zone())).catch(function () { return null; }),
+			getJson('data?r=health.publishing&days=0&tz=' + encodeURIComponent(R.zone())).catch(function () { return null; }),
+			getJson('data?r=health.database&days=1&tz=' + encodeURIComponent(R.zone())).catch(function () { return null; })
+		]).then(function (a) {
+			lastBus = a[0];
+			lastBus.database = a[3] && a[3]['health.database'];
+			lastBus.publishing = a[2] && a[2]['health.publishing'];
+			var st = a[1] && a[1]['health.stored'];
+			lastBus.stored = st && st.rows && st.rows[0] ? { newest: st.rows[0][0], events: st.rows[0][1] } : null;
+			if (P.cluster.current === 'bus') P.cluster.draw();
+		});
+	}
+
+	function ago(ms) {
+		var s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+		return s < 90 ? s + ' s ago' : s < 5400 ? Math.round(s / 60) + ' min ago' : Math.round(s / 3600) + ' h ago';
+	}
+
+	function busDelete(which) {
+		return fetch('bus?delete=' + encodeURIComponent(which), { method: 'POST', credentials: 'same-origin',
+			headers: { 'X-Blade-Board': '1' } }).then(function (r) { return r.json(); }).then(function (j) {
+			busArmed = null;
+			if (j.error) setStatus('error', j.error);
+			return loadBus();
+		});
+	}
+
+	/* A delete asks twice, in place: the first click arms the button. */
+	function deleteButton(which, label) {
+		var b = el('button', 'bus__del' + (busArmed === which ? ' bus__del--armed' : ''),
+			busArmed === which ? 'Confirm' : label);
+		b.type = 'button';
+		b.addEventListener('click', function () {
+			if (busArmed === which) { busDelete(which); return; }
+			busArmed = which;
+			P.cluster.draw();
+		});
+		return b;
+	}
+
+	function drawBus(body) {
+		if (localOnly(body, 'The event bus')) return;
+		if (!lastBus) { C.message(body, 'empty', 'Loading…'); loadBus().catch(function () {}); return; }
+		if (lastBus.error) return C.message(body, 'error', lastBus.error);
+		var box = el('div', 'bus');
+		var st = lastBus.stored, stale = !st || !st.newest || Date.now() - st.newest > BUS_STALE_MS;
+		var fresh = el('p', 'bus__line' + (stale ? ' bus__line--bad' : ''));
+		fresh.appendChild(el('span', 'bus__word', stale ? 'BEHIND' : 'CURRENT'));
+		fresh.appendChild(document.createTextNode(!st ? 'The analytics database could not be read.'
+			: !st.newest ? 'Analytics stored no event in the last day.'
+			: 'Analytics stored its newest event ' + ago(st.newest) + ' (' + C.fmt(st.events) + ' today).'));
+		fresh.title = 'Every panel read from the database is at most this old. Behind: nothing stored for '
+			+ (BUS_STALE_MS / 60000) + ' minutes, while every server samples itself each minute.';
+		box.appendChild(fresh);
+
+		var subs = (lastBus.bus && lastBus.bus.subscriptions) || [];
+		var t = el('table', 'bus__table'), head = el('tr');
+		['subscription', 'server', 'consumer', 'waiting'].forEach(function (h, i) { head.appendChild(el('th', i === 3 ? 'num' : '', h)); });
+		t.appendChild(el('thead')).appendChild(head);
+		var tb = t.appendChild(el('tbody'));
+		subs.forEach(function (s) {
+			var tr = tb.appendChild(el('tr', !s.active || s.waiting > 0 ? 'bus__row--bad' : ''));
+			tr.appendChild(el('td', '', s.name));
+			tr.appendChild(el('td', '', s.server));
+			tr.appendChild(el('td', '', s.active ? 'attached' : 'NONE'));
+			tr.appendChild(el('td', 'num', C.fmt(s.waiting)));
+			tr.title = !s.active ? 'No application is consuming this subscription: its events pile up on the broker.'
+				: s.waiting > 0 ? 'Events waiting for this subscriber: it is falling behind.' : 'Keeping up.';
+		});
+		if (subs.length) box.appendChild(t);
+
+		/* Publishing over the last hour: what every application handed the bus,
+		   what the bus refused, and how long a send held the thread. Only the
+		   applications with a refusal or a slow send are listed. */
+		var pub = lastBus.publishing;
+		if (pub && pub.rows) {
+			var pc = function (n) { return pub.columns.indexOf(n); };
+			var total = 0, refused = 0, slow = [];
+			pub.rows.forEach(function (r) {
+				total += r[pc('events published')] || 0;
+				refused += r[pc('publishes failed')] || 0;
+				if ((r[pc('publishes failed')] || 0) > 0 || (r[pc('mean send ms')] || 0) >= 1) slow.push(r);
+			});
+			var pl = el('p', 'bus__line' + (slow.length ? ' bus__line--bad' : ''));
+			pl.appendChild(el('span', 'bus__word', refused ? 'REFUSED' : slow.length ? 'SLOW' : 'PUBLISHING'));
+			pl.appendChild(document.createTextNode(C.fmt(total) + ' events published in the last hour by ' + pub.rows.length
+				+ (pub.rows.length === 1 ? ' application' : ' applications') + (refused ? ', ' + C.fmt(refused) + ' refused by the bus (each one lost)' : '')
+				+ (slow.length ? '' : '; every send under 1 ms on average.')));
+			pl.title = 'A send holds the publishing thread, for a call event the SIP container\'s. Under 1 ms means the broker keeps up; applications built before sends were timed show no time.';
+			box.appendChild(pl);
+			if (slow.length) {
+				var st2 = el('table', 'bus__table'), sh = el('tr');
+				['application', 'published', 'refused', 'mean send'].forEach(function (h, i) { sh.appendChild(el('th', i ? 'num' : '', h)); });
+				st2.appendChild(el('thead')).appendChild(sh);
+				var sb = st2.appendChild(el('tbody'));
+				slow.forEach(function (r) {
+					var tr = sb.appendChild(el('tr', 'bus__row--bad'));
+					tr.appendChild(el('td', '', r[pc('application')]));
+					tr.appendChild(el('td', 'num', C.fmt(r[pc('events published')])));
+					tr.appendChild(el('td', 'num', C.fmt(r[pc('publishes failed')])));
+					var ms = r[pc('mean send ms')];
+					tr.appendChild(el('td', 'num', ms == null ? '—' : ms + ' ms'));
+				});
+				box.appendChild(st2);
+			}
+		}
+
+		/* The database itself: how much it holds, how fast it grows, how far
+		   back it reaches. Nothing deletes old rows yet (TODO 14). */
+		var db = lastBus.database;
+		if (db && db.rows && db.rows.length) {
+			var all = db.rows[0];
+			var dl = el('p', 'bus__line');
+			dl.appendChild(el('span', 'bus__word', 'DATABASE'));
+			var gb = all[4] != null ? (all[4] / 1073741824).toFixed(1) + ' GB, ' : '';
+			var days = all[3] ? Math.round((Date.now() - all[3]) / 86400000) : null;
+			dl.appendChild(document.createTextNode(gb + C.fmt(all[1]) + ' events, about ' + C.fmt(Math.round(all[2])) + ' more a day'
+				+ (days != null ? '; the oldest from ' + dayText(all[3]) + ', ' + days + ' days back' : '') + '.'));
+			dl.title = 'Every report reads these rows. The kinds that grow fastest are listed; old rows are not deleted yet, so the database grows until retention is set (TODO 14).';
+			box.appendChild(dl);
+			var dt = el('table', 'bus__table'), dh = el('tr');
+			['event', 'rows', 'a day'].forEach(function (h, i) { dh.appendChild(el('th', i ? 'num' : '', h)); });
+			dt.appendChild(el('thead')).appendChild(dh);
+			var dbody = dt.appendChild(el('tbody'));
+			db.rows.slice(1, 7).forEach(function (r) {
+				var tr = dbody.appendChild(el('tr'));
+				tr.appendChild(el('td', '', r[0]));
+				tr.appendChild(el('td', 'num', C.fmt(r[1])));
+				tr.appendChild(el('td', 'num', C.fmt(Math.round(r[2]))));
+			});
+			box.appendChild(dt);
+		}
+
+		var parked = lastBus.parked || [];
+		var ph = el('p', 'bus__line' + (parked.length ? ' bus__line--bad' : ''));
+		ph.appendChild(el('span', 'bus__word', parked.length ? 'PARKED' : 'NONE PARKED'));
+		ph.appendChild(document.createTextNode(parked.length
+			? parked.length + (parked.length === 1 ? ' event' : ' events') + ' failed processing and reached no report.'
+			: 'Nothing on the error queue.'));
+		if (parked.length && lastBus.mayDelete) ph.appendChild(deleteButton('all', 'Delete all'));
+		box.appendChild(ph);
+		if (parked.length) {
+			var pt = el('table', 'bus__table'), phd = el('tr');
+			['sent', 'event', 'subject', 'server', ''].forEach(function (h) { phd.appendChild(el('th', '', h)); });
+			pt.appendChild(el('thead')).appendChild(phd);
+			var pb = pt.appendChild(el('tbody'));
+			parked.forEach(function (m) {
+				var tr = pb.appendChild(el('tr'));
+				tr.appendChild(el('td', '', m.at ? dayText(m.at) + ' ' + clockText(m.at) : '—'));
+				tr.appendChild(el('td', '', String(m.type || '').replace(/^org\.vorpal\.blade\./, '')));
+				tr.appendChild(el('td', '', m.subject || '—'));
+				tr.appendChild(el('td', '', m.server || '—'));
+				var act = tr.appendChild(el('td'));
+				if (lastBus.mayDelete && m.id) act.appendChild(deleteButton(m.id, 'Delete'));
+				tr.title = (m.reason || '') + (m.eventId ? '\nevent ' + m.eventId : '')
+					+ '\nThe analytics log says why; a type it cannot store is raised under Operations › Issues.';
+			});
+			box.appendChild(pt);
+			if (!lastBus.mayDelete) box.appendChild(el('p', 'bus__note', 'Deleting needs the WebLogic Admin or Operator role.'));
+		}
+		body.appendChild(box);
+	}
+
+	/* Applications › Downstream: each server the flight recorder found
+	   failing calls, most calls first, with what went wrong and the statuses
+	   it answered. A click narrows Calls to its calls; its site on the map, if
+	   the dashboard knows the address. */
+	function drawPeers(body) {
+		guard(D.apps && D.apps['calls.peers'], body, function (res) {
+			if (!res.rows.length) return C.message(body, 'empty', 'No server the calls were sent to was recorded failing them in this range.');
+			var list = el('div', 'causes causes--peers');
+			res.rows.forEach(function (r) {
+				var peer = r[0], on = state.peer === peer;
+				var row = el('button', 'causes__row' + (on ? ' causes__row--on' : ''));
+				row.type = 'button';
+				row.appendChild(el('span', 'causes__n', C.fmt(r[1])));
+				row.appendChild(el('span', 'causes__whose', peer));
+				row.appendChild(el('span', 'causes__text', r[2] + (r[3] ? '  ·  answered ' + r[3] : '')));
+				row.title = C.fmt(r[1]) + (r[1] === 1 ? ' call' : ' calls') + ' failed by ' + peer + ', ' + dayText(r[4]) + ' ' + clockText(r[4])
+					+ (r[5] !== r[4] ? ' to ' + dayText(r[5]) + ' ' + clockText(r[5]) : '') + '\nClick: the Calls panel for these calls only';
+				row.addEventListener('click', function () { choose({ peer: on ? null : peer }); });
+				list.appendChild(row);
+			});
+			body.appendChild(list);
+		});
+	}
+
+	/* ── the rail: every application and service ─────────────────────────── */
+
+	/* The applications and services deployed here, from the portal
+	   application's discovery (/blade/portal/api/v1/cards): apps open at their
+	   own address, services in the Configurator. Every one is listed whatever
+	   the viewer may open; an app that refuses the viewer shows its own page
+	   saying which roles open it (denied.jsp). The name is always shown: an
+	   icon alone says little. The dashboard itself is left out. */
+
+	/* Icons are drawn in the rail's own ink: each app's favicon is used as a
+	   mask, so a navy outline made for a light page reads on the dark rail,
+	   and no icon depends on its colour. An app without an icon of its own
+	   gets a plain window; a service, a plug: something running, set in the
+	   Configurator. */
+	function glyph(paths) {
+		return 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
+			+ '<g fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + paths + '</g></svg>');
+	}
+	var GLYPH_APP = glyph('<rect x="4" y="6" width="24" height="20" rx="2.5"/><path d="M4 11h24 M8 8.5h.01 M11 8.5h.01"/>');
+	var GLYPH_SERVICE = glyph('<path d="M12 4v6 M20 4v6 M8 10h16v5a8 8 0 0 1-16 0z M16 23v5"/>');
+	/* The deployment inventory: a clipboard with a list on it. */
+	var GLYPH_INVENTORY = glyph('<rect x="7" y="6" width="18" height="22" rx="2.5"/><path d="M12 4h8v4h-8z M11 14h.01 M15 14h6 M11 19h.01 M15 19h6 M11 24h.01 M15 24h6"/>');
+
+	function maskIcon(icon, url) {
+		var m = 'url("' + url + '")';
+		icon.style.webkitMaskImage = m;
+		icon.style.maskImage = m;
+	}
+
+	/* Where an application opens: here, unless every server it runs on is
+	   another one (an engine-tier app such as Audit or Recordings), which a
+	   browser reaches at the engine tier's own address. */
+	function appHref(card, where) {
+		var path = '/' + card.contextRoot + '/';
+		var elsewhere = where.server && card.servers && card.servers.length
+			&& card.servers.indexOf(where.server) < 0;
+		return elsewhere && where.engineBaseUrl ? where.engineBaseUrl + path : path;
+	}
+
+	function railItem(card, where) {
+		var service = card.kind === 'service';
+		var a = el('a', 'rail__item');
+		a.href = service ? '/blade/configurator/configurator.html?schema=' + encodeURIComponent(card.configuratorDomain || card.name)
+			: appHref(card, where);
+		a.target = service ? 'blade-configurator' : 'blade-' + card.contextRoot.replace(/^.*\//, '');
+		var icon = el('span', 'rail__icon');
+		icon.setAttribute('aria-hidden', 'true');
+		if (service) {
+			maskIcon(icon, GLYPH_SERVICE);
+		} else {
+			// Only an icon that loads becomes the mask; a missing one, the window.
+			var src = '/' + card.contextRoot + '/favicon.svg', probe = new Image();
+			probe.onload = function () { maskIcon(icon, src); };
+			probe.onerror = function () { maskIcon(icon, GLYPH_APP); };
+			probe.src = src;
+		}
+		a.appendChild(icon);
+		a.appendChild(el('span', 'rail__name', card.name));
+		a.title = [card.name + (card.tagline ? ': ' + card.tagline : ''), card.description]
+			.filter(Boolean).join('\n\n');
+		return a;
+	}
+
+	function loadRail(cfg) {
+		var where = { server: cfg && cfg.about && cfg.about.server, engineBaseUrl: cfg && cfg.engineBaseUrl };
+		var rail = document.getElementById('rail');
+		if (!rail) return;
+		getJson('/blade/portal/api/v1/cards').then(function (res) {
+			var cards = (res && res.cards) || [];
+			rail.textContent = '';
+			var inv = el('a', 'rail__item rail__item--first');
+			inv.href = '/blade/portal/report.html';
+			inv.target = 'blade-portal';
+			inv.title = 'Deployment Inventory\n\nEvery application and service, where each runs, in one printable page.';
+			var icon = el('span', 'rail__icon');
+			icon.setAttribute('aria-hidden', 'true');
+			maskIcon(icon, GLYPH_INVENTORY);
+			inv.appendChild(icon);
+			inv.appendChild(el('span', 'rail__name', 'Deployment Inventory'));
+			rail.appendChild(inv);
+			[['app', 'Apps'], ['service', 'Services']].forEach(function (g) {
+				var some = cards.filter(function (c) {
+					return (c.kind === 'service') === (g[0] === 'service') && c.contextRoot !== 'blade/dashboard';
+				});
+				if (!some.length) return;
+				rail.appendChild(el('div', 'rail__head', g[1]));
+				some.forEach(function (c) { rail.appendChild(railItem(c, where)); });
+			});
+		}).catch(function () {
+			rail.textContent = '';
+			rail.appendChild(el('p', 'rail__note', 'The application list is unavailable: the portal application serves it.'));
+		});
+	}
+
+	/* ── headroom ──────────────────────────────────────────────────────── */
+
+	/* What one engine was measured to carry (dashboard settings, from a load
+	   test); zero until measured. */
+	var CAPACITY = { cps: 0, sessions: 0 };
+
+	/* Servers › Headroom: each server's busiest minute in the range, set
+	   against what it was measured to carry. Past 80% of it is marked. */
+	function drawHeadroom(body) {
+		if (!RIGHTS.platform) return C.message(body, 'empty', 'Headroom is not in your grant.');
+		guard(D.servers && D.servers['platform.headroom'], body, function (res) {
+			var rows = res.rows.filter(function (r) { return !state.server || r[1] === state.server; });
+			if (!rows.length) return C.message(body, 'empty', 'No server sampled in this range.');
+			var box = el('div', 'bus');
+			if (!CAPACITY.cps && !CAPACITY.sessions) {
+				box.appendChild(el('p', 'bus__note', 'Capacity is not measured yet: the busiest minutes below stand alone until a load test sets capacityCallsPerSecond and capacitySessions in the dashboard settings.'));
+			}
+			var t = el('table', 'bus__table'), head = el('tr');
+			['server', 'peak calls/s', 'of capacity', 'most calls held', 'of capacity', 'heap', 'cpu'].forEach(function (h, i) { head.appendChild(el('th', i ? 'num' : '', h)); });
+			t.appendChild(el('thead')).appendChild(head);
+			var tb = t.appendChild(el('tbody'));
+			var share = function (v, cap) { return cap && v != null ? Math.round(v / cap * 100) : null; };
+			rows.forEach(function (r) {
+				var cpsShare = share(r[2], CAPACITY.cps), sesShare = share(r[4], CAPACITY.sessions);
+				var near = (cpsShare || 0) >= 80 || (sesShare || 0) >= 80;
+				var tr = tb.appendChild(el('tr', near ? 'bus__row--bad' : ''));
+				tr.appendChild(el('td', 'bus__nowrap', r[1] + (near ? ' · NEAR CAPACITY' : '')));
+				tr.appendChild(el('td', 'num bus__nowrap', r[2] == null ? '—' : String(r[2])));
+				tr.appendChild(el('td', 'num bus__nowrap', cpsShare == null ? '—' : cpsShare + '%'));
+				tr.appendChild(el('td', 'num bus__nowrap', r[4] == null ? '—' : C.fmt(r[4])));
+				tr.appendChild(el('td', 'num bus__nowrap', sesShare == null ? '—' : sesShare + '%'));
+				tr.appendChild(el('td', 'num bus__nowrap', r[5] == null ? '—' : r[5] + '%'));
+				tr.appendChild(el('td', 'num bus__nowrap', r[6] == null ? '—' : r[6] + '%'));
+				tr.title = (r[3] ? 'Busiest minute ' + dayText(r[3]) + ' ' + clockText(r[3]) + '. ' : '')
+					+ (CAPACITY.cps ? 'Measured to carry ' + CAPACITY.cps + ' new calls a second and ' + C.fmt(CAPACITY.sessions) + ' at once.' : 'Capacity not measured.');
+			});
+			box.appendChild(t);
+			body.appendChild(box);
+		});
+	}
+
+	/* ── apps: deployment health ───────────────────────────────────────── */
+
+	/* /apps, read on the live cycle while the tab shows: each server's
+	   metaspace against its size when first seen after the server started, and
+	   each application's WebLogic state and framework build. An application not
+	   ACTIVE, or built with another framework than most on its server, is
+	   marked in words. */
+	var lastApps = null;
+
+	function loadApps() {
+		if (!RIGHTS.platform || remoteScope()) return Promise.resolve();
+		return getJson('apps').then(function (a) {
+			lastApps = a;
+			if (P.cluster.current === 'apps') P.cluster.draw();
+		});
+	}
+
+	function mb(bytes) { return C.fmt(Math.round(bytes / 1048576)) + ' MB'; }
+
+	function drawApps(body) {
+		if (localOnly(body, 'Applications')) return;
+		if (!lastApps) { C.message(body, 'empty', 'Loading…'); loadApps().catch(function () {}); return; }
+		if (lastApps.error) return C.message(body, 'error', lastApps.error);
+		var box = el('div', 'bus');
+		(lastApps.servers || []).forEach(function (s) {
+			if (state.server && s.server !== state.server) return;
+			var apps = (lastApps.apps || []).filter(function (a) { return a.server === s.server; });
+			// The framework most applications on this server were built with; an
+			// application too old to say is a build of its own.
+			var OLD = 'older, unreported', count = {}, usual = null;
+			apps.forEach(function (a) { a.fw = a.framework || OLD; count[a.fw] = (count[a.fw] || 0) + 1; });
+			Object.keys(count).forEach(function (f) { if (!usual || count[f] > count[usual]) usual = f; });
+
+			var line = el('p', 'bus__line' + (s.restart ? ' bus__line--bad' : ''));
+			line.appendChild(el('span', 'bus__word', s.restart ? 'RESTART RECOMMENDED' : s.server.toUpperCase()));
+			var grew = s.metaspaceFirstSeen ? Math.round((s.metaspace / s.metaspaceFirstSeen - 1) * 100) : 0;
+			line.appendChild(document.createTextNode((s.restart ? s.server + ': ' : '')
+				+ (s.metaspace != null ? 'metaspace ' + mb(s.metaspace) + (grew > 0 ? ', up ' + grew + '% from ' + mb(s.metaspaceFirstSeen) + (s.baselineFrom === 'sample' ? ' in its first recorded sample since it started' : ' when the dashboard first saw it') : '') : '')
+				+ (s.classesLoaded != null ? ' · ' + C.fmt(s.classesLoaded) + ' classes loaded' : '')
+				+ (s.startedAt ? ' · up since ' + dayText(s.startedAt) + ' ' + clockText(s.startedAt) : '')));
+			line.title = 'Every redeploy loads an application\'s classes again; copies an old deployment still holds are freed only by a restart. Restart recommended past '
+				+ lastApps.growthPercent + '% growth (dashboard settings: metaspaceGrowthPercent).';
+			box.appendChild(line);
+			/* The certificate each TLS listener on the server presents. */
+			(lastApps.certificates || []).filter(function (c) { return c.server === s.server; }).forEach(function (c) {
+				var soon = c.daysLeft != null && c.daysLeft <= lastApps.certificateWarningDays;
+				var cl = el('p', 'bus__line' + (soon || c.error ? ' bus__line--bad' : ''));
+				cl.appendChild(el('span', 'bus__word', c.error ? 'UNREADABLE' : c.daysLeft < 0 ? 'EXPIRED' : soon ? 'EXPIRING' : String(c.protocol).toUpperCase()));
+				var cn = /CN=([^,]+)/.exec(c.subject || '');
+				cl.appendChild(document.createTextNode((soon || c.error ? String(c.protocol).toUpperCase() + ' ' : '') + c.address + ' · '
+					+ (c.error ? c.error : (c.daysLeft < 0 ? 'expired ' + -c.daysLeft + ' days ago' : c.daysLeft + ' days left')
+						+ ' (' + (cn ? cn[1] : c.subject) + ')')));
+				cl.title = c.error ? 'The handshake failed; the certificate could not be read.'
+					: 'Subject: ' + c.subject + '\nIssuer: ' + c.issuer + '\nExpires: ' + dayText(c.notAfter)
+					+ '\nRead from the handshake once an hour; raised under Issues at ' + lastApps.certificateWarningDays + ' days.';
+				box.appendChild(cl);
+			});
+			if (!apps.length) return;
+			var t = el('table', 'bus__table'), head = el('tr');
+			['application', 'state', 'framework', 'configuration'].forEach(function (h) { head.appendChild(el('th', '', h)); });
+			t.appendChild(el('thead')).appendChild(head);
+			var tb = t.appendChild(el('tbody'));
+			apps.sort(function (a, b) {
+				var drift = function (x) { return /^differs/.test(x.config || ''); };
+				var ba = a.state !== 'ACTIVE' || a.fw !== usual || drift(a), bb = b.state !== 'ACTIVE' || b.fw !== usual || drift(b);
+				return ba !== bb ? (ba ? -1 : 1) : a.app < b.app ? -1 : 1;
+			});
+			apps.forEach(function (a) {
+				var odd = a.fw !== usual, bad = a.state !== 'ACTIVE', drifted = /^differs/.test(a.config || '');
+				var tr = tb.appendChild(el('tr', bad || odd || drifted ? 'bus__row--bad' : ''));
+				tr.appendChild(el('td', '', a.app));
+				tr.appendChild(el('td', 'bus__nowrap', a.state));
+				tr.appendChild(el('td', '', a.fw + (odd ? '  ·  DIFFERS' : '')));
+				tr.appendChild(el('td', '', drifted ? a.config.toUpperCase().replace(/^DIFFERS AT /, 'DIFFERS at ') : (a.config || '—')));
+				tr.title = bad ? 'WebLogic has this application ' + a.state + ' here, not ACTIVE: it takes no calls.'
+					: odd ? 'Built with another framework than most applications on ' + s.server + ' (' + usual + '): a rollout half done.'
+					: drifted ? 'The configuration it runs is not the AdminServer\'s file (' + a.config + '): a push that failed, a file edited by hand, or an application that never reloaded.'
+					: 'Active.';
+			});
+			box.appendChild(t);
+		});
+		body.appendChild(box);
+	}
+
+	/* ── operations ────────────────────────────────────────────────────── */
+
+	var OPS_WORDS = {
+		'org.vorpal.blade.endpoint.down': 'down', 'org.vorpal.blade.endpoint.up': 'up',
+		'org.vorpal.blade.remote.down': 'cut off', 'org.vorpal.blade.remote.up': 'back',
+		'org.vorpal.blade.trunk.failed': 'trunk down', 'org.vorpal.blade.trunk.registered': 'trunk up',
+		'org.vorpal.blade.trunk.unregistered': 'trunk off', 'org.vorpal.blade.queue.depth': 'queue',
+		'org.vorpal.blade.sip.denied': 'refused',
+		'org.vorpal.blade.config.saved': 'config', 'org.vorpal.blade.config.published': 'pushed',
+		'org.vorpal.blade.call.dropped': 'dropped', 'org.vorpal.blade.problem.raised': 'problem',
+		'org.vorpal.blade.problem.cleared': 'solved'
+	};
+	/* A problem raised as a warning (Problems.warn) reads as one: nothing has
+	   failed yet. */
+	function opsWord(e) {
+		if (e.type === 'org.vorpal.blade.problem.raised' && e.kind === 'warning') return 'warning';
+		return OPS_WORDS[e.type] || 'event';
+	}
+	var OPS_BAD = { down: 1, 'trunk down': 1, refused: 1, 'cut off': 1, dropped: 1, problem: 1 };
+
+	/* Where a problem is solved: the admin app that can show why, already at
+	   the call, log, file or time (links.js; each app declares what it opens).
+	   A problem an application raised names its own page. */
+	var L = window.BladeLinks;
+	function solveLink(e) {
+		var at = e.time ? new Date(e.time).getTime() : null;
+		switch (e.type) {
+		case 'org.vorpal.blade.problem.raised':
+			return /^\/blade\/[\w-]/.test(e.open || '')
+				? { href: e.open, target: 'blade-' + e.open.split('/')[2], app: (e.application || 'its') + ' admin page' } : null;
+		case 'org.vorpal.blade.call.dropped':
+			return e.vorpalId ? L.to('call', { call: e.vorpalId }) : null;
+		case 'org.vorpal.blade.config.saved':
+		case 'org.vorpal.blade.config.published':
+			return L.to('config', { application: e.application || String(e.file || '').replace(/^.*\//, '').replace(/\.json$/, '') });
+		case 'org.vorpal.blade.endpoint.down':
+		case 'org.vorpal.blade.endpoint.up':
+			return L.to('endpoint', { endpoint: e.endpoint }) || L.to('log', { server: e.node, at: at, q: e.endpoint });
+		case 'org.vorpal.blade.remote.down':
+		case 'org.vorpal.blade.remote.up':
+			return L.to('log', { server: e.node, app: e.application, at: at, q: e.remote });
+		case 'org.vorpal.blade.trunk.failed':
+		case 'org.vorpal.blade.trunk.registered':
+		case 'org.vorpal.blade.trunk.unregistered':
+			return L.to('log', { server: e.node, app: 'gateway', at: at, q: e.gateway });
+		default:
+			return null;
+		}
+	}
+
+	/* ── the peek drawer ──
+	   A quick look at an app that can show itself embedded (it declares
+	   "embed" in its opens.json), beside the board; "Open in its own window"
+	   is one click away. New windows stay the default: the drawer opens only
+	   from its own button. */
+	var drawer = null;
+	function peek(link) {
+		if (!drawer) {
+			drawer = el('aside', 'drawer');
+			drawer.setAttribute('aria-label', 'Quick look');
+			var head = el('div', 'drawer__head');
+			drawer.title_ = el('span', 'drawer__title', '');
+			drawer.own = el('a', 'drawer__own', 'Open in its own window ↗');
+			var close = el('button', 'drawer__close', 'Close ✕');
+			close.type = 'button';
+			close.addEventListener('click', function () { drawer.hidden = true; drawer.frame.src = 'about:blank'; });
+			head.appendChild(drawer.title_); head.appendChild(drawer.own); head.appendChild(close);
+			drawer.frame = el('iframe', 'drawer__frame');
+			drawer.frame.title = 'Quick look';
+			drawer.appendChild(head); drawer.appendChild(drawer.frame);
+			document.body.appendChild(drawer);
+			document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && !drawer.hidden) close.click(); });
+		}
+		var hash = link.href.indexOf('#'), base = hash < 0 ? link.href : link.href.slice(0, hash);
+		drawer.frame.src = base + (base.indexOf('?') < 0 ? '?' : '&') + 'embed=1' + (hash < 0 ? '' : link.href.slice(hash));
+		drawer.title_.textContent = link.app;
+		drawer.own.href = link.href; drawer.own.target = link.target;
+		drawer.hidden = false;
+	}
+
+	/* A "peek" button for a link whose app can show itself embedded, or null. */
+	function peekButton(link) {
+		if (!link || !link.embed) return null;
+		var b = el('button', 'peek', 'peek');
+		b.type = 'button';
+		b.title = 'Quick look at ' + link.app + ' beside the board';
+		b.addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); peek(link); });
+		return b;
+	}
+
+	/* When an event happened, in the viewer's zone: the clock time today, the
+	   date as well before today. */
+	function opsWhen(ms) {
+		var day = function (t) { return new Date(t).toLocaleDateString([], { timeZone: R.zone() }); };
+		var clockTime = R.time(ms, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+		if (day(ms) === day(Date.now())) return clockTime;
+		return new Date(ms).toLocaleDateString([], { timeZone: R.zone(), month: 'short', day: 'numeric' }) + ' ' + clockTime;
+	}
+
+	/* How long something lasted: "40 s", "6 min", "2 h 5 min", "3 d 4 h". */
+	function duration(ms) {
+		var s = Math.max(0, Math.round(ms / 1000));
+		if (s < 60) return s + ' s';
+		var m = Math.floor(s / 60);
+		if (m < 60) return m + ' min';
+		var h = Math.floor(m / 60);
+		if (h < 24) return h + ' h' + (m % 60 ? ' ' + (m % 60) + ' min' : '');
+		return Math.floor(h / 24) + ' d' + (h % 24 ? ' ' + (h % 24) + ' h' : '');
+	}
+
+	function opsSummary(e) {
+		switch (e.type) {
+		case 'org.vorpal.blade.endpoint.down':
+		case 'org.vorpal.blade.endpoint.up': return e.endpoint + (e.note ? ' · ' + e.note : '');
+		case 'org.vorpal.blade.remote.down':
+		case 'org.vorpal.blade.remote.up': return (e.kind ? e.kind + ' ' : '') + e.remote + (e.application ? ' · ' + e.application : '') + (e.reason ? ' · ' + e.reason : '');
+		case 'org.vorpal.blade.trunk.failed': return e.gateway + ' · ' + (e.status || '') + ' ' + (e.reason || '');
+		case 'org.vorpal.blade.trunk.registered':
+		case 'org.vorpal.blade.trunk.unregistered': return e.gateway + (e.registrar ? ' · ' + e.registrar : '');
+		case 'org.vorpal.blade.queue.depth': return e.queue + ' · ' + e.depth + ' waiting (low ' + e.low + ', high ' + e.high + ')';
+		case 'org.vorpal.blade.sip.denied': return e.method + ' from ' + e.sourceAddress;
+		case 'org.vorpal.blade.config.saved': return e.file + ' ' + e.change + ' by ' + e.actor + ' (' + e.editor + ')';
+		case 'org.vorpal.blade.config.published': return e.file + ' → ' + (e.pushedTo || []).join(', ') + ((e.failed && e.failed.length) ? ' · FAILED on ' + e.failed.join(', ') : '');
+		/* Each leg as it stood when the call expired: "caller EARLY, waiting". */
+		case 'org.vorpal.blade.call.dropped': return (e.appName || 'call') + ' · ' + (e.legs || []).map(function (l) {
+			return l.role + ' ' + l.state + (l.inviteOpen ? ', waiting' : '');
+		}).join(' · ') + (e.vorpalId ? ' · call ' + e.vorpalId : '');
+		case 'org.vorpal.blade.problem.raised': return (e.application ? e.application + ' · ' : '') + (e.summary || e.key);
+		case 'org.vorpal.blade.problem.cleared': return (e.application ? e.application + ' · ' : '') + e.key;
+		default: return e.type;
+		}
+	}
+
+	/* Rows that fit, newest first, then a count of the rest. `when(e)` words
+	   the right column (default: when it happened); the full line and the full
+	   date are on hover either way. */
+	function opsRows(body, items, word, empty, when) {
+		if (!items.length) return C.message(body, 'empty', empty);
+		var box = el('div', 'ops-list');
+		body.appendChild(box);
+		var shown = 0;
+		for (var i = 0; i < items.length; i++) {
+			var e = items[i], w = word(e);
+			var link = solveLink(e);
+			var row = el('div', 'ops-row' + (link ? ' ops-row--link' : '')), main = opsSummary(e) + (e.node ? ' · ' + e.node : '');
+			var go = row;
+			if (link) { go = el('a', 'ops-row__go'); go.href = link.href; go.target = link.target; row.appendChild(go); }
+			var at = e.time ? new Date(e.time).getTime() : null;
+			go.appendChild(el('span', 'ops-row__what' + (OPS_BAD[w] ? ' bad' : ''), w));
+			go.appendChild(el('span', 'ops-row__main', main));
+			go.appendChild(el('span', 'ops-row__when', at == null ? '' : when ? when(e) : opsWhen(at)));
+			var pb = peekButton(link);
+			if (pb) row.appendChild(pb);
+			row.title = w + ' · ' + main + (at == null ? '' : '\n'
+				+ new Date(at).toLocaleString([], { timeZone: R.zone(), dateStyle: 'medium', timeStyle: 'medium' }))
+				+ (e.until ? ' until ' + new Date(e.until).toLocaleString([], { timeZone: R.zone(), dateStyle: 'medium', timeStyle: 'medium' }) : '')
+				+ (link ? '\nOpen in ' + link.app : '');
+			box.appendChild(row);
+			if (box.scrollHeight > body.clientHeight - 20) { box.removeChild(row); break; }
+			shown++;
+		}
+		if (shown < items.length) body.appendChild(el('div', 'panel__more', (items.length - shown) + ' more'));
+	}
+
+	/* The live feed's events, narrowed to the chosen server. */
+	function onServer(items) {
+		return state.server ? items.filter(function (e) { return e.node === state.server; }) : items;
+	}
+
+	function liveIssues() {
+		if (!lastOps) return [];
+		return onServer(lastOps.endpointsDown.map(function (e) { e.type = 'org.vorpal.blade.endpoint.down'; return e; })
+			.concat(lastOps.trunksFailing.map(function (e) { e.type = 'org.vorpal.blade.trunk.failed'; return e; }))
+			.concat((lastOps.remotesDown || []).map(function (e) { e.type = 'org.vorpal.blade.remote.down'; return e; }))
+			.concat((lastOps.problems || []).map(function (e) { e.type = 'org.vorpal.blade.problem.raised'; return e; })));
+	}
+
+	/* An operations event from the database (ops.events, ops.issues) in the
+	   shape the live feed gives it, so one renderer words both. */
+	function opsEvent(type, at, node, application, subject, detail, extra) {
+		var e = { type: type, time: at, node: node, application: application };
+		switch (type.replace(/^org\.vorpal\.blade\./, '').split('.')[0]) {
+		case 'endpoint': e.endpoint = subject; e.note = detail; break;
+		case 'remote': e.remote = subject; e.reason = detail; break;
+		case 'trunk': e.gateway = subject; e.reason = detail; break;
+		case 'queue': e.queue = subject; break;
+		case 'problem': e.key = subject; e.summary = detail; break;
+		}
+		Object.keys(extra || {}).forEach(function (k) { if (extra[k] != null) e[k] = extra[k]; });
+		return e;
+	}
+
+	function pastEvents() {
+		return rowsOf(D.ops && D.ops['ops.events']).map(function (r) {
+			return opsEvent(r[1], r[0], r[2], r[3], r[4], r[5], { kind: r[6], registrar: r[7], status: r[8], low: r[9], high: r[10],
+				depth: r[11], open: r[12] });
+		});
+	}
+
+	function pastIssues() {
+		return rowsOf(D.ops && D.ops['ops.issues']).map(function (r) {
+			return opsEvent(r[0], r[5], r[2], r[3], r[1], r[4], { until: r[6], open: r[7], kind: r[8] });
+		});
+	}
+
+	/* Operations needs the platform grant and, for the live feed, this domain. */
+	function opsAllowed(body) {
+		if (!RIGHTS.platform) { C.message(body, 'empty', 'Operations events are not in your grant.'); return false; }
+		if (liveFeed()) {
+			if (localOnly(body, 'Operations events')) return false;
+			if (!lastOps) { C.message(body, 'empty', 'Listening to the event bus…'); return false; }
+		}
+		return true;
+	}
+
+	function drawIssues(body) {
+		if (!opsAllowed(body)) return;
+		if (liveFeed()) {
+			return opsRows(body, liveIssues(), opsWord,
+				'No open issues' + (state.server ? ' on ' + state.server : '') + '. An endpoint, trunk, cut-off service or a problem an application raised shows here from the event that reports it until the one that clears it.',
+				function (e) { return 'for ' + duration(Date.now() - new Date(e.time).getTime()); });
+		}
+		guard(D.ops && D.ops['ops.issues'], body, function () {
+			opsRows(body, pastIssues(), opsWord,
+				'Nothing was down and no problem was open at this time.',
+				function (e) {
+					return e.until ? duration(e.until - e.time) + ', from ' + clockText(e.time) : 'since ' + opsWhen(e.time) + ', still open';
+				});
+		});
+	}
+
+	function drawQueues(body) {
+		if (!opsAllowed(body)) return;
+		if (liveFeed()) {
+			var q = lastOps ? onServer(lastOps.queues.map(function (e) { e.type = 'org.vorpal.blade.queue.depth'; return e; })) : [];
+			return opsRows(body, q, function () { return 'queue'; }, 'No queue has held a caller since this server started listening.');
+		}
+		guard(D.ops && D.ops['ops.queues'], body, function (res) {
+			if (!res.rows.length) return C.message(body, 'empty', 'No queue held a caller at this time.');
+			fitTable(body, { columns: res.columns, rows: res.rows.map(function (r) {
+				return [r[0], r[1], r[2], r[3], r[4], r[5] == null ? '—' : opsWhen(r[5])];
+			}) });
+		});
+	}
+
+	/* A trunk's last refusal in words: what the status says about whose
+	   problem it is. */
+	function trunkFailure(status, reason) {
+		var why = status === 401 || status === 407 ? 'credentials refused'
+			: status === 403 ? 'refused: the account or what it may do'
+			: status === 404 ? 'the registrar does not know the account'
+			: status === 408 ? 'the registrar did not answer'
+			: status >= 500 ? 'the registrar failed' : null;
+		return (status ? status + ' ' : '') + (why || reason || '—');
+	}
+
+	/* Each trunk over the range (ops.trunks): its state at the end of it and
+	   since when, how often it registered and failed, and its last failure in
+	   words. Down, or failing more than once, is marked and comes first. */
+	function drawTrunks(body) {
+		if (!RIGHTS.platform) return C.message(body, 'empty', 'Trunks are not in your grant.');
+		guard(D.ops && D.ops['ops.trunks'], body, function (res) {
+			if (!res.rows.length) return C.message(body, 'empty', 'No gateway registered a trunk in the month before this time.');
+			var col = function (n) { return res.columns.indexOf(n); };
+			var rows = res.rows.map(function (r) {
+				// Registering again with no failure is the gateway restarting, not a flap.
+				var state = r[col('state')], failed = r[col('failed')], flapping = failed > 1 || (failed > 0 && r[col('registered')] > 0);
+				return [r[col('trunk')], r[col('server')],
+					(state === 'registered' ? 'registered' : state.toUpperCase()) + (flapping ? ' · FLAPPING' : ''),
+					opsWhen(r[col('since')]), r[col('registered')], failed,
+					r[col('last status')] != null || r[col('last reason')] ? trunkFailure(r[col('last status')], r[col('last reason')]) : '—',
+					r[col('registrar')] || '—'];
+			});
+			fitTable(body, { columns: ['trunk', 'server', 'state', 'since', 'registered', 'failed', 'last failure', 'registrar'], rows: rows });
+		});
+	}
+
+	function drawRecent(body) {
+		if (!opsAllowed(body)) return;
+		if (liveFeed()) {
+			return opsRows(body, onServer(lastOps ? lastOps.recent : []), opsWord, 'No operations events yet.');
+		}
+		guard(D.ops && D.ops['ops.events'], body, function () {
+			opsRows(body, pastEvents(), opsWord, 'No operations events at this time.');
+		});
+	}
+
+	/* What changed in the range (the `changes` report), newest first: one
+	   row a day, or within a day or less one row a minute. Restarts counted
+	   per server, configuration files by name. Each row's every change, with
+	   its time, is on hover. */
+	function changeDays(res, byMinute) {
+		var col = function (name) { return res.columns.indexOf(name); };
+		var byDay = {}, order = [];
+		res.rows.forEach(function (r) {
+			var day = byMinute ? String(r[col('at')] - r[col('at')] % 60000) : String(r[col('bucket')]).slice(0, 10);
+			var at = r[col('at')], change = r[col('change')], server = r[col('server')], what = r[col('what')];
+			var file = r[col('file')], failed = r[col('failed on')];
+			failed = failed && failed !== '[]' ? String(failed).replace(/[\[\]"]/g, '') : '';
+			var d = byDay[day];
+			if (!d) { d = byDay[day] = { day: day, lines: [], servers: {}, apps: {}, configs: [] }; order.push(d); }
+			var line;
+			switch (change) {
+			case 'server restarted':
+				line = server + ' restarted';
+				d.servers[server] = (d.servers[server] || 0) + 1;
+				break;
+			case 'application restarted':
+				line = what + ' restarted on ' + server;
+				(d.apps[server] = d.apps[server] || []).push(what);
+				break;
+			case 'config pushed':
+				line = file + ' pushed' + (failed ? ', FAILED on ' + failed : '');
+				if (d.configs.indexOf(line) < 0) d.configs.push(line);
+				break;
+			default: // config saved: what is "actor · saved|restored|deleted"
+				line = file + ' ' + String(what).split(' · ').reverse().join(' by ');
+				if (d.configs.indexOf(line) < 0) d.configs.push(line);
+			}
+			d.lines.push(clockText(at) + ' ' + line);
+		});
+		order.reverse();
+		return {
+			columns: [byMinute ? 'time' : 'day', 'what changed'],
+			rows: order.map(function (d) {
+				var parts = [];
+				Object.keys(d.servers).forEach(function (srv) {
+					var n = d.servers[srv];
+					parts.push(srv + ' restarted' + (n > 1 ? ' ' + n + ' times' : ''));
+				});
+				Object.keys(d.apps).forEach(function (srv) {
+					var apps = d.apps[srv], names = apps.filter(function (a, i) { return apps.indexOf(a) === i; });
+					var times = function (a) { var n = apps.filter(function (b) { return b === a; }).length; return n > 1 ? a + ' ×' + n : a; };
+					parts.push(names.length <= 4 ? names.map(times).join(', ') + ' restarted on ' + srv
+						: apps.length + ' restarts of ' + names.length + ' applications on ' + srv);
+				});
+				if (byMinute) return [dayText(+d.day) + ' ' + clockText(+d.day), parts.concat(d.configs).join(' · ')];
+				var p = d.day.split('-'), date = new Date(+p[0], +p[1] - 1, +p[2]);
+				return [date.toLocaleDateString([], { weekday: 'short' }) + ' ' + p[1] + '/' + p[2], parts.concat(d.configs).join(' · ')];
+			}),
+			titles: order.map(function (d) {
+				var shown = d.lines.slice(0, 20);
+				return (d.lines.length === 1 ? '1 change' : d.lines.length + ' changes') + ':\n' + shown.join('\n')
+					+ (d.lines.length > shown.length ? '\n… ' + (d.lines.length - shown.length) + ' more' : '');
+			})
+		};
+	}
+
+	/* The onset: when the range's calls began going wrong (the earliest cause
+	   Applications › Causes found), and the change just before it, within the
+	   hour. What did we do?, answered before anyone opens a log. */
+	function onsetLine(body, res) {
+		var causes = D.apps && D.apps['calls.causes'];
+		if (!causes || !causes.rows || !causes.rows.length) return;
+		var first = null, cause = null;
+		causes.rows.forEach(function (r) { if (first == null || r[7] < first) { first = r[7]; cause = r[0]; } });
+		var col = function (n) { return res.columns.indexOf(n); }, before = null;
+		res.rows.forEach(function (r) {
+			var at = r[col('at')];
+			if (at <= first && first - at <= 3600000 && (!before || at > before[col('at')])) before = r;
+		});
+		var p = el('p', 'bus__line' + (before ? ' bus__line--bad' : ''));
+		p.appendChild(el('span', 'bus__word', 'ONSET'));
+		var change = before ? (function (r) {
+			var c = r[col('change')], srv = r[col('server')], what = r[col('what')], file = r[col('file')];
+			return c === 'server restarted' ? srv + ' restarted' : c === 'application restarted' ? what + ' restarted on ' + srv
+				: c === 'config pushed' ? file + ' pushed' : file + ' ' + String(what).split(' · ').reverse().join(' by ');
+		})(before) : null;
+		p.appendChild(document.createTextNode('Calls began going wrong at ' + clockText(first) + ' (' + causeText(cause) + '). '
+			+ (before ? 'Just before: ' + change + ', ' + Math.round((first - before[col('at')]) / 60000) + ' min earlier.'
+				: 'Nothing changed in the hour before.')));
+		p.title = 'The earliest cause in Applications › Causes, and the newest change at or before it, within an hour.';
+		body.appendChild(p);
+	}
+
+	function drawChanges(body) {
+		if (!RIGHTS.platform) return C.message(body, 'empty', 'Changes are not in your grant.');
+		guard(D.ops && D.ops.changes, body, function (res) {
+			// A day or less is told by the minute; anything longer by the day.
+			var s = state.slice;
+			var span = s && s.from ? s.until - s.from : (s ? 3600000 : rangeEnd() - rangeStart());
+			var t = changeDays(res, span <= 86400000 + 60000);
+			if (!t.rows.length) return C.message(body, 'empty', 'Nothing restarted and no configuration changed at this time.');
+			onsetLine(body, res);
+			// The table draws into a box of its own: it clears what it draws into.
+			var box = el('div', 'panel__fill');
+			body.appendChild(box);
+			fitTable(box, t, { wrap: true, more: span <= 86400000 + 60000 ? 'more' : 'more days' });
+			body.querySelectorAll('tbody tr').forEach(function (tr, i) { tr.title = t.titles[i]; });
+		});
+	}
+
+	/* ── analytics ─────────────────────────────────────────────────────── */
+
+	/* Report results by group: each group is one request, over the range and
+	   the choices the panels it fills follow. */
+	var D = {};
+
+	/* How calls ended, good to bad, bottom up: the stoplight order, so position
+	   says what the colour says. Declined is ordinary traffic, fair like an
+	   abandon; failed and dropped are faults. */
+	var OUTCOME_PARTS = [
+		{ name: 'Completed', color: '--ok', explain: 'answered, then hung up normally' },
+		{ name: 'Abandoned', color: '--warn', explain: 'the caller hung up before anyone answered' },
+		{ name: 'Declined', color: '--warn', explain: 'the callee said no: busy, unavailable, not found, or no answer' },
+		{ name: 'Failed', color: '--bad', explain: 'the call could not be put through: nothing answered, a server error (5xx), or refused on credentials (401, 403, 407)' },
+		{ name: 'Dropped', color: '--bad', explain: 'a bug stopped relaying the signaling: the call was left half set up or half hung up until it expired, or the caller gave up on an answer that never reached them' }
+	];
+	var OUTCOME_NAMES = OUTCOME_PARTS.map(function (p) { return p.name.toLowerCase(); });
+
+	/* One line per server for a per-minute sample reading (platform.heap,
+	   platform.cpu), drawn on the call charts' own buckets so every Traffic
+	   tab shares a time axis. A gap is a bucket with no sample, not a zero. */
+	function perServer(report, what) {
+		return function (body) {
+			if (!RIGHTS.platform) return C.message(body, 'empty', what + ' are not in your grant.');
+			guard(D.traffic && D.traffic[report], body, function (res) {
+				var calls = D.traffic['calls.by-outcome'];
+				var buckets = rowsOf(calls).map(function (r) { return r[0]; });
+				var byServer = {};
+				res.rows.forEach(function (r) { (byServer[r[1]] = byServer[r[1]] || {})[r[0]] = r[2]; });
+				var series = Object.keys(byServer).sort().map(function (server) {
+					return { name: server, values: buckets.map(function (b) { return [b, b in byServer[server] ? byServer[server][b] : null]; }) };
+				});
+				if (!series.length) return C.message(body, 'empty', 'No server samples at this time.');
+				C.multiLine(body, series, mergeOpts({ pct: true, colors: LINE_COLORS() }, calls ? bucketPick(calls) : {}));
+			});
+		};
+	}
+
+	/* "busiest: Thu 00:00 · 28 calls", the bucket with the most calls started,
+	   in the viewer's zone, as the report's buckets already are. */
+	function busiest(res) {
+		var best = null, most = 0;
+		res.rows.forEach(function (r) {
+			var n = 0;
+			for (var i = 1; i < r.length; i++) n += r[i] || 0;
+			if (n > most) { most = n; best = r[0]; }
+		});
+		if (!best) return 'no calls at this time';
+		return 'busiest: ' + when(best) + ' · ' + C.fmt(most) + (most === 1 ? ' call' : ' calls');
+	}
+
+	/* "Thu 10/08 14:00" for a bucket with a time, "Thu 10/08" for a day:
+	   buckets are already in the viewer's zone. */
+	function when(bucket) {
+		var m = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}:\d{2}))?$/.exec(bucket);
+		if (!m) return bucket;
+		return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(+m[1], +m[2] - 1, +m[3]).getDay()] + ' ' + m[2] + '/'
+			+ m[3] + (m[4] ? ' ' + m[4] : '');
+	}
+
+	/* The reports each group asks for. Individual calls only while their tab
+	   is open: a request for them is audited as someone looking at calls,
+	   which a hidden tab is not. */
+	var GROUPS = {
+		base: function () {
+			return { r: ['calls.summary', 'outcomes.summary', 'outcomes.ended', 'outcomes.usual', 'outcomes.daily', 'outcomes.by-application',
+				'duration.summary', 'risk.summary'], q: rangeQuery() + scopeQuery() };
+		},
+		/* Every domain's servers, so the Servers panel can offer each domain. */
+		servers: function () {
+			return { r: RIGHTS.platform ? ['platform.latest', 'platform.servers', 'platform.headroom'] : [], q: rangeQuery() };
+		},
+		traffic: function () {
+			var r = ['calls.by-outcome', 'calls.concurrent', 'calls.heatmap'];
+			if (RIGHTS.platform) r.push('platform.heap', 'platform.cpu');
+			return { r: r, q: rangeQuery() + scopeQuery() + (state.server ? '&server=' + encodeURIComponent(state.server) : '') };
+		},
+		ops: function () {
+			var r = RIGHTS.platform ? ['changes', 'ops.trunks'] : [];
+			if (RIGHTS.platform && !liveFeed()) r.push('ops.events', 'ops.issues', 'ops.queues');
+			return { r: r, q: sliceQuery() + scopeQuery() + (state.server ? '&server=' + encodeURIComponent(state.server) : '') };
+		},
+		apps: function () {
+			return { r: ['calls.by-application', 'duration.bands', 'health.coverage', 'calls.causes', 'calls.peers'],
+				q: rangeQuery() + scopeQuery() + (state.outcome ? '&outcome=' + state.outcome : '') };
+		},
+		calls: function () {
+			var r = ['highrisk.by-band', 'risk.daily'];
+			if (P.risk && P.risk.current === 'flagged') r.push('highrisk.calls');
+			if (P.risk && P.risk.current === 'list' && RIGHTS.content) r.push('calls.list');
+			return { r: r, q: rangeQuery() + scopeQuery() + (state.outcome ? '&outcome=' + state.outcome : '')
+				+ (state.app ? '&app=' + encodeURIComponent(state.app) : '')
+				+ (state.cause ? '&cause=' + encodeURIComponent(state.cause) : '')
+				+ (state.peer ? '&peer=' + encodeURIComponent(state.peer) : ''),
+				headers: state.number ? { 'X-Blade-Number': state.number } : null };
+		}
+	};
+	/* The panels each group fills. */
+	var DRAWS = { base: ['outcomes'], servers: ['cluster', 'apps'], traffic: ['traffic'], ops: ['ops'], apps: ['apps', 'ops'], calls: ['risk'] };
+
+	var seq = {};
+	function loadGroup(name) {
+		var g = GROUPS[name]();
+		if (!g.r.length) { D[name] = {}; DRAWS[name].forEach(function (k) { P[k].draw(); }); return Promise.resolve(); }
+		var n = seq[name] = (seq[name] || 0) + 1;
+		return getJson('data?r=' + g.r.join(',') + g.q + '&tz=' + encodeURIComponent(R.zone()), g.headers).then(function (d) {
+			if (n !== seq[name]) return;   // a newer choice asked again
+			D[name] = d;
+			if (name === 'base') baseKpis(d);
+			if (name === 'servers') serverKpis();
+			DRAWS[name].forEach(function (k) { P[k].draw(); });
+		});
+	}
+
+	function baseKpis(d) {
+		var cs = d['calls.summary'], os = d['outcomes.summary'], ds = d['duration.summary'], rs = d['risk.summary'];
+		kpi('calls', cell(cs, 'calls'), state.range === 'custom' ? '' : C.fmt(cell(cs, 'today')) + ' today');
+		var started = cell(os, 'started'), answered = cell(os, 'answered');
+		kpi('answered', answered, (started ? Math.round(100 * answered / started) + '% of ' + C.fmt(started) + ' started'
+			: 'none started') + ' · ' + C.fmt(cell(os, 'lost')) + ' lost');
+		var med = cell(ds, 'median');
+		kpi('duration', clock(med), med == null ? '' : 'average ' + clock(cell(ds, 'average')) + ' · longest ' + clock(cell(ds, 'longest')));
+		var flagged = cell(rs, 'calls flagged');
+		kpi('flagged', flagged, C.fmt(cell(rs, 'calls assessed')) + ' assessed', flagged > 0);
+	}
+
+	function loadAnalytics() {
+		return Promise.all(Object.keys(GROUPS).map(loadGroup)).then(function () {
+			// The clock beside it says the time; the refresh time is on hover only.
+			setStatus('', 'live');
+			statusEl.title = 'Analytics refreshed at ' + R.time(Date.now(), { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+		}).catch(function (e) { if (e.message !== 'auth') setStatus('err', 'analytics failed'); });
+	}
+
+	/* Live re-reads the last hour often, a range of days each minute, and a
+	   custom range never: it does not move. */
+	var analyticsTimer = null;
+	function scheduleAnalytics() {
+		clearInterval(analyticsTimer);
+		if (state.range === 'custom') return;
+		analyticsTimer = setInterval(loadAnalytics, isLive() ? Math.min(ANALYTICS_MS, LIVE_ANALYTICS_MS) : ANALYTICS_MS);
+	}
+
+	/* ── the network map ── */
+
+	/* /network, read on the live cycle while its tab shows; the zoomed place
+	   is kept across refreshes so a refresh does not throw the viewer out. */
+	var lastNetwork = null, netAtlases = { us: null, world: null }, netAtlasLoading = false, netZoomed = null;
+
+	function loadNetwork() {
+		if (!RIGHTS.platform || remoteScope()) return Promise.resolve();
+		return getJson('network').then(function (n) {
+			lastNetwork = n;
+			if (P.traffic.current === 'network') P.traffic.draw();
+		});
+	}
+
+	function drawNetwork(body) {
+		if (!RIGHTS.platform) return C.message(body, 'empty', 'The network map is not in your grant.');
+		if (remoteScope()) return C.message(body, 'empty', 'The network map shows this domain. Choose it in Servers.');
+		if (!lastNetwork) { C.message(body, 'empty', 'Loading…'); loadNetwork().catch(function () {}); return; }
+		if (lastNetwork.error) return C.message(body, 'error', lastNetwork.error);
+		if (!lastNetwork.sites || !lastNetwork.sites.length) {
+			return C.message(body, 'empty', 'No sites yet: add them under "sites" in the dashboard settings.');
+		}
+		if (!window.topojson) return C.message(body, 'error', 'Map files missing (vendor/topojson-client.min.js).');
+		if (!netAtlases.us || !netAtlases.world) {
+			C.message(body, 'empty', 'Loading map…');
+			if (!netAtlasLoading) {
+				netAtlasLoading = true;
+				Promise.all([getJson('vendor/states-albers-10m.json'), getJson('vendor/land-110m.json')]).then(function (a) {
+					netAtlases = { us: a[0], world: a[1] };
+					if (P.traffic.current === 'network') P.traffic.draw();
+				}).catch(function (e) { netAtlasLoading = false; C.message(body, 'error', 'Map atlas: ' + (e.message || e)); });
+			}
+			return;
+		}
+		var model = window.BladeNetwork.model(lastNetwork, lastNodes, Date.now());
+		var trouble = model.sites.filter(function (s) { return s.state === 'down' || s.state === 'warn'; })
+			.sort(function (a, b) { return window.BladeNetwork.rank(b.state) - window.BladeNetwork.rank(a.state); });
+		P.traffic.sub.textContent = trouble.length
+			? (trouble[0].state === 'down' ? 'down: ' : 'trouble: ') + trouble[0].name + ' · ' + trouble[0].summary
+			: 'every site working · refusals over the last ' + lastNetwork.windowMinutes + ' min';
+		var foot = [];
+		var unplaced = lastNetwork.unplaced || {};
+		if (unplaced.origins && unplaced.origins.length) {
+			foot.push('Calls from addresses no site claims: ' + unplaced.origins.map(function (o) { return o.origin + ' (' + o.calls + ')'; }).join(', '));
+		}
+		if (unplaced.failures && unplaced.failures.length) {
+			foot.push('Refused by servers no site claims: ' + unplaced.failures.map(function (f) {
+				return f.server + ' ' + f.calls + ' × ' + f.status + ' ' + f.meaning + (f.reason ? ' "' + f.reason + '"' : '');
+			}).join(', '));
+		}
+		if (unplaced.remotes && unplaced.remotes.length) {
+			foot.push('Services failing that no site claims: ' + unplaced.remotes.map(function (r) {
+				return r.kind + ' ' + r.remote + ' (' + r.failures + ' of ' + r.calls + ')';
+			}).join(', '));
+		}
+		if (unplaced.endpoints && unplaced.endpoints.length) {
+			foot.push('Balancer endpoints no site claims: ' + window.BladeNetwork.endpointMembers(unplaced, Date.now()).map(function (m) {
+				return m.label + ' (' + m.note + ')';
+			}).join(', '));
+		}
+		var noCoords = model.sites.filter(function (s) { return s.lat == null || s.lon == null; });
+		if (noCoords.length) foot.push('No coordinates: ' + noCoords.map(function (s) { return s.name + ' (' + s.state + ')'; }).join(', '));
+		if (lastNetwork.analyticsError) foot.push('Call data unavailable: ' + lastNetwork.analyticsError);
+		C.networkMap(body, netAtlases, model, {
+			zoomed: netZoomed, onZoom: function (k) { netZoomed = k; }, foot: foot.join(' · ')
+		});
+	}
+
+	/* ── panel definitions ─────────────────────────────────────────────── */
+
+	var P = {};
+
+	function buildPanels() {
+		P.cluster = new Panel('cluster', 'Servers', 'platform', false);
+		P.cluster.setViews([
+			{ key: 'servers', label: 'Servers', live: isLive,
+				sub: function () { return isLive() ? 'click one to narrow' : 'peaks in the range'; }, tip: 'Click a server to narrow Traffic and Operations to it',
+				draw: drawServers },
+			{ key: 'jdbc', label: 'JDBC', live: true, sub: 'connection pools', draw: drawJdbc },
+			{ key: 'bus', label: 'Bus', live: true, sub: 'is the data arriving',
+				tip: 'Whether the board can be trusted: how fresh the stored events are, each subscription\'s backlog, and the events the bus parked',
+				draw: drawBus, fetch: function () { loadBus().catch(function () {}); } },
+			{ key: 'headroom', label: 'Headroom', sub: 'busiest minute against capacity',
+				tip: 'Each server\'s busiest minute in the range (new calls a second, calls held at once, heap, CPU) against what it was measured to carry',
+				draw: drawHeadroom },
+			{ key: 'apps', label: 'Apps', live: true, sub: 'deployed and current',
+				tip: 'Each application\'s WebLogic state and framework build on each server, and each server\'s metaspace: when a restart would free what redeploys left behind',
+				draw: drawApps, fetch: function () { loadApps().catch(function () {}); } }
+		]);
+		P.cluster.showRange = function () {
+			Panel.prototype.showRange.call(this);
+			var v = this.view();
+			if (v && v.key === 'servers' && !isLive()) { this.range.hidden = false; this.range.textContent = rangePhrase(); }
+		};
+
+		P.traffic = new Panel('traffic', 'Traffic', 'calls', true, ['server']);
+		P.traffic.setViews([
+			{ key: 'calls', label: 'Calls', sub: 'click a time to narrow', tip: 'Click a time to narrow Operations to it', draw: function (body) {
+				guard(D.traffic && D.traffic['calls.by-outcome'], body, function (res) {
+					P.traffic.sub.textContent = busiest(res);
+					C.stackBar(body, res.rows, mergeOpts({ parts: OUTCOME_PARTS, empty: 'No calls ended at this time.' }, bucketPick(res)));
+				});
+			} },
+			{ key: 'sessions', label: 'Sessions', sub: 'peak concurrent calls', draw: function (body) {
+				guard(D.traffic && D.traffic['calls.concurrent'], body, function (res) {
+					var best = res.rows.reduce(function (b, r) { return r[1] > b[1] ? r : b; }, ['', 0]);
+					P.traffic.sub.textContent = best[1] ? 'peak ' + C.fmt(best[1]) + ' · ' + when(best[0]) : 'no calls at this time';
+					if (!best[1]) return C.message(body, 'empty', 'No calls at this time.');
+					C.line(body, res.rows, mergeOpts({ name: 'peak', endLabel: false }, bucketPick(res)));
+				});
+			} },
+			{ key: 'heap', label: 'Heap', sub: 'highest per server', draw: perServer('platform.heap', 'Heap readings') },
+			{ key: 'cpu', label: 'CPU', sub: 'busiest minute per server', draw: perServer('platform.cpu', 'CPU readings') },
+			{ key: 'when', label: 'When', sub: 'weekday × hour', tip: 'Click an hour to narrow Operations to every such hour in the range', draw: function (body) {
+				guard(D.traffic && D.traffic['calls.heatmap'], body, function (res) {
+					var s = state.slice;
+					C.heatmap(body, res.rows, {
+						pick: function (r) {
+							var dow = WEEKDAYS.indexOf(r[0]) + 1;
+							choose({ slice: s && s.dow === dow && s.hod === +r[1] ? null : { dow: dow, hod: +r[1] } });
+						},
+						picked: s && s.dow ? [WEEKDAYS[s.dow - 1], s.hod] : null
+					});
+				});
+			} },
+			{ key: 'network', label: 'Network', sub: 'sites and routes', live: true, narrow: false, first: true, draw: drawNetwork,
+				fetch: function () { loadNetwork().catch(function () {}); } }
+		]);
+
+		P.ops = new Panel('ops', 'Operations', null, true, ['server', 'slice']);
+		P.ops.setViews([
+			{ key: 'issues', label: 'Issues', live: liveFeed,
+				sub: function () { return liveFeed() ? 'open now' : 'open in the range'; }, tip: 'An issue stays until it is cleared', draw: drawIssues },
+			{ key: 'queues', label: 'Queues', live: liveFeed,
+				sub: function () { return liveFeed() ? 'last minute' : 'minutes with callers'; }, tip: 'Per node: the minutes each queue held callers', draw: drawQueues },
+			{ key: 'recent', label: 'Recent', live: liveFeed, sub: 'newest first', draw: drawRecent },
+			{ key: 'trunks', label: 'Trunks', sub: 'down or flapping first',
+				tip: 'Each trunk a gateway registers: its state and since when, how often it registered and failed in the range, and its last failure in words', draw: drawTrunks },
+			{ key: 'changes', label: 'Changes', sub: 'newest first', tip: 'Restarts and configuration changes; hover a row for each one and its time', draw: drawChanges }
+		]);
+		/* Operations narrowed to a time shows that time, not the whole range. */
+		P.ops.showRange = function () {
+			Panel.prototype.showRange.call(this);
+			var v = this.view();
+			var live = v && (typeof v.live === 'function' ? v.live() : v.live);
+			if (state.slice && !live) this.range.hidden = true;
+		};
+
+		P.outcomes = new Panel('outcomes', 'Outcomes', 'outcomes', true);
+		P.outcomes.setViews([
+			{ key: 'ended', label: 'Ended', sub: 'click one to narrow', tip: 'Each call counted once. Click an outcome to narrow Applications and Calls to it', draw: function (body) {
+				guard(D.base && D.base['outcomes.ended'], body, function (res) {
+					var by = {};
+					res.rows.forEach(function (r) { by[r[0]] = r[1] || 0; });
+					var total = Object.keys(by).reduce(function (n, k) { return n + by[k]; }, 0);
+					if (!total) return C.message(body, 'empty', 'No call ended in this range.');
+					var rows = OUTCOME_PARTS.map(function (p) { return [p.name, by[p.name.toLowerCase()] || 0, p]; });
+					/* The same window one to four weeks back: "usually 2%". A bad
+					   outcome well above its usual share says UNUSUAL. */
+					var usual = {};
+					((D.base['outcomes.usual'] || {}).rows || []).forEach(function (r) { if (r[1] != null) usual[r[0]] = r[1]; });
+					var unusual = function (r) {
+						var o = r[0].toLowerCase(), u = usual[o], share = 100 * r[1] / total;
+						return u != null && (o === 'failed' || o === 'dropped' || o === 'declined' || o === 'abandoned')
+							&& share >= 2 * u + 5;
+					};
+					C.hbar(body, rows, { valueWidth: Object.keys(usual).length ? 200 : 90,
+						pick: function (r) {
+							var o = r[0].toLowerCase();
+							choose({ outcome: state.outcome === o ? null : o });
+						},
+						picked: state.outcome ? state.outcome.charAt(0).toUpperCase() + state.outcome.slice(1) : null,
+						value: function (r) {
+							var u = usual[r[0].toLowerCase()];
+							return C.fmt(r[1]) + ' · ' + Math.round(100 * r[1] / total) + '%'
+								+ (u != null ? ' · usual ' + Math.round(u) + '%' : '') + (unusual(r) ? ' · UNUSUAL' : '');
+						},
+						color: function (r) { return r[2].color; },
+						title: function (r) {
+							var u = usual[r[0].toLowerCase()];
+							return r[0] + ': ' + C.fmt(r[1]) + '\n' + r[2].explain
+								+ (u != null ? '\nUsually ' + u + '%: the same hours of the same weekday, over the four weeks before' : '')
+								+ '\nClick: Applications and Calls for these calls only';
+						} });
+				});
+			} },
+			{ key: 'daily', label: 'Over time', sub: 'how calls ended', draw: function (body) {
+				guard(D.base && D.base['outcomes.daily'], body, function (res) {
+					C.multiLine(body, seriesOf(res, OUTCOME_NAMES),
+						{ colors: OUTCOME_PARTS.map(function (p) { return C.token(p.color); }) });
+				});
+			} },
+			{ key: 'apps', label: 'By application', sub: 'per application', draw: function (body) {
+				guard(D.base && D.base['outcomes.by-application'], body, function (res) { fitTable(body, res); });
+			} }
+		]);
+
+		P.apps = new Panel('apps', 'Applications', 'health', true, ['outcome']);
+		P.apps.setViews([
+			{ key: 'calls', label: 'Calls', sub: 'click one to narrow', tip: 'A call through two applications counts for each. Click an application to narrow Calls to it', draw: function (body) {
+				guard(D.apps && D.apps['calls.by-application'], body, function (res) {
+					C.hbar(body, res.rows, { limit: 8,
+						pick: function (r) { choose({ app: state.app === r[0] ? null : r[0] }); },
+						picked: state.app,
+						title: function (r) { return r[0] + ': ' + C.fmt(r[1]) + ' calls\nClick: the Calls panel for ' + r[0] + "'s calls only"; } });
+				});
+			} },
+			{ key: 'causes', label: 'Causes', sub: 'click one to narrow', tip: 'What the flight recorder found on the calls that went wrong, grouped by cause, most calls first. Click a cause to narrow Calls to it', draw: drawCauses },
+			{ key: 'peers', label: 'Downstream', sub: 'click one to narrow', tip: 'Each server the calls were sent to that the flight recorder found failing them, most calls first. Click one to narrow Calls to its calls', draw: drawPeers },
+			{ key: 'length', label: 'Length', sub: 'calls by duration', draw: function (body) {
+				guard(D.apps && D.apps['duration.bands'], body, function (res) { C.bar(body, res.rows); });
+			} },
+			{ key: 'gaps', label: 'Gaps', narrow: false, sub: 'events never sent', tip: 'Lifecycle events each application never sends, over every call', draw: function (body) {
+				guard(D.apps && D.apps['health.coverage'], body, function (res) {
+					fitTable(body, pick(res, ['application', 'calls', 'gaps']));
+				});
+			} }
+		]);
+
+		P.risk = new Panel('risk', 'Calls', 'risk', true, ['outcome', 'app', 'cause', 'peer', 'number']);
+		P.risk.setViews([
+			{ key: 'list', label: 'Calls', sub: 'click one for Trace', tip: 'Newest first. Click a call to open it in Trace', fetch: function () { loadGroup('calls'); },
+				draw: function (body) {
+					if (!RIGHTS.content) return C.message(body, 'empty', 'Individual calls are not in your grant.');
+					/* The flight recorder keeps a trace of every failed and dropped call. */
+					if ((state.outcome === 'failed' || state.outcome === 'dropped') && L.has('recorded')) {
+						var rec = L.to('recorded', { since: rangeStart() });
+						var a = el('a', 'panel__link', 'Their traces, as the flight recorder kept them, in Trace ↗');
+						a.href = rec.href; a.target = rec.target;
+						body.appendChild(a);
+					}
+					/* A caller's number, as the complaint gives it: Calls narrows to
+					   that number's calls in the range. Kept out of the address. */
+					var find = el('form', 'find');
+					var input = el('input', 'find__input');
+					input.type = 'search'; input.placeholder = 'Find a number, such as +1 646 555 0100';
+					input.setAttribute('aria-label', 'Find the calls of a phone number');
+					input.autocomplete = 'off';
+					if (state.number) input.value = state.number;
+					find.appendChild(input);
+					find.addEventListener('submit', function (e) {
+						e.preventDefault();
+						var digits = input.value.replace(/[^0-9]/g, '');
+						choose({ number: digits.length >= 4 ? digits : null });
+					});
+					body.appendChild(find);
+					// The table draws into a box of its own: it clears what it draws into.
+					var box = el('div', 'panel__fill');
+					body.appendChild(box);
+					guard(D.calls && D.calls['calls.list'], box, function (res) {
+						if (!res.rows.length) return C.message(box, 'empty', state.number ? 'No call to or from a number ending ' + state.number.slice(-4) + ' in this range. Widen the range to look further back.' : 'No calls at this time.');
+						fitTable(box, res, { rowOpen: function (row) { return L.to('call', { call: row[0] }); } });
+					});
+				} },
+			{ key: 'bands', label: 'Risk', sub: 'calls by worst band reached', draw: function (body) {
+				guard(D.calls && D.calls['highrisk.by-band'], body, function (res) { R.bandList(body, res.rows); });
+			} },
+			{ key: 'daily', label: 'Over time', sub: 'calls assessed', draw: function (body) {
+				guard(D.calls && D.calls['risk.daily'], body, function (res) { C.bar(body, res.rows); });
+			} },
+			{ key: 'flagged', label: 'Flagged', sub: 'highest score first', fetch: function () { loadGroup('calls'); },
+				draw: function (body) {
+					// Four columns fit a third of the screen; the full report has the rest.
+					guard(D.calls && D.calls['highrisk.calls'], body, function (res) { fitTable(body, pick(res, ['worst band', 'peak score', 'call', 'first assessed'])); });
+				} }
+		]);
+	}
+
+	function drawAll() { Object.keys(P).forEach(function (k) { P[k].draw(); }); }
+
+	/* Charts take their colours from the tokens when they draw, so a theme
+	   switch redraws them. */
+	new MutationObserver(function () { drawAll(); })
+		.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+	/* ── who is signed in ──────────────────────────────────────────────── */
+
+	/* The account menu: the person's initials and name; opened, what their
+	   grant shows them and Sign out. Built from /settings, so it says what the
+	   server will actually enforce. */
+	function buildAccount(cfg) {
+		var host = document.getElementById('acct');
+		var name = cfg && (cfg.displayName || cfg.user);
+		if (!name) return;
+		var initials = name.split(/[\s._@-]+/).filter(Boolean).slice(0, 2)
+			.map(function (w) { return w.charAt(0).toUpperCase(); }).join('');
+		var btn = el('button', 'acct__btn');
+		btn.type = 'button';
+		btn.setAttribute('aria-haspopup', 'true');
+		btn.setAttribute('aria-expanded', 'false');
+		btn.appendChild(el('span', 'acct__badge', initials || '?'));
+		btn.appendChild(el('span', 'acct__name', name));
+		var menu = el('div', 'acct__menu');
+		menu.hidden = true;
+		menu.appendChild(el('div', 'acct__who', name));
+		var how = (cfg.user && cfg.user !== name ? cfg.user + ' · ' : '') + 'signed in with ' + (cfg.signedInWith || 'WebLogic');
+		menu.appendChild(el('div', 'acct__how', how));
+		if (cfg.sees && cfg.sees.length) {
+			menu.appendChild(el('div', 'acct__h', 'What you see'));
+			var list = el('ul', 'acct__sees');
+			cfg.sees.forEach(function (line) { list.appendChild(el('li', '', line)); });
+			menu.appendChild(list);
+		}
+		var out = el('a', 'acct__out', 'Sign out');
+		out.href = 'signout';
+		menu.appendChild(out);
+		var open = function (yes) { menu.hidden = !yes; btn.setAttribute('aria-expanded', String(yes)); };
+		btn.addEventListener('click', function (e) { e.stopPropagation(); open(menu.hidden); });
+		document.addEventListener('click', function (e) { if (!host.contains(e.target)) open(false); });
+		document.addEventListener('keydown', function (e) { if (e.key === 'Escape') open(false); });
+		host.appendChild(btn);
+		host.appendChild(menu);
+		host.hidden = false;
+	}
+
+	/* ── about ─────────────────────────────────────────────────────────── */
+
+	/* The brand pill opens About: this build (from the WAR's manifest), what
+	   it runs on, the copyright and license. Built from /settings; without it
+	   the panel still names the product. */
+	function buildAbout(about) {
+		var host = document.getElementById('about');
+		var btn = host.querySelector('button');
+		var panel = el('div', 'about');
+		panel.hidden = true;
+		about = about || {};
+		panel.appendChild(el('div', 'about__name', 'BLADE Dashboard'));
+		if (about.version) {
+			var built = about.built ? about.built.replace('T', ' ').replace(/:\d\dZ$/, ' UTC') : '';
+			panel.appendChild(el('div', 'about__ver', 'Version ' + about.version
+				+ (about.mode === 'dev' ? ' · development build' : '') + (built ? ' · built ' + built : '')));
+		}
+		var rows = el('dl', 'about__rows');
+		function row(k, v) { if (!v) return; rows.appendChild(el('dt', '', k)); rows.appendChild(el('dd', '', v)); }
+		row('Server', about.server && about.domain ? about.server + ' · domain ' + about.domain : about.server);
+		var wls = about.weblogic && /WebLogic Server [\d.]+/.exec(about.weblogic);
+		row('WebLogic', wls ? wls[0].replace('WebLogic Server ', '') : about.weblogic);
+		row('Java', about.java);
+		if (rows.children.length) panel.appendChild(rows);
+		var links = el('div', 'about__links');
+		var docs = el('a', '', 'Documentation');
+		docs.href = '/blade/javadoc/'; docs.target = 'blade-javadoc';
+		var src = el('a', '', 'Source on GitHub');
+		src.href = 'https://github.com/vorpalnet/blade'; src.target = '_blank'; src.rel = 'noopener';
+		links.appendChild(docs); links.appendChild(src);
+		panel.appendChild(links);
+		if (about.copyright || about.license) {
+			panel.appendChild(el('div', 'about__legal', [about.copyright, about.license].filter(Boolean).join(' · ')));
+		}
+		host.appendChild(panel);
+		var open = function (yes) { panel.hidden = !yes; btn.setAttribute('aria-expanded', String(yes)); };
+		btn.addEventListener('click', function (e) { e.stopPropagation(); open(panel.hidden); });
+		document.addEventListener('click', function (e) { if (!host.contains(e.target)) open(false); });
+		document.addEventListener('keydown', function (e) { if (e.key === 'Escape') open(false); });
+	}
+
+	/* ── loading ───────────────────────────────────────────────────────── */
+
+	var statusEl = document.getElementById('status'), statusText = document.getElementById('statusText');
+	function setStatus(kind, text) { statusEl.className = 'status' + (kind ? ' ' + kind : ''); statusText.textContent = text; }
+
+	function loadHealth() {
+		return getJson('health').then(function (r) {
+			if (!r || r.error) { kpi('nodes', null, (r && r.error) || 'health failed', true); return; }
+			lastNodes = r.nodes || [];
+			/* A past range may have drawn before this domain's name was known. */
+			var named = r.domain && !localDomain;
+			if (r.domain) localDomain = r.domain;
+			serverKpis();
+			if (named || isLive() || P.cluster.current === 'jdbc') P.cluster.draw();
+		});
+	}
+
+	/* Servers running and SIP sessions, over the servers in scope. */
+	function serverKpis() {
+		if (!RIGHTS.platform) return;
+		var nodes = visibleServers(), running = 0, trouble = false, byState = {};
+		nodes.forEach(function (n) {
+			var w = stateWord(n);
+			if (w === 'RUNNING') running++;
+			else {
+				var word = w === 'SHUTDOWN' ? 'shut down' : w.toLowerCase().replace(/_/g, ' ');
+				(byState[word] = byState[word] || []).push(n.server);
+				/* Shut down is a choice; anything else that is not running is not. */
+				if (w !== 'SHUTDOWN') trouble = true;
+			}
+		});
+		if (!nodes.length) { kpi('nodes', null, remoteScope() ? 'no recent sample' : ''); return; }
+		/* "engine1, engine2 shut down": one phrase per state, so it fits the tile. */
+		var down = Object.keys(byState).map(function (word) { return byState[word].join(', ') + ' ' + word; });
+		kpi('nodes', running + ' / ' + nodes.length, down.length ? down.join(' · ') : 'all running', trouble);
+	}
+
+	/* A domain chosen in Servers scopes the whole board, headline numbers
+	   included. Remembered per browser. */
+	function scopeChanged(value) {
+		scope = value; store('domain', scope);
+		relinkAll();
+		['base', 'traffic', 'ops', 'apps', 'calls'].forEach(function (g) { D[g] = undefined; });
+		serverKpis();
+		drawAll();
+		loadOps().catch(function () {});
+		loadNow().catch(function () {});
+		loadAnalytics();
+	}
+
+	/* Calls up now: Vorpal-IDs some application still holds, from the call
+	   rows (calls.now), on the live cycle. The line is the last hour's peak. */
+	function loadNow() {
+		return getJson('data?r=calls.now' + scopeQuery() + '&tz=' + encodeURIComponent(R.zone())).then(function (d) {
+			var n = d && d['calls.now'];
+			if (!n || n.error) { kpi('now', null, (n && n.error) ? 'analytics unavailable' : '', true); return; }
+			var peak = cell(n, 'peak last hour'), at = cell(n, 'peak at');
+			kpi('now', cell(n, 'now'), peak ? 'peak ' + C.fmt(peak) + ' at ' + String(at).substring(11, 16) + ' · last hour'
+				: 'none in the last hour');
+		});
+	}
+
+	function loadOps() {
+		return getJson('ops').then(function (o) {
+			if (!o || o.error) return;
+			lastOps = o;
+			if (remoteScope()) { kpi('queued', null, 'read live in ' + localDomain + ' only'); }
+			else {
+				/* Calls waiting in a queue, live from the queue application's gauges;
+				   the line is how long the longest of them has waited. */
+				var q = o.queuedNow || {};
+				if (q.calls == null) kpi('queued', null, q.error ? 'queue reading failed' : 'no queue application running', !!q.error);
+				else kpi('queued', q.calls, q.calls ? 'longest waiting ' + clock(q.longestMs / 1000) : 'none waiting');
+			}
+			if (liveFeed() && P.ops.current !== 'changes') P.ops.draw();
+		});
+	}
+
+	/* The range buttons: Live, the settings' ranges, and Custom, which opens
+	   two date pickers read in the board's time zone. */
+	function buildRange() {
+		var host = document.getElementById('range');
+		host.textContent = '';
+		var add = function (key, label, title) {
+			var b = el('button', state.range === key ? 'on' : '', label);
+			b.type = 'button';
+			if (title) b.title = title;
+			b.addEventListener('click', function () {
+				if (key === 'custom') return openCustom(b);
+				closeCustom();
+				choose({ range: key, from: null, until: null });
+			});
+			host.appendChild(b);
+		};
+		add('live', 'Live', 'The last hour, as it happens');
+		RANGES.forEach(function (r) { add(r, rangeLabel(r)); });
+		add('custom', state.range === 'custom' ? spanText(state.from, state.until - 1) : 'Custom', 'Choose the start and end');
+	}
+
+	var customBox = null;
+	function closeCustom() { if (customBox) customBox.hidden = true; }
+
+	/* "2026-10-14T08:00" for a datetime-local input, in the board's zone. */
+	function pickerValue(ms) {
+		var p = {};
+		new Intl.DateTimeFormat('en-CA', { timeZone: R.zone(), hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
+			hour: '2-digit', minute: '2-digit' }).formatToParts(new Date(ms)).forEach(function (x) { p[x.type] = x.value; });
+		return p.year + '-' + p.month + '-' + p.day + 'T' + p.hour + ':' + p.minute;
+	}
+
+	function pickerMs(value) {
+		var m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value || '');
+		return m ? R.zonedMs(+m[1], +m[2], +m[3], +m[4], +m[5]) : null;
+	}
+
+	function openCustom(anchor) {
+		if (!customBox) {
+			customBox = el('div', 'custom');
+			customBox.setAttribute('role', 'dialog');
+			customBox.setAttribute('aria-label', 'Custom range');
+			var row = function (label, input) { var l = el('label', 'custom__row'); l.appendChild(el('span', '', label)); l.appendChild(input); return l; };
+			customBox.from = el('input'); customBox.from.type = 'datetime-local';
+			customBox.until = el('input'); customBox.until.type = 'datetime-local';
+			customBox.zone = el('div', 'custom__zone');
+			customBox.err = el('div', 'custom__err');
+			var ok = el('button', 'custom__ok', 'Show this range'); ok.type = 'button';
+			var cancel = el('button', 'custom__cancel', 'Cancel'); cancel.type = 'button';
+			ok.addEventListener('click', function () {
+				var from = pickerMs(customBox.from.value), until = pickerMs(customBox.until.value);
+				if (!from || !until || until <= from) { customBox.err.textContent = 'The end must come after the start.'; return; }
+				if (from > Date.now()) { customBox.err.textContent = 'The start is in the future.'; return; }
+				closeCustom();
+				choose({ range: 'custom', from: from, until: Math.min(until, Date.now()) });
+			});
+			cancel.addEventListener('click', closeCustom);
+			customBox.appendChild(row('From', customBox.from));
+			customBox.appendChild(row('To', customBox.until));
+			customBox.appendChild(customBox.zone);
+			customBox.appendChild(customBox.err);
+			var buttons = el('div', 'custom__buttons'); buttons.appendChild(cancel); buttons.appendChild(ok);
+			customBox.appendChild(buttons);
+			document.body.appendChild(customBox);
+			document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeCustom(); });
+		}
+		var until = state.range === 'custom' ? state.until : Date.now(), from = state.range === 'custom' ? state.from : until - 86400000;
+		customBox.from.value = pickerValue(from);
+		customBox.until.value = pickerValue(until);
+		customBox.zone.textContent = 'Times are ' + R.zone() + ', the zone chosen in the top bar. Long ranges can take a while.';
+		customBox.err.textContent = '';
+		var r = anchor.getBoundingClientRect();
+		customBox.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 320)) + 'px';
+		customBox.style.top = (r.bottom + 6) + 'px';
+		customBox.hidden = false;
+		customBox.from.focus();
+	}
+
+	/* The time now in the viewer's zone. Every time on the board is in that
+	   zone; the select beside the clock changes it. */
+	function tick() {
+		document.getElementById('clock').textContent = R.time(Date.now(), { hour: '2-digit', minute: '2-digit' });
+	}
+
+	/* A new zone: the live chart's times and every analytics bucket move. */
+	function zoneChanged() {
+		tick();
+		loadNow().catch(function () {});
+		Object.keys(GROUPS).forEach(function (g) { D[g] = undefined; });
+		buildRange();
+		labelRanges();
+		drawAll();
+		loadAnalytics();
+	}
+
+	state = readHash();
+	buildPanels();
+	buildKpis();
+	buildRange();
+	R.zoneSelect(document.getElementById('tz'), zoneChanged);
+	drawAll();
+	tick();
+	setStatus('', 'loading…');
+	// The window the apps' "Dashboard" link comes back to.
+	if (!window.name) window.name = 'blade-dashboard';
+	// Links appear once the apps' declarations are in.
+	L.load().then(drawAll, function () {});
+	window.addEventListener('hashchange', function () { apply(readHash()); });
+	var live = function () {
+		loadHealth().catch(function () {}); loadOps().catch(function () {}); loadNow().catch(function () {});
+		if (P.traffic.current === 'network') loadNetwork().catch(function () {});
+		if (P.cluster.current === 'bus') loadBus().catch(function () {});
+		if (P.cluster.current === 'apps') loadApps().catch(function () {});
+	};
+	getJson('settings').catch(function () { return null; }).then(function (cfg) {
+		if (cfg) {
+			LIVE_MS = (cfg.liveRefreshSeconds || 5) * 1000;
+			ANALYTICS_MS = (cfg.analyticsRefreshSeconds || 60) * 1000;
+			HEAP_HIGH = cfg.heapHighPercent || HEAP_HIGH;
+			CAPACITY = { cps: cfg.capacityCallsPerSecond || 0, sessions: cfg.capacitySessions || 0 };
+			RIGHTS = { platform: cfg.platform !== false, content: cfg.content !== false };
+			/* The deployment's ranges, between Live and Custom. */
+			if (cfg.ranges && cfg.ranges.length) {
+				RANGES = cfg.ranges.map(String);
+				buildRange();
+			}
+			buildAccount(cfg);
+		}
+		buildAbout(cfg && cfg.about);
+		loadRail(cfg);
+		if (!RIGHTS.platform) {
+			live = function () { loadNow().catch(function () {}); };
+			hidePlatformKpis();
+			drawAll();
+		}
+		live();
+		loadAnalytics();
+		setInterval(live, LIVE_MS);
+		scheduleAnalytics();
+	});
+	setInterval(tick, 15000);
+	var rz;
+	window.addEventListener('resize', function () { clearTimeout(rz); rz = setTimeout(drawAll, 150); });
+})();

@@ -3,7 +3,7 @@
 Javadocs: `/blade/javadoc/portal/` on the Admin Portal
 
 The shared host behind every admin app, served at `/blade/portal`. Its launcher deck moved to
-the [dashboard](../../proto/dashboard/README.md)'s rail: `/blade/portal/` now forwards there,
+the [dashboard](../dashboard/README.md)'s rail: `/blade/portal/` now forwards there,
 and the server's bare address goes there too ([Redirect](../redirect/README.md)). What stays
 here is what the other apps load from it: the login page, the brand assets, the editor kit, the
 card list the rail reads, the deployment inventory report and the service pages.

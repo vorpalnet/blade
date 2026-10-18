@@ -20,7 +20,9 @@ import org.vorpal.blade.framework.v3.Callflow;
 /// Forks an initial INVITE to every contact registered for the account — a
 /// forking B2BUA built on [Callflow#sendRequestsInParallel]: the first 2xx
 /// wins and the framework CANCELs the losing dialogs. With `session:passthru`
-/// set, the winning dialog drops out of the dialog after setup.
+/// set, the INVITE is proxied instead and the service leaves the call; the
+/// container then answers the caller, so this callflow neither rings nor
+/// answers it itself ([Callflow#isPassthru]).
 public class InviteCallflow extends Callflow implements Serializable {
 	private static final long serialVersionUID = 397213565821542521L;
 
@@ -57,10 +59,12 @@ public class InviteCallflow extends Callflow implements Serializable {
 			return;
 		}
 
-		// sendRequestsInParallel doesn't surface the dialogs' provisional
-		// responses, so ring the caller immediately — their UA generates
-		// local ringback until a dialog answers.
-		sendResponse(aliceRequest.createResponse(180));
+		// Ring the caller immediately — their UA generates local ringback until
+		// a dialog answers. Not under passthru: a proxy's caller hears only the
+		// callees.
+		if (!isPassthru()) {
+			sendResponse(aliceRequest.createResponse(180));
+		}
 
 		SipApplicationSession appSession = aliceRequest.getApplicationSession();
 
@@ -80,7 +84,7 @@ public class InviteCallflow extends Callflow implements Serializable {
 		// immediate 180 above; 100 Trying is hop-by-hop
 		Callback<SipServletResponse> dialogObserver = (dialogResponse) -> {
 			int status = dialogResponse.getStatus();
-			if (status > 100 && status < 200 && !aliceRequest.isCommitted()) {
+			if (status > 100 && status < 200 && !isPassthru() && !aliceRequest.isCommitted()) {
 				SipServletResponse aliceRinging = aliceRequest.createResponse(status);
 				copyContentAndHeaders(dialogResponse, aliceRinging);
 				sendResponse(aliceRinging);
@@ -89,7 +93,8 @@ public class InviteCallflow extends Callflow implements Serializable {
 
 		sendRequestsInParallel(timeout, bobRequests, (bobResponse) -> {
 
-			if (!aliceRequest.isCommitted()) {
+			// under passthru the container has already answered the caller
+			if (!isPassthru() && !aliceRequest.isCommitted()) {
 
 				SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
 				copyContentAndHeaders(bobResponse, aliceResponse); // links alice to the winning dialog

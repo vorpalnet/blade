@@ -438,6 +438,8 @@ write_deployment_manifest() {
                 echo "fsmar|approuter/|SIP application router (reboot engine tier)" ;;
             blade-agent.jar)
                 echo "agent|-javaagent|Network agent: loaded by each managed server's start arguments (restart)" ;;
+            blade-overload.jar)
+                echo "overload|<domain>/lib|Overload protection collector: read by every server at start (restart)" ;;
             blade-shared.war)
                 echo "shared-lib|admin+cluster|WebLogic shared library (3rd-party JARs)" ;;
             blade-framework.jar)

@@ -21,14 +21,31 @@ public final class Problems {
 	private Problems() {
 	}
 
+	/// What a warning carries as its `kind`. A problem raised with [#raise]
+	/// has no kind: something is wrong now.
+	public static final String WARNING = "warning";
+
 	/// Raises, or restates, the problem under `key`. `open` must be a path under
 	/// `/blade/`; anything else is dropped, so the issue shows without a link.
 	public static void raise(String key, String summary, String open) {
+		publish(key, summary, open, null);
+	}
+
+	/// Raises, or restates, a warning under `key`: nothing has failed yet, but
+	/// it will if nobody acts, such as a server spending a quarter of its time
+	/// collecting garbage. It shows under Issues worded as a warning, apart
+	/// from the problems, and clears with [#clear] like one.
+	public static void warn(String key, String summary, String open) {
+		publish(key, summary, open, WARNING);
+	}
+
+	private static void publish(String key, String summary, String open, String kind) {
 		String link = (open != null && open.startsWith("/blade/") && !open.startsWith("/blade//")) ? open : null;
 		Events.publish(BladeEventTypes.PROBLEM_RAISED, key, data -> data
 				.put("key", key)
 				.put("summary", summary)
 				.put("open", link)
+				.put("kind", kind)
 				.put("application", SettingsManager.getApplicationName())
 				.put("node", SettingsManager.getServerName()));
 	}

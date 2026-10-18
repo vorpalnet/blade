@@ -63,6 +63,21 @@ URL or password. It works on Oracle, MySQL and SQL Server:
   again.
 - **The reporting views** are replaced whenever their script changed.
 
+The schema holds every table BLADE keeps in that database: the analytics
+tables, the call catalog's and the block list that the agent console writes and
+`proxy-block` reads. No application creates a table of its own any more, so a
+database whose login may not create tables works, and a change to a table
+reaches every database through a migration.
+
+An application built outside this checkout that keeps a table in the same
+database brings its own `migrations/` directory, with files named for it
+(`meetings-001-caller-memory.MySQL.sql`). Name each such directory in the
+profile, comma-separated, and step 4 applies them after BLADE's:
+
+```
+upgrade.sql.modules=/home/oracle/git/gryphon/meetings/sql
+```
+
 A domain with no analytics data source skips the step.
 
 ### Before it changes anything

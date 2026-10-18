@@ -50,7 +50,7 @@ Carriers that verify in their own network often strip `Identity` and send only `
 
 An agent who takes a spam call can mark the number, and the mark blocks it for a set time. Spammers rotate numbers, so the mark expires rather than blocking whoever is given the number next. The pieces ship with the app:
 
-- `sql/spam-numbers.sql` creates the `spam_numbers` table. The agent desktop inserts a row with an `expires_at` and a `treatment`, `tarpit` by default, or `review` for a caller someone should listen to.
+- The `spam_numbers` table is part of the analytics schema, so `./upgrade.sh <env>` creates it in the analytics database. The agent desktop inserts a row with an `expires_at` and a `treatment`, `tarpit` by default, or `review` for a caller someone should listen to.
 - `_templates/spam-numbers.sql` is the lookup. It is bundled in the WAR and copied to the domain's `_templates/` on first use.
 
 Add a `jdbc` connector to the pipeline **before** `lists`, so the allow list still overrides a mark:
