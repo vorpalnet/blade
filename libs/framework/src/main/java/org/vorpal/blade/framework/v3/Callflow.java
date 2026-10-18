@@ -88,12 +88,12 @@ import org.vorpal.blade.framework.v3.diagnostics.TraceLog;
 /// a branch of its own; one it sends before proxying (an early 180) leaves the
 /// caller's session a user agent, which brings the Contact rewrite back.
 ///
-/// **Serial, parallel, and tiers.** A serial hunt is a sequential proxy: each
-/// branch has `milliseconds`, any failure moves on, and a failure the
-/// `advance` rule does not accept cancels the rest, so the caller gets that
-/// failure. A parallel batch is a parallel proxy: the container cancels the
+/// **Serial, parallel, and tiers.** BLADE sends the proxy batches. A
+/// parallel race is one batch of every destination: the container cancels the
 /// other branches on a 2xx and picks the failure the caller gets when all fail
-/// (RFC 3261 section 16.7). A next batch (a next tier) started from inside the
+/// (RFC 3261 section 16.7). A serial hunt is one batch per destination, each
+/// with `milliseconds`; a failure the `advance` rule accepts starts the next,
+/// and any other ends the hunt with that failure. A next batch (a next tier) started from inside the
 /// completion callback joins the same proxy before the caller hears the
 /// failure. It must start there, on that thread: once the callback returns
 /// with nothing new started, the failure goes to the caller and the proxy is
@@ -102,12 +102,13 @@ import org.vorpal.blade.framework.v3.diagnostics.TraceLog;
 /// proxy may try each destination once, so a later batch skips the ones an
 /// earlier batch tried; one left with nothing new fails at once with a 408.
 ///
-/// **Timeouts.** The container times a parallel proxy once, as a whole, so a
-/// later batch would get only what the first left. Each parallel batch is
-/// timed here instead (see [#proxyPassthru]); when its time runs out its
-/// branches are cancelled and, unless a definite failure has come in, the
-/// completion callback gets a 408 at once, so a next batch can start while
-/// the old branches finish.
+/// **Timeouts.** The container times a proxy once, as a whole, so a later
+/// batch would get only what the first left, and it ends a timed-out branch
+/// with the callee's 487, which neither fails over nor is what the caller
+/// should hear. Every batch is timed here instead (see [#proxyPassthru]):
+/// when its time runs out its branches are cancelled and, unless a definite
+/// failure has come in, the batch fails with a 408 at once, so the next
+/// destination or batch can start while the old branches finish.
 ///
 /// **What the caller sees differs from the B2BUA** where proxy rules say so:
 /// every 2xx is forwarded (two callees answering together means two answers,
@@ -549,16 +550,18 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	/// was never going to complete.
 	///
 	/// A request with no final response before `milliseconds` is cancelled
-	/// and the hunt moves on, as does one that cannot be sent. When the last
-	/// request times out, `lambdaFunction` gets a 408 made from it.
+	/// and the hunt moves on, as does one that cannot be sent. If its callee
+	/// answers anyway, as our CANCEL reaches it, that 2xx is acknowledged and
+	/// the call ended with a BYE. When the last request times out,
+	/// `lambdaFunction` gets a 408 made from it.
 	/// `dialogResponse` (may be null) sees every response every dialog
 	/// produces, provisional and final, before the hunt acts on it. Emptying
 	/// `requests` ends the hunt after the request in flight.
 	///
-	/// Under passthru an initial INVITE's hunt is a sequential proxy instead
-	/// (see the class notes): the same callbacks, the same `advance` rule, but
-	/// the container sends the caller the answer, and `requests` is emptied at
-	/// once.
+	/// Under passthru an initial INVITE's hunt is proxied instead, one
+	/// destination at a time (see the class notes): the same callbacks, the
+	/// same `advance` rule and timeouts, but the container sends the caller
+	/// the answer, and `requests` is emptied at once.
 	///
 	/// @param milliseconds   how long each request may go without a final response
 	/// @param requests       the requests, in order; consumed as the hunt runs
@@ -594,8 +597,15 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 				if (dialogResponse != null) {
 					dialogResponse.accept(response);
 				}
-				if (provisional(response)
-						|| Boolean.TRUE.equals(response.getRequest().getAttribute(HUNT_ABANDONED))) {
+				if (provisional(response)) {
+					return;
+				}
+				if (Boolean.TRUE.equals(response.getRequest().getAttribute(HUNT_ABANDONED))) {
+					// the timer moved the hunt on; a callee that answered as our
+					// CANCEL reached it is acknowledged and its call ended
+					if (successful(response)) {
+						endExtraAnswer(response);
+					}
 					return;
 				}
 				stopTimer(response.getApplicationSession(), timerId);
@@ -613,8 +623,8 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	}
 
 	/// The baseline serial hunt, except under passthru: an initial INVITE then
-	/// goes out as a sequential proxy (see [#proxyPassthru]) that, like the
-	/// baseline hunt, moves on after any failure.
+	/// is proxied one destination at a time (see [#proxyPassthru]), moving on
+	/// after any failure like the baseline hunt.
 	@Override
 	public void sendRequestsInSerial(long milliseconds, List<SipServletRequest> requests,
 			Callback<SipServletResponse> lambdaFunction, Callback<SipServletResponse> dialogResponse)
@@ -837,6 +847,22 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	/// out as a proxy.
 	static final String PASSTHRU_PROXY_ATTR = "org.vorpal.blade.v3.passthru.proxy";
 
+	/// One destination of a passthru proxy: what a branch needs from the
+	/// request the callflow built, kept with the call so that a serial hunt
+	/// can start the next one later.
+	static final class PassthruTarget implements java.io.Serializable {
+		private static final long serialVersionUID = 1L;
+		final URI uri;
+		final java.util.HashMap<String, Object> attributes = new java.util.HashMap<>();
+
+		PassthruTarget(SipServletRequest request) {
+			this.uri = request.getRequestURI();
+			for (String name : request.getAttributeNameSet()) {
+				attributes.put(name, request.getAttribute(name));
+			}
+		}
+	}
+
 	/// What a passthru proxy reports to, kept with the call so it survives
 	/// failover like any other callback.
 	static final class PassthruProxy implements java.io.Serializable {
@@ -844,15 +870,19 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 		Callback<SipServletResponse> complete;
 		Callback<SipServletResponse> observer;
 		Advance advance;
+		/// A race (all at once) rather than a hunt (one at a time).
 		boolean parallel;
+		/// How long a batch may ring: the whole race, or each destination of a hunt.
+		long timeoutMillis;
 		boolean answered;
-		/// The batch in flight (one per [#proxyPassthru] call), and the last
-		/// batch `complete` has already been told about.
+		/// The batch in flight, and the last batch `complete` has been told about.
 		int batch;
 		int completedBatch;
 		/// A failure no other branch would fix has arrived in this batch.
 		boolean definite;
 		String batchTimer;
+		/// A hunt's destinations not yet tried, in order.
+		java.util.LinkedList<PassthruTarget> waiting = new java.util.LinkedList<>();
 		/// Every destination this call's proxy has tried: a proxy may try a
 		/// destination only once.
 		java.util.HashSet<String> tried = new java.util.HashSet<>();
@@ -861,30 +891,37 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 		java.util.HashSet<String> seen = new java.util.HashSet<>();
 	}
 
+	/// A passthru proxy's own timeout, in seconds: long enough never to fire, so
+	/// that each batch's timer decides.
+	static final int PASSTHRU_NO_TIMEOUT_SECONDS = 24 * 60 * 60;
+
 	/// Sends an initial INVITE's `requests` as branches of a proxy on the
 	/// caller's INVITE, without Record-Route, instead of as new dialogs. Each
 	/// branch gets its request's Request-URI and attributes; the requests
 	/// themselves are never sent, and their sessions are invalidated.
 	///
-	/// `parallel` forks to all branches at once, otherwise one after another
-	/// (`timeoutMillis` then limits each branch; for a parallel batch, the
-	/// batch). The container cancels the rest on a 2xx, sends every 2xx to
-	/// the caller, and picks the failure the caller gets (RFC 3261 section
-	/// 16.7). `observer` sees every response of every branch, provisional and
-	/// final; `complete` gets the 2xx, or the failure the caller would get. A
-	/// next tier started from inside `complete` is added to the same proxy, and
-	/// the caller then hears from it instead. `advance`, for a sequential proxy,
-	/// stops the search on a failure it does not accept; for a parallel one it
-	/// says which failures are retryable.
+	/// The container runs the proxy in parallel, and BLADE sends it batches. A
+	/// race (`parallel`) is one batch of every destination; a hunt is one
+	/// batch per destination, the next started when one fails and `advance`
+	/// accepts the failure. Every batch is timed here, for `timeoutMillis`
+	/// (the whole race, or each destination of the hunt), not by the
+	/// container: it times a proxy once, as a whole, and ends a timed-out
+	/// branch with the callee's 487, which would neither fail over nor be what
+	/// the caller should hear. See [#passthruBatchTimeout].
 	///
-	/// A parallel batch with a `timeoutMillis` gets its own timer, and the
-	/// proxy's own timeout is set out of reach (see [#passthruBatchTimeout]). A
-	/// sequential proxy's timeout is per branch, so it is the container's.
-	/// Called again for a next tier, it replaces the callbacks, stops the old
-	/// batch's timer, and starts the new branches on the same proxy. A proxy
-	/// may try a destination only once, so one already tried, or listed twice,
-	/// is skipped; a batch left with nothing new hands `complete` a 408 at
-	/// once, so a later tier still gets its turn.
+	/// The container cancels the rest on a 2xx, sends every 2xx to the
+	/// caller, and picks the failure a race ends with (RFC 3261 section 16.7).
+	/// `observer` sees every response of every branch, provisional and final;
+	/// `complete` gets the 2xx, or the failure the caller would get. A next
+	/// tier started from inside `complete` is added to the same proxy, and the
+	/// caller then hears from it instead. `advance` decides which failures
+	/// move a hunt on; for a race it says which failures are retryable.
+	///
+	/// Called again for a next tier, it replaces the callbacks and the hunt,
+	/// stops the old batch's timer, and starts the new batch on the same
+	/// proxy. A proxy may try a destination only once, so one already tried,
+	/// or listed twice, is skipped; with nothing new to try, `complete` gets a
+	/// 408 at once, so a later tier still gets its turn.
 	///
 	/// @return false when there is no caller INVITE to proxy (the requests are
 	///         then sent as a B2BUA, as without passthru)
@@ -905,91 +942,107 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 		if (state == null) {
 			proxy.setRecordRoute(false);
 			proxy.setSupervised(true);
+			proxy.setParallel(true);
+			proxy.setProxyTimeout(PASSTHRU_NO_TIMEOUT_SECONDS);
 			state = new PassthruProxy();
 		}
-		proxy.setParallel(parallel);
-		if (parallel) {
-			// The container times a parallel proxy as a whole, once: a batch started
-			// after the first would get only what is left of its time. Each batch is
-			// timed here instead, see the timer below.
-			proxy.setProxyTimeout(PASSTHRU_NO_TIMEOUT_SECONDS);
-		} else if (timeoutMillis > 0) {
-			proxy.setProxyTimeout((int) Math.max(1, (timeoutMillis + 999) / 1000));
-		}
 		stopTimer(appSession, state.batchTimer);
+		state.batchTimer = null;
 		state.complete = complete;
 		state.observer = observer;
 		state.advance = advance;
 		state.parallel = parallel;
+		state.timeoutMillis = timeoutMillis;
 		state.answered = false;
-		state.definite = false;
-		state.batchTimer = null;
-		final int batch = ++state.batch;
-		if (parallel && timeoutMillis > 0) {
-			state.batchTimer = startTimer(appSession, timeoutMillis, false,
-					(timer) -> passthruBatchTimeout(inbound, batch));
-		}
+		state.waiting.clear();
 
 		// A proxy refuses a destination it has tried before, or one listed twice:
 		// skip those, so an endpoint in two tiers does not stop the second.
-		List<URI> targets = new java.util.ArrayList<>();
-		List<SipServletRequest> sending = new java.util.ArrayList<>();
+		java.util.LinkedList<PassthruTarget> targets = new java.util.LinkedList<>();
 		for (SipServletRequest request : requests) {
 			if (state.tried.add(request.getRequestURI().toString())) {
-				targets.add(request.getRequestURI());
-				sending.add(request);
+				targets.add(new PassthruTarget(request));
 			} else {
 				sipLogger.fine(request, "Callflow.proxyPassthru - already tried " + request.getRequestURI());
 			}
-		}
-		for (SipServletRequest request : requests) {
 			SipSession unsent = request.getSession();
 			if (unsent != null && unsent.isValid()) {
 				unsent.invalidate();
 			}
 		}
+		appSession.setAttribute(IS_PROXY_ATTR, Boolean.TRUE); // the caller's CANCEL is the container's to handle
+
 		if (targets.isEmpty()) {
-			// nothing new to try: this batch fails at once, as if every branch timed out
-			stopTimer(appSession, state.batchTimer);
-			state.batchTimer = null;
-			state.completedBatch = batch;
+			// nothing new to try: fail at once, as if every destination had timed out
+			state.completedBatch = ++state.batch;
 			appSession.setAttribute(PASSTHRU_PROXY_ATTR, state);
-			appSession.setAttribute(IS_PROXY_ATTR, Boolean.TRUE);
 			if (complete != null) {
 				complete.accept(new DetachedResponse(inbound, 408));
 			}
-			return true;
+		} else if (parallel) {
+			startBatch(inbound, state, targets);
+		} else {
+			state.waiting.addAll(targets);
+			startBatch(inbound, state, java.util.Collections.singletonList(state.waiting.removeFirst()));
 		}
-		List<javax.servlet.sip.ProxyBranch> branches = proxy.createProxyBranches(targets);
-		for (int i = 0; i < branches.size() && i < sending.size(); i++) {
-			SipServletRequest request = sending.get(i);
-			SipServletRequest branchRequest = branches.get(i).getRequest();
-			for (String name : request.getAttributeNameSet()) {
-				branchRequest.setAttribute(name, request.getAttribute(name));
-			}
-			sipLogger.superArrow(Direction.SEND, false, branchRequest, null, this.getClass().getSimpleName(), null);
-		}
-
-		appSession.setAttribute(PASSTHRU_PROXY_ATTR, state);
-		appSession.setAttribute(IS_PROXY_ATTR, Boolean.TRUE); // the caller's CANCEL is the container's to handle
-		proxy.startProxy();
 		return true;
 	}
 
-	/// A parallel proxy's own timeout, in seconds: long enough never to fire, so
-	/// that each batch's timer decides.
-	static final int PASSTHRU_NO_TIMEOUT_SECONDS = 24 * 60 * 60;
+	/// Starts one batch of branches on the caller's proxy, and its timer.
+	private static void startBatch(SipServletRequest inbound, PassthruProxy state, List<PassthruTarget> targets)
+			throws javax.servlet.sip.TooManyHopsException {
+		SipApplicationSession appSession = inbound.getApplicationSession();
+		javax.servlet.sip.Proxy proxy = inbound.getProxy();
+		final int batch = ++state.batch;
+		state.definite = false;
+		state.batchTimer = null;
 
-	/// A parallel batch ran out of time: cancel what is still ringing. Unless a
-	/// failure no other branch would fix has come in, `complete` gets a 408 now,
-	/// made here rather than by the container, because the container sends the
-	/// 408 it makes for cancelled branches to the caller even when a next batch
-	/// has started. A next batch started from `complete` goes out while the old
-	/// branches finish, so the caller hears only from it.
+		List<URI> uris = new java.util.ArrayList<>();
+		for (PassthruTarget target : targets) {
+			uris.add(target.uri);
+		}
+		List<javax.servlet.sip.ProxyBranch> branches = proxy.createProxyBranches(uris);
+		for (int i = 0; i < branches.size() && i < targets.size(); i++) {
+			SipServletRequest branchRequest = branches.get(i).getRequest();
+			targets.get(i).attributes.forEach(branchRequest::setAttribute);
+			sipLogger.superArrow(Direction.SEND, false, branchRequest, null, "proxy", null);
+		}
+		if (state.timeoutMillis > 0) {
+			state.batchTimer = startTimer(appSession, state.timeoutMillis, false,
+					(timer) -> passthruBatchTimeout(inbound, batch));
+		}
+		appSession.setAttribute(PASSTHRU_PROXY_ATTR, state);
+		proxy.startProxy();
+	}
+
+	/// A batch ended without an answer, with `failure`: a hunt moves on to its
+	/// next destination if `advance` accepts the failure, otherwise `complete`
+	/// hears it. `observed` says the observer has already seen `failure`, so a
+	/// callback that is both (a lone [#sendRequest]) is not told twice.
+	private static void batchFailed(SipServletRequest inbound, PassthruProxy state, SipServletResponse failure,
+			boolean observed) throws javax.servlet.sip.TooManyHopsException {
+		if (!state.parallel && !state.waiting.isEmpty() && (state.advance == null || state.advance.test(failure))) {
+			startBatch(inbound, state, java.util.Collections.singletonList(state.waiting.removeFirst()));
+			return;
+		}
+		state.completedBatch = state.batch;
+		inbound.getApplicationSession().setAttribute(PASSTHRU_PROXY_ATTR, state);
+		if (state.complete != null && !(observed && state.complete == state.observer)) {
+			state.complete.accept(failure);
+		}
+	}
+
+	/// A batch ran out of time: cancel what is still ringing. Unless a failure
+	/// no other branch would fix has come in (the container then answers with
+	/// it), the batch has failed with a 408, made here rather than by the
+	/// container: the container ends a cancelled branch with the callee's 487,
+	/// or sends the 408 it makes to the caller even when a next batch has
+	/// started. A next batch therefore goes out at once, while the old
+	/// branches finish, and the caller hears only from it.
 	private static void passthruBatchTimeout(SipServletRequest inbound, int batch) {
 		SipApplicationSession appSession = inbound.getApplicationSession();
 		PassthruProxy state = (PassthruProxy) appSession.getAttribute(PASSTHRU_PROXY_ATTR);
-		if (state == null || state.batch != batch || state.completedBatch == batch) {
+		if (state == null || state.batch != batch || state.completedBatch == batch || state.answered) {
 			return;
 		}
 		try {
@@ -1007,14 +1060,10 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 				}
 			}
 			state.batchTimer = null;
-			if (!state.definite) {
-				state.completedBatch = batch;
+			if (state.definite) {
 				appSession.setAttribute(PASSTHRU_PROXY_ATTR, state);
-				if (state.complete != null) {
-					state.complete.accept(new DetachedResponse(inbound, 408));
-				}
 			} else {
-				appSession.setAttribute(PASSTHRU_PROXY_ATTR, state);
+				batchFailed(inbound, state, new DetachedResponse(inbound, 408), false);
 			}
 		} catch (Exception e) {
 			sipLogger.severe(inbound, "Callflow.passthruBatchTimeout - " + e);
@@ -1029,10 +1078,10 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	///
 	/// The observer sees each response once: the container may report a
 	/// branch's final twice, as a branch response and then as the best, so
-	/// finals are remembered by Via, To tag and status. The completion callback
-	/// sees the best response once per batch, and not at all when the batch
-	/// timer has already given it a 408, unless the late one is a 2xx. A 487 is
-	/// a cancel's echo, ours or the caller's, never a definite failure.
+	/// finals are remembered by Via, To tag and status. A 2xx goes to the
+	/// completion callback. A best failure ends the batch (see `batchFailed`),
+	/// unless the batch timer has already ended it. A 487 is a cancel's echo,
+	/// ours or the caller's, never a definite failure.
 	static boolean passthruResponse(SipServletResponse response, boolean branch) {
 		SipApplicationSession appSession = response.getApplicationSession();
 		PassthruProxy state = (appSession != null && appSession.isValid())
@@ -1053,19 +1102,19 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 					&& state.advance != null && !state.advance.test(response);
 			if (branch) {
 				state.definite |= definite;
-				// a sequential search moves on by itself; stop it on a failure no other branch would fix
-				if (!state.parallel && definite) {
-					response.getProxy().cancel();
-				}
 			} else if (!provisional(response) && !state.answered) {
-				state.answered = successful(response);
 				stopTimer(appSession, state.batchTimer);
 				state.batchTimer = null;
 				boolean told = state.completedBatch == state.batch; // by the batch timer
-				state.completedBatch = state.batch;
-				appSession.setAttribute(PASSTHRU_PROXY_ATTR, state);
-				if (state.complete != null && state.complete != state.observer && (!told || state.answered)) {
-					state.complete.accept(response);
+				if (successful(response)) {
+					state.answered = true;
+					state.completedBatch = state.batch;
+					appSession.setAttribute(PASSTHRU_PROXY_ATTR, state);
+					if (state.complete != null && state.complete != state.observer) {
+						state.complete.accept(response);
+					}
+				} else if (!told) {
+					batchFailed(response.getProxy().getOriginalRequest(), state, response, true);
 				}
 			}
 			if (appSession.isValid()) {

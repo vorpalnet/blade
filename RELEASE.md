@@ -123,6 +123,14 @@ applications.
   they behave exactly as before. `proxy-registrar`, whose sample turns passthru on, now checks
   `isPassthru()` like `proxy-balancer`, and leaves the call after forking to the registered
   contacts.
+- **A serial hunt under passthru behaves as it does as a B2BUA.** The container's own sequential
+  proxy ended a destination that rang past its timeout with the callee's 487: the hunt's last
+  destination timing out gave the caller a 487 it never asked for, and a next tier never started.
+  BLADE now hunts one destination per batch, times each one itself, and treats a timeout as a
+  408, so it fails over and the caller hears a 408.
+- **A callee that answers as the hunt gives up on it is ended.** When a serial hunt's timer
+  cancels a destination and its callee answers anyway, the 2xx is ACKed and ended with a BYE.
+  Both hunts, v3 and baseline, used to ignore it, leaving that callee on a dead call.
 - **Each parallel batch gets its own timeout.** The container times a parallel proxy once, as a
   whole, so a second batch would have had only what the first left. BLADE times each batch and
   cancels only its branches; a next tier then starts at once, while they finish.

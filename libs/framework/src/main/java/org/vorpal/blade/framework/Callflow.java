@@ -1428,7 +1428,13 @@ public abstract class Callflow implements Serializable {
 
 				if (Boolean.TRUE.equals(response.getRequest().getAttribute(SERIAL_ABANDONED))) {
 					// late final (e.g. 487 after our CANCEL); the timeout
-					// path already advanced the hunt
+					// path already advanced the hunt. A 2xx that crossed our
+					// CANCEL is a callee who answered: acknowledge it, as every
+					// 2xx to an INVITE must be, and end that call.
+					if (successful(response)) {
+						sendRequest(response.createAck());
+						sendRequest(response.getSession().createRequest(BYE));
+					}
 					return;
 				}
 
