@@ -4,14 +4,14 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import javax.enterprise.concurrent.ManagedScheduledExecutorService;
-import javax.naming.InitialContext;
 
 import org.vorpal.blade.framework.v3.events.Problems;
 
@@ -37,17 +37,20 @@ import org.vorpal.blade.framework.v3.events.Problems;
 /// generation after collection, call-state lock failures. Those are warnings,
 /// raised for the dashboard and never a reason to refuse.
 ///
-/// Each change is raised or cleared through [Problems], so it shows under the
-/// dashboard's Issues, goes out through its notifications, and is stored by
-/// analytics with the other operations events. The state is also on the
+/// Each overload episode is raised once through [Problems], so it shows under
+/// the dashboard's Issues, goes out through its notifications, and is stored
+/// by analytics with the other operations events. It clears only after the
+/// engine has taken calls for [#EPISODE_CLEAR_MILLIS]: an engine that refuses,
+/// recovers and refuses again within that time is one problem, not a stream
+/// of them. The state is also on the
 /// [SipQueuesMXBean], which the Servers panel reads.
 ///
-/// Runs on the container's managed scheduler, rescheduling itself after each
-/// pass.
+/// Runs on a daemon thread of its own, rescheduling itself after each pass. Not
+/// the container's managed scheduler: a SIP application's startup has no
+/// `java:comp` binding for it, and the lookup fails.
 final class OverloadMonitor implements Runnable {
 
 	private static final Logger logger = Logger.getLogger(OverloadMonitor.class.getName());
-	private static final String EXECUTOR = "java:comp/DefaultManagedScheduledExecutorService";
 
 	/// Between readings. [EngineLatency#WINDOW] readings make its second.
 	static final long SAMPLE_MILLIS = 250;
@@ -69,6 +72,11 @@ final class OverloadMonitor implements Runnable {
 	/// so a reading that hovers at the line raises it once, not every second.
 	static final int CLEAR_SHARE = 80;
 
+	/// How long the engine must take calls before an overload episode ends and
+	/// its problem clears, so an engine that refuses, recovers and refuses
+	/// again raises one problem, not one each time.
+	static final long EPISODE_CLEAR_MILLIS = 30_000L;
+
 	/// How recently the container must have asked for the verdict to count as
 	/// acting on it.
 	static final long CONSULTED_MILLIS = 60_000L;
@@ -82,14 +90,17 @@ final class OverloadMonitor implements Runnable {
 	/// Raised and not yet cleared: key to summary.
 	private final Map<String, String> raised = new LinkedHashMap<>();
 
-	private ManagedScheduledExecutorService executor;
+	private ScheduledExecutorService executor;
 	private volatile ScheduledFuture<?> next;
 	private volatile boolean stopped;
 	private long lastStrain;
 
 	// What the MBean reports.
 	private volatile int latencyMillis = -1;
+	/// When the current overload episode started (0: none), and when the
+	/// engine last went back to taking calls within it.
 	private volatile long refusingSince;
+	private long calmSince;
 	private volatile int gcPercent = -1;
 	private volatile int heapAfterGcPercent = -1;
 	private volatile long lockFailuresPerMinute = -1;
@@ -99,12 +110,16 @@ final class OverloadMonitor implements Runnable {
 		this.application = application;
 	}
 
-	/// Starts sampling. Returns null, logged, when the container offers no
-	/// managed scheduler; the options service runs without it.
+	/// Starts sampling. Returns null, logged, if it cannot; the options service
+	/// runs without it.
 	static OverloadMonitor start(Supplier<OptionsSettings> settings, String application) {
 		try {
 			OverloadMonitor monitor = new OverloadMonitor(settings, application);
-			monitor.executor = (ManagedScheduledExecutorService) new InitialContext().lookup(EXECUTOR);
+			monitor.executor = Executors.newSingleThreadScheduledExecutor(r -> {
+				Thread t = new Thread(r, "options-overload-monitor");
+				t.setDaemon(true);
+				return t;
+			});
 			monitor.next = monitor.executor.schedule(monitor, SAMPLE_MILLIS, TimeUnit.MILLISECONDS);
 			if (!OverloadBridge.installed()) {
 				logger.info("Options - " + OverloadBridge.HOLDER + " is not in the domain lib folder; the overload"
@@ -125,6 +140,9 @@ final class OverloadMonitor implements Runnable {
 		ScheduledFuture<?> f = next;
 		if (f != null) {
 			f.cancel(false);
+		}
+		if (executor != null) {
+			executor.shutdownNow();
 		}
 		OverloadBridge.report(false, 0);
 		synchronized (raised) {
@@ -162,17 +180,29 @@ final class OverloadMonitor implements Runnable {
 		}
 		latencyMillis = ms;
 		boolean was = verdict.refusing();
-		boolean refuse = verdict.sample(ms, o.getRefuseMillis());
+		boolean refuse = verdict.sample(ms, o.getRefuseMillis(), now);
 		OverloadBridge.report(refuse, VALID_MILLIS);
 
 		if (refuse && !was) {
-			refusingSince = now;
-			String summary = refusingSummary(o, now);
-			logger.warning("Options - " + summary);
-			raise(KEY, summary, false);
+			calmSince = 0;
+			if (refusingSince == 0) {
+				// a new episode: one problem for all of it, however often it flips
+				refusingSince = now;
+				String summary = refusingSummary(o, now);
+				logger.warning("Options - " + summary);
+				raise(KEY, summary, false);
+			} else {
+				logger.fine("Options - refusing new calls again: SIP messages taking " + ms + " ms");
+			}
 		} else if (!refuse && was) {
+			calmSince = now;
+			logger.fine("Options - taking new calls: SIP messages taking " + Math.max(0, ms) + " ms");
+		}
+		if (episodeOver(refuse, calmSince, now)) {
+			logger.info("Options - taking new calls again since "
+					+ java.time.Instant.ofEpochMilli(calmSince) + ": SIP messages taking " + Math.max(0, ms) + " ms");
 			refusingSince = 0;
-			logger.info("Options - taking new calls again: SIP messages taking " + Math.max(0, ms) + " ms");
+			calmSince = 0;
 			clear(KEY);
 		}
 
@@ -180,6 +210,12 @@ final class OverloadMonitor implements Runnable {
 			lastStrain = now;
 			strain(now, o);
 		}
+	}
+
+	/// An overload episode ends once the engine has taken calls for
+	/// [#EPISODE_CLEAR_MILLIS]; until then a new refusal belongs to it.
+	static boolean episodeOver(boolean refusing, long calmSince, long now) {
+		return !refusing && calmSince > 0 && now - calmSince >= EPISODE_CLEAR_MILLIS;
 	}
 
 	/// Messages are waiting and none finished in the last second.

@@ -43,12 +43,20 @@ public abstract class AsyncSipServlet extends org.vorpal.blade.framework.AsyncSi
 		super.doResponse(response);
 	}
 
+	/// Records the response as received and, unless it is a branch's final the
+	/// caller never sees, as sent on to the caller: the container forwards it,
+	/// and a call record that saw it only arrive would hold that this
+	/// application never answered the caller's INVITE.
 	private boolean proxied(SipServletResponse response, boolean branch) {
 		if (!Callflow.passthruResponse(response, branch)) {
 			return false;
 		}
-		Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "proxy");
+		Callflow.getLogger().superArrow(Direction.RECEIVE, false, null, response, "proxy", null);
 		traced(Direction.RECEIVE, null, response, "proxy", branch ? "branch" : "received");
+		if (!branch) {
+			Callflow.getLogger().superArrow(Direction.SEND, true, null, response, "proxy", null);
+			traced(Direction.SEND, null, response, "proxy", "send");
+		}
 		return true;
 	}
 }

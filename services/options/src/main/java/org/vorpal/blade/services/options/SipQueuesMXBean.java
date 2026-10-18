@@ -29,7 +29,9 @@ public interface SipQueuesMXBean {
 	/// True while [OverloadMonitor] says refuse new calls.
 	boolean isRefusing();
 
-	/// When refusing began, in epoch milliseconds; 0 when not refusing.
+	/// When the current overload episode began, in epoch milliseconds; 0 when
+	/// there is none. An episode lasts until the engine has taken calls for 30
+	/// seconds, so it can be set while [#isRefusing] is false.
 	long getRefusingSince();
 
 	/// How long the engine takes over its SIP messages: the 90th percentile

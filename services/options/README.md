@@ -62,6 +62,10 @@ A healthy engine takes a few milliseconds. The wait in the queue is part of the 
 there is nothing to tune to the hardware: a faster engine works the same queue off sooner.
 An engine with messages waiting and none finishing counts as slow.
 
+Once it starts refusing, an engine refuses for at least 10 seconds. Refused calls cost it
+almost nothing, so without the hold its latency would drop at once, the calls would come
+straight back, and it would switch about once a second for as long as the load lasted.
+
 Two pieces put the verdict in front of the container, once per domain:
 
 ```
@@ -79,7 +83,8 @@ of the time, an old generation that stays full after collection, and call-state 
 failures. Warnings never refuse a call.
 
 Each change shows on the dashboard: under Issues (a refusal as a problem, a cause as a
-warning, each linked to this configuration), in its notifications, in analytics with the
+warning, each linked to this configuration; one problem per overload episode, which ends
+after 30 seconds of taking calls), in its notifications, in analytics with the
 other operations events, and on the Servers panel, where the engine reads `refusing` and its
 hover gives the readings.
 

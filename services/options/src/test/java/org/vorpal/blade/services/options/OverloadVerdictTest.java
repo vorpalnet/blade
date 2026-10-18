@@ -11,21 +11,42 @@ class OverloadVerdictTest {
 	@Test
 	void refusesAtTheLineAndResumesOnlyBelowHalfOfIt() {
 		OverloadVerdict v = new OverloadVerdict();
-		assertFalse(v.sample(90, 100));
-		assertTrue(v.sample(100, 100));
-		assertTrue(v.sample(60, 100), "between the lines: still refusing");
-		assertTrue(v.sample(50, 100));
-		assertFalse(v.sample(40, 100));
-		assertFalse(v.sample(90, 100), "between the lines from below: still taking calls");
+		long held = OverloadVerdict.HOLD_MILLIS;
+		assertFalse(v.sample(90, 100, 0));
+		assertTrue(v.sample(100, 100, 0));
+		assertTrue(v.sample(60, 100, held), "between the lines: still refusing");
+		assertTrue(v.sample(50, 100, held));
+		assertFalse(v.sample(40, 100, held));
+		assertFalse(v.sample(90, 100, held), "between the lines from below: still taking calls");
 	}
 
 	@Test
-	void noReadingTakesCallsAndZeroTurnsItOff() {
+	void refusingHoldsForItsMinimumWhateverTheReadings() {
 		OverloadVerdict v = new OverloadVerdict();
-		assertTrue(v.sample(150, 100));
-		assertFalse(v.sample(-1, 100), "an idle engine is not refusing");
-		assertTrue(v.sample(150, 100));
-		assertFalse(v.sample(150, 0));
+		assertTrue(v.sample(150, 100, 1_000));
+		assertTrue(v.sample(0, 100, 2_000), "the latency fell at once, but the hold stands");
+		assertTrue(v.sample(-1, 100, 1_000 + OverloadVerdict.HOLD_MILLIS - 1));
+		assertFalse(v.sample(0, 100, 1_000 + OverloadVerdict.HOLD_MILLIS), "the hold is over");
+		assertTrue(v.sample(150, 100, 20_000), "a new refusal starts a new hold");
+		assertFalse(v.sample(150, 0, 20_001), "switched off, hold or not");
+	}
+
+	@Test
+	void noReadingTakesCallsAfterTheHold() {
+		OverloadVerdict v = new OverloadVerdict();
+		long held = OverloadVerdict.HOLD_MILLIS;
+		assertTrue(v.sample(150, 100, 0));
+		assertFalse(v.sample(-1, 100, held), "an idle engine is not refusing");
+		assertTrue(v.sample(150, 100, held));
+		assertFalse(v.sample(150, 0, held));
+	}
+
+	@Test
+	void anEpisodeEndsAfterThirtySecondsOfTakingCalls() {
+		assertFalse(OverloadMonitor.episodeOver(true, 0, 100_000));
+		assertFalse(OverloadMonitor.episodeOver(false, 0, 100_000), "never refused");
+		assertFalse(OverloadMonitor.episodeOver(false, 70_001, 100_000));
+		assertTrue(OverloadMonitor.episodeOver(false, 70_000, 100_000));
 	}
 
 	@Test

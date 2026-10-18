@@ -49,7 +49,8 @@ options service now refuses new calls first, through OCCAS overload protection, 
 already up carry on:
 - **One number decides: how slow the engine may get.** The container times every SIP message from
   socket to finish, queue wait included. When 90% of the last second's took `refuseMillis` (100 ms)
-  or more, the engine refuses new calls, and takes them again below half of it. Nothing to tune to
+  or more, the engine refuses new calls for at least 10 seconds, and takes them again below half of
+  it. One problem is raised per episode, cleared after 30 seconds of taking calls. Nothing to tune to
   the hardware, since a faster engine works the same queue off sooner. It lives in `options.json`
   under `overload` and changes in the Configurator without a restart.
 - **Pings turn load balancers away first.** At half of `refuseMillis` the options ping answers
@@ -118,6 +119,10 @@ applications.
 - **Proxy rules apply to a parallel tier:** every 2xx is forwarded and the caller ends the extra
   one, and every branch's early media reaches the caller. A 503 still reaches the caller as a 500:
   the container converts it, as RFC 3261 section 16.7 asks of a proxy.
+- **A passthru call is not reported as failed.** The call record now sees the responses the
+  container forwards to the caller, so the flight recorder no longer judges a passthru call one this
+  application never answered. Having left the call, the application cannot report it answered or
+  ended, so the dashboard shows no outcome for it.
 - **The baseline fan-out signatures take the same path.** A v3 callflow calling the four-argument
   `sendRequestsInSerial` or `sendRequestsInParallel` proxies too under passthru; without passthru
   they behave exactly as before. `proxy-registrar`, whose sample turns passthru on, now checks
