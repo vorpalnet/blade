@@ -1071,6 +1071,14 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 		}
 	}
 
+	/// An analytics event for a passthru call, sent as [org.vorpal.blade.framework.v2.b2bua.Terminate]
+	/// sends a B2BUA's: the application's analytics configuration decides
+	/// whether it is kept.
+	private static void passthruEvent(String name, SipServletResponse response) {
+		org.vorpal.blade.framework.v2.config.SettingsManager.createEvent(name, response);
+		org.vorpal.blade.framework.v2.config.SettingsManager.sendEvent(response);
+	}
+
 	/// Hands a response of a passthru proxy to its callbacks; the v3
 	/// [AsyncSipServlet] calls it for every response. `branch` is true for a
 	/// branch's final that is not (yet) the one the caller gets. Returns false
@@ -1093,6 +1101,10 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 		try {
 			boolean fresh = provisional(response) || state.seen.add(response.getHeader("Via") + "|"
 					+ response.getTo().getParameter("tag") + "|" + response.getStatus());
+			if (fresh && response.getStatus() >= 400) {
+				// which server refused a leg, as the servlet records it for any other application
+				org.vorpal.blade.framework.v3.net.Legs.failed(response);
+			}
 			if (fresh && state.observer != null) {
 				state.observer.accept(response);
 			}
@@ -1110,10 +1122,18 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 					state.answered = true;
 					state.completedBatch = state.batch;
 					appSession.setAttribute(PASSTHRU_PROXY_ATTR, state);
+					// The call is answered, and the application leaves it: its part is
+					// done, and it will never see the hang-up to report it then.
+					passthruEvent("callAnswered", response);
+					passthruEvent("callCompleted", response);
 					if (state.complete != null && state.complete != state.observer) {
 						state.complete.accept(response);
 					}
 				} else if (!told) {
+					if (response.getStatus() == 487) {
+						// the caller cancelled: a batch timer's cancel is told before its 487 arrives
+						passthruEvent("callAbandoned", response);
+					}
 					batchFailed(response.getProxy().getOriginalRequest(), state, response, true);
 				}
 			}

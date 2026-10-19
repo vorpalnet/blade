@@ -119,10 +119,13 @@ applications.
 - **Proxy rules apply to a parallel tier:** every 2xx is forwarded and the caller ends the extra
   one, and every branch's early media reaches the caller. A 503 still reaches the caller as a 500:
   the container converts it, as RFC 3261 section 16.7 asks of a proxy.
-- **A passthru call is not reported as failed.** The call record now sees the responses the
+- **A passthru call gets the right outcome on the dashboard.** The call record sees the responses the
   container forwards to the caller, so the flight recorder no longer judges a passthru call one this
-  application never answered. Having left the call, the application cannot report it answered or
-  ended, so the dashboard shows no outcome for it.
+  application never answered. The framework reports what the proxy sees: an answer is `callAnswered`
+  and `callCompleted` (the application's part ends there, and it never sees the hang-up), a caller's
+  CANCEL is `callAbandoned`, and each refused leg is recorded as for any other application. So a
+  passthru call reads completed, declined, failed or abandoned. Its length is still the application
+  session's, not the call's, as for any proxy.
 - **The baseline fan-out signatures take the same path.** A v3 callflow calling the four-argument
   `sendRequestsInSerial` or `sendRequestsInParallel` proxies too under passthru; without passthru
   they behave exactly as before. `proxy-registrar`, whose sample turns passthru on, now checks
