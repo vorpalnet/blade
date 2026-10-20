@@ -124,8 +124,13 @@ fi
 
 # --- 3. resources ------------------------------------------------------------
 step "3. Resources: JMS event bus and analytics data source"
-"${SCRIPT_DIR}/install.sh" "$ENV_NAME" jms ${DRYFLAG:+"$DRYFLAG"} || die "the JMS event bus could not be reconciled (above)."
-"${SCRIPT_DIR}/install.sh" "$ENV_NAME" datasource ${DRYFLAG:+"$DRYFLAG"} || die "the analytics data source could not be reconciled (above)."
+# --sql promises to change nothing: it writes step 4's SQL and stops.
+if [ -n "$SQL_OUT" ]; then
+    ok "skipped (--sql): the domain is left as it is"
+else
+    "${SCRIPT_DIR}/install.sh" "$ENV_NAME" jms ${DRYFLAG:+"$DRYFLAG"} || die "the JMS event bus could not be reconciled (above)."
+    "${SCRIPT_DIR}/install.sh" "$ENV_NAME" datasource ${DRYFLAG:+"$DRYFLAG"} || die "the analytics data source could not be reconciled (above)."
+fi
 
 # --- 4. database -------------------------------------------------------------
 step "4. Analytics database"
