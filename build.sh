@@ -1216,7 +1216,7 @@ INCLUDED_COUNT=$(echo "$INCLUDED_MODULES" | wc -l | tr -d ' ')
 # you're producing" so people stop confusing the two.
 # Match the actual version line, not merely the first line: with
 # JAVA_TOOL_OPTIONS/_JAVA_OPTIONS set, the JVM prints "Picked up ..." first.
-BUILD_JDK_VERSION=$(java -version 2>&1 | grep -m1 -E '^[^ ]+ version ' \
+BUILD_JDK_VERSION=$("${JAVA_HOME:+$JAVA_HOME/bin/}java" -version 2>&1 | grep -m1 -E '^[^ ]+ version ' \
     | sed 's/^[^ ]* version //;s/"//g' | awk '{print $1}')
 BUILD_JDK_MAJOR=$(printf '%s' "$BUILD_JDK_VERSION" \
     | awk -F. '{if ($1 == "1") print $2; else print $1}')
