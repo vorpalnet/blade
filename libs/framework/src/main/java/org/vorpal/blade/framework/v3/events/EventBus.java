@@ -591,6 +591,19 @@ public final class EventBus {
 		return true;
 	}
 
+	/// Stop one subscription and remove it from the broker, backlog and all.
+	///
+	/// @param subscriptionName the subscription to retire
+	/// @return true if a subscriber was installed and has now been removed
+	public static boolean unsubscribeSubscriber(String subscriptionName) {
+		EventSubscriber removed = SUBSCRIBERS.remove(subscriptionName);
+		if (removed == null) {
+			return false;
+		}
+		removed.unsubscribe();
+		return true;
+	}
+
 	/// The publisher for a destination, or null when none is installed.
 	///
 	/// @param destinationJndi the destination JNDI name; null means the default

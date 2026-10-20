@@ -15,8 +15,9 @@ import org.vorpal.blade.framework.v2.config.SettingsManager;
 /// data source exists and its `events` table is there to insert into.
 ///
 /// **Not set up is not an error.** A database costs money, and a domain that
-/// has not bought one should hear nothing about it: the sink simply does not
-/// subscribe, and says so once at INFO. **Set up but down is a different
+/// has not bought one should hear nothing about it: the sink does not
+/// subscribe, removes a durable subscription an earlier run left on the broker
+/// (so no backlog piles up with nowhere to go), and says so once at INFO. **Set up but down is a different
 /// thing** — a connection that fails counts as set up, and the sink's own outage
 /// handling (pause, health check, SEVERE) takes over as before.
 ///

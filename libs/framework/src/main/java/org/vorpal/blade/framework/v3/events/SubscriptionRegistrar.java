@@ -47,6 +47,9 @@ public final class SubscriptionRegistrar {
 	/// Consume only while this holds; null for always. See [Builder#when].
 	private java.util.function.BooleanSupplier when;
 
+	/// Removing this subscription from the broker while [#when] is false.
+	private EventSubscriber discarder;
+
 	/// Also take every call event but these types; null for off. See
 	/// [Builder#callEventsExcept].
 	private Supplier<List<String>> callEventsExcept;
@@ -145,10 +148,12 @@ public final class SubscriptionRegistrar {
 		}
 
 		/// Consume only while `condition` holds, asked again on every reconcile.
-		/// While it does not, the subscription is closed (not unsubscribed, so a
-		/// durable one keeps its backlog) and nothing is logged here: the
-		/// condition's owner says why. The analytics sink uses it to wait for a
-		/// database somebody has set up.
+		/// While it does not, the subscription is removed from the broker,
+		/// durable or not, backlog and all, so nothing piles up for a consumer
+		/// that has nowhere to put it ([EventSubscriber#discard]). Nothing is
+		/// logged here: the condition's owner says why. The analytics sink uses
+		/// it to wait for a database somebody has set up; a database that is set
+		/// up but down must keep the condition true, so its backlog survives.
 		public Builder when(java.util.function.BooleanSupplier condition) {
 			this.when = condition;
 			return this;
@@ -276,6 +281,14 @@ public final class SubscriptionRegistrar {
 			watchdog.interrupt();
 		}
 		EventBus.unregisterSubscriber(subscriptionName);
+		endDiscard();
+	}
+
+	private void endDiscard() {
+		if (discarder != null) {
+			discarder.close();
+			discarder = null;
+		}
 	}
 
 	/// Never throws.
@@ -289,9 +302,23 @@ public final class SubscriptionRegistrar {
 	private void reconcile(boolean announce) {
 		try {
 			if (when != null && !when.getAsBoolean()) {
-				EventBus.unregisterSubscriber(subscriptionName);
+				EventBus.unsubscribeSubscriber(subscriptionName);
+				if (discarder == null) {
+					EventSubscriber d = new EventSubscriber(EventBus.CONNECTION_FACTORY_JNDI, EventBus.TOPIC_JNDI,
+							subscriptionName, null, durable.getAsBoolean(), null);
+					try {
+						d.discard();
+					} catch (Exception e) {
+						d.close();
+						throw e;
+					}
+					discarder = d;
+				} else {
+					discarder.retryUnattached();
+				}
 				return;
 			}
+			endDiscard();
 			List<String> wanted = types.get();
 
 			if ((wanted == null || wanted.isEmpty()) && callEventsExcept == null) {

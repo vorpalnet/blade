@@ -1028,9 +1028,9 @@ the data source exists, ./upgrade.sh builds the schema and keeps it current
 (new tables, columns and views) on every BLADE upgrade, after listing the
 changes and asking. If your DBA must make every change,
 ./upgrade.sh <env> --sql FILE writes them out instead.
-Leave the URL blank to skip persistence for now: events still flow on the JMS
-topic and are held there (bounded by the topic quota and TTL) until a database
-comes up.
+Leave the URL blank to skip persistence for now: the analytics sink does not
+subscribe without a database, so events on the JMS topic are not kept. It
+starts recording within a minute of a database being set up.
 EOF
     ask DB_DIALECT "  dialect (mysql|oracle|mssql)" "${DB_DIALECT:-mysql}"
     case "$DB_DIALECT" in

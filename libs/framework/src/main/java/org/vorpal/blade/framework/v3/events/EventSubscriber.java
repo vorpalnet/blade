@@ -8,6 +8,7 @@ import java.util.concurrent.ConcurrentMap;
 import javax.jms.Connection;
 import javax.jms.ConnectionFactory;
 import javax.jms.Destination;
+import javax.jms.InvalidDestinationException;
 import javax.jms.JMSException;
 import javax.jms.Message;
 import javax.jms.MessageConsumer;
@@ -146,6 +147,12 @@ public class EventSubscriber {
 	private volatile boolean closed;
 	private volatile boolean paused;
 
+	/// Set by [#discard]: members are unsubscribed rather than consumed.
+	private volatile boolean discarding;
+
+	/// The members whose durable subscription [#discard] has removed.
+	private final java.util.Set<String> discarded = ConcurrentHashMap.newKeySet();
+
 	/// Optional meters — see [#meter]. Null when nobody is counting.
 	private volatile Counter.Series received;
 	private volatile Counter.Series handled;
@@ -281,6 +288,11 @@ public class EventSubscriber {
 
 		// Not distributed, or no member discovery available: one consumer on the
 		// destination as looked up.
+		if (discarding) {
+			available.put(SOLE, destination);
+			attach(SOLE);
+			return;
+		}
 		boolean started = false;
 		try {
 			members.put(SOLE, open(SOLE, destination, subscriptionName));
@@ -312,12 +324,19 @@ public class EventSubscriber {
 		if (member == null) {
 			return;
 		}
+		// The subscription name and client id must be unique per member —
+		// they ARE the subscription's identity to the broker, and reusing
+		// one across members would make several consumers fight over a
+		// single stream instead of each covering its own partition.
+		String name = SOLE.equals(memberName) ? subscriptionName : subscriptionName + "@" + memberName;
+		if (discarding) {
+			if (!discarded.contains(memberName) && removeDurable(name)) {
+				discarded.add(memberName);
+			}
+			return;
+		}
 		try {
-			// The subscription name and client id must be unique per member —
-			// they ARE the subscription's identity to the broker, and reusing
-			// one across members would make several consumers fight over a
-			// single stream instead of each covering its own partition.
-			members.put(memberName, open(memberName, member, subscriptionName + "@" + memberName));
+			members.put(memberName, open(memberName, member, name));
 		} catch (Exception e) {
 			members.remove(memberName);
 			// Not a permanent failure. A durable subscription permits one active
@@ -351,6 +370,38 @@ public class EventSubscriber {
 		Member member = members.remove(memberName);
 		if (member != null) {
 			member.close();
+		}
+	}
+
+	/// Remove one member's durable subscription from the broker without ever
+	/// consuming from it, discarding its backlog. True when it is gone or never
+	/// existed; false while a live consumer elsewhere holds its client id, to be
+	/// retried by [#retryUnattached].
+	private boolean removeDurable(String name) {
+		if (!durable) {
+			return true;
+		}
+		Connection connection = null;
+		try {
+			connection = factory.createConnection();
+			connection.setClientID(name);
+			connection.createSession(false, Session.AUTO_ACKNOWLEDGE).unsubscribe(name);
+			LOG.info("events: removed durable subscription " + name + " and its backlog");
+			return true;
+		} catch (InvalidDestinationException none) {
+			return true; // never subscribed
+		} catch (JMSException e) {
+			LOG.log(java.util.logging.Level.FINE,
+					"could not remove durable subscription " + name + " (will retry): " + e);
+			return false;
+		} finally {
+			if (connection != null) {
+				try {
+					connection.close();
+				} catch (JMSException ignored) {
+					// closing is best effort
+				}
+			}
 		}
 	}
 
@@ -660,6 +711,20 @@ public class EventSubscriber {
 				member.close();
 			}
 		}
+	}
+
+	/// Remove this subscription's durable subscriptions from the broker, on
+	/// every member of the destination, without consuming them: the backlog is
+	/// discarded. This works on a subscription this JVM never opened, which is
+	/// the point: one left on the broker by an earlier run. Members that come
+	/// up later are removed as they appear; a member whose client id is held by
+	/// a live consumer is retried by [#retryUnattached]. Stop it with [#close].
+	///
+	/// @throws NamingException if a JNDI lookup fails
+	/// @throws JMSException    if the destination cannot be reached
+	public void discard() throws NamingException, JMSException {
+		discarding = true;
+		init();
 	}
 
 	/// Close, then remove the durable subscriptions from the broker.
