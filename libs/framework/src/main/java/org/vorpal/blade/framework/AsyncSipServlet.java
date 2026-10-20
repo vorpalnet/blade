@@ -13,6 +13,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.logging.Level;
 
+import javax.servlet.ServletConfig;
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.ServletException;
@@ -51,6 +52,7 @@ import org.vorpal.blade.framework.v3.net.CallOrigin;
 import org.vorpal.blade.framework.v3.net.Legs;
 import org.vorpal.blade.framework.v3.net.DroppedCalls;
 import org.vorpal.blade.framework.v3.diagnostics.FlightRecorder;
+import org.vorpal.blade.framework.v3.deploy.ApplicationKey;
 import org.vorpal.blade.framework.v3.metrics.Histogram;
 import org.vorpal.blade.framework.v3.metrics.MetricsRegistry;
 import org.vorpal.blade.framework.v2.b2bua.Terminate;
@@ -246,6 +248,21 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// @throws IOException if an I/O error occurs during selection
 	protected abstract Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException;
 
+	/// What [ApplicationKey#install] did in [#init], logged once the logger exists.
+	private static ApplicationKey.Outcome applicationKey;
+
+	/// Installs the servlet's `@SipApplicationKey` method when the container's
+	/// annotation scan is switched off; see [ApplicationKey].
+	///
+	/// Here rather than in [#servletInitialized]: the container runs `init` for a
+	/// load-on-startup servlet before it tells the application router the
+	/// application exists, and calls the servlet listeners only after.
+	@Override
+	public void init(ServletConfig config) throws ServletException {
+		super.init(config);
+		applicationKey = ApplicationKey.install(config.getServletContext(), getClass());
+	}
+
 	/// Initializes the servlet when the SIP container starts
 	///
 	/// This method sets up the SIP factory, session utilities, timer service, and
@@ -286,6 +303,17 @@ public abstract class AsyncSipServlet extends SipServlet
 
 			if (title != null) {
 				sipLogger.info(application + " compiled using " + title + " version " + version);
+			}
+
+			switch (applicationKey == null ? ApplicationKey.Outcome.NONE : applicationKey) {
+			case INSTALLED:
+				sipLogger.info(application + " @SipApplicationKey installed without the annotation scan");
+				break;
+			case UNREACHABLE:
+				sipLogger.severe(application + " @SipApplicationKey not reachable on the container; with the annotation scan off, every request gets a new application session");
+				break;
+			default:
+				break;
 			}
 
 			servletCreated(event);

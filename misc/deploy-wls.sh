@@ -130,19 +130,22 @@ try:
         print('DEPLOY_OK')
     else:
         if isLib:
-            m = lib_map()
             target_id = '${WLS_LIB_ID}'
-            if name in m:
-                if m[name] == target_id:
-                    # Same Name#Spec@Impl already deployed - nothing to do.
-                    print('LIBRARY_UNCHANGED ' + m[name] + ' (same version; not redeploying)')
-                else:
-                    # Version changed. A referenced library can't be redeployed in
-                    # place - undeploy the referencing apps first (undeploy-all),
-                    # then redeploy. We do NOT attempt it here (it would fail).
-                    print('LIBRARY_VERSION_DIFFERS deployed=' + m[name] + ' new=' + target_id)
-                    print('  -> run undeploy-all, then deploy again to update the library.')
-                    refused = 1
+            versions = [l for l in cmo.getLibraries() if base(l.getName()) == name]
+            if target_id in [l.getName() for l in versions]:
+                # Same Name#Spec@Impl already deployed - nothing to do.
+                print('LIBRARY_UNCHANGED ' + target_id + ' (same version; not redeploying)')
+            elif versions:
+                # A new version goes in BESIDE the deployed ones: a referenced library
+                # can't be replaced in place, and WebLogic keeps each Name#Spec@Impl
+                # separately. Each app binds to the newest version on its servers when
+                # it is next deployed; running apps keep theirs until then. Without a
+                # target it takes the newest deployed version's targets.
+                tg = '${WLS_TARGETS}' or ','.join([t.getName() for t in versions[-1].getTargets()])
+                print('deploy library ' + name + ' (' + target_id + ') beside '
+                      + ', '.join([l.getName() for l in versions]) + ' -> ' + tg + ' ...')
+                deploy(name, '${WLS_SOURCE}', targets=tg, upload='true', block='true', libraryModule='true')
+                print('DEPLOYED_LIBRARY ' + target_id + ' (apps bind to it when next deployed)')
             else:
                 print('deploy library ' + name + ' (' + target_id + ') -> ${WLS_TARGETS} ...')
                 deploy(name, '${WLS_SOURCE}', targets='${WLS_TARGETS}', upload='true', block='true', libraryModule='true')

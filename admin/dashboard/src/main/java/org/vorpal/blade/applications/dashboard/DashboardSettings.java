@@ -25,6 +25,7 @@ public class DashboardSettings extends Configuration implements Serializable {
 	private String analyticsDataSource = "jdbc/BladeAnalytics";
 	private int heapHighPercent = 85;
 	private int metaspaceGrowthPercent = 25;
+	private int metaspaceCeilingPercent = 75;
 	private int certificateWarningDays = 30;
 	private int capacityCallsPerSecond;
 	private int capacitySessions;
@@ -148,6 +149,15 @@ public class DashboardSettings extends Configuration implements Serializable {
 
 	public void setMetaspaceGrowthPercent(int metaspaceGrowthPercent) {
 		this.metaspaceGrowthPercent = clamp(metaspaceGrowthPercent, 1, 1000);
+	}
+
+	@JsonPropertyDescription("Share of a server's metaspace ceiling (-XX:MaxMetaspaceSize), in percent, at which Servers › Apps recommends restarting it. At the ceiling the server stops loading classes: deploys and applications fail with OutOfMemoryError: Metaspace. A server with no ceiling is judged by growth alone.")
+	public int getMetaspaceCeilingPercent() {
+		return metaspaceCeilingPercent;
+	}
+
+	public void setMetaspaceCeilingPercent(int metaspaceCeilingPercent) {
+		this.metaspaceCeilingPercent = clamp(metaspaceCeilingPercent, 1, 100);
 	}
 
 	@JsonPropertyDescription("Share of calls, in percent, that must end completed for a place on the map to read healthy. Between this and unhealthyPercent the colour runs from healthy to unhealthy.")

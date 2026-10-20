@@ -553,16 +553,22 @@ load_profile() {
     DOMAIN="$(d domain.name "")"
     START_MODE="$(d server.start.mode dev)"
     ADMIN_USER="$(d admin.username weblogic)"
-    # Leave Metaspace UNBOUNDED — the JVM default. A MaxMetaspaceSize cap is a
-    # landmine: too low and a full BLADE deploy dies partway with
-    # "OutOfMemoryError: Metaspace" (the service set plus the blade-shared library
-    # needs well over 1g), and any fixed ceiling we pick is just a bigger landmine.
+    # Leave Metaspace UNBOUNDED — the JVM default — while the SIP annotation scan is
+    # on. A MaxMetaspaceSize cap is then a landmine: a full BLADE deploy needs ~3 GB
+    # (each SIP application loads all of blade-shared) and grows with every
+    # redeploy. With the scan off (sip.annotation.scan=false) the engines need
+    # ~0.5 GB and sip_scan_arg caps them at sip.metaspace.max.
     # Bound the HEAP with -Xmx; let Metaspace grow as classes load. Keep -Xms modest
     # so the two JVMs on an admin box don't reserve the machine out from under
     # each other.
     MEM_ARGS="$(d server.mem.args "-Xms512m -Xmx1536m")"
     # Empty by default: no jdk.serialFilter unless the operator sets one (see occas.conf).
     SERIAL_FILTER="$(d server.serial.filter "")"
+    # true = the SIP container scans each SIP application for annotations (the
+    # OCCAS default); false = -Dwlss.parse.annotations=false on the engines.
+    SIP_SCAN="$(d sip.annotation.scan true)"
+    # The engines' metaspace ceiling, applied only with the scan off (see sip_scan_arg).
+    SIP_METASPACE="$(d sip.metaspace.max 1g)"
     # ORACLE_HOME is a SYMLINK, not the real directory. Patching builds a new
     # versioned home beside the current one and flips this link, so a patch is
     # atomic and a rollback is one flip. Everything -- the domain, the units,
@@ -1291,6 +1297,19 @@ save_profile() {
         echo "# session replication / JMS still work before trusting it. Suggested start:"
         echo "#   server.serial.filter=org.vorpal.blade.**;java.util.*;java.lang.*;javax.servlet.sip.ar.SipRouteModifier;!*"
         echo "server.serial.filter=${SERIAL_FILTER}"
+        echo ""
+        echo "# The SIP container's annotation scan on the engines. true = OCCAS default:"
+        echo "# each SIP application's whole class path, blade-shared included, is loaded"
+        echo "# into its own class loader (~40 MB of metaspace per application). false ="
+        echo "# -Dwlss.parse.annotations=false: the container reads WEB-INF/sip.xml instead"
+        echo "# (~6 MB each). Every SIP application on the engines must then carry a sip.xml,"
+        echo "# which the BLADE build generates from the annotations (3.0.8 and later)."
+        echo "sip.annotation.scan=${SIP_SCAN}"
+        echo "# With the scan off, the engines' metaspace ceiling (-XX:MaxMetaspaceSize):"
+        echo "# about twice what an engine with every BLADE application loaded uses, so it"
+        echo "# trips only on a class-loader leak, failing that JVM instead of starving the"
+        echo "# box. Ignored while the scan is on, where any fixed ceiling OOMs a deploy."
+        echo "sip.metaspace.max=${SIP_METASPACE}"
         echo ""
         echo "# --- Cluster shape (BEA_ENGINE_TIER_CLUST): STATIC machine0/engine0 on the"
         echo "# admin box + DYNAMIC engine1..N on machine1..N ---"
@@ -4700,6 +4719,18 @@ serial_filter_arg() {
     [ -n "$f" ] && printf ' -Djdk.serialFilter=%s' "$f"
 }
 
+# -Dwlss.parse.annotations=false plus a metaspace ceiling when the profile turns the
+# SIP annotation scan off (sip.annotation.scan=false), else empty. Engines only: the
+# AdminServer keeps the scan, since applications not built by BLADE (Oracle's own)
+# may rely on it. The ceiling is safe only without the scan: an engine then holds
+# ~0.5 GB of class metadata for the whole BLADE set (~6 MB per SIP application), not
+# ~3 GB (~40 MB each), so sip.metaspace.max (default 1g) leaves room for a leak to show.
+sip_scan_arg() {
+    [ "$(read_prop "$OCCAS_CONF" sip.annotation.scan)" = "false" ] || return 0
+    local max; max="$(read_prop "$OCCAS_CONF" sip.metaspace.max)"
+    printf ' -Dwlss.parse.annotations=false -XX:MaxMetaspaceSize=%s' "${max:-1g}"
+}
+
 emit_serverstart_one() {
     local coll="$1" nm="$2" mem="$3" OH="$MWHOME"
     local cp="${OH}/wlserver/server/lib/weblogic.jar:${OH}/wlserver/../oracle_common/modules/thirdparty/ant-contrib-1.0b3.jar:${OH}/wlserver/modules/features/oracle.wls.common.nodemanager.jar:${OH}/occas/server/lib/platform/oracle.sdp.occas.depended.jar:${OH}/wlserver/sip/server/lib/wlss-runtime-rest-proxy.jar:${OH}/wlserver/sip/server/lib/weblogic_sip.jar:${OH}/wlserver/common/derby/lib/derbytools.jar:${OH}/wlserver/common/derby/lib/derbyclient.jar:${OH}/wlserver/common/derby/lib/derby.jar:${OH}/wlserver/common/derby/lib/derbyshared.jar"
@@ -4720,7 +4751,7 @@ PYSS
 emit_serverstart_block() {
     local tmpl="${1}-template"
     local mem; mem="$(read_prop "$OCCAS_CONF" server.mem.args)"
-    mem="${mem:--Xms512m -Xmx1024m}"   # NO Metaspace cap — it OOMs a full deploy
+    mem="${mem:--Xms512m -Xmx1024m}"   # NO Metaspace cap here; sip_scan_arg adds one to engines with the scan off
     mem="${mem}$(serial_filter_arg)"   # append -Djdk.serialFilter when configured
     # MaxMessageSize (set inside emit_serverstart_one) is a first-class config.xml
     # attribute -- NOT a -D JVM arg -- so it is honoured at startup independent of
@@ -4730,7 +4761,7 @@ emit_serverstart_block() {
     # AR load without MaxMessageSizeExceededException. Dynamic engines inherit the
     # ServerTemplate's ServerStart; the AdminServer gets its own.
     echo "# --- BLADE: per-server ServerStart (MBean-mode JVM args + SIP classpath) ---"
-    emit_serverstart_one "ServerTemplates" "${tmpl}" "$mem"
+    emit_serverstart_one "ServerTemplates" "${tmpl}" "${mem}$(sip_scan_arg)"
     emit_serverstart_one "Servers" "AdminServer" "$mem"
 }
 
@@ -4920,9 +4951,10 @@ emit_static_engine0_block() {
     local machine="${H_NAME[0]:-machine0}"
     local addr="${H_ADDR[0]}"
     local e0mem; e0mem="$(read_prop "$OCCAS_CONF" engine0.mem.args)"
-    # Lower HEAP than the dynamic engines (shares the box with the AdminServer),
-    # but NO Metaspace cap — engine0 is a cluster member and loads the same apps +
-    # blade-shared library, so a fixed Metaspace ceiling just OOMs it mid-deploy.
+    # Lower HEAP than the dynamic engines (shares the box with the AdminServer).
+    # Metaspace is capped only with the SIP annotation scan off (sip_scan_arg):
+    # with the scan on, engine0 loads blade-shared once per application and a
+    # fixed ceiling OOMs it mid-deploy.
     e0mem="${e0mem:--Xms256m -Xmx768m}"
     echo "# --- BLADE: STATIC engine0 on ${machine} (admin box), member of ${cluster} ---"
     cat <<PYE0
@@ -4987,7 +5019,7 @@ PYE0S
     # port (ENGINE_SSL_PORT, default 8002) — engine0 shares the box with the
     # AdminServer, which owns 7002. Then a LOWER-heap ServerStart.
     emit_keystore_block "/Servers/${e0}" "${e0}" "${ENGINE_SSL_PORT:-8002}"
-    emit_serverstart_one "Servers" "${e0}" "$e0mem"
+    emit_serverstart_one "Servers" "${e0}" "${e0mem}$(sip_scan_arg)"
 }
 
 # Admin password: env > the config > prompt (skipped under dry-run).

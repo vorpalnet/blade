@@ -1179,11 +1179,14 @@
 			line.appendChild(el('span', 'bus__word', s.restart ? 'RESTART RECOMMENDED' : s.server.toUpperCase()));
 			var grew = s.metaspaceFirstSeen ? Math.round((s.metaspace / s.metaspaceFirstSeen - 1) * 100) : 0;
 			line.appendChild(document.createTextNode((s.restart ? s.server + ': ' : '')
-				+ (s.metaspace != null ? 'metaspace ' + mb(s.metaspace) + (grew > 0 ? ', up ' + grew + '% from ' + mb(s.metaspaceFirstSeen) + (s.baselineFrom === 'sample' ? ' in its first recorded sample since it started' : ' when the dashboard first saw it') : '') : '')
+				+ (s.metaspace != null ? 'metaspace ' + mb(s.metaspace)
+					+ (s.metaspaceMax ? ' of a ' + mb(s.metaspaceMax) + ' ceiling (' + Math.round(s.metaspace * 100 / s.metaspaceMax) + '%' + (s.nearCeiling ? ', past ' + lastApps.ceilingPercent + '%' : '') + ')' : '')
+					+ (grew > 0 ? ', up ' + grew + '% from ' + mb(s.metaspaceFirstSeen) + (s.baselineFrom === 'sample' ? ' in its first recorded sample since it started' : ' when the dashboard first saw it') : '') : '')
 				+ (s.classesLoaded != null ? ' · ' + C.fmt(s.classesLoaded) + ' classes loaded' : '')
 				+ (s.startedAt ? ' · up since ' + dayText(s.startedAt) + ' ' + clockText(s.startedAt) : '')));
 			line.title = 'Every redeploy loads an application\'s classes again; copies an old deployment still holds are freed only by a restart. Restart recommended past '
-				+ lastApps.growthPercent + '% growth (dashboard settings: metaspaceGrowthPercent).';
+				+ lastApps.growthPercent + '% growth (dashboard settings: metaspaceGrowthPercent)'
+				+ (s.metaspaceMax ? ', or past ' + lastApps.ceilingPercent + '% of the ceiling, where the server stops loading classes (metaspaceCeilingPercent).' : '.');
 			box.appendChild(line);
 			/* The certificate each TLS listener on the server presents. */
 			(lastApps.certificates || []).filter(function (c) { return c.server === s.server; }).forEach(function (c) {

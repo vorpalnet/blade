@@ -479,6 +479,15 @@
 					<version>${maven-compiler-plugin.version}</version>
 					<configuration>
 						<release>${blade.java.version}</release>
+						<!-- Run annotation processors found on the class path: the framework's
+						     SipXmlProcessor writes each SIP application's sip.xml. JDK 23 stopped
+						     running them unless asked. -->
+						<proc>full</proc>
+						<!-- Where SipXmlProcessor writes sip.xml: the WAR plugin's staging
+						     directory, which it packages as is. -->
+						<compilerArgs>
+							<arg>-Ablade.webinf=${project.build.directory}/${project.build.finalName}/WEB-INF</arg>
+						</compilerArgs>
 					</configuration>
 				</plugin>
 				<plugin>

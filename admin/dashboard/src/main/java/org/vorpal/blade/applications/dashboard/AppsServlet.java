@@ -31,6 +31,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /// recorded metaspace after it started ([AnalyticsReports#firstMetaspaceMb]); without one (no database,
 /// or a server started before samples carried metaspace), the size the
 /// dashboard first saw, which can only under-state the growth.
+///
+/// **Why the ceiling.** A server started with `-XX:MaxMetaspaceSize` (the
+/// installer sets one on engines with the SIP annotation scan off) stops loading
+/// classes when it reaches it, and deploys and applications fail with
+/// `OutOfMemoryError: Metaspace`. Past `metaspaceCeilingPercent` of it, a restart
+/// is recommended whatever the growth says.
 @WebServlet("/apps")
 public class AppsServlet extends HttpServlet {
 
@@ -51,6 +57,7 @@ public class AppsServlet extends HttpServlet {
 		resp.setHeader("Cache-Control", "no-store");
 		DashboardSettings settings = DashboardSettingsStartup.settings(getServletContext());
 		int growth = settings == null ? 25 : settings.getMetaspaceGrowthPercent();
+		int ceiling = settings == null ? 75 : settings.getMetaspaceCeilingPercent();
 		ObjectNode out = MAPPER.createObjectNode();
 		try (HealthServlet.CloseableContext ctx = new HealthServlet.CloseableContext()) {
 			MBeanServer dr = (MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
@@ -63,7 +70,7 @@ public class AppsServlet extends HttpServlet {
 			} catch (RuntimeException noDatabase) {
 				logger.log(Level.FINE, "no analytics database for the metaspace baseline", noDatabase);
 			}
-			java.util.List<String> running = servers(dr, out.putArray("servers"), growth, reports);
+			java.util.List<String> running = servers(dr, out.putArray("servers"), growth, ceiling, reports);
 			apps(dr, running, out.putArray("apps"));
 		} catch (Exception e) {
 			logger.log(Level.FINE, "apps read failed", e);
@@ -81,13 +88,14 @@ public class AppsServlet extends HttpServlet {
 		out.put("certificatesReadAt", Certificates.readAt);
 		out.put("certificateWarningDays", settings == null ? 30 : settings.getCertificateWarningDays());
 		out.put("growthPercent", growth);
+		out.put("ceilingPercent", ceiling);
 		out.put("asOf", System.currentTimeMillis());
 		MAPPER.writeValue(resp.getWriter(), out);
 	}
 
 	/// Each running server's metaspace and classes; returns their names.
-	static java.util.List<String> servers(MBeanServer dr, ArrayNode out, int growth, AnalyticsReports reports)
-			throws Exception {
+	static java.util.List<String> servers(MBeanServer dr, ArrayNode out, int growth, int ceiling,
+			AnalyticsReports reports) throws Exception {
 		java.util.List<String> names = new java.util.ArrayList<>();
 		for (ObjectName sr : dr.queryNames(new ObjectName("com.bea:Type=ServerRuntime,*"), null)) {
 			String name = HealthServlet.str(dr, sr, "Name");
@@ -120,7 +128,15 @@ public class AppsServlet extends HttpServlet {
 				s.put("baselineFrom", sampled != null ? "sample" : "first seen");
 				s.put("metaspace", used);
 				s.put("metaspaceFirstSeen", base);
-				s.put("restart", used > base * (100L + growth) / 100L);
+				// -1 (undefined) when the JVM has no -XX:MaxMetaspaceSize.
+				long max = ((Number) ((CompositeData) usage).get("max")).longValue();
+				boolean grown = used > base * (100L + growth) / 100L;
+				boolean full = max > 0 && used >= max * ceiling / 100L;
+				if (max > 0) {
+					s.put("metaspaceMax", max);
+				}
+				s.put("nearCeiling", full);
+				s.put("restart", grown || full);
 			}
 			ObjectName cl = new ObjectName("java.lang:Location=" + name + ",type=ClassLoading");
 			Object loaded = HealthServlet.get(dr, cl, "LoadedClassCount");

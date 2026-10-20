@@ -103,6 +103,16 @@
 		     IDE that wants source attachment can attach the JAR to itself. -->
 		<plugins>
 			<plugin>
+				<!-- The framework ships SipXmlProcessor (META-INF/services), which every
+				     application's compile runs. Compiling the framework itself must not:
+				     javac would find the services file before the class exists. -->
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<proc>none</proc>
+				</configuration>
+			</plugin>
+			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-install-plugin</artifactId>
 				<configuration>
