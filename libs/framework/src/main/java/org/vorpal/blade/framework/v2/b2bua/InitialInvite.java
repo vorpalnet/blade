@@ -28,6 +28,7 @@ import java.io.IOException;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
+import javax.servlet.sip.AuthInfo;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
@@ -38,6 +39,7 @@ import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.CalleeAuthenticator;
 
 /**
  * Callflow for handling initial INVITE requests in a B2BUA scenario. Creates
@@ -170,87 +172,126 @@ public class InitialInvite extends org.vorpal.blade.framework.v3.Callflow {
 			return;
 		}
 
-		sendRequest(bobRequest, (bobResponse) -> {
+		sendRequest(bobRequest, this::calleeResponded);
+	}
 
-			// The caller cancelled after the callee's INVITE went out.
-			if (endIfAbandoned(aliceRequest, bobResponse)) {
-				return;
-			}
+	/// A response to the callee's INVITE: relay it to the caller, and on a 2xx carry the
+	/// caller's ACK or PRACK back down.
+	private void calleeResponded(SipServletResponse bobResponse) throws ServletException, IOException {
+
+		// The caller cancelled after the callee's INVITE went out.
+		if (endIfAbandoned(aliceRequest, bobResponse)) {
+			return;
+		}
+
+		if (retriedWithCredentials(bobResponse)) {
+			return;
+		}
 
 //				setSessionExpiration(bobResponse);
 
-			SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
-			copyContentAndHeaders(bobResponse, aliceResponse);
+		SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
+		copyContentAndHeaders(bobResponse, aliceResponse);
 
-			if (successful(bobResponse)) {
+		if (successful(bobResponse)) {
 
-				SipSession caller = aliceResponse.getSession();
-				caller.setAttribute(ATTR_USER_AGENT, ROLE_CALLER);
-				SipSession callee = Callflow.getLinkedSession(caller);
-				if (callee != null) {
-					callee.setAttribute(ATTR_USER_AGENT, ROLE_CALLEE);
-				}
-
-				if (b2buaListener != null) {
-
-					try {
-
-						SettingsManager.createEvent("callAnswered", aliceResponse);
-						b2buaListener.callAnswered(aliceResponse);
-//							sipLogger.finer("InitialInvite.processContinue - SettingsManager.sendEvent(aliceResponse); #2");
-						SettingsManager.sendEvent(aliceResponse);
-
-					} catch (Exception ex) {
-						sipLogger.warning(aliceResponse, "InitialInvite.processContinue - catch #1");
-						throw new ServletException(ex);
-					}
-
-				}
-			} else if (failure(bobResponse)) {
-//					sipLogger
-//							.finer("InitialInvite.processContinue - creating callDeclined event for: " + bobResponse);
-				SettingsManager.createEvent("callDeclined", aliceResponse);
-				if (b2buaListener != null) {
-					b2buaListener.callDeclined(aliceResponse);
-				}
-//					sipLogger.finer("InitialInvite.processContinue - SettingsManager.sendEvent(aliceResponse); #3");
-				SettingsManager.sendEvent(aliceResponse);
-				Analytics.sessionStop(aliceResponse);
+			SipSession caller = aliceResponse.getSession();
+			caller.setAttribute(ATTR_USER_AGENT, ROLE_CALLER);
+			SipSession callee = Callflow.getLinkedSession(caller);
+			if (callee != null) {
+				callee.setAttribute(ATTR_USER_AGENT, ROLE_CALLEE);
 			}
 
-			// Sometimes you want to arrest the processing of the transaction.
-			// If either the callflow or the request are marked as 'doNotProcess', we won't
-			boolean _doNotProcess = Boolean.TRUE.equals((Boolean)bobRequest.getAttribute(ATTR_DO_NOT_PROCESS));
-			this.doNotProcess = (this.doNotProcess || _doNotProcess);
-			if (!this.doNotProcess) {
+			if (b2buaListener != null) {
 
-				sendResponse(aliceResponse, (aliceAck) -> {
-					// Matches whichever arrived — an unexpected method throws
-					// rather than falling through the way the old else-branch did.
-					SipServletRequest bobAckOrPrack = createAcknowledgement(bobResponse, aliceAck);
+				try {
 
-					if (aliceAck.getMethod().equals(PRACK)) {
+					SettingsManager.createEvent("callAnswered", aliceResponse);
+					b2buaListener.callAnswered(aliceResponse);
+//							sipLogger.finer("InitialInvite.processContinue - SettingsManager.sendEvent(aliceResponse); #2");
+					SettingsManager.sendEvent(aliceResponse);
+
+				} catch (Exception ex) {
+					sipLogger.warning(aliceResponse, "InitialInvite.processContinue - catch #1");
+					throw new ServletException(ex);
+				}
+
+			}
+		} else if (failure(bobResponse)) {
+//					sipLogger
+//							.finer("InitialInvite.processContinue - creating callDeclined event for: " + bobResponse);
+			SettingsManager.createEvent("callDeclined", aliceResponse);
+			if (b2buaListener != null) {
+				b2buaListener.callDeclined(aliceResponse);
+			}
+//					sipLogger.finer("InitialInvite.processContinue - SettingsManager.sendEvent(aliceResponse); #3");
+			SettingsManager.sendEvent(aliceResponse);
+			Analytics.sessionStop(aliceResponse);
+		}
+
+		// Sometimes you want to arrest the processing of the transaction.
+		// If either the callflow or the request are marked as 'doNotProcess', we won't
+		boolean _doNotProcess = Boolean.TRUE.equals((Boolean)bobRequest.getAttribute(ATTR_DO_NOT_PROCESS));
+		this.doNotProcess = (this.doNotProcess || _doNotProcess);
+		if (!this.doNotProcess) {
+
+			sendResponse(aliceResponse, (aliceAck) -> {
+				// Matches whichever arrived — an unexpected method throws
+				// rather than falling through the way the old else-branch did.
+				SipServletRequest bobAckOrPrack = createAcknowledgement(bobResponse, aliceAck);
+
+				if (aliceAck.getMethod().equals(PRACK)) {
 //					if (b2buaListener != null) {
 //						b2buaListener.callEvent(bobAckOrPrack);
 //					}
-						sendRequest(bobAckOrPrack, (prackResponse) -> {
-							sendResponse(aliceAck.createResponse(prackResponse.getStatus()));
-						});
-					} else {
-						SettingsManager.createEvent("callConnected", bobAckOrPrack);
-						if (b2buaListener != null) {
-							b2buaListener.callConnected(bobAckOrPrack);
-						}
-//							sipLogger.finer(bobAckOrPrack, "InitialInvite.processContinue - SettingsManager.sendEvent(bobAckOrPrack); #4");
-						SettingsManager.sendEvent(bobAckOrPrack);
-						sendRequest(bobAckOrPrack);
+					sendRequest(bobAckOrPrack, (prackResponse) -> {
+						sendResponse(aliceAck.createResponse(prackResponse.getStatus()));
+					});
+				} else {
+					SettingsManager.createEvent("callConnected", bobAckOrPrack);
+					if (b2buaListener != null) {
+						b2buaListener.callConnected(bobAckOrPrack);
 					}
+//							sipLogger.finer(bobAckOrPrack, "InitialInvite.processContinue - SettingsManager.sendEvent(bobAckOrPrack); #4");
+					SettingsManager.sendEvent(bobAckOrPrack);
+					sendRequest(bobAckOrPrack);
+				}
 
-				});
+			});
 
-			}
-		});
+		}
+	}
 
+	/// A 401 or 407 from the callee, answered here when the listener can supply credentials for
+	/// it ([CalleeAuthenticator]): the INVITE goes out again on the same dialog, with the same
+	/// body and headers plus the digest, and the caller never sees the challenge. A challenge to
+	/// an INVITE that already carried credentials is relayed instead, so wrong credentials end
+	/// the call rather than loop.
+	///
+	/// @return true if the INVITE was resent and this response is finished with
+	private boolean retriedWithCredentials(SipServletResponse bobResponse) throws ServletException, IOException {
+		int status = bobResponse.getStatus();
+		if ((status != 401 && status != 407) || !(b2buaListener instanceof CalleeAuthenticator)) {
+			return false;
+		}
+		SipServletRequest challenged = bobResponse.getRequest();
+		if (challenged.getHeader("Authorization") != null || challenged.getHeader("Proxy-Authorization") != null) {
+			sipLogger.warning(bobResponse, "InitialInvite - callee challenged our credentials; relaying " + status);
+			return false;
+		}
+		AuthInfo credentials = ((CalleeAuthenticator) b2buaListener).credentials(bobResponse);
+		if (credentials == null) {
+			return false;
+		}
+
+		SipServletRequest retry = bobResponse.getSession().createRequest(INVITE);
+		retry.setRequestURI(challenged.getRequestURI());
+		copyContentAndHeaders(challenged, retry);
+		retry.addAuthHeader(bobResponse, credentials);
+		bobRequest = retry;
+		retry.getSession().setAttribute(ATTR_INITIAL_INVITE, retry);
+		sendRequest(retry, this::calleeResponded);
+		return true;
 	}
 
 	/// The To of the callee's INVITE: the caller's, unless a subclass routes the

@@ -8,7 +8,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// `type: "register-digest"` — keep the trunk alive with an outbound SIP REGISTER and
 /// HTTP‑digest authentication on the 401/407 challenge (most credentialed
 /// SIP trunks). Refreshed by a SIP servlet timer before {@link #getExpires()} lapses.
-@JsonPropertyOrder({ "type", "userId", "authName", "password", "expires", "allow", "userAgent" })
+@JsonPropertyOrder({ "type", "userId", "authName", "password", "expires", "contact", "allow", "userAgent" })
 public class RegisterDigestStyle extends RegistrationStyle {
 	private static final long serialVersionUID = 1L;
 
@@ -16,6 +16,7 @@ public class RegisterDigestStyle extends RegistrationStyle {
 	private String authName;
 	private String password;
 	private int expires = 300;
+	private String contact;
 	private String allow = "INVITE, ACK, CANCEL, BYE, OPTIONS, INFO, REFER, NOTIFY, MESSAGE, SUBSCRIBE";
 	private String userAgent = "BLADE Gateway";
 
@@ -64,6 +65,18 @@ public class RegisterDigestStyle extends RegistrationStyle {
 
 	public void setExpires(int expires) {
 		this.expires = expires;
+	}
+
+	@JsonPropertyDescription("Optional: the Contact URI the REGISTER binds, where the carrier sends this trunk's "
+			+ "inbound calls, e.g. sip:12345678@203.0.113.10:5060;transport=tcp. Use the engine's public address when "
+			+ "it sits behind NAT. Unset sends the container's own Contact, which carries its listen address and a "
+			+ "placeholder user.")
+	public String getContact() {
+		return contact;
+	}
+
+	public void setContact(String contact) {
+		this.contact = contact;
 	}
 
 	@JsonPropertyDescription("Value of the Allow header advertised in the REGISTER.")

@@ -3,10 +3,12 @@ package org.vorpal.blade.services.gateway;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
+import javax.servlet.sip.AuthInfo;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
@@ -16,7 +18,9 @@ import javax.servlet.sip.annotation.SipApplication;
 import javax.servlet.sip.annotation.SipListener;
 import javax.servlet.sip.annotation.SipServlet;
 
+import org.vorpal.blade.framework.v2.config.CredentialEncryption;
 import org.vorpal.blade.framework.v3.B2buaServlet;
+import org.vorpal.blade.framework.v3.CalleeAuthenticator;
 
 /// The gateway SIP servlet: **the outbound face of a SIP trunk**. Two jobs:
 ///
@@ -38,12 +42,16 @@ import org.vorpal.blade.framework.v3.B2buaServlet;
 @SipApplication(distributable = true)
 @SipServlet(loadOnStartup = 1)
 @SipListener
-public class GatewaySipServlet extends B2buaServlet {
+public class GatewaySipServlet extends B2buaServlet implements CalleeAuthenticator {
 	private static final long serialVersionUID = 1L;
 
 	/// Route/Request‑URI param FSMAR sets to name the virtual gateway for an
 	/// outbound call.
 	static final String VGW_PARAM = "vgw";
+
+	/// Outbound SipSession attribute: the name of the trunk the call went out on, so a digest
+	/// challenge to it is answered with that trunk's credentials ([#credentials]).
+	static final String TRUNK_ATTR = "org.vorpal.blade.gateway.trunk";
 
 	public static GatewaySettingsManager settings;
 	static final List<TrunkRegistrar> registrars = new ArrayList<>();
@@ -130,6 +138,7 @@ public class GatewaySipServlet extends B2buaServlet {
 
 		// 1) Request-URI -> the carrier trunk.
 		outboundRequest.setRequestURI(sipFactory.createURI(vg.trunkRequestUri(number)));
+		outboundRequest.getSession().setAttribute(TRUNK_ATTR, vg.getName());
 
 		// 2) From -> the trunk identity. From is a system header, so setAddressHeader is
 		// refused; the URI of an initial request's From may still be changed in place.
@@ -161,22 +170,27 @@ public class GatewaySipServlet extends B2buaServlet {
 		}
 
 		sipLogger.info("gateway " + vg.getName() + ": outbound INVITE -> " + outboundRequest.getRequestURI());
+	}
 
-		// BOUNDARY: outbound-INVITE digest auth is NOT handled here. Registered
-		// (post-REGISTER)
-		// and ip-auth trunks accept outbound INVITEs from the authenticated source, so
-		// this is
-		// rarely needed. It also can't be done from callStarted: the stock bridge
-		// treats a carrier
-		// 401/407 as a failure and propagates it to the caller
-		// (InitialInvite.processContinue,
-		// v2/b2bua/InitialInvite.java:197-206) — answering the challenge needs a
-		// re-auth-aware
-		// outbound dialog (a gateway InitialInvite variant, mirroring
-		// RegisterCallflow.onResponse's
-		// createRequest(response,"INVITE") + addAuthHeader + loop guard). Add it if a
-		// carrier
-		// re-challenges INVITEs.
+	/// The carrier challenged an outbound INVITE (a digest-authenticated trunk, such as one
+	/// that dials without an IP allow-list): answer with the credentials of the trunk the
+	/// call went out on, which a `register-digest` trunk already holds for its REGISTER.
+	/// Null, so the challenge is relayed, for a trunk with no credentials.
+	@Override
+	public AuthInfo credentials(SipServletResponse challenge) {
+		Object trunk = challenge.getSession().getAttribute(TRUNK_ATTR);
+		VirtualGateway vg = findGateway(trunk == null ? null : trunk.toString());
+		if (vg == null || !(vg.getStyle() instanceof RegisterDigestStyle)) {
+			return null;
+		}
+		RegisterDigestStyle style = (RegisterDigestStyle) vg.getStyle();
+		AuthInfo authInfo = sipFactory.createAuthInfo();
+		String password = CredentialEncryption.plaintext(style.getPassword());
+		for (Iterator<String> realms = challenge.getChallengeRealms(); realms.hasNext();) {
+			authInfo.addAuthInfo(challenge.getStatus(), realms.next(), style.getAuthName(), password);
+		}
+		sipLogger.info("gateway " + vg.getName() + ": answering " + challenge.getStatus() + " with trunk credentials");
+		return authInfo;
 	}
 
 	@Override

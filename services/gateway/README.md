@@ -20,6 +20,12 @@ One `GatewaySipServlet` hosts **N `VirtualGateway`s** — one per outbound trunk
   - **`ip-auth`** (`IpAuthStyle`) — IP-allowlisted carriers that need no
     REGISTER; `newRegistrar()` returns null.
   - **new carriers** = one `@JsonSubTypes.Type` line + a subclass.
+- a `register-digest` trunk that should take inbound calls by registration sets `contact`
+  to an address the carrier can reach (the engine's public address behind NAT). Some carriers
+  send inbound calls back over the REGISTER's own TCP connection instead of opening a new one
+  to the Contact; for those, keep `expires` under the carrier's idle-connection timeout and
+  the engine channel's `IdleConnectionTimeout` above the refresh period, so a live connection
+  always exists.
 - optionally carries a `dialPrefix`, which goes in front of the dialed number when the carrier
   wants an account tech prefix there (`12345678*18165551234`), and a `callerId`, the number
   presented as the From user instead of the registration identity.
@@ -71,14 +77,14 @@ would reach nothing. `<name>` must match a `VirtualGateway.name` in this app's c
 dropdown is populated from it via `/gatewayVgws`, which the editor queries for whichever app the
 transition targets).
 
-## Scope boundary
+## Digest-authenticated outbound calls
 
-- **Outbound-INVITE digest auth is not implemented.** Registered (post-REGISTER) and ip-auth trunks
-  accept outbound INVITEs from the authenticated source, so it's rarely needed — and it can't live in
-  `callStarted`: the stock B2BUA bridge propagates a carrier `401/407` to the caller
-  (`InitialInvite.processContinue`, `v2/b2bua/InitialInvite.java`). Answering the challenge
-  needs a re-auth-aware outbound dialog (a gateway `InitialInvite` variant mirroring
-  `RegisterCallflow.onResponse`: `createRequest(response,"INVITE")` + `addAuthHeader` + loop guard).
+A carrier that authenticates outbound calls by digest instead of an IP allow-list answers the
+first INVITE with a 407. The gateway answers it with the credentials of the trunk the call went
+out on (the same `authName` and `password` its REGISTER uses) and resends the INVITE; the caller
+sees only the outcome. A second challenge is relayed, so wrong credentials end the call instead
+of looping. Such a carrier usually wants the plain E.164 number, so leave `dialPrefix` unset;
+a tech prefix is the IP-authentication convention.
 
 ## Build / test
 

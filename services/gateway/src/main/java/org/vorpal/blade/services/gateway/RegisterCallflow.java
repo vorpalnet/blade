@@ -80,10 +80,26 @@ public class RegisterCallflow extends TrunkRegistrar {
 		register.setRequestURI(getSipFactory().createURI(
 				"sip:" + gateway.getRegistrarDomain() + ";transport=" + gateway.getTransport()));
 		bindOutbound(register);
+		bindContact(register);
 		register.setExpires(expires);
 		register.setHeader("Allow", style.getAllow());
 		register.setHeader("User-Agent", style.getUserAgent());
 		sendRequest(register, this::onResponse);
+	}
+
+	/// Contact is a system header on most requests, but an application may set it on a
+	/// REGISTER: it is the binding being registered. Without this the container sends its
+	/// own, `sip:wlssuser@<listen address>`, which behind NAT is an address the carrier
+	/// cannot reach.
+	private void bindContact(SipServletRequest register) {
+		if (style.getContact() != null && !style.getContact().isEmpty()) {
+			try {
+				register.setAddressHeader("Contact", getSipFactory().createAddress("<" + style.getContact() + ">"));
+			} catch (Exception e) {
+				sipLogger.warning("gateway " + name() + ": could not set Contact " + style.getContact() + ": "
+						+ e.getMessage());
+			}
+		}
 	}
 
 	private void bindOutbound(SipServletRequest register) {
@@ -121,6 +137,7 @@ public class RegisterCallflow extends TrunkRegistrar {
 			retry.setRequestURI(getSipFactory().createURI(
 					"sip:" + gateway.getRegistrarDomain() + ";transport=" + gateway.getTransport()));
 			bindOutbound(retry);
+			bindContact(retry);
 			retry.addAuthHeader(response, style.getAuthName(),
 					CredentialEncryption.plaintext(style.getPassword()));
 			retry.setExpires(challenged.getExpires()); // preserve 0 (de‑register) or the configured value
