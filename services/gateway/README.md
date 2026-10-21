@@ -20,6 +20,9 @@ One `GatewaySipServlet` hosts **N `VirtualGateway`s** — one per outbound trunk
   - **`ip-auth`** (`IpAuthStyle`) — IP-allowlisted carriers that need no
     REGISTER; `newRegistrar()` returns null.
   - **new carriers** = one `@JsonSubTypes.Type` line + a subclass.
+- optionally carries a `dialPrefix`, which goes in front of the dialed number when the carrier
+  wants an account tech prefix there (`12345678*18165551234`), and a `callerId`, the number
+  presented as the From user instead of the registration identity.
 - optionally names an **`outboundInterface`** — multi-homed engines only, to originate that
   trunk's REGISTER and INVITEs from a specific local SIP channel. Leave it unset on a
   single-interface engine: the container's own interface is used, and the channel's
@@ -49,8 +52,17 @@ b2buaCallee.getTrigger("INVITE").createTransition("gateway")   // next = a state
     .setId("offnet-via-gateway")
     .setWhen("${To.user} matches '\\+?1[2-9]\\d{9}'")
     .setSubscriber("To")
-    .setRoutes(new String[] { "sip:${To.user}@gateway;vgw=carrier-primary" });
+    .setRoutes(new String[] { "sip:${To.user}@10.0.0.5:5060;transport=tcp;lr;vgw=carrier-primary" });
 ```
+
+The Route's host is the engine's own SIP address (`10.0.0.5:5060` here), never the app name. The
+container pops a Route that points at itself and invokes the next app; a Route to any other host is
+an external destination, so the request leaves OCCAS and the gateway never runs (`BEA-330638 Unable
+to resolve route to destination : gateway` when the host is `gateway`).
+
+The Route's user part is the number dialed out the trunk, so a transition can forward a call to a
+number other than the one in its Request-URI (`sip:18165551234@10.0.0.5:5060;lr;vgw=carrier-primary`).
+A Route with no user dials the Request-URI's user.
 
 In the Flow editor this is the **transition into the gateway state**, whose *Virtual gateway*
 dropdown writes the `;vgw=` param onto the pushed Route. It belongs on the arrow, not on a cloud:

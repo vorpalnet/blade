@@ -11,6 +11,7 @@ import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipURI;
+import javax.servlet.sip.URI;
 import javax.servlet.sip.annotation.SipApplication;
 import javax.servlet.sip.annotation.SipListener;
 import javax.servlet.sip.annotation.SipServlet;
@@ -107,7 +108,7 @@ public class GatewaySipServlet extends B2buaServlet {
 				doNotProcess(outboundRequest, 404, "Unknown virtual gateway");
 				return;
 			}
-			bridgeToTrunk(vg, outboundRequest);
+			bridgeToTrunk(vg, outboundRequest, routedNumberOf(inbound != null ? inbound : outboundRequest));
 		} catch (Exception e) {
 			sipLogger.severe("gateway: callStarted failed: " + e.getMessage());
 		}
@@ -116,24 +117,33 @@ public class GatewaySipServlet extends B2buaServlet {
 	/// BLADE to carrier. Rewrite the outbound dialog onto `vg`: Request-URI to the carrier
 	/// trunk, From to the trunk identity, source pinned to the trunk's outbound interface
 	/// when one is configured.
-	private void bridgeToTrunk(VirtualGateway vg, SipServletRequest outboundRequest)
+	/// `routedNumber` is the number FSMAR put in the `;vgw=` Route's user part, so a
+	/// transition can send a call to a number other than the one dialed
+	/// (`sip:18165551234@<engine address>;lr;vgw=...`). Null dials the Request-URI's own user.
+	private void bridgeToTrunk(VirtualGateway vg, SipServletRequest outboundRequest, String routedNumber)
 			throws ServletException, IOException {
 
-		// The dialed number is the user part of the (copied) Request-URI.
-		String number = (outboundRequest.getRequestURI() instanceof SipURI)
-				? ((SipURI) outboundRequest.getRequestURI()).getUser()
-				: null;
+		String number = routedNumber;
+		if (number == null && outboundRequest.getRequestURI() instanceof SipURI) {
+			number = ((SipURI) outboundRequest.getRequestURI()).getUser();
+		}
 
 		// 1) Request-URI -> the carrier trunk.
 		outboundRequest.setRequestURI(sipFactory.createURI(vg.trunkRequestUri(number)));
 
-		// 2) From -> the trunk identity (best effort; some containers restrict system
-		// headers).
-		String identity = (vg.getStyle() != null) ? vg.getStyle().outboundIdentity() : null;
+		// 2) From -> the trunk identity. From is a system header, so setAddressHeader is
+		// refused; the URI of an initial request's From may still be changed in place.
+		// P-Asserted-Identity carries the caller's number too, so it follows From.
+		String identity = (vg.getCallerId() != null) ? vg.getCallerId()
+				: (vg.getStyle() != null) ? vg.getStyle().outboundIdentity() : null;
 		if (identity != null) {
 			try {
-				Address from = sipFactory.createAddress("<sip:" + identity + "@" + vg.getRegistrarDomain() + ">");
-				outboundRequest.setAddressHeader("From", from);
+				URI uri = sipFactory.createURI("sip:" + identity + "@" + vg.getRegistrarDomain());
+				outboundRequest.getFrom().setURI(uri);
+				outboundRequest.getFrom().setDisplayName(null);
+				if (outboundRequest.getHeader("P-Asserted-Identity") != null) {
+					outboundRequest.setAddressHeader("P-Asserted-Identity", sipFactory.createAddress(uri));
+				}
 			} catch (Exception e) {
 				sipLogger.warning("gateway " + vg.getName() + ": could not set trunk From: " + e.getMessage());
 			}
@@ -211,6 +221,24 @@ public class GatewaySipServlet extends B2buaServlet {
 		}
 		if (request.getRequestURI() instanceof SipURI) {
 			return ((SipURI) request.getRequestURI()).getParameter(VGW_PARAM);
+		}
+		return null;
+	}
+
+	/// The user part of the popped `;vgw=` Route, or null when the Route has none
+	/// (`sip:<engine address>;lr;vgw=...`).
+	static String routedNumberOf(SipServletRequest request) {
+		try {
+			Address popped = request.getPoppedRoute();
+			if (popped != null && popped.getURI() instanceof SipURI) {
+				SipURI uri = (SipURI) popped.getURI();
+				String user = uri.getUser();
+				if (uri.getParameter(VGW_PARAM) != null && user != null && !user.isEmpty()) {
+					return user;
+				}
+			}
+		} catch (Exception ignore) {
+			// no popped route
 		}
 		return null;
 	}

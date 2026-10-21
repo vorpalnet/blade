@@ -111,4 +111,20 @@ public class GatewayConfigTest {
 		VirtualGateway back = M.readValue(M.writeValueAsString(vg), VirtualGateway.class);
 		assertEquals("admin.example.com", back.getOutboundInterface());
 	}
+
+	@Test
+	public void dialPrefixGoesInFrontOfTheNumber() throws Exception {
+		VirtualGateway vg = new VirtualGateway();
+		vg.setRegistrarDomain("sip.carrier.example.com");
+		vg.setTransport("tcp");
+		vg.setDialPrefix("12345678*");
+		vg.setCallerId("18165550100");
+		assertEquals("sip:12345678*18165551234@sip.carrier.example.com;transport=tcp",
+				vg.trunkRequestUri("18165551234"));
+		assertEquals("no number, no prefix", "sip:sip.carrier.example.com;transport=tcp", vg.trunkRequestUri(null));
+
+		VirtualGateway back = M.readValue(M.writeValueAsString(vg), VirtualGateway.class);
+		assertEquals("12345678*", back.getDialPrefix());
+		assertEquals("18165550100", back.getCallerId());
+	}
 }

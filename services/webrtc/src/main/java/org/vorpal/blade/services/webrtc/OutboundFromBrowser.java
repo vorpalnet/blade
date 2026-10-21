@@ -307,6 +307,21 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 
 	// ---- anchored -----------------------------------------------------------------------------
 
+	/// [SipApplicationSession] attribute (Boolean): the network leg has applied an SDP answer. The
+	/// PSTN commonly repeats one answer in several `183`s and again in the `200`, and a media
+	/// server endpoint accepts exactly one (Kurento refuses the rest with "Sdp Answer already
+	/// processed"). First one wins, as on the pass-through path ([#ANSWER_FORWARDED]).
+	private static final String NETWORK_ANSWERED = "org.vorpal.blade.webrtc.networkAnswered";
+
+	/// True the first time it is called for `app`, false after.
+	private static boolean firstNetworkAnswer(SipApplicationSession app) {
+		if (app.getAttribute(NETWORK_ANSWERED) != null) {
+			return false;
+		}
+		app.setAttribute(NETWORK_ANSWERED, Boolean.TRUE);
+		return true;
+	}
+
 	/// The far end responded: ring, answer, or refuse.
 	private void onNetworkResponse(SipServletResponse response, NetworkConnection networkLeg, String aor,
 			String callId) throws MsControlException {
@@ -318,7 +333,7 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 			// 180/183. Any SDP here is early media and belongs to the network dialog only; the browser
 			// is already negotiated and hears whatever the media server relays.
 			byte[] early = rawContent(response);
-			if (early != null) {
+			if (early != null && firstNetworkAnswer(app)) {
 				processAnswer(networkLeg, early, done -> {
 					// nothing further; the media path is now open for ringback
 				});
@@ -343,8 +358,11 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 		BrowserRegistry.deliver(aor,
 				SignalProtocol.event(SignalProtocol.CALL_ESTABLISHED, callId, SignalProtocol.data()));
 
-		if (answer != null) {
+		if (answer != null && firstNetworkAnswer(app)) {
 			processAnswer(networkLeg, answer, done -> acknowledge(response, app, aor, callId, networkLeg, true));
+		} else if (app.getAttribute(NETWORK_ANSWERED) != null) {
+			// An early answer already negotiated the network dialog.
+			acknowledge(response, app, aor, callId, networkLeg, true);
 		} else {
 			// Answered with no SDP, so processAnswer never runs and the network dialog is never
 			// negotiated: the media server has nowhere to send audio. The call is up for signaling

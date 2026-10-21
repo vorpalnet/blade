@@ -18,13 +18,15 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// identification (no arrival interface, no source allowlist). The only local-interface
 /// concern that remains is outbound source selection on a multi-homed engine, and it is
 /// optional: see {@link #getOutboundInterface()}.
-@JsonPropertyOrder({ "name", "transport", "registrarDomain", "outboundInterface", "style" })
+@JsonPropertyOrder({ "name", "transport", "registrarDomain", "dialPrefix", "callerId", "outboundInterface", "style" })
 public class VirtualGateway implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	private String name;
 	private String transport = "udp";
 	private String registrarDomain;
+	private String dialPrefix;
+	private String callerId;
 	private String outboundInterface;
 	private RegistrationStyle style;
 
@@ -55,6 +57,28 @@ public class VirtualGateway implements Serializable {
 		this.registrarDomain = registrarDomain;
 	}
 
+	@JsonPropertyDescription("Optional: text the carrier wants in front of the dialed number on an outbound call, "
+			+ "such as an account tech prefix and its separator (12345678*). Sent as "
+			+ "sip:<dialPrefix><number>@<registrarDomain>.")
+	public String getDialPrefix() {
+		return dialPrefix;
+	}
+
+	public void setDialPrefix(String dialPrefix) {
+		this.dialPrefix = dialPrefix;
+	}
+
+	@JsonPropertyDescription("Optional: the number to present as the From user on outbound calls, usually one of "
+			+ "the account's own phone numbers. Unset presents the registration style's identity (for a digest "
+			+ "trunk, its userId), which some carriers reject as caller ID.")
+	public String getCallerId() {
+		return callerId;
+	}
+
+	public void setCallerId(String callerId) {
+		this.callerId = callerId;
+	}
+
 	@JsonPropertyDescription("Optional, multi-homed engines only: the local SIP interface to originate this trunk's "
 			+ "REGISTER and outbound INVITEs from, named by the interface's advertised host (its channel listen or "
 			+ "public address). Leave unset on a single-interface engine; the container's own interface is used, and "
@@ -77,10 +101,13 @@ public class VirtualGateway implements Serializable {
 	}
 
 	/// The Request-URI to send an outbound call for `number` out this trunk:
-	/// `sip:<number>@<registrarDomain>;transport=<transport>`.
+	/// `sip:<dialPrefix><number>@<registrarDomain>;transport=<transport>`.
 	public String trunkRequestUri(String number) {
 		StringBuilder sb = new StringBuilder("sip:");
 		if (number != null && !number.isEmpty()) {
+			if (dialPrefix != null) {
+				sb.append(dialPrefix);
+			}
 			sb.append(number).append('@');
 		}
 		sb.append(registrarDomain);
