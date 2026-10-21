@@ -91,7 +91,7 @@ Everything below is how the installer delivers those five properties.
   yourself first — with the naxsi module if you want the WAF — and have a TLS
   certificate on disk (e.g. Let's Encrypt); `install.sh` references the cert, it
   does not obtain or renew it.
-- **Messaging + analytics (optional):** STEP 5 provisions the JMS event bus
+- **Messaging + analytics (optional):** STEP 6 provisions the JMS event bus
   (`jms/BladeEventBusTopic` + its error queue) against the running AdminServer,
   and creates the `jdbc/BladeAnalytics` data source once you point it at your
   database on the "Analytics database" page. The database is yours; its schema
@@ -274,12 +274,20 @@ demo certificate on a live TLS port.
    the AdminServer SSL listener binds its ListenAddress, which localhost can't
    reach.
 
-**STEP 6 — Deploy settings.** The build mode (dev or prod), SSH user, and the admin URL that
+**STEP 6 — Event bus & analytics database.** Needs the AdminServer running;
+both rows are online WLST. **jms** provisions `jms/BladeEventBusTopic` and its
+error queue on the engine cluster. The **db** page takes your database's dialect
+(`mysql`, `oracle`, `mssql`), JDBC URL, user and password; **dbc** then creates
+`jdbc/BladeAnalytics` on the cluster and the AdminServer. Run `./upgrade.sh <env>`
+afterward to build the schema. Skip the database and events still flow on the
+topic, yet nothing keeps them.
+
+**STEP 7 — Deploy settings.** The build mode (dev or prod), SSH user, and the admin URL that
 `deploy.sh` will use. `install.sh` computes the admin URL from the live domain
 (preferring `t3s` when SSL is on) and writes it, plus the WebLogic target names,
 into the profile.
 
-**STEP 7 — Deploy to WebLogic.** After `./build.sh`, deploy everything. This step
+**STEP 8 — Deploy to WebLogic.** After `./build.sh`, deploy everything. This step
 delegates to `deploy.sh` — the single deploy authority — which pushes the shared
 library first, then the EARs and service WARs in dependency order. See
 [DEPLOYING.md](DEPLOYING.md).

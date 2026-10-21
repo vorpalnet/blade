@@ -82,7 +82,7 @@ the next reload; publishers for destinations that did not change are left alone.
 ## Deploy
 
 1. **Provision the JMS resources.** `install.sh` runs this for you (the
-   "Provision the JMS event bus" row in STEP 5, or headless
+   "Provision the JMS event bus" row in STEP 6, or headless
    `./install.sh <env> jms`) by executing the script below. The Events console
    can also create them, or run the WLST directly:
    ```bash

@@ -696,7 +696,7 @@ load_profile() {
     # on|off|auto — auto emits the naxsi includes only when the core ruleset is
     # present (naxsi is a compiled nginx module + rule files: a separate prereq).
     NGX_NAXSI="$(d nginx.naxsi auto)"
-    # --- JMS event bus + analytics database (STEP 5 'jms' / 'db' / 'dbc' rows) -
+    # --- JMS event bus + analytics database (STEP 6 'jms' / 'db' / 'dbc' rows) -
     # The event-bus knobs feed services/events/notes/configure-messaging-jms.py;
     # the jdbc.* keys describe the operator's OWN database for jdbc/BladeAnalytics
     # (password is an ENC() secret, read where it's used).
@@ -1556,27 +1556,28 @@ build_menu_rows() {
     _row action E "Re-provision every engine host"               "$(_sum_engines)" "-"
     _row action verify "Verify the cluster (health-check every node)" "" "-"
     _row action o "Deploy WebLogic Remote Console (/rconsole)" "" "-"
+    _row action f "Open firewall ports (firewalld)"              "NM/admin/ssl$([ "${SIP_TLS:-false}" = true ] && printf /sip)" "-"
+    local p_nginx ngxsum
+    if [ -n "${NGX_ADMIN_SN}${NGX_APPS_SN}" ]; then p_nginx=1; ngxsum="${NGX_ADMIN_SN:-—}${NGX_APPS_SN:+, ${NGX_APPS_SN}}"; else p_nginx=-; ngxsum="not configured"; fi
+    _row phase  nginx "nginx reverse proxy (edge TLS + WebSocket)" "$ngxsum" "$p_nginx"
+    _row action ngx   "Install/refresh nginx config (validate + reload)" "$([ -f /etc/nginx/nginx.conf ] && echo /etc/nginx/nginx.conf)" "-"
     # JMS/JDBC: "done" read from the domain's own config.xml, like the boot-unit
     # probes — cheap, local, and true after a re-image or a hand-run of the
     # notes scripts. Adopted BladeAnalytics* naming counts (adopt-never-rename).
     local domcfg="${DOMAINS_DIR}/${DOMAIN}/config/config.xml"
     local a_jms=0; grep -qsE 'BladeMessagingSystemModule|BladeAnalyticsSystemModule' "$domcfg" && a_jms=1
     local a_dbc=0; grep -qs '<name>BladeAnalytics</name>' "$domcfg" && a_dbc=1
+    _row head ""      "STEP 6 · Event bus & analytics database (AdminServer running)" "" "-"
     _row action jms "Provision the JMS event bus (topic + error queue)" "jms/BladeEventBusTopic on BEA_ENGINE_TIER_CLUST" "$a_jms"
     local p_db dbsum
     if [ -n "$DB_URL" ]; then p_db=1; dbsum="${DB_DIALECT} · ${DB_URL}"; else p_db=-; dbsum="not configured — events hold on the topic"; fi
     _row phase  db  "Analytics database (jdbc/BladeAnalytics)" "$dbsum" "$p_db"
     _row action dbc "Create the analytics data source" "$([ "$a_dbc" = 1 ] && echo 'jdbc/BladeAnalytics')" "$a_dbc"
-    _row action f "Open firewall ports (firewalld)"              "NM/admin/ssl$([ "${SIP_TLS:-false}" = true ] && printf /sip)" "-"
-    local p_nginx ngxsum
-    if [ -n "${NGX_ADMIN_SN}${NGX_APPS_SN}" ]; then p_nginx=1; ngxsum="${NGX_ADMIN_SN:-—}${NGX_APPS_SN:+, ${NGX_APPS_SN}}"; else p_nginx=-; ngxsum="not configured"; fi
-    _row phase  nginx "nginx reverse proxy (edge TLS + WebSocket)" "$ngxsum" "$p_nginx"
-    _row action ngx   "Install/refresh nginx config (validate + reload)" "$([ -f /etc/nginx/nginx.conf ] && echo /etc/nginx/nginx.conf)" "-"
-    _row head ""      "STEP 6 · Deploy settings (build profile, SSH, admin URL)" "" "-"
+    _row head ""      "STEP 7 · Deploy settings (build profile, SSH, admin URL)" "" "-"
     _row phase runtime "SSH user, admin URL" "${ADMINURL}" "$p_run"
     # App deployment lives in deploy.sh (it reads THIS profile). install.sh stands
     # up the server; it no longer deploys apps.
-    _row head ""      "STEP 7 · Deploy apps → run:  ./deploy.sh ${NAME:-<env>} --all" "" "-"
+    _row head ""      "STEP 8 · Deploy apps → run:  ./deploy.sh ${NAME:-<env>} --all" "" "-"
     # UNINSTALL · listed top-to-bottom in safe teardown order (reverse of STEP 1).
     # The checked set runs in menu order, so ticking any subset tears down safely.
     # Each ✓ means "still present / removable"; each row confirms before deleting.
@@ -5023,7 +5024,7 @@ PYE0S
 }
 
 # Admin password: env > the config > prompt (skipped under dry-run).
-# ----- JMS event bus + analytics data source (STEP 5, online WLST) -----------
+# ----- JMS event bus + analytics data source (STEP 6, online WLST) -----------
 # Provision the BLADE messaging stack (file store, JMS server, system module,
 # connection factory, distributed topic + error queue) by running the canonical
 # WLST helper that ships with the service: services/events/notes/
