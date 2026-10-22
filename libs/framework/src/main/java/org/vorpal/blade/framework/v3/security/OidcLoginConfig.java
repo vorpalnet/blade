@@ -10,17 +10,32 @@ import java.util.Properties;
 /// with, read from `WEB-INF/blade-oidc.properties`.
 ///
 /// The file is not part of the WAR in the repository: a client secret has no
-/// place there. `deploy.sh` adds it from `~/.blade/<env>/oidc/<deployment-name>.properties`
-/// at deploy time, so the same build signs in against a different identity
-/// provider in every environment, and a WAR deployed without the file falls
-/// back to the container's own login. The keys:
+/// place there. `deploy.sh` adds it at deploy time, so the same build signs in
+/// against a different identity provider in every environment, and a WAR
+/// deployed without the file falls back to the container's own login. It takes
+/// `~/.blade/<env>/oidc/<deployment-name>.properties` when that exists, else the
+/// environment's one file, `~/.blade/<env>/oidc.properties`, for every WAR that
+/// names this filter.
+///
+/// One file serves every application because the redirect URL may be a
+/// template: `${contextPath}` is the application's context path, filled in
+/// when the file is read, and `${host}` is the host name the browser asked
+/// for, filled in per request ([#forHost]), so applications behind different
+/// virtual hosts share one client:
+///
+/// ```
+/// redirectUrl=https://${host}:443${contextPath}/oidc/callback
+/// ```
+///
+/// The provider still accepts only the redirect URLs registered on the client,
+/// so a forged `Host` header sends the browser nowhere. The keys:
 ///
 /// | key             | meaning                                                          |
 /// |-----------------|------------------------------------------------------------------|
 /// | `issuer`        | the `iss` every token must carry, matched exactly                |
 /// | `discoveryUrl`  | where the provider's metadata lives, when it is not `<issuer>/.well-known/openid-configuration` |
 /// | `clientId`, `clientSecret` | the confidential client the provider registered for this application |
-/// | `redirectUrl`   | the callback, `https://<host>/<context-root>/oidc/callback`, exactly as registered with the provider |
+/// | `redirectUrl`   | the callback, `https://<host>/<context-root>/oidc/callback`, exactly as registered with the provider; may use `${host}` and `${contextPath}` |
 /// | `scope`         | the scopes to request, default `openid`; an OCI identity domain emits its `groups` claim only for `openid groups` |
 /// | `usernameClaim` | the claim that names the user, default `sub`                     |
 /// | `groupsClaim`   | the claim that carries the user's groups, default `groups`       |
@@ -39,6 +54,11 @@ public final class OidcLoginConfig {
 	public static final String RESOURCE = "/WEB-INF/blade-oidc.properties";
 
 	private static final String WELL_KNOWN = "/.well-known/openid-configuration";
+	private static final String HOST = "${host}";
+	private static final String CONTEXT_PATH = "${contextPath}";
+	private static final java.util.regex.Pattern HOST_NAME = java.util.regex.Pattern.compile("[A-Za-z0-9.-]+");
+
+	private final Properties source;
 
 	private final String issuer;
 	private final String discoveryUrl;
@@ -53,6 +73,7 @@ public final class OidcLoginConfig {
 	private final Map<String, String> roleMappings;
 
 	private OidcLoginConfig(Properties p) {
+		this.source = p;
 		this.issuer = required(p, "issuer");
 		this.clientId = required(p, "clientId");
 		this.clientSecret = required(p, "clientSecret");
@@ -90,6 +111,12 @@ public final class OidcLoginConfig {
 	/// Read the settings from a stream, or return null for a null stream, which
 	/// is what a WAR deployed without the file yields.
 	public static OidcLoginConfig read(InputStream in) throws IOException {
+		return read(in, null);
+	}
+
+	/// As [#read(InputStream)], with `${contextPath}` in the redirect URL
+	/// replaced by `contextPath` (the application's, such as `/blade/phone`).
+	public static OidcLoginConfig read(InputStream in, String contextPath) throws IOException {
 		if (in == null) {
 			return null;
 		}
@@ -97,7 +124,25 @@ public final class OidcLoginConfig {
 		try (InputStream s = in) {
 			p.load(s);
 		}
+		String redirect = p.getProperty("redirectUrl");
+		if (redirect != null && contextPath != null) {
+			p.setProperty("redirectUrl", redirect.replace(CONTEXT_PATH, contextPath));
+		}
 		return parse(p);
+	}
+
+	/// These settings with `${host}` in the redirect URL replaced by `host`, the
+	/// name the browser asked for; this same object when the URL names no
+	/// `${host}`. A name that is not a plain host name leaves the template in
+	/// place, and the provider refuses the unregistered URL.
+	public OidcLoginConfig forHost(String host) {
+		if (!redirectUrl.contains(HOST) || host == null || !HOST_NAME.matcher(host).matches()) {
+			return this;
+		}
+		Properties p = new Properties();
+		p.putAll(source);
+		p.setProperty("redirectUrl", redirectUrl.replace(HOST, host));
+		return new OidcLoginConfig(p);
 	}
 
 	public String issuer() {

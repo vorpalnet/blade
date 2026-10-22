@@ -102,9 +102,19 @@ match on `${subject.<claim>}`.
 `<issuer>/.well-known/openid-configuration`), `usernameClaim` (default `sub`),
 `groupsClaim` (default `groups`), `audience` (for bearer tokens issued to
 another audience) and `role.<group>` mappings. A secret has no place in a WAR
-in the repository, so `deploy.sh` adds the file from
-`~/.blade/<env>/oidc/<deployment-name>.properties` at deploy time; a WAR with
-no such file deploys as built. The redirect URL's path is what identifies the
+in the repository, so `deploy.sh` adds the file at deploy time: from
+`~/.blade/<env>/oidc/<deployment-name>.properties` when that exists, otherwise
+from the environment's one file, `~/.blade/<env>/oidc.properties`, for every WAR
+whose `web.xml` names the filter. A WAR with neither deploys as built and signs
+in with the WebLogic login, so OpenID Connect stays optional.
+
+The environment's file is one client for every application. Its redirect URL
+is a template, `https://${host}:443${contextPath}/oidc/callback`: the filter
+fills in the application's context path when it reads the file and the host
+name the browser asked for on each request, so applications behind different
+virtual hosts share it. The provider accepts only the URLs registered on the
+client, which `misc/oci-identity-domain.sh` registers for every host and
+application when given the template and `BLADE_HOSTS`. The redirect URL's path is what identifies the
 callback, so the scheme, host and port a proxy presents to the browser do not
 have to be what the server sees.
 

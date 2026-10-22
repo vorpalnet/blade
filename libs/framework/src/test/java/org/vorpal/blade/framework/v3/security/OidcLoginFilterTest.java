@@ -592,6 +592,22 @@ class OidcLoginFilterTest {
 		}
 
 		@Test
+		void oneFileServesEveryApplication() throws Exception {
+			String file = "issuer=" + ISSUER + "\nclientId=" + CLIENT + "\nclientSecret=s3cret\n"
+					+ "redirectUrl=https://${host}:443${contextPath}/oidc/callback\n";
+			OidcLoginConfig cfg = OidcLoginConfig.read(
+					new java.io.ByteArrayInputStream(file.getBytes(java.nio.charset.StandardCharsets.UTF_8)), CONTEXT);
+			assertEquals(CONTEXT + "/oidc/callback", cfg.callbackPath());
+			assertEquals(CALLBACK, cfg.forHost("apps.example.com").redirectUrl());
+			assertEquals("s3cret", cfg.forHost("apps.example.com").clientSecret());
+			// anything but a plain host name keeps the template, which no provider has registered
+			assertTrue(cfg.forHost("evil.example/x?").redirectUrl().contains("${host}"));
+			// a fixed URL is left alone
+			OidcLoginConfig fixed = config();
+			assertSame(fixed, fixed.forHost("other.example.com"));
+		}
+
+		@Test
 		void parsesADiscoveryDocument() throws Exception {
 			OidcProvider p = OidcProvider.parse("{\"issuer\":\"x\",\"authorization_endpoint\":\"https://a/auth\","
 					+ "\"token_endpoint\":\"https://a/token\",\"jwks_uri\":\"https://a/jwk\"}");

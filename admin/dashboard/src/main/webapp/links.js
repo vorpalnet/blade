@@ -11,8 +11,8 @@
    config, endpoint. `"embed": true` says the app can show itself in a frame
    (?embed=1), so the board offers a quick look beside it. A `{name}` is
    filled from what the board knows, encoded;
-   a parameter left empty is dropped. The board finds the apps from the
-   portal's card list, so an undeployed app gives no link and a new app that
+   a parameter left empty is dropped. The board finds the apps from its
+   application list (cards), so an undeployed app gives no link and a new app that
    declares a noun is linked without a change here. All admin apps share one
    sign-in (the BLADEADMINSESSION cookie), so the board can read their files.
 
@@ -21,7 +21,7 @@
 (function () {
 	'use strict';
 
-	/* Asked directly when the portal is not deployed or cannot list its cards. */
+	/* Asked directly when the application list cannot be read. */
 	var KNOWN = ['blade/callflow', 'blade/logs', 'blade/configurator'];
 
 	var nouns = {};      // noun -> { app, base, template, window }
@@ -37,7 +37,7 @@
 	}
 
 	function roots() {
-		return getJson('/blade/portal/api/v1/cards').then(function (c) {
+		return getJson('cards').then(function (c) {
 			return (c.cards || []).filter(function (card) { return card.kind !== 'service' && card.contextRoot; })
 				.map(function (card) { return card.contextRoot.replace(/^\/+|\/+$/g, ''); });
 		}).catch(function () { return KNOWN; });

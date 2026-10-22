@@ -225,6 +225,9 @@ public class OidcLoginFilter implements Filter {
 		}
 
 		OidcLoginConfig cfg = currentConfig();
+		if (cfg != null) {
+			cfg = cfg.forHost(req.getServerName());
+		}
 
 		// 1. an API client with a token
 		String authorization = req.getHeader("Authorization");
@@ -563,7 +566,9 @@ public class OidcLoginFilter implements Filter {
 				OidcLoginConfig read = null;
 				if (filterConfig != null && filterConfig.getServletContext() != null) {
 					try {
-						read = OidcLoginConfig.read(filterConfig.getServletContext().getResourceAsStream(OidcLoginConfig.RESOURCE));
+						javax.servlet.ServletContext context = filterConfig.getServletContext();
+						read = OidcLoginConfig.read(context.getResourceAsStream(OidcLoginConfig.RESOURCE),
+								context.getContextPath());
 						if (read != null) {
 							logger.info("OpenID login configured: " + read);
 						}

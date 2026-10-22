@@ -39,15 +39,11 @@
 	
  -->
 
+	<!-- No <taglib> entries: the JSTL tags come from the blade-shared library,
+	     whose taglibs-standard-impl JAR declares its own URIs. A taglib-location
+	     naming /WEB-INF/lib/taglibs-standard-impl-*.jar points at a JAR the
+	     skinny WAR strips, and the login page then fails to compile. -->
 	<jsp-config>
-		<taglib>
-			<taglib-uri>http://java.sun.com/jsp/jstl/core</taglib-uri>
-			<taglib-location>/WEB-INF/lib/taglibs-standard-impl-1.2.5.jar</taglib-location>
-		</taglib>
-		<taglib>
-			<taglib-uri>http://java.sun.com/jsp/jstl/fmt</taglib-uri>
-			<taglib-location>/WEB-INF/lib/taglibs-standard-impl-1.2.5.jar</taglib-location>
-		</taglib>
 		<jsp-property-group>
 			<url-pattern>*.jsp</url-pattern>
 			<page-encoding>UTF-8</page-encoding>

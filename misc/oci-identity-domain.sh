@@ -39,6 +39,16 @@
 #       misc/oci-identity-domain.sh <env> <domain-url> blade-phone \
 #       https://<admin-host>:443/blade/phone/oidc/callback participant1
 #
+# One client for the whole environment: give a redirect URL templated with
+# ${host} and ${contextPath} (single-quoted, so the shell leaves it alone) and
+# list the hosts in BLADE_HOSTS. Every host and context path pair is
+# registered on the client, and the settings go to ~/.blade/<env>/oidc.properties,
+# which deploy.sh adds to every WAR that names OidcLoginFilter.
+# BLADE_CONTEXT_PATHS overrides the applications that use it today.
+#   BLADE_HOSTS="admin.example.com apps.example.com" \
+#       misc/oci-identity-domain.sh <env> <domain-url> blade-<env> \
+#       'https://${host}:443${contextPath}/oidc/callback'
+#
 # Re-runnable: each step looks before it creates.
 set -euo pipefail
 
@@ -60,6 +70,22 @@ case "$REDIRECT" in
 esac
 BLADE_HOME="${BLADE_HOME:-$HOME/.blade}"
 OUT="${BLADE_HOME}/${ENV_NAME}/oidc/${APP}.properties"
+# The URLs the provider is told about: the one given, or, for a template, every
+# host and context path it stands for.
+REDIRECTS=()
+case "$REDIRECT" in
+  *'${'*)
+    OUT="${BLADE_HOME}/${ENV_NAME}/oidc.properties"
+    case "$REDIRECT" in *'${host}'*) [ -n "${BLADE_HOSTS:-}" ] || { echo "BLADE_HOSTS names the hosts a \${host} template stands for" >&2; exit 2; } ;; esac
+    for h in ${BLADE_HOSTS:-none}; do
+      for c in ${BLADE_CONTEXT_PATHS:-/blade/dashboard /blade/phone /blade/recordings /blade/audit /agent}; do
+        u="${REDIRECT//\$\{host\}/$h}"; REDIRECTS+=("${u//\$\{contextPath\}/$c}")
+      done
+    done ;;
+  *) REDIRECTS=("$REDIRECT") ;;
+esac
+json_list() { python3 -c 'import sys,json; print(json.dumps(sys.argv[1:]))' "$@"; }
+LOGOUTS=(); for u in "${REDIRECTS[@]}"; do LOGOUTS+=("${u%/oidc/callback}/"); done
 OCI=(oci identity-domains)
 
 say() { printf '# %s\n' "$*"; }
@@ -76,8 +102,8 @@ if [ -z "$APP_ID" ] || [ "$APP_ID" = "null" ]; then
       --based-on-template '{"value":"CustomWebAppTemplateId"}' \
       --is-o-auth-client true --client-type confidential \
       --allowed-grants '["authorization_code","refresh_token","password"]' \
-      --redirect-uris "[\"${REDIRECT}\"]" \
-      --post-logout-redirect-uris "[\"${REDIRECT%/oidc/callback}/\"]" \
+      --redirect-uris "$(json_list "${REDIRECTS[@]}")" \
+      --post-logout-redirect-uris "$(json_list "${LOGOUTS[@]}")" \
       --allow-offline true --bypass-consent true --active true)
   APP_ID=$(printf '%s' "$CREATED" | python3 -c 'import sys,json; d=json.load(sys.stdin)["data"]; print(d["id"])')
   CLIENT_ID=$(printf '%s' "$CREATED" | python3 -c 'import sys,json; d=json.load(sys.stdin)["data"]; print(d["name"])')
@@ -90,14 +116,16 @@ else
   # An application registered with an earlier form of the redirect URL keeps
   # it; the current one is added beside it, since the provider sends exactly
   # what the properties file says and the domain accepts only what is listed.
-  if ! "${OCI[@]}" app get --endpoint "$DOMAIN" --app-id "$APP_ID" --query 'data."redirect-uris"' 2>/dev/null \
-        | grep -qF "\"${REDIRECT}\""; then
-    say "adding redirect URL ${REDIRECT} to ${APP}"
-    "${OCI[@]}" app patch --endpoint "$DOMAIN" --app-id "$APP_ID" \
-        --schemas '["urn:ietf:params:scim:api:messages:2.0:PatchOp"]' \
-        --operations "[{\"op\":\"add\",\"path\":\"redirectUris\",\"value\":[\"${REDIRECT}\"]}]" >/dev/null \
-        || say "could not add the redirect URL; add it to ${APP} in the console"
-  fi
+  HAVE=$("${OCI[@]}" app get --endpoint "$DOMAIN" --app-id "$APP_ID" --query 'data."redirect-uris"' 2>/dev/null || true)
+  for u in "${REDIRECTS[@]}"; do
+    if ! printf '%s' "$HAVE" | grep -qF "\"${u}\""; then
+      say "adding redirect URL ${u} to ${APP}"
+      "${OCI[@]}" app patch --endpoint "$DOMAIN" --app-id "$APP_ID" \
+          --schemas '["urn:ietf:params:scim:api:messages:2.0:PatchOp"]' \
+          --operations "[{\"op\":\"add\",\"path\":\"redirectUris\",\"value\":[\"${u}\"]},{\"op\":\"add\",\"path\":\"postLogoutRedirectUris\",\"value\":[\"${u%/oidc/callback}/\"]}]" >/dev/null \
+          || say "could not add the redirect URL; add it to ${APP} in the console"
+    fi
+  done
 fi
 # an app created inactive stays unusable until activated
 "${OCI[@]}" app-status-changer put --endpoint "$DOMAIN" --app-status-changer-id "$APP_ID" \
@@ -210,6 +238,7 @@ mkdir -p "$(dirname "$OUT")"; chmod 700 "$(dirname "$OUT")"
 umask 077
 cat > "$OUT" <<EOF
 # ${APP} on ${ENV_NAME}: WEB-INF/blade-oidc.properties, added by deploy.sh.
+# A redirect URL with \${host} and \${contextPath} serves every application.
 # Read by the framework's OidcLoginFilter. An identity domain emits the groups
 # claim only when the groups scope is requested.
 issuer=${DOMAIN}
@@ -221,4 +250,7 @@ groupsClaim=groups
 EOF
 if [ -n "$CLIENT_SECRET" ]; then SECRET_STATE=present; else SECRET_STATE="MISSING: read it from the console and fill it in"; fi
 say "wrote ${OUT} (client id ${CLIENT_ID}; secret ${SECRET_STATE})"
-say "next: ./deploy.sh ${ENV_NAME} ${APP}.war (the file rides into the WAR as WEB-INF/blade-oidc.properties)"
+case "$OUT" in
+  */oidc.properties) say "next: redeploy each WAR that names OidcLoginFilter; a per-app file under oidc/ still wins over this one" ;;
+  *) say "next: ./deploy.sh ${ENV_NAME} ${APP}.war (the file rides into the WAR as WEB-INF/blade-oidc.properties)" ;;
+esac

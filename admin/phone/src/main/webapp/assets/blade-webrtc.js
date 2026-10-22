@@ -43,6 +43,10 @@ const EVENT = {
  *
  * Events you can assign: onRegistered, onIncoming, onProgress, onEstablished, onConnected, onEnded,
  * onError, onRemoteStream, onStateChange.
+ *
+ * Every call offers a video section, so video shows whenever the far end sends some, and the
+ * camera can be switched on mid-call with setCamera() without renegotiating. A far end that wants
+ * audio only rejects the section and nothing else changes.
  */
 export class BladePhone {
   /**
@@ -69,6 +73,12 @@ export class BladePhone {
     this.pc = null;
     this.callId = null;
     this.localStream = null;
+    /** Everything the far end sends on this call, audio and video, in one stream. */
+    this.remoteStream = null;
+    /** The call's video section, whichever side offered it; null on an audio-only call. */
+    this.videoTransceiver = null;
+    /** The camera, while it is on. Off by default: video is received whenever it arrives. */
+    this.cameraStream = null;
     this.state = 'idle';
     /** Candidates that arrived before the peer connection had a remote description. */
     this.pendingCandidates = [];
@@ -167,7 +177,9 @@ export class BladePhone {
     this.#setState('calling');
 
     await this.#newPeerConnection();
-    const offer = await this.pc.createOffer({ offerToReceiveAudio: true });
+    // sendrecv with no track yet: nothing is sent until setCamera(true) puts one on the sender.
+    this.videoTransceiver = this.pc.addTransceiver('video', { direction: 'sendrecv' });
+    const offer = await this.pc.createOffer();
     await this.pc.setLocalDescription(offer);
 
     // Unless the gateway said it can take trickled candidates, send one complete offer. Holding it
@@ -209,6 +221,27 @@ export class BladePhone {
     this.#send(EVENT.CALL_DTMF, this.callId, { digit: String(digit) });
   }
 
+  /**
+   * Turn the camera on or off during a call. Resolves false when the call has no video section
+   * the far end will receive (it rejected the section, or offered video it only sends).
+   */
+  async setCamera(on) {
+    const transceiver = this.videoTransceiver;
+    if (!transceiver || transceiver.stopped) return false;
+    if (!on) {
+      await transceiver.sender.replaceTrack(null);
+      this.#stopCamera();
+      return true;
+    }
+    const direction = transceiver.currentDirection;
+    if (direction && direction !== 'sendrecv' && direction !== 'sendonly') return false;
+    if (!this.cameraStream) {
+      this.cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    }
+    await transceiver.sender.replaceTrack(this.cameraStream.getVideoTracks()[0]);
+    return true;
+  }
+
   /** Mute or unmute the microphone locally. */
   setMuted(muted) {
     if (!this.localStream) return;
@@ -228,6 +261,7 @@ export class BladePhone {
         await this.#newPeerConnection();
         await this.pc.setRemoteDescription({ type: 'offer', sdp: event.data.sdp });
         await this.#drainCandidates();
+        this.#adoptVideo();
         this.#setState('ringing');
         this.onIncoming({ callId: this.callId, from: event.data.from });
         break;
@@ -257,6 +291,7 @@ export class BladePhone {
         this.trickle = false;
         await this.pc.setRemoteDescription({ type: 'offer', sdp: event.data.sdp });
         await this.#drainCandidates();
+        this.#adoptVideo();
         const updated = await this.pc.createAnswer();
         await this.pc.setLocalDescription(updated);
         if (!this.trickle) await this.#iceGatheringComplete();
@@ -355,7 +390,13 @@ export class BladePhone {
     this.#teardown();
     this.pc = new RTCPeerConnection({ iceServers: this.iceServers });
 
-    this.pc.ontrack = (e) => this.onRemoteStream(e.streams[0]);
+    // One stream for the whole call, built from the tracks themselves: a far end that sends no
+    // msid (a SIP endpoint, a media server) gives tracks with no stream of their own.
+    this.remoteStream = new MediaStream();
+    this.pc.ontrack = (e) => {
+      if (!this.remoteStream.getTracks().includes(e.track)) this.remoteStream.addTrack(e.track);
+      this.onRemoteStream(this.remoteStream, e.track);
+    };
     this.pc.onicecandidate = (e) => {
       // Only meaningful while trickling; otherwise the candidates are already inside the SDP.
       if (!this.trickle || !e.candidate || !this.callId) return;
@@ -376,6 +417,25 @@ export class BladePhone {
     for (const track of this.localStream.getTracks()) {
       this.pc.addTrack(track, this.localStream);
     }
+  }
+
+  /**
+   * After a remote offer: take its video section as ours and open it both ways, so the camera
+   * can go on later without a re-offer. The answer then carries whatever direction the offer
+   * allows.
+   */
+  #adoptVideo() {
+    const video = this.pc.getTransceivers().find((t) => !t.stopped && t.receiver.track.kind === 'video');
+    if (!video) return;
+    video.direction = 'sendrecv';
+    this.videoTransceiver = video;
+    if (this.cameraStream) video.sender.replaceTrack(this.cameraStream.getVideoTracks()[0]).catch(() => {});
+  }
+
+  #stopCamera() {
+    if (!this.cameraStream) return;
+    for (const track of this.cameraStream.getTracks()) track.stop();
+    this.cameraStream = null;
   }
 
   /** Resolve once ICE gathering finishes, so the SDP we send carries every candidate. */
@@ -407,6 +467,9 @@ export class BladePhone {
       for (const track of this.localStream.getTracks()) track.stop();
       this.localStream = null;
     }
+    this.#stopCamera();
+    this.videoTransceiver = null;
+    this.remoteStream = null;
     this.pendingCandidates = [];
     // Deliberately does NOT clear callId. Tearing down the media is not the same as ending the
     // call — #newPeerConnection() calls this to rebuild the peer connection while the call is very

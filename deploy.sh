@@ -614,10 +614,17 @@ APP_NAME="${NAME_OVERRIDE:-${ART_BASE%.*}}"
 
 # --- OpenID Connect client settings, per environment -----------------------
 # A web application's OpenID Connect client settings (issuer, client id, client
-# secret, redirect URL, scope) live beside the profile,
-# ~/.blade/<env>/oidc/<name>.properties, never in a WAR in the repository, and
-# are added to a scratch copy of the WAR here, at deploy time. A WAR without
-# one deploys as built and authenticates the way it always did.
+# secret, redirect URL, scope) live beside the profile, never in a WAR in the
+# repository, and are added to a scratch copy of the WAR here, at deploy time:
+#
+#   ~/.blade/<env>/oidc/<name>.properties   this one application, if present
+#   ~/.blade/<env>/oidc.properties          otherwise, every WAR whose web.xml
+#                                           names OidcLoginFilter
+#
+# The environment's one file is how OpenID Connect is switched on for a whole
+# environment: one client at the provider, a redirect URL templated with
+# ${host} and ${contextPath}. With neither file a WAR deploys as built and
+# signs in with the WebLogic login, the way it always did.
 #
 # The file lands as WEB-INF/blade-oidc.properties, which the framework's
 # OidcLoginFilter reads. A file that says provider=container lands as
@@ -625,6 +632,10 @@ APP_NAME="${NAME_OVERRIDE:-${ART_BASE%.*}}"
 # misc/configure-oidc.py); the two never coexist in one WAR, since the
 # container's provider takes over any application carrying its file.
 OIDC_PROPS="${BLADE_HOME}/${ENV_NAME}/oidc/${APP_NAME}.properties"
+if [ ! -f "$OIDC_PROPS" ] && [[ "$ART" == *.war ]] && [ -f "${BLADE_HOME}/${ENV_NAME}/oidc.properties" ] \
+        && unzip -p "$ART" WEB-INF/web.xml 2>/dev/null | grep -q OidcLoginFilter; then
+    OIDC_PROPS="${BLADE_HOME}/${ENV_NAME}/oidc.properties"
+fi
 if [[ "$ART" == *.war ]] && [ -f "$OIDC_PROPS" ] && [ "$ACTION" = deploy ]; then
     OIDC_TARGET=WEB-INF/blade-oidc.properties
     grep -q '^provider=container' "$OIDC_PROPS" && OIDC_TARGET=WEB-INF/oidcAuth.properties

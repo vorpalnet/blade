@@ -3,7 +3,7 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>BLADE WebRTC Phone</title>
+	<title>BLADE Phone</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
 	<script src="/blade/portal/brand/theme.js"></script>
 	<link rel="stylesheet" href="assets/phone.css">
@@ -22,40 +22,47 @@
 		</a>
 		<a class="vorpal-appmark" href="/blade/phone/">Phone</a>
 		<div class="vorpal-topbar-right">
-			<span class="vorpal-pill" id="pill">Offline</span>
+			<span class="vorpal-pill" id="pill" data-state="idle">Offline</span>
+			<span data-theme-switch></span>
+			<span class="phone-acct" id="acct" hidden>
+				<span class="phone-acct-badge" id="acct-badge" aria-hidden="true"></span>
+				<span class="phone-acct-name" id="acct-name"></span>
+			</span>
 		</div>
 	</header>
 
 	<main class="vorpal-main">
-		<div class="vorpal-page phone-page">
+		<div class="phone-page">
 
-			<section class="vorpal-hero phone-hero">
-				<div>
-					<h1>WebRTC Phone</h1>
-					<p>A browser as a first&#8209;class SIP endpoint.</p>
-				</div>
-			</section>
-
-			<div class="phone-grid">
+			<div class="phone-layout" id="layout" data-details="false">
 
 				<!-- ------------------------------------------------ the handset -->
-				<div class="phone-handset">
+				<section class="phone-handset" aria-label="Phone">
 					<div class="phone-display" id="display" data-live="false">
+						<div class="phone-stage" id="stage" aria-label="Video" hidden>
+							<video id="remote-video" autoplay playsinline muted></video>
+							<div class="phone-stage-label" id="stage-label" hidden></div>
+							<video class="phone-self" id="local-video" autoplay playsinline muted hidden></video>
+						</div>
 						<div class="phone-state">
-							<span class="phone-state-dot"></span>
+							<span class="phone-state-dot" aria-hidden="true"></span>
 							<span id="state-label">Not registered</span>
+							<span class="phone-timer" id="timer"></span>
 						</div>
 						<div class="phone-party phone-party-empty" id="party">No call</div>
-						<div class="phone-timer" id="timer">&nbsp;</div>
+						<div class="phone-me" id="me">&nbsp;</div>
+						<div class="phone-live" id="live" hidden>
+							<div class="phone-meter"><b>You</b><div class="phone-meter-track" id="meter-mic"></div></div>
+							<div class="phone-meter"><b>Far end</b><div class="phone-meter-track" id="meter-rx"></div></div>
+							<div class="phone-call-facts" id="call-facts"></div>
+						</div>
 					</div>
 
 					<div class="phone-incoming" id="incoming" hidden>
 						<div class="phone-incoming-label">Incoming call</div>
-						<div class="phone-incoming-from" id="incoming-from">&mdash;</div>
+						<div class="phone-incoming-from" id="incoming-from"></div>
 						<div class="phone-incoming-actions">
-							<button class="phone-btn phone-btn-primary" id="btn-answer" style="grid-column:auto">
-								<span class="phone-btn-icon" aria-hidden="true">&#9742;</span> Answer
-							</button>
+							<button class="phone-btn phone-btn-call" id="btn-answer">Answer</button>
 							<button class="phone-btn" id="btn-decline">Decline</button>
 						</div>
 					</div>
@@ -69,36 +76,51 @@
 					<div class="phone-keypad" id="keypad" role="group" aria-label="Dial pad"></div>
 
 					<div class="phone-actions">
-						<button class="phone-btn phone-btn-primary" id="btn-call" disabled>
-							<span class="phone-btn-icon" aria-hidden="true">&#9742;</span> Call
+						<button class="phone-btn phone-btn-call" id="btn-call" disabled>
+							<span class="phone-btn-icon" aria-hidden="true">&#9990;</span><span id="call-label">Call</span>
 						</button>
-						<button class="phone-btn" id="btn-hangup" disabled>Hang up</button>
 						<button class="phone-btn" id="btn-mute" aria-pressed="false" disabled>Mute</button>
+						<button class="phone-btn" id="btn-camera" aria-pressed="false" disabled>Camera</button>
 					</div>
-				</div>
 
-				<!-- ------------------------------------------------ side panels -->
-				<div class="phone-stack">
+					<div class="phone-recent" id="recent" hidden>
+						<div class="phone-recent-head">Recent</div>
+						<div class="phone-recent-list" id="recent-list"></div>
+					</div>
 
-					<section class="phone-panel">
-						<h2 class="phone-panel-title">Connection</h2>
+					<button class="phone-details-toggle" id="btn-details" type="button"
+					        aria-controls="details" aria-expanded="false">
+						<span class="phone-details-toggle-name">Connection and signaling</span>
+						<span class="phone-auth-short" id="auth-short">Not registered</span>
+						<span class="phone-details-chevron" aria-hidden="true">&#8250;</span>
+					</button>
+				</section>
+				<!-- ------------------------------------------------ everything a demo does not need -->
+				<aside class="phone-details" id="details" aria-label="Connection and signaling" hidden>
+					<div class="phone-details-head">
+						<h2>Connection and signaling</h2>
+						<button class="phone-details-close" id="btn-details-close" type="button"
+						        title="Close" aria-label="Close connection and signaling">&#10005;</button>
+					</div>
+
+					<details class="phone-panel" data-panel="connection" open>
+						<summary class="phone-panel-title"><span class="phone-panel-name">Connection</span><span class="phone-panel-peek" id="peek-connection"></span></summary>
 						<div class="phone-field">
-							<label for="gateway">Gateway (engine tier)<span class="phone-tip" tabindex="0"
+							<label for="gateway">Gateway<span class="phone-tip" tabindex="0"
 								aria-describedby="tip-gateway"><span class="phone-tip-mark" aria-hidden="true">?</span><span
 								class="phone-tip-bubble" role="tooltip" id="tip-gateway">The <code>webrtc</code> service runs on
-								the <strong>engine</strong> tier; this page is served from the admin tier, so the address is
-								configuration rather than this page&rsquo;s own origin.</span></span></label>
+								the engine tier. This page comes from the admin tier, so the address is configuration, not this
+								page&rsquo;s own origin.</span></span></label>
 							<input id="gateway" autocomplete="off" spellcheck="false">
 						</div>
 						<div class="phone-field">
 							<label for="aor">Your address<span class="phone-tip" tabindex="0"
 								aria-describedby="tip-aor"><span class="phone-tip-mark" aria-hidden="true">?</span><span
 								class="phone-tip-bubble" role="tooltip" id="tip-aor">The address other browsers dial to reach
-								you, as <code>user@host</code>. It starts as your username plus the configured domain; edit it
-								to register as someone else, which is what testing a browser&#8209;to&#8209;browser call from one
-								account needs. Whichever address you get, the gateway honours the one inside your signed token
-								and refuses any other &mdash; and the token still records the account you signed in
-								with.</span></span></label>
+								you, as <code>user@host</code>. Where the deployment allows it, edit it to register as someone
+								else, which a browser&#8209;to&#8209;browser test from one account needs. The gateway honours
+								only the address inside your signed token, and the token still records who signed
+								in.</span></span></label>
 							<input id="aor" placeholder="user@host" autocomplete="off" spellcheck="false"
 							       readonly aria-readonly="true">
 						</div>
@@ -106,46 +128,36 @@
 							<label for="stun">STUN server<span class="phone-tip" tabindex="0"
 								aria-describedby="tip-stun"><span class="phone-tip-mark" aria-hidden="true">?</span><span
 								class="phone-tip-bubble" role="tooltip" id="tip-stun">Browsers publish <code>&lt;uuid&gt;.local</code>
-								mDNS candidates instead of private addresses, so a reachable STUN or TURN server is required,
-								not optional.</span></span></label>
-							<input id="stun" value="stun:stun.l.google.com:19302" autocomplete="off" spellcheck="false">
+								mDNS candidates instead of private addresses, so a reachable STUN or TURN server is
+								required.</span></span></label>
+							<input id="stun" autocomplete="off" spellcheck="false">
 						</div>
 						<div class="phone-row">
 							<button class="vorpal-btn" id="btn-register">Register</button>
-							<button class="vorpal-btn vorpal-btn-secondary" id="btn-unregister" disabled>Disconnect</button>
+							<button class="vorpal-btn vorpal-btn-secondary" id="btn-unregister" disabled>Unregister</button>
 						</div>
 						<p class="phone-auth" id="auth-state" data-verified="unknown">Not registered.</p>
-					</section>
+					</details>
 
-					<section class="phone-panel">
-						<h2 class="phone-panel-title">Media</h2>
-						<div class="phone-meter">
-							<div class="phone-meter-head"><b>Microphone</b><span id="mic-state">idle</span></div>
-							<div class="phone-meter-track" id="meter-mic"></div>
-						</div>
-						<div class="phone-meter">
-							<div class="phone-meter-head"><b>Remote</b><span id="rx-state">idle</span></div>
-							<div class="phone-meter-track" id="meter-rx"></div>
-						</div>
+					<details class="phone-panel" data-panel="media" open>
+						<summary class="phone-panel-title"><span class="phone-panel-name">Media</span><span class="phone-panel-peek" id="peek-media"></span></summary>
 						<dl class="phone-facts">
-							<div class="phone-fact"><dt>Media path</dt><dd><span class="phone-badge" id="fact-path">&mdash;</span></dd></div>
-							<div class="phone-fact"><dt>ICE</dt><dd><span class="phone-badge" id="fact-ice">&mdash;</span></dd></div>
-							<div class="phone-fact"><dt>Candidate pair</dt><dd id="fact-pair">&mdash;</dd></div>
-							<div class="phone-fact"><dt>Codec</dt><dd id="fact-codec">&mdash;</dd></div>
+							<div class="phone-fact"><dt>Media path</dt><dd id="fact-path">&ndash;</dd></div>
+							<div class="phone-fact"><dt>ICE</dt><dd id="fact-ice">&ndash;</dd></div>
+							<div class="phone-fact"><dt>Candidate pair</dt><dd id="fact-pair">&ndash;</dd></div>
+							<div class="phone-fact"><dt>Audio codec</dt><dd id="fact-codec">&ndash;</dd></div>
+							<div class="phone-fact"><dt>Video</dt><dd id="fact-video">&ndash;</dd></div>
 						</dl>
-					</section>
+					</details>
 
-					<section class="phone-panel">
-						<h2 class="phone-panel-title">Signaling</h2>
+					<details class="phone-panel phone-panel-log" data-panel="signaling" open>
+						<summary class="phone-panel-title"><span class="phone-panel-name">Signaling</span><span class="phone-panel-peek" id="peek-signaling"></span></summary>
 						<ul class="phone-log" id="log"><li class="phone-log-empty">Nothing yet.</li></ul>
-					</section>
-
-				</div>
+					</details>
+				</aside>
 			</div>
 
-			<footer class="vorpal-footer">
-				<span>Keyboard: digits dial &middot; Enter calls &middot; Escape hangs up</span>
-			</footer>
+			<footer class="phone-footer">Keyboard: digits dial &middot; Enter calls &middot; Escape hangs up</footer>
 
 		</div>
 	</main>

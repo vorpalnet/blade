@@ -7,18 +7,25 @@
 	var C = global.BladeCharts;
 
 	/* fetch that copes with FORM auth: an expired session returns the login page
-	   (HTML, not JSON), so on anything but JSON we reload into the form. */
+	   (HTML, not JSON), so on anything but JSON we reload into the form. Only for the
+	   dashboard's own (relative) URLs: another application's sign-in page (an absolute
+	   /blade/... URL) is that application's session, which reloading this page never
+	   creates, so it just fails and the caller shows the panel as unavailable. Reloading
+	   on it looped forever when the portal (FORM) had no session beside an OIDC one. */
 	function getJson(url, extra) {
 		var headers = { 'Accept': 'application/json' };
 		Object.keys(extra || {}).forEach(function (k) { headers[k] = extra[k]; });
+		var own = url.charAt(0) !== '/';
+		function signIn() {
+			if (own) window.location.reload();
+			throw new Error('auth: ' + url);
+		}
 		return fetch(url, { headers: headers, credentials: 'same-origin' })
 			.then(function (r) {
 				var ct = r.headers.get('content-type') || '';
-				if (r.status === 401 || r.status === 403 || ct.indexOf('text/html') >= 0) {
-					window.location.reload(); throw new Error('auth');
-				}
+				if (r.status === 401 || r.status === 403 || ct.indexOf('text/html') >= 0) signIn();
 				return r.text().then(function (t) {
-					try { return JSON.parse(t); } catch (e) { window.location.reload(); throw new Error('auth'); }
+					try { return JSON.parse(t); } catch (e) { signIn(); }
 				});
 			});
 	}

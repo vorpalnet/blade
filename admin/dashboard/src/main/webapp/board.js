@@ -1009,8 +1009,8 @@
 
 	/* ── the rail: every application and service ─────────────────────────── */
 
-	/* The applications and services deployed here, from the portal
-	   application's discovery (/blade/portal/api/v1/cards): apps open at their
+	/* The applications and services deployed here, from the dashboard's own
+	   copy of the application list (cards, AppCards): apps open at their
 	   own address, services in the Configurator. Every one is listed whatever
 	   the viewer may open; an app that refuses the viewer shows its own page
 	   saying which roles open it (denied.jsp). The name is always shown: an
@@ -1074,7 +1074,7 @@
 		var where = { server: cfg && cfg.about && cfg.about.server, engineBaseUrl: cfg && cfg.engineBaseUrl };
 		var rail = document.getElementById('rail');
 		if (!rail) return;
-		getJson('/blade/portal/api/v1/cards').then(function (res) {
+		getJson('cards').then(function (res) {
 			var cards = (res && res.cards) || [];
 			rail.textContent = '';
 			var inv = el('a', 'rail__item rail__item--first');
@@ -1097,7 +1097,7 @@
 			});
 		}).catch(function () {
 			rail.textContent = '';
-			rail.appendChild(el('p', 'rail__note', 'The application list is unavailable: the portal application serves it.'));
+			rail.appendChild(el('p', 'rail__note', 'The application list is unavailable.'));
 		});
 	}
 
