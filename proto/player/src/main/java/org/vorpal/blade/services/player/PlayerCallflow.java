@@ -18,7 +18,8 @@ import org.vorpal.blade.framework.v3.events.Events;
 import org.vorpal.blade.framework.v3.media.MediaCallflow;
 
 /// Answer an inbound INVITE, anchor its media on the 309 media server, and play the configured prompt
-/// (optionally recording the caller). The whole conversation reads top-to-bottom via the media verbs:
+/// (optionally recording the caller). A call may name one of the configured prompts with a
+/// `;play=<name>` Request-URI parameter ([PlayerSettings#mediaUriFor]). The whole conversation reads top-to-bottom via the media verbs:
 ///
 /// `offer` (SDP anchor → 200 OK) → on ACK: `join` group↔caller → optional `record` → `play` → on
 /// completion, loop or hang up.
@@ -87,7 +88,7 @@ public class PlayerCallflow extends MediaCallflow {
 		} catch (MsControlException e) {
 			sipLogger.severe(invite, "PlayerCallflow: media anchor failed: " + e.getMessage());
 			PlayerBye.teardown(app.getId());
-			invite.createResponse(500, "Media server unavailable").send();
+			sendResponse(invite.createResponse(500, "Media server unavailable"));
 			PlayerEvents.ended(app, BladeEventTypes.CALL_DECLINED);
 		}
 	}
@@ -191,23 +192,30 @@ public class PlayerCallflow extends MediaCallflow {
 			sipLogger.warning(invite, "PlayerCallflow: no live media group to play on (hung up already?)");
 			return;
 		}
-		play(anchor.mg, new URI[] { URI.create(cfg.getMediaUri()) }, done -> {
+		String media = cfg.mediaUriFor(promptName(invite));
+		play(anchor.mg, new URI[] { URI.create(media) }, done -> {
 			if (cfg.isLoop()) {
 				// Music on a loop is not news each time round.
 				playOnce(appId, invite);
 			} else {
 				Events.publish(invite.getApplicationSession(), BladeEventTypes.MEDIA_PLAYED,
-						data -> data.put("media", cfg.getMediaUri()));
+						data -> data.put("media", media));
 				hangup(invite);
 			}
 		});
 	}
 
-	/// Release the media anchor and BYE the caller.
+	/// The prompt this call asked for: the `play` parameter of its Request-URI, or null.
+	static String promptName(SipServletRequest invite) {
+		return (invite.getRequestURI() instanceof javax.servlet.sip.SipURI)
+				? ((javax.servlet.sip.SipURI) invite.getRequestURI()).getParameter("play")
+				: null;
+	}
+
+	/// BYE the caller, then release the media anchor. In that order for the reason [PlayerBye]
+	/// answers first: teardown can wait out the media server, and the caller should not.
 	private void hangup(SipServletRequest invite) {
 		SipApplicationSession app = invite.getApplicationSession();
-		PlayerBye.teardown(app.getId());
-		PlayerEvents.ended(app, BladeEventTypes.CALL_COMPLETED);
 		try {
 			SipServletRequest bye = invite.getSession().createRequest("BYE");
 			sendRequest(bye, resp -> {
@@ -216,5 +224,7 @@ public class PlayerCallflow extends MediaCallflow {
 		} catch (Exception e) {
 			sipLogger.warning(invite, "PlayerCallflow: BYE after playback failed: " + e.getMessage());
 		}
+		PlayerBye.teardown(app.getId());
+		PlayerEvents.ended(app, BladeEventTypes.CALL_COMPLETED);
 	}
 }

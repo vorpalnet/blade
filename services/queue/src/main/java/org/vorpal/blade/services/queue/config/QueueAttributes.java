@@ -9,21 +9,20 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 public class QueueAttributes implements Serializable {
 	private static final long serialVersionUID = 1L;
 
-	@JsonPropertyDescription("Interval in milliseconds between polling the queue for new calls.")
 	public Integer period;
 
-	@JsonPropertyDescription("Number of transactions processed per polling cycle.")
 	public Integer rate;
 //	public Integer limit;
 
-	@JsonPropertyDescription("Duration in milliseconds to wait for an announcement or agent response before re-queuing the call.")
 	public Integer ringDuration;
 
-	@JsonPropertyDescription("Interval in milliseconds between ring attempts to an agent.")
 	public Integer ringPeriod;
 
-	@JsonPropertyDescription("SIP URI of the announcement server to play while callers wait in the queue.")
 	public String announcement;
+
+	public String media;
+
+	public Boolean destinationHolds;
 
 	public QueueAttributes() {
 	}
@@ -33,9 +32,13 @@ public class QueueAttributes implements Serializable {
 		this.rate = that.rate;
 //		this.limit = that.limit;
 		this.ringDuration = that.ringDuration;
+		this.ringPeriod = that.ringPeriod;
 		this.announcement = that.announcement;
+		this.media = that.media;
+		this.destinationHolds = that.destinationHolds;
 	}
 
+	@JsonPropertyDescription("Milliseconds between release ticks.")
 	public Integer getPeriod() {
 		return period;
 	}
@@ -51,6 +54,7 @@ public class QueueAttributes implements Serializable {
 		return this;
 	}
 
+	@JsonPropertyDescription("Calls released per tick, oldest first.")
 	public Integer getRate() {
 		return rate;
 	}
@@ -75,6 +79,7 @@ public class QueueAttributes implements Serializable {
 //		return this;
 //	}
 
+	@JsonPropertyDescription("Seconds between the 180 Ringing re-sent to a waiting caller.")
 	public Integer getRingPeriod() {
 		return ringPeriod;
 	}
@@ -84,6 +89,8 @@ public class QueueAttributes implements Serializable {
 		return this;
 	}
 
+	@JsonPropertyDescription("Seconds a caller hears ringing before the queue answers with the announcement or media. "
+			+ "0 or empty answers at once when either is set.")
 	public Integer getRingDuration() {
 		return ringDuration;
 	}
@@ -100,12 +107,39 @@ public class QueueAttributes implements Serializable {
 		return this;
 	}
 
+	@JsonPropertyDescription("SIP URI of an announcement server the caller is connected to while waiting. Ignored when "
+			+ "media is set.")
 	public String getAnnouncement() {
 		return announcement;
 	}
 
 	public QueueAttributes setAnnouncement(String announcement) {
 		this.announcement = announcement;
+		return this;
+	}
+
+	@JsonPropertyDescription("A prompt or music the queue plays to a waiting caller itself, on the JSR-309 media "
+			+ "server, looping until the caller is released. An http: or file: URI the media server can fetch. "
+			+ "Needs the media server driver configured; takes the place of announcement.")
+	public String getMedia() {
+		return media;
+	}
+
+	public QueueAttributes setMedia(String media) {
+		this.media = media;
+		return this;
+	}
+
+	@JsonPropertyDescription("The destination keeps its own line, as presence does for a skill's address: "
+			+ "each caller is sent on as soon as they hear the media, without waiting for a release tick, "
+			+ "and keeps hearing it until the destination answers. Needs media. Off: callers wait for the "
+			+ "queue's ticks.")
+	public Boolean getDestinationHolds() {
+		return destinationHolds;
+	}
+
+	public QueueAttributes setDestinationHolds(Boolean destinationHolds) {
+		this.destinationHolds = destinationHolds;
 		return this;
 	}
 

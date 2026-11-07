@@ -26,6 +26,9 @@ One `GatewaySipServlet` hosts **N `VirtualGateway`s** — one per outbound trunk
   to the Contact; for those, keep `expires` under the carrier's idle-connection timeout and
   the engine channel's `IdleConnectionTimeout` above the refresh period, so a live connection
   always exists.
+- two trunks that reach one carrier account through different registrars register only one of
+  them; the other sets `register: false` and keeps its credentials for outbound calls. A carrier
+  holding two bindings for one account delivers each inbound call to both, so it arrives twice.
 - optionally carries a `dialPrefix`, which goes in front of the dialed number when the carrier
   wants an account tech prefix there (`12345678*18165551234`), and a `callerId`, the number
   presented as the From user instead of the registration identity.

@@ -17,6 +17,8 @@
 			<url-pattern>/resources/*</url-pattern>
 			<url-pattern>/api/*</url-pattern>
 			<url-pattern>/v1/*</url-pattern>
+			<!-- the transfer event socket: its upgrade is a GET, and it shows every call's transfers -->
+			<url-pattern>/events</url-pattern>
 		</web-resource-collection>
 		<auth-constraint>
 			<role-name>Admin</role-name>

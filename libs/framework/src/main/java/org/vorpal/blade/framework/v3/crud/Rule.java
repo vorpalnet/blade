@@ -34,6 +34,9 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// | `statusRange` | response-only status filter (see syntax below)                    | `200-299` · `4xx` · `!5xx` · `200,301,302`     |
 /// | `when`        | boolean expression over session variables (Expression grammar)    | `${customerTier} == premium` · `${a} && ${b}`  |
 ///
+/// In an application's own `crud` section ([Crud]) every rule sees the event
+/// `send`, so a rule there leaves `event` unset.
+///
 /// ### Comma + negation semantics (method, event, statusRange)
 ///
 /// Tokens are comma-separated. Each token is positive (`INVITE`) or
@@ -143,7 +146,7 @@ public class Rule implements Serializable {
 			if (appSession != null) {
 				for (Operation op : operations) {
 					for (String name : op.variableNames()) {
-						appSession.removeAttribute(name);
+						MessageHelper.removeVariable(appSession, name);
 					}
 				}
 			}

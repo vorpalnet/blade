@@ -246,8 +246,6 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 			if (appSession != null) {
 
-				appSession.setAttribute(TXFER_REQUEST, transferRequest);
-
 				// Now find transferee
 				SipSession transfereeSession = null;
 //				Address sipAddress = null;
@@ -322,6 +320,10 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 						return;
 					}
 
+					// Stored only once the transfer is accepted: a request refused 491 above must not
+					// replace the one in progress, whose final response reports it.
+					appSession.setAttribute(TXFER_REQUEST, transferRequest);
+
 					Address transferee = (Address) transfereeSession.getAttribute(SIP_ADDRESS_ATTR);
 					Address target = null;
 
@@ -375,16 +377,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 							style = TransferStyle.blind;
 						}
 
-						switch (style) {
-						case attended:
-						case conference:
-						case blind:
-							callflow = new BlindTransfer(this, settings.getCurrent(), false);
-							break;
-						case refer:
-
-							callflow = new ReferTransfer(this, settings.getCurrent());
-						}
+						callflow = createTransferCallflow(style);
 
 						// Add any inviteHeaders
 						((Transfer) callflow).setInviteHeaders(transferRequest.target.inviteHeaders);
@@ -491,6 +484,22 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 		}
 	}
 
+	/// The callflow a REST transfer of `style` runs. Every style but `refer` is
+	/// carried out as a blind transfer that hangs up on the transferor itself
+	/// (no NOTIFYs: no transferor sent a REFER). A service that implements more
+	/// styles overrides this.
+	protected Callflow createTransferCallflow(TransferStyle style) {
+		switch (style) {
+		case refer:
+			return new ReferTransfer(this, settings.getCurrent());
+		case attended:
+		case conference:
+		case blind:
+		default:
+			return new BlindTransfer(this, settings.getCurrent(), false);
+		}
+	}
+
 	@Override
 	public void transferRequested(SipServletRequest inboundRefer) throws ServletException, IOException {
 
@@ -526,12 +535,11 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 			sipLogger.info(response, "TransferAPI.transferCompleted - status=" + response.getStatus());
 		}
 
-		SipApplicationSession appSession = response.getApplicationSession();
-		TransferRequest transferRequest = (TransferRequest) appSession.getAttribute(TXFER_REQUEST);
-
-		if (transferRequest != null && transferRequest.notification != null
-				&& Notification.Style.async.equals(transferRequest.notification.style)) {
-
+		// A waited request (notification absent, or style async) parked its response at
+		// invokeTransfer, so whatever is parked is answered, the way transferDeclined and
+		// transferAbandoned do. Nothing parked means the caller was not waiting, or was
+		// already answered (an attended transfer answers when the target picks up).
+		{
 			AsyncResponse asyncResponse = responseMap.remove(response.getApplicationSession().getId());
 			if (asyncResponse != null) {
 
@@ -549,10 +557,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 				asyncResponse.resume(Response.status(Status.OK).entity(txferResp).build());
 			} else {
-
-				sipLogger.severe(response,
-						"TransferAPI.transferCompleted - Failed to remove asyncResponse from responseMap. Cannot 'resume'.");
-
+				sipLogger.finer(response, "TransferAPI.transferCompleted - no waiting REST request to answer");
 			}
 
 		}

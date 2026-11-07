@@ -28,6 +28,7 @@ public class PlayerSettings extends Configuration implements Serializable {
 	private String driverName;
 	private Map<String, String> driverProperties = new LinkedHashMap<>();
 	private String mediaUri;
+	private Map<String, String> prompts = new LinkedHashMap<>();
 	private boolean loop = false;
 	private boolean record = false;
 	private String recordUri;
@@ -62,6 +63,24 @@ public class PlayerSettings extends Configuration implements Serializable {
 
 	public void setMediaUri(String mediaUri) {
 		this.mediaUri = mediaUri;
+	}
+
+	@JsonPropertyDescription("Named prompts a call can ask for instead of mediaUri: a Request-URI "
+			+ "parameter play=<name> plays prompts[name]. Only names listed here can be played, so a "
+			+ "caller can never make the media server fetch a URI of its choosing. An unknown or "
+			+ "missing name plays mediaUri.")
+	public Map<String, String> getPrompts() {
+		return prompts;
+	}
+
+	public void setPrompts(Map<String, String> prompts) {
+		this.prompts = prompts;
+	}
+
+	/// The media to play for a call that asked for `name` (its `play` URI parameter, or null).
+	public String mediaUriFor(String name) {
+		String named = (name == null || prompts == null) ? null : prompts.get(name);
+		return (named != null && !named.isEmpty()) ? named : mediaUri;
 	}
 
 	@JsonPropertyDescription("Replay the media when it finishes (music-on-answer). When false, the "

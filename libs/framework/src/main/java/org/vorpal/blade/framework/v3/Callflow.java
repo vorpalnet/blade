@@ -21,6 +21,7 @@ import org.vorpal.blade.framework.Callback;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
 import org.vorpal.blade.framework.v2.logging.Logger.Direction;
 import org.vorpal.blade.framework.sip.DetachedResponse;
+import org.vorpal.blade.framework.v3.crud.CrudHook;
 import org.vorpal.blade.framework.v3.diagnostics.Diagnostics;
 import org.vorpal.blade.framework.v3.diagnostics.TraceLog;
 
@@ -305,6 +306,10 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 			return;
 		}
 
+		// The application's CRUD rules get the last word. They run before the
+		// passthru hand-off too, which keeps this request's Request-URI.
+		CrudHook.apply(request);
+
 		if (passthruEnabled() && isInitialInvite(request)
 				&& proxyPassthru(new java.util.ArrayList<>(java.util.Collections.singletonList(request)), true, 0,
 						lambdaFunction, lambdaFunction, null)) {
@@ -433,6 +438,8 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 		if (response == null || dropResponseToCancel(response)) {
 			return;
 		}
+
+		CrudHook.apply(response);
 
 		SipApplicationSession appSession = response.getApplicationSession();
 		SipSession sipSession = response.getSession();
@@ -576,6 +583,9 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 			sipLogger.warning("Callflow.sendRequestsInSerial - empty request list");
 			return;
 		}
+		for (SipServletRequest request : requests) {
+			CrudHook.apply(request);
+		}
 		if (passthruEnabled() && isInitialInvite(requests.get(0)) && proxyPassthru(
 				new java.util.ArrayList<>(requests), false, milliseconds, lambdaFunction, dialogResponse, advance)) {
 			requests.clear();
@@ -695,6 +705,9 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 		if (requests.isEmpty()) {
 			sipLogger.warning("Callflow.sendRequestsInParallel - empty request list");
 			return;
+		}
+		for (SipServletRequest request : requests) {
+			CrudHook.apply(request);
 		}
 		if (passthruEnabled() && isInitialInvite(requests.get(0)) && proxyPassthru(
 				new java.util.ArrayList<>(requests), true, timeout, lambdaFunction, dialogResponse, retryable)) {

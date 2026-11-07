@@ -20,7 +20,7 @@ const els = {
   pill: $('pill'), display: $('display'), state: $('state-label'), party: $('party'), me: $('me'),
   timer: $('timer'), incoming: $('incoming'), incomingFrom: $('incoming-from'),
   live: $('live'), callFacts: $('call-facts'), meterMic: $('meter-mic'), meterRx: $('meter-rx'),
-  target: $('target'), keypad: $('keypad'), log: $('log'), remote: $('remote'),
+  target: $('target'), skills: $('skills'), keypad: $('keypad'), log: $('log'), remote: $('remote'),
   layout: $('layout'), stage: $('stage'), stageLabel: $('stage-label'),
   remoteVideo: $('remote-video'), localVideo: $('local-video'),
   recent: $('recent'), recentList: $('recent-list'),
@@ -31,6 +31,7 @@ const els = {
   peek: { connection: $('peek-connection'), media: $('peek-media'), signaling: $('peek-signaling') },
   btn: {
     call: $('btn-call'), callLabel: $('call-label'), mute: $('btn-mute'), camera: $('btn-camera'),
+    agent: $('btn-agent'),
     answer: $('btn-answer'), decline: $('btn-decline'), back: $('btn-back'),
     register: $('btn-register'), unregister: $('btn-unregister'),
     details: $('btn-details'), detailsClose: $('btn-details-close'),
@@ -413,6 +414,8 @@ function setState(state) {
   els.btn.call.disabled = !(live || state === 'registered');
   els.btn.mute.disabled = state !== 'established';
   els.btn.camera.disabled = !(state === 'established' && phone?.videoTransceiver);
+  els.btn.agent.disabled = state === 'idle';
+  if (state === 'idle') showAgent(false);
   els.btn.register.disabled = state !== 'idle';
   els.btn.unregister.disabled = state === 'idle';
 
@@ -641,6 +644,12 @@ async function register() {
     els.factPath.textContent = mediaPath;
   };
   phone.onEnded = (d) => log(`call ended: ${d.reason ?? 'normal'}`);
+  phone.onPresence = (ready) => log(`presence: published ${ready ? 'Ready' : 'Not ready'}`);
+  phone.onPresenceState = (view) => {
+    showAgent(view.status);
+    const skills = Object.entries(view.skills).map(([k, on]) => on ? k : `${k} (not ready)`).join(', ');
+    log(`presence: ${view.status}${skills ? ' · ' + skills : ''}`);
+  };
   phone.onError = (e) => log(String(e), 'err');
   phone.onRemoteStream = onRemoteTrack;
 
@@ -695,6 +704,52 @@ els.btn.answer.addEventListener('click', async () => {
 });
 
 els.btn.decline.addEventListener('click', hangUp);
+
+// ---------------------------------------------------------------- agent presence
+
+// Ready or Not Ready for calls routed by skill, for the skills typed beside the button: published
+// to the presence server through the gateway, which withdraws it when the socket closes.
+// Re-published every 30 minutes so it never lapses while the page is open (the gateway asks for an
+// hour). The button shows what the server says, not what was last asked: the gateway watches this
+// address, so a call ringing, a call in progress, or a missed call that set the agent Not ready
+// all show here.
+const SKILLS_KEY = 'blade-phone-skills';
+const AGENT_WORDS = { ready: 'Ready', ringing: 'Ringing', busy: 'On a call', 'not-ready': 'Not ready', offline: 'Not ready' };
+let agentReady = false;
+
+try { els.skills.value = localStorage.getItem(SKILLS_KEY) || ''; } catch { /* private window */ }
+
+function skillsTyped() {
+  return els.skills.value.toLowerCase().split(/[\s,]+/).filter(Boolean);
+}
+
+/** status: the presence server's word (ready, ringing, busy, not-ready, offline), or false/true. */
+function showAgent(status) {
+  if (typeof status === 'boolean') status = status ? 'ready' : 'offline';
+  agentReady = status === 'ready' || status === 'ringing' || status === 'busy';
+  els.btn.agent.setAttribute('aria-pressed', String(agentReady));
+  els.btn.agent.textContent = `Agent: ${AGENT_WORDS[status] || status}`;
+}
+
+function publishAgent(ready) {
+  const skills = skillsTyped();
+  try { localStorage.setItem(SKILLS_KEY, skills.join(' ')); } catch { /* private window */ }
+  phone.setReady(ready, skills);
+}
+
+els.btn.agent.addEventListener('click', () => {
+  if (!phone) return;
+  log(`presence: asking for ${agentReady ? 'Not ready' : 'Ready'} · ${skillsTyped().join(', ') || 'no skills'}`, 'out');
+  publishAgent(!agentReady);
+});
+
+els.skills.addEventListener('change', () => {
+  if (phone && phone.state !== 'idle' && agentReady) publishAgent(true);
+});
+
+setInterval(() => {
+  if (phone && phone.state !== 'idle' && agentReady) publishAgent(true);
+}, 30 * 60 * 1000);
 
 els.btn.mute.addEventListener('click', () => {
   muted = !muted;

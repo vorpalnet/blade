@@ -100,6 +100,9 @@ public class AuditAPI {
 				row.put("source", event.getSource());
 				row.put("subject", event.getSubject());
 				row.put("id", event.getId());
+				// The record itself: who, what, permitted or refused, from where. Without it
+				// a listing shows that something happened and never what.
+				row.put("data", event.getData());
 				rows.add(row);
 			}
 			Map<String, Object> body = new LinkedHashMap<>();

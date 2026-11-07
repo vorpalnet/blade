@@ -40,9 +40,21 @@ hour, and day.
 | --- | --- |
 | `period` | Milliseconds between release ticks |
 | `rate` | Calls released per tick |
-| `ringPeriod` | Interval between 180 re-sends while queued |
-| `ringDuration` | How long to ring before connecting the caller to the announcement |
-| `announcement` | SIP URI of the announcement/MOH server (optional — omit for ringback-only queues) |
+| `ringPeriod` | Seconds between 180 re-sends while queued |
+| `ringDuration` | Seconds to ring before answering the caller with the announcement or media; 0 answers at once |
+| `announcement` | SIP URI of an announcement/MOH server (optional; omit for ringback-only queues) |
+| `media` | A prompt or music the queue plays itself on the JSR-309 media server, looped while the caller waits; takes the place of `announcement` |
+| `destinationHolds` | With `media`: the destination keeps its own line (presence, for a skill), so each caller is sent on as soon as they hear the media, not on a tick |
+
+A queue with `media` needs a media server. `driverName` and `driverProperties`, at the top of the
+configuration, name the JSR-309 driver and pass it its settings, as the player's do; the driver
+ships in the WAR (the Gryphon build of this app carries one). The queue answers the caller from
+the media server, and on release moves them to the destination with an offerless re-INVITE, so
+the destination is always offered the caller's media and needs no SDP of its own.
+
+With `destinationHolds`, the order turns around: the destination is asked first, with an INVITE
+that carries no offer and may wait there for minutes, and the caller hears the media meanwhile.
+When someone answers, the caller is re-INVITEd with their offer.
 
 The sample config defines `fast` / `medium` / `slow` queues and shows both a hash map and
 a prefix map steering dialed numbers to queues. Edit and publish through the

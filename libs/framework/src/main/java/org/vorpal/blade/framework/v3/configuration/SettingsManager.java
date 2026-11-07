@@ -9,6 +9,8 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletContextEvent;
 
+import org.vorpal.blade.framework.v3.crud.CrudHook;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -183,8 +185,12 @@ public abstract class SettingsManager<T> extends org.vorpal.blade.framework.v2.c
 	/// invoked from `Settings.reload()` on every load) to the clearer
 	/// [#refreshed] hook. `final` so a subclass cannot re-introduce the v2
 	/// confusion by overriding it — override `refreshed`, not this.
+	///
+	/// Before that it hands the config to [CrudHook#publish], so an
+	/// application's `crud` section takes effect on every load.
 	@Override
 	public final void initialize(T config) throws ServletParseException {
+		CrudHook.publish(config);
 		refreshed(config);
 	}
 

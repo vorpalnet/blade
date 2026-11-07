@@ -339,8 +339,11 @@ public final class BladeEventTypes {
 	/// or `ReferTransfer` saw a `100 Trying` sipfrag come back in a NOTIFY.
 	public static final String TRANSFER_INITIATED = "org.vorpal.blade.transfer.initiated";
 
-	/// The transfer target answered — a success response to the target INVITE, or
-	/// a `200 OK` sipfrag in a NOTIFY.
+	/// The transferee is connected to the target. For a blind transfer that is
+	/// the target answering (a success response to the target INVITE, or a
+	/// `200 OK` sipfrag in a NOTIFY). For an attended transfer it is later: the
+	/// transferor hung up on the target after consulting, and the transferee was
+	/// connected to her.
 	public static final String TRANSFER_COMPLETED = "org.vorpal.blade.transfer.completed";
 
 	/// The transfer did not succeed: the target's dialog returned a failure response,
@@ -348,7 +351,9 @@ public final class BladeEventTypes {
 	///
 	/// Both cases land here — `ReferTransfer` publishes it for a failed REFER as
 	/// well as for a `486` sipfrag — so this means "the transfer was refused",
-	/// not specifically "the target said no".
+	/// not specifically "the target said no". An attended transfer also
+	/// publishes it when the target hangs up during the consultation, or is lost
+	/// before the transferee reaches her.
 	public static final String TRANSFER_DECLINED = "org.vorpal.blade.transfer.declined";
 
 	/// The transferee gave up before the transfer completed — a BYE or CANCEL

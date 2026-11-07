@@ -1,0 +1,376 @@
+{
+  "types": [
+    {
+      "type": "org.vorpal.blade.services.transfer.transferRequested",
+      "title": "Transfer Requested",
+      "description": "A transfer was asked for: a REFER arrived, or the REST API was called. Sent to the transfer's webhook and event sockets at the same moment.",
+      "owner": "transfer",
+      "version": 1,
+      "fields": [
+        {
+          "name": "event",
+          "type": "STRING",
+          "required": true,
+          "description": "The event name: the type's last segment."
+        },
+        {
+          "name": "time",
+          "type": "STRING",
+          "required": true,
+          "description": "When it happened, ISO-8601 in UTC."
+        },
+        {
+          "name": "sessionKeys",
+          "type": "ARRAY",
+          "itemType": "STRING",
+          "description": "The call's session keys as the session selectors compute them from its first INVITE: what a REST request names as sessionKey."
+        },
+        {
+          "name": "uid",
+          "type": "STRING",
+          "description": "The REST request's notification.uid, so a client can match events to its request."
+        },
+        {
+          "name": "style",
+          "type": "STRING",
+          "description": "The REST request's transfer style: blind, attended, conference or refer. Absent for a REFER's transfer."
+        },
+        {
+          "name": "referTo",
+          "type": "STRING",
+          "description": "The transfer target's URI."
+        },
+        {
+          "name": "method",
+          "type": "STRING",
+          "description": "The SIP method of the message behind the event."
+        },
+        {
+          "name": "status",
+          "type": "INTEGER",
+          "description": "The SIP status, when a response is behind the event."
+        },
+        {
+          "name": "description",
+          "type": "STRING",
+          "description": "The SIP reason phrase, when a response is behind the event."
+        },
+        {
+          "name": "request",
+          "type": "OBJECT",
+          "description": "The REST request that started the transfer, as it was sent. Absent for a REFER's transfer."
+        }
+      ]
+    },
+    {
+      "type": "org.vorpal.blade.services.transfer.transferInitiated",
+      "title": "Transfer Initiated",
+      "description": "The INVITE to the transfer target was sent. Sent to the transfer's webhook and event sockets at the same moment.",
+      "owner": "transfer",
+      "version": 1,
+      "fields": [
+        {
+          "name": "event",
+          "type": "STRING",
+          "required": true,
+          "description": "The event name: the type's last segment."
+        },
+        {
+          "name": "time",
+          "type": "STRING",
+          "required": true,
+          "description": "When it happened, ISO-8601 in UTC."
+        },
+        {
+          "name": "sessionKeys",
+          "type": "ARRAY",
+          "itemType": "STRING",
+          "description": "The call's session keys as the session selectors compute them from its first INVITE: what a REST request names as sessionKey."
+        },
+        {
+          "name": "uid",
+          "type": "STRING",
+          "description": "The REST request's notification.uid, so a client can match events to its request."
+        },
+        {
+          "name": "style",
+          "type": "STRING",
+          "description": "The REST request's transfer style: blind, attended, conference or refer. Absent for a REFER's transfer."
+        },
+        {
+          "name": "referTo",
+          "type": "STRING",
+          "description": "The transfer target's URI."
+        },
+        {
+          "name": "method",
+          "type": "STRING",
+          "description": "The SIP method of the message behind the event."
+        },
+        {
+          "name": "status",
+          "type": "INTEGER",
+          "description": "The SIP status, when a response is behind the event."
+        },
+        {
+          "name": "description",
+          "type": "STRING",
+          "description": "The SIP reason phrase, when a response is behind the event."
+        },
+        {
+          "name": "request",
+          "type": "OBJECT",
+          "description": "The REST request that started the transfer, as it was sent. Absent for a REFER's transfer."
+        }
+      ]
+    },
+    {
+      "type": "org.vorpal.blade.services.transfer.consultationStarted",
+      "title": "Consultation Started",
+      "description": "An attended transfer's target answered and is talking to the transferor; the transferee is parked. The transfer is not complete until the transferor hangs up on the target. Sent to the transfer's webhook and event sockets at the same moment.",
+      "owner": "transfer",
+      "version": 1,
+      "fields": [
+        {
+          "name": "event",
+          "type": "STRING",
+          "required": true,
+          "description": "The event name: the type's last segment."
+        },
+        {
+          "name": "time",
+          "type": "STRING",
+          "required": true,
+          "description": "When it happened, ISO-8601 in UTC."
+        },
+        {
+          "name": "sessionKeys",
+          "type": "ARRAY",
+          "itemType": "STRING",
+          "description": "The call's session keys as the session selectors compute them from its first INVITE: what a REST request names as sessionKey."
+        },
+        {
+          "name": "uid",
+          "type": "STRING",
+          "description": "The REST request's notification.uid, so a client can match events to its request."
+        },
+        {
+          "name": "style",
+          "type": "STRING",
+          "description": "The REST request's transfer style: blind, attended, conference or refer. Absent for a REFER's transfer."
+        },
+        {
+          "name": "referTo",
+          "type": "STRING",
+          "description": "The transfer target's URI."
+        },
+        {
+          "name": "method",
+          "type": "STRING",
+          "description": "The SIP method of the message behind the event."
+        },
+        {
+          "name": "status",
+          "type": "INTEGER",
+          "description": "The SIP status, when a response is behind the event."
+        },
+        {
+          "name": "description",
+          "type": "STRING",
+          "description": "The SIP reason phrase, when a response is behind the event."
+        },
+        {
+          "name": "request",
+          "type": "OBJECT",
+          "description": "The REST request that started the transfer, as it was sent. Absent for a REFER's transfer."
+        }
+      ]
+    },
+    {
+      "type": "org.vorpal.blade.services.transfer.transferCompleted",
+      "title": "Transfer Completed",
+      "description": "The transferee is connected to the target: for a blind transfer when the target answers, for an attended transfer when the transferor hangs up on the target after consulting. Sent to the transfer's webhook and event sockets at the same moment.",
+      "owner": "transfer",
+      "version": 1,
+      "fields": [
+        {
+          "name": "event",
+          "type": "STRING",
+          "required": true,
+          "description": "The event name: the type's last segment."
+        },
+        {
+          "name": "time",
+          "type": "STRING",
+          "required": true,
+          "description": "When it happened, ISO-8601 in UTC."
+        },
+        {
+          "name": "sessionKeys",
+          "type": "ARRAY",
+          "itemType": "STRING",
+          "description": "The call's session keys as the session selectors compute them from its first INVITE: what a REST request names as sessionKey."
+        },
+        {
+          "name": "uid",
+          "type": "STRING",
+          "description": "The REST request's notification.uid, so a client can match events to its request."
+        },
+        {
+          "name": "style",
+          "type": "STRING",
+          "description": "The REST request's transfer style: blind, attended, conference or refer. Absent for a REFER's transfer."
+        },
+        {
+          "name": "referTo",
+          "type": "STRING",
+          "description": "The transfer target's URI."
+        },
+        {
+          "name": "method",
+          "type": "STRING",
+          "description": "The SIP method of the message behind the event."
+        },
+        {
+          "name": "status",
+          "type": "INTEGER",
+          "description": "The SIP status, when a response is behind the event."
+        },
+        {
+          "name": "description",
+          "type": "STRING",
+          "description": "The SIP reason phrase, when a response is behind the event."
+        },
+        {
+          "name": "request",
+          "type": "OBJECT",
+          "description": "The REST request that started the transfer, as it was sent. Absent for a REFER's transfer."
+        }
+      ]
+    },
+    {
+      "type": "org.vorpal.blade.services.transfer.transferDeclined",
+      "title": "Transfer Declined",
+      "description": "The transfer did not happen: the target refused or never answered, or, in an attended transfer, hung up during the consultation or was lost before the transferee reached her. Sent to the transfer's webhook and event sockets at the same moment.",
+      "owner": "transfer",
+      "version": 1,
+      "fields": [
+        {
+          "name": "event",
+          "type": "STRING",
+          "required": true,
+          "description": "The event name: the type's last segment."
+        },
+        {
+          "name": "time",
+          "type": "STRING",
+          "required": true,
+          "description": "When it happened, ISO-8601 in UTC."
+        },
+        {
+          "name": "sessionKeys",
+          "type": "ARRAY",
+          "itemType": "STRING",
+          "description": "The call's session keys as the session selectors compute them from its first INVITE: what a REST request names as sessionKey."
+        },
+        {
+          "name": "uid",
+          "type": "STRING",
+          "description": "The REST request's notification.uid, so a client can match events to its request."
+        },
+        {
+          "name": "style",
+          "type": "STRING",
+          "description": "The REST request's transfer style: blind, attended, conference or refer. Absent for a REFER's transfer."
+        },
+        {
+          "name": "referTo",
+          "type": "STRING",
+          "description": "The transfer target's URI."
+        },
+        {
+          "name": "method",
+          "type": "STRING",
+          "description": "The SIP method of the message behind the event."
+        },
+        {
+          "name": "status",
+          "type": "INTEGER",
+          "description": "The SIP status, when a response is behind the event."
+        },
+        {
+          "name": "description",
+          "type": "STRING",
+          "description": "The SIP reason phrase, when a response is behind the event."
+        },
+        {
+          "name": "request",
+          "type": "OBJECT",
+          "description": "The REST request that started the transfer, as it was sent. Absent for a REFER's transfer."
+        }
+      ]
+    },
+    {
+      "type": "org.vorpal.blade.services.transfer.transferAbandoned",
+      "title": "Transfer Abandoned",
+      "description": "The transferee hung up before the transfer completed. Sent to the transfer's webhook and event sockets at the same moment.",
+      "owner": "transfer",
+      "version": 1,
+      "fields": [
+        {
+          "name": "event",
+          "type": "STRING",
+          "required": true,
+          "description": "The event name: the type's last segment."
+        },
+        {
+          "name": "time",
+          "type": "STRING",
+          "required": true,
+          "description": "When it happened, ISO-8601 in UTC."
+        },
+        {
+          "name": "sessionKeys",
+          "type": "ARRAY",
+          "itemType": "STRING",
+          "description": "The call's session keys as the session selectors compute them from its first INVITE: what a REST request names as sessionKey."
+        },
+        {
+          "name": "uid",
+          "type": "STRING",
+          "description": "The REST request's notification.uid, so a client can match events to its request."
+        },
+        {
+          "name": "style",
+          "type": "STRING",
+          "description": "The REST request's transfer style: blind, attended, conference or refer. Absent for a REFER's transfer."
+        },
+        {
+          "name": "referTo",
+          "type": "STRING",
+          "description": "The transfer target's URI."
+        },
+        {
+          "name": "method",
+          "type": "STRING",
+          "description": "The SIP method of the message behind the event."
+        },
+        {
+          "name": "status",
+          "type": "INTEGER",
+          "description": "The SIP status, when a response is behind the event."
+        },
+        {
+          "name": "description",
+          "type": "STRING",
+          "description": "The SIP reason phrase, when a response is behind the event."
+        },
+        {
+          "name": "request",
+          "type": "OBJECT",
+          "description": "The REST request that started the transfer, as it was sent. Absent for a REFER's transfer."
+        }
+      ]
+    }
+  ]
+}

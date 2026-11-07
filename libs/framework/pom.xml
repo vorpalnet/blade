@@ -68,6 +68,12 @@
 			<groupId>com.nimbusds</groupId>
 			<artifactId>oauth2-oidc-sdk</artifactId>
 		</dependency>
+		<!-- Jersey's auto-discovery SPI, for v3.rest.RestJsonDiscoverable. The
+		     container supplies Jersey; provided scope keeps it out of every WAR. -->
+		<dependency>
+			<groupId>org.glassfish.jersey.core</groupId>
+			<artifactId>jersey-common</artifactId>
+		</dependency>
 
 		<!-- Tests. Version managed in the parent POM. -->
 		<dependency>

@@ -20,7 +20,40 @@ import org.vorpal.blade.framework.v3.configuration.selectors.Selector;
 public class MessageHelper implements Serializable {
 	private static final long serialVersionUID = 1L;
 
+	/// Prefix on the application-session attribute that holds a CRUD variable.
+	/// `${callerUser}` is stored as `crud.callerUser`, so a variable can never
+	/// overwrite an attribute the hosting application keeps for itself: CRUD
+	/// runs inside any v3 application now, not only the CRUD service.
+	public static final String VARIABLE_PREFIX = "crud.";
+
 	private MessageHelper() {
+	}
+
+	/// Stores CRUD variable `name` on the application session, under
+	/// [#VARIABLE_PREFIX]. A null value removes it.
+	public static void putVariable(SipApplicationSession appSession, String name, String value) {
+		if (appSession == null || name == null) {
+			return;
+		}
+		if (value == null) {
+			appSession.removeAttribute(VARIABLE_PREFIX + name);
+		} else {
+			appSession.setAttribute(VARIABLE_PREFIX + name, value);
+		}
+	}
+
+	/// CRUD variable `name`, or null.
+	public static String getVariable(SipApplicationSession appSession, String name) {
+		if (appSession == null || name == null) {
+			return null;
+		}
+		Object value = appSession.getAttribute(VARIABLE_PREFIX + name);
+		return (value instanceof String) ? (String) value : null;
+	}
+
+	/// Removes CRUD variable `name` from the application session.
+	public static void removeVariable(SipApplicationSession appSession, String name) {
+		putVariable(appSession, name, null);
 	}
 
 	/**
@@ -146,6 +179,13 @@ public class MessageHelper implements Serializable {
 			}
 			break;
 
+		case "To":
+		case "to":
+		case "From":
+		case "from":
+			setAddress(msg, attribute, value);
+			break;
+
 		case "contact":
 		case "Contact":
 			// `Contact` is a SIP system header — `setHeader` throws. The
@@ -160,6 +200,46 @@ public class MessageHelper implements Serializable {
 			msg.setHeader(attribute, value);
 			break;
 		}
+	}
+
+	/// Rewrites the `To` or `From` address in place: its URI and display name
+	/// become those of `value`. The change goes through the message's own
+	/// address object, as the gateway's `From` rewrite does, not through
+	/// `setHeader`, which the container may refuse for these headers. The tag and other header parameters stay as the
+	/// dialog has them; parameters written in `value` are ignored.
+	///
+	/// Only an initial request is changed. Inside a dialog the URIs are the
+	/// dialog's (RFC 3261 section 12.2.1.1), and a response's `To` is its
+	/// request's, so a rule broad enough to reach a re-INVITE or a 200 is
+	/// skipped there rather than breaking the dialog.
+	private static void setAddress(SipServletMessage msg, String attribute, String value) throws Exception {
+		if (!(msg instanceof SipServletRequest) || !((SipServletRequest) msg).isInitial()) {
+			SettingsManager.getSipLogger().finer(msg,
+					"MessageHelper - " + attribute + " is fixed inside a dialog; not changed");
+			return;
+		}
+		if (msg instanceof org.vorpal.blade.framework.sip.DetachedMessage) {
+			// BLADE's own message (the editor's preview, tests) keeps its headers as
+			// text and may have no SipFactory behind it, as on the AdminServer.
+			String current = msg.getHeader(attribute);
+			if (current == null) {
+				return;
+			}
+			javax.servlet.sip.Address address = new org.vorpal.blade.framework.sip.DetachedAddress(current);
+			javax.servlet.sip.Address supplied = new org.vorpal.blade.framework.sip.DetachedAddress(value);
+			address.setURI(supplied.getURI());
+			address.setDisplayName(supplied.getDisplayName());
+			msg.setHeader(attribute, address.toString());
+			return;
+		}
+		javax.servlet.sip.Address supplied = SettingsManager.sipFactory.createAddress(value);
+		javax.servlet.sip.Address live = attribute.equalsIgnoreCase("To") ? msg.getTo() : msg.getFrom();
+		if (live == null) {
+			SettingsManager.getSipLogger().warning(msg, "MessageHelper - no " + attribute + " header on message");
+			return;
+		}
+		live.setURI(supplied.getURI());
+		live.setDisplayName(supplied.getDisplayName());
 	}
 
 	/// Copies the header parameters of a textual Contact value onto the
@@ -220,21 +300,28 @@ public class MessageHelper implements Serializable {
 		}
 	}
 
-	/**
-	 * Builds a Map of all String-typed attributes from a SipApplicationSession.
-	 * Used for ${variable} resolution in operations.
-	 */
+	/// The variables `${name}` resolves against: every String attribute on the
+	/// application session, with CRUD's own variables (stored under
+	/// [#VARIABLE_PREFIX]) laid over them by their bare name. Unprefixed
+	/// attributes stay visible on purpose: the tester writes `${scenario}` and
+	/// `${index}` itself, and a rule may read an attribute its application set.
 	public static Map<String, String> getSessionVariables(SipApplicationSession appSession) {
 		Map<String, String> vars = new HashMap<>();
 		if (appSession == null) {
 			return vars;
 		}
+		Map<String, String> own = new HashMap<>();
 		for (String name : appSession.getAttributeNameSet()) {
 			Object value = appSession.getAttribute(name);
 			if (value instanceof String) {
-				vars.put(name, (String) value);
+				if (name.startsWith(VARIABLE_PREFIX)) {
+					own.put(name.substring(VARIABLE_PREFIX.length()), (String) value);
+				} else {
+					vars.put(name, (String) value);
+				}
 			}
 		}
+		vars.putAll(own);
 		return vars;
 	}
 

@@ -17,11 +17,12 @@ bridging, no media server involved.
 
 ## REST API
 
-Base path: `/tpcc/api/v1`. Long-running operations are asynchronous — the HTTP response
+Base path: `/tpcc/resources/api/v1`. Long-running operations are asynchronous — the HTTP response
 resumes when the SIP transaction completes.
 
 | Method and path | Does |
 | --- | --- |
+| `POST call` | Ring `from`, then call `to` with `from`'s offer and connect them: `{from:{localParty, remoteParty, requestUri?}, to:{…}}`. Returns `{sessionId, fromDialogId, toDialogId}` once `to` answers |
 | `POST session` | Create a control session; returns `{"sessionId"}`. Optional body sets expiry and attributes |
 | `POST dialog/{sessionId}` | Create a dialog: `{localParty, remoteParty, requestUri?}` — sends the offerless INVITE |
 | `GET dialog/{sessionId}` | List the session's dialogs by dialog id |
@@ -31,12 +32,16 @@ resumes when the SIP transaction completes.
 | `DELETE dialog/{sessionId}/{dialogId}` | BYE a dialog |
 
 `sessionId` is the SIP application-session key (minted by `POST session`); `dialogId` is
-one dialog's Vorpal dialog id. The API has no per-dialog hold or mute operation and no
-one-shot call endpoint: create a session and both dialogs, then connect them.
+one dialog's Vorpal dialog id. The API has no per-dialog hold or mute operation.
 
-**Deployment note:** as shipped, the API's `web.xml` carries no auth-constraint — unlike
-the other service-tier APIs (context, events), which use BASIC auth. Put authentication
-in front of it before exposing it beyond a lab.
+`POST call` is the one-shot form, and the one to use when `to` is an application or media
+server: `to` gets an INVITE that already carries `from`'s offer, where create+connect sends
+every party an offerless INVITE first. `to` must answer at once (`from`'s 200 OK waits
+unacknowledged until it does, and `from` gives up after 32 s).
+
+**Authentication:** BASIC. Every write needs the `Admin` or `Operator` role, since the API
+originates calls with any From and Request-URI it is given; reads take any authenticated user.
+The OpenAPI document (`/tpcc/resources/openapi.json`) stays public.
 
 ## Configuration
 

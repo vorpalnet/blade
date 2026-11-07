@@ -56,6 +56,7 @@ public class QueueSettingsManager extends SettingsManager<QueueConfig> {
 	public void initialize(QueueConfig config) {
 
 		sipLogger.fine("QueueSettingsManager.initialize...");
+		QueueServlet.installMediaServer(config);
 
 		try {
 			QueueAttributes qa;

@@ -673,6 +673,15 @@ public abstract class AsyncSipServlet extends SipServlet
 			Object handler, String methodHint) {
 	}
 
+	/// Called with each initial request just before [#chooseCallflow], under the
+	/// application-session lock. Does nothing here. The v3 servlet overrides it
+	/// to run the application's CRUD pipeline, which must finish before the
+	/// callflow sends anything.
+	///
+	/// @param request the initial request
+	protected void initialRequest(SipServletRequest request) {
+	}
+
 	/// Processes incoming SIP requests with glare detection and callback handling
 	///
 	/// This method handles initial INVITE session setup, glare detection and
@@ -831,6 +840,10 @@ public abstract class AsyncSipServlet extends SipServlet
 						requestLambda.accept(request);
 
 					} else {
+
+						if (request.isInitial()) {
+							initialRequest(request);
+						}
 
 						Callflow callflow = chooseCallflow(request);
 

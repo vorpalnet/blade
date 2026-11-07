@@ -109,7 +109,9 @@
 /// `callStarted`, `callAnswered`, `callConnected`, `callCompleted`,
 /// `callDeclined`, `callAbandoned`, `requestEvent`, `responseEvent`.
 ///
-/// See `CrudServlet` for which lifecycle methods fire each event.
+/// See `CrudServlet` for which lifecycle methods fire each event. Inside an
+/// application's own `crud` section every rule sees `send` instead, so a rule
+/// there leaves `event` unset.
 ///
 ///
 /// ## Operation reference
@@ -169,8 +171,11 @@
 /// ## Variables and substitution
 ///
 /// Read operations save extracted values to the
-/// [javax.servlet.sip.SipApplicationSession] as attributes. Subsequent
-/// operations reference them via `${name}` substitution. Variables
+/// [javax.servlet.sip.SipApplicationSession] as attributes named
+/// `crud.<name>` ([MessageHelper#VARIABLE_PREFIX]), so a variable never
+/// overwrites an attribute of the application hosting the rules. Subsequent
+/// operations reference them via `${name}` substitution, which also resolves
+/// any other String attribute on the session by its own name. Variables
 /// persist for the entire dialog (so values written on the INVITE are
 /// visible on the 200 OK), and are replicated for cluster failover.
 ///
@@ -247,10 +252,20 @@
 /// literal string.
 ///
 ///
+/// ## Inside an application
+///
+/// Any v3 application can run CRUD rules itself, without the CRUD service in
+/// its FSMAR chain: its configuration carries a `crud` section ([Crud]), the
+/// same rule sets under the same names. [CrudHook] runs them on every message
+/// the application's callflows send, after the application's own changes. The
+/// CRUD service is still the way to change messages between two applications
+/// without touching either.
+///
 /// ## Core classes
 ///
-/// - `CrudServlet` — the B2BUA entry point
-/// - [CrudConfiguration] / [CrudConfigurationSample] — config surface
-/// - [RuleSet] / [Rule] / [Operation] — the rule engine
-/// - [MessageHelper] / [MimeHelper] / [XmlHelper] / [SdpHelper] — utilities
+/// - `CrudServlet` · the B2BUA entry point
+/// - [CrudConfiguration] / [CrudConfigurationSample] · config surface
+/// - [Crud] / [CrudHook] / [CrudCapable] · the same rules inside any v3 application
+/// - [RuleSet] / [Rule] / [Operation] · the rule engine
+/// - [MessageHelper] / [MimeHelper] / [XmlHelper] / [SdpHelper] · utilities
 package org.vorpal.blade.framework.v3.crud;

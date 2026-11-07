@@ -18,15 +18,17 @@ import org.vorpal.blade.framework.v3.B2buaServlet;
 import org.vorpal.blade.framework.v2.b2bua.Passthru;
 import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.framework.v2.callflow.CallflowResponseCode;
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.framework.v2.config.Translation;
-import org.vorpal.blade.framework.v2.transfer.AttendedTransfer;
+import org.vorpal.blade.framework.v3.transfer.AttendedTransfer;
+import org.vorpal.blade.framework.v3.transfer.TransferObserver;
+import org.vorpal.blade.services.transfer.notify.TransferNotices;
 import org.vorpal.blade.framework.v2.transfer.BlindTransfer;
 import org.vorpal.blade.framework.v2.transfer.ConferenceTransfer;
 import org.vorpal.blade.framework.v2.transfer.Transfer;
 import org.vorpal.blade.framework.v2.transfer.TransferInitialInvite;
 import org.vorpal.blade.framework.v2.transfer.TransferListener;
-import org.vorpal.blade.framework.v2.transfer.TransferSettings;
+import org.vorpal.blade.framework.v3.transfer.TransferSettings;
 import org.vorpal.blade.framework.v2.transfer.api.TransferAPI;
 
 /**
@@ -39,7 +41,7 @@ import org.vorpal.blade.framework.v2.transfer.api.TransferAPI;
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
 @javax.servlet.sip.annotation.SipListener
 public class TransferServlet extends B2buaServlet
-		implements B2buaListener, TransferListener, SipApplicationSessionListener {
+		implements B2buaListener, TransferObserver, SipApplicationSessionListener {
 
 	private static final long serialVersionUID = 1L;
 	// public class TransferServlet extends B2buaServlet {
@@ -53,12 +55,24 @@ public class TransferServlet extends B2buaServlet
 		TransferServlet.settingsManager = settingsManager;
 	}
 
+	@SuppressWarnings({ "unchecked", "rawtypes" })
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
-		settingsManager = new SettingsManager<>(event, TransferSettings.class, new TransferSettingsSample());
+		settingsManager = new SettingsManager<TransferSettings>(event) {
+			@Override
+			protected TransferSettings sample() {
+				return new TransferSettingsSample();
+			}
 
-		// Quirky visibility problem
-		TransferAPI.settings = settingsManager;
+			@Override
+			protected void refreshed(TransferSettings config) {
+				// nothing to prepare; the v3 manager publishes the crud section itself
+			}
+		};
+
+		// Quirky visibility problem. The v2 field is typed for the v2 settings;
+		// every v3 TransferSettings is one, so the raw assignment is safe.
+		TransferAPI.settings = (org.vorpal.blade.framework.v2.config.SettingsManager) settingsManager;
 
 		// jwm - use 'analytics' config for CDR type logging
 //		sipLogger.info("TransferServlet.servletCreated");
@@ -93,6 +107,17 @@ public class TransferServlet extends B2buaServlet
 		}
 
 		return callflow;
+	}
+
+	/// A REFER whose `Refer-To` carries `Replaces` is an attended transfer,
+	/// whatever style the configuration chose for it.
+	private String attendedIfReplaces(SipServletRequest refer, String style) {
+		if (!"attended".equals(style) && AttendedTransfer.hasReplaces(refer)) {
+			sipLogger.finer(refer, "TransferServlet.chooseCallflow - Refer-To carries Replaces; style " + style
+					+ " overridden to attended");
+			return "attended";
+		}
+		return style;
 	}
 
 	@Override
@@ -153,7 +178,7 @@ public class TransferServlet extends B2buaServlet
 					ts = "blind";
 				}
 
-				callflow = this.chooseCallflowStyle(ts);
+				callflow = this.chooseCallflowStyle(attendedIfReplaces(request, ts));
 
 				sipLogger.finer(request, "callflow=" + callflow.getClass().getName());
 
@@ -166,7 +191,7 @@ public class TransferServlet extends B2buaServlet
 
 				if (true == settings.getTransferAllRequests()
 						&& null != (ts = settings.getDefaultTransferStyle().toString())) {
-					callflow = this.chooseCallflowStyle(ts);
+					callflow = this.chooseCallflowStyle(attendedIfReplaces(request, ts));
 				} else {
 					sipLogger.finer(request,
 							"No translation defined in configuration file; will not process REFER requests.");
@@ -183,6 +208,11 @@ public class TransferServlet extends B2buaServlet
 
 	@Override
 	public void transferRequested(SipServletRequest inboundRefer) throws ServletException, IOException {
+
+		// A REFER's transfer is not the REST request an earlier transfer on this
+		// call may have left behind; its notices must not borrow that one's webhook.
+		inboundRefer.getApplicationSession().removeAttribute("TXFER_REQUEST");
+		TransferNotices.publish("transferRequested", inboundRefer);
 
 		try {
 
@@ -205,6 +235,7 @@ public class TransferServlet extends B2buaServlet
 
 	@Override
 	public void transferInitiated(SipServletRequest outboundRequest) throws ServletException, IOException {
+		TransferNotices.publish("transferInitiated", outboundRequest);
 
 // jwm - use 'analytics' config for CDR type logging		
 //		if (sipLogger.isLoggable(Level.INFO)) {
@@ -216,6 +247,7 @@ public class TransferServlet extends B2buaServlet
 
 	@Override
 	public void transferCompleted(SipServletResponse response) throws ServletException, IOException {
+		TransferNotices.publish("transferCompleted", response);
 
 		// jwm - use 'analytics' config for CDR type logging
 //		if (sipLogger.isLoggable(Level.INFO)) {
@@ -227,6 +259,7 @@ public class TransferServlet extends B2buaServlet
 
 	@Override
 	public void transferDeclined(SipServletResponse response) throws ServletException, IOException {
+		TransferNotices.publish("transferDeclined", response);
 		// jwm - use 'analytics' config for CDR type logging
 //		if (sipLogger.isLoggable(Level.INFO)) {
 //			sipLogger.info(response, "TransferServlet.transferDeclined - status=" + response.getStatus() + " "
@@ -235,7 +268,18 @@ public class TransferServlet extends B2buaServlet
 	}
 
 	@Override
+	public void transferDeclined(SipServletRequest request) throws ServletException, IOException {
+		TransferNotices.publish("transferDeclined", request);
+	}
+
+	@Override
+	public void consultationStarted(SipServletResponse targetAnswer) throws ServletException, IOException {
+		TransferNotices.publish("consultationStarted", targetAnswer);
+	}
+
+	@Override
 	public void transferAbandoned(SipServletRequest request) throws ServletException, IOException {
+		TransferNotices.publish("transferAbandoned", request);
 		// jwm - use 'analytics' config for CDR type logging
 //		if (sipLogger.isLoggable(Level.INFO)) {
 //			sipLogger.info(request, "TransferServlet.transferAbandoned - method=" + request.getMethod());

@@ -24,9 +24,9 @@
 ///   </tr>
 ///   <tr>
 ///     <td>Attended</td>
-///     <td>{@link AttendedTransfer}</td>
-///     <td>Transferor consults with target before completing the transfer
-///         (not yet fully implemented)</td>
+///     <td>{@link org.vorpal.blade.framework.v3.transfer.AttendedTransfer}</td>
+///     <td>Transferor consults with target before completing the transfer;
+///         built on {@link BlindTransfer}</td>
 ///   </tr>
 ///   <tr>
 ///     <td>Conference</td>
@@ -151,7 +151,7 @@
 /// - {@link TransferInitialInvite} - B2BUA initial INVITE handler that stores the request for later transfer use
 /// - {@link BlindTransfer} - Unattended transfer: BLADE calls target directly
 /// - {@link ReferTransfer} - REFER-based transfer: transferee calls target
-/// - {@link AttendedTransfer} - Consultative transfer (stub)
+/// - {@link org.vorpal.blade.framework.v3.transfer.AttendedTransfer} - Consultative transfer (v3, extends BlindTransfer)
 /// - {@link ConferenceTransfer} - Conference bridging (stub)
 /// - {@link TransferSettings} - Configuration with transfer style, headers, and routing
 /// - {@link TransferListener} - Lifecycle callbacks for transfer events

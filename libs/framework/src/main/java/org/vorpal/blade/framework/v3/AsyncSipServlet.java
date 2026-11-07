@@ -6,6 +6,7 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
+import org.vorpal.blade.framework.v3.crud.CrudHook;
 import org.vorpal.blade.framework.v2.logging.Logger.Direction;
 
 /// The v3 `AsyncSipServlet`: the baseline servlet plus **trace eventing at the sequence-diagram
@@ -28,6 +29,13 @@ public abstract class AsyncSipServlet extends org.vorpal.blade.framework.AsyncSi
 	protected void traced(Direction direction, SipServletRequest request, SipServletResponse response, Object handler,
 			String methodHint) {
 		Callflow.traceEvent(direction, request, response, handler, methodHint, null);
+	}
+
+	/// Runs the application's CRUD pipeline, if its `crud` section has one,
+	/// so the rule set is chosen before the callflow sends anything.
+	@Override
+	protected void initialRequest(SipServletRequest request) {
+		CrudHook.select(request);
 	}
 
 	/// A response to a passthru proxy goes to the callbacks [Callflow#proxyPassthru]

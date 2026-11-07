@@ -66,6 +66,16 @@ public class GatewayConfigTest {
 	}
 
 	@Test
+	public void anOutboundOnlyDigestTrunkSendsNoRegister() throws Exception {
+		VirtualGateway vg = M.readValue("{\"name\":\"t\",\"style\":{\"type\":\"register-digest\","
+				+ "\"register\":false,\"authName\":\"acct\"}}", VirtualGateway.class);
+		RegisterDigestStyle d = (RegisterDigestStyle) vg.getStyle();
+		assertNull("no REGISTER", d.newRegistrar(vg));
+		assertEquals("credentials kept for outbound challenges", "acct", d.getAuthName());
+		assertTrue("registers by default", new RegisterDigestStyle().getRegister());
+	}
+
+	@Test
 	public void missingTypeFallsBackToRegisterDigest() throws Exception {
 		RegistrationStyle s = M.readValue("{\"authName\":\"x\"}", RegistrationStyle.class);
 		assertTrue("defaultImpl kicks in", s instanceof RegisterDigestStyle);

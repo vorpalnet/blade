@@ -120,6 +120,7 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
+import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.URI;
 
@@ -329,64 +330,7 @@ public class BlindTransfer extends Transfer {
 					}
 
 				} else if (successful(targetResponse)) {
-
-					if (sipLogger.isLoggable(Level.FINER)) {
-						sipLogger.finer(targetResponse,
-								"BlindTransfer.process - target (carol) sends successful response "
-										+ targetResponse.getStatus() + " " + targetResponse.getReasonPhrase());
-					}
-
-					SettingsManager.createEvent("transferCompleted", targetResponse);
-					if (transferListener != null) {
-						transferListener.transferCompleted(targetResponse);
-					}
-					sipLogger.finer("BlindTransfer.process - SettingsManager.sendEvent(targetResponse); #4");
-					SettingsManager.sendEvent(targetResponse);
-
-					// Alice will no longer hangup, expect a BYE from Bob
-					aliceExpectation.clear();
-
-					copyContent(targetResponse, transfereeRequest); // link target to transferee
-
-					sendRequest(transfereeRequest, (transfereeResponse) -> {
-
-						sendRequest(transfereeResponse.createAck());
-						sendRequest(copyContent(transfereeResponse, targetResponse.createAck())); // transferee to
-																									// target
-						// Send the SIP/2.0 200 OK to the transferor (bob).
-						// Bob's REFER rides his existing INVITE dialog, so the session only goes
-						// TERMINATED once that dialog is torn down (Bob's BYE) - emptying the REFER
-						// subscription alone does not invalidate an INVITE-based session. If Bob
-						// hung up early, this session is already invalid, so skip the NOTIFY.
-						if (referRequest.getSession().isValid() == true) {
-							if (sendNotify) {
-								SipServletRequest notify200 = referRequest.getSession().createRequest(NOTIFY);
-								notify200.setHeader(EVENT, "refer");
-								notify200.setHeader(SUBSCRIPTION_STATE, SUBSCRIPTION_TERMINATED_NORESOURCE);
-								String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " "
-										+ targetResponse.getReasonPhrase();
-								notify200.setContent(sipFrag.getBytes(), SIPFRAG);
-
-								sendRequest(notify200);
-							} else {
-								sendRequest(referRequest.getSession().createRequest(BYE));
-							}
-						} else {
-							sipLogger.warning(referRequest,
-									"BlindTransfer.process - Cannot send terminating NOTIFY (success); bob's INVITE dialog is already torn down (he likely sent BYE early).");
-						}
-
-						// User is notified of a successful transfer
-
-						SipSession callee = targetResponse.getSession();
-						callee.setAttribute(USER_AGENT_ATTR, USER_AGENT_CALLEE);
-						SipSession caller = getLinkedSession(callee);
-						if (caller != null) {
-							caller.setAttribute(USER_AGENT_ATTR, USER_AGENT_CALLER);
-						}
-						URI referTo2 = (URI) appSession.getAttribute(REFER_TO);
-						appSession.setAttribute(X_PREVIOUS_DN_ATTR, referTo2);
-					});
+					targetAnswered(referRequest, targetResponse, aliceExpectation, bobExpectation);
 
 				} else if (failure(targetResponse)) {
 
@@ -469,6 +413,85 @@ public class BlindTransfer extends Transfer {
 			sipLogger.logStackTrace(referRequest, e);
 		}
 
+	}
+
+	/// Whether this transfer sends NOTIFYs to the transferor, as the REFER path
+	/// does; the REST path hangs up on him instead.
+	protected boolean isSendNotify() {
+		return sendNotify;
+	}
+
+	/// Called when the target (Carol) answers the INVITE this transfer sent her.
+	/// A blind transfer connects the transferee (Alice) to her at once: the
+	/// target's offer goes to Alice in a re-INVITE, Alice's answer back in the
+	/// target's ACK, and the transferor (Bob) is told, or hung up on. A subclass
+	/// that does something else first (an attended transfer's consultation) calls
+	/// this to finish the way a blind transfer does.
+	///
+	/// @param referRequest     the REFER this transfer is processing
+	/// @param targetResponse   the target's 2xx to the INVITE
+	/// @param aliceExpectation the transferee's BYE expectation, set while the target rang
+	/// @param bobExpectation   the transferor's BYE expectation, set while the target rang
+	protected void targetAnswered(SipServletRequest referRequest, SipServletResponse targetResponse,
+			Expectation aliceExpectation, Expectation bobExpectation) throws ServletException, IOException {
+
+		if (sipLogger.isLoggable(Level.FINER)) {
+			sipLogger.finer(targetResponse,
+					"BlindTransfer.process - target (carol) sends successful response "
+							+ targetResponse.getStatus() + " " + targetResponse.getReasonPhrase());
+		}
+
+		SettingsManager.createEvent("transferCompleted", targetResponse);
+		if (transferListener != null) {
+			transferListener.transferCompleted(targetResponse);
+		}
+		sipLogger.finer("BlindTransfer.process - SettingsManager.sendEvent(targetResponse); #4");
+		SettingsManager.sendEvent(targetResponse);
+
+		// Alice will no longer hangup, expect a BYE from Bob
+		aliceExpectation.clear();
+
+		copyContent(targetResponse, transfereeRequest); // link target to transferee
+
+		sendRequest(transfereeRequest, (transfereeResponse) -> {
+
+			sendRequest(transfereeResponse.createAck());
+			sendRequest(copyContent(transfereeResponse, targetResponse.createAck())); // transferee to
+																						// target
+			// Send the SIP/2.0 200 OK to the transferor (bob).
+			// Bob's REFER rides his existing INVITE dialog, so the session only goes
+			// TERMINATED once that dialog is torn down (Bob's BYE) - emptying the REFER
+			// subscription alone does not invalidate an INVITE-based session. If Bob
+			// hung up early, this session is already invalid, so skip the NOTIFY.
+			if (referRequest.getSession().isValid() == true) {
+				if (sendNotify) {
+					SipServletRequest notify200 = referRequest.getSession().createRequest(NOTIFY);
+					notify200.setHeader(EVENT, "refer");
+					notify200.setHeader(SUBSCRIPTION_STATE, SUBSCRIPTION_TERMINATED_NORESOURCE);
+					String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " "
+							+ targetResponse.getReasonPhrase();
+					notify200.setContent(sipFrag.getBytes(), SIPFRAG);
+
+					sendRequest(notify200);
+				} else {
+					sendRequest(referRequest.getSession().createRequest(BYE));
+				}
+			} else {
+				sipLogger.warning(referRequest,
+						"BlindTransfer.process - Cannot send terminating NOTIFY (success); bob's INVITE dialog is already torn down (he likely sent BYE early).");
+			}
+
+			// User is notified of a successful transfer
+
+			SipSession callee = targetResponse.getSession();
+			callee.setAttribute(USER_AGENT_ATTR, USER_AGENT_CALLEE);
+			SipSession caller = getLinkedSession(callee);
+			if (caller != null) {
+				caller.setAttribute(USER_AGENT_ATTR, USER_AGENT_CALLER);
+			}
+			URI referTo2 = (URI) referRequest.getApplicationSession().getAttribute(REFER_TO);
+			referRequest.getApplicationSession().setAttribute(X_PREVIOUS_DN_ATTR, referTo2);
+		});
 	}
 
 }

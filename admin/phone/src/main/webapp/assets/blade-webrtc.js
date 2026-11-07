@@ -25,6 +25,7 @@ const EVENT = {
   CALL_ANSWER: 'call.answer',
   CALL_HANGUP: 'call.hangup',
   CALL_DTMF: 'call.dtmf',
+  PRESENCE_PUBLISH: 'presence.publish',
   // gateway -> browser
   SESSION_READY: 'session.ready',
   CALL_INCOMING: 'call.incoming',
@@ -33,6 +34,8 @@ const EVENT = {
   CALL_CONNECTED: 'call.connected',
   CALL_ENDED: 'call.ended',
   CALL_UPDATE: 'call.update',
+  PRESENCE_PUBLISHED: 'presence.published',
+  PRESENCE_NOTIFY: 'presence.notify',
   ERROR: 'signal.error',
   // both
   ICE_CANDIDATE: 'ice.candidate',
@@ -101,6 +104,14 @@ export class BladePhone {
     this.onRemoteStream = () => {};
     this.onStateChange = () => {};
     this.onRenegotiated = () => {};
+    /** The presence server took a setReady(): called with true for Ready, false for Not Ready. */
+    this.onPresence = () => {};
+    /**
+     * The presence server's view of this address, after the first setReady() and on every change,
+     * including its own: { status: 'ready' | 'ringing' | 'busy' | 'not-ready' | 'offline',
+     * skills: { name: readyForIt } }.
+     */
+    this.onPresenceState = () => {};
   }
 
   // ---- session ----------------------------------------------------------------------------
@@ -213,6 +224,16 @@ export class BladePhone {
     this.#teardown();
     this.callId = null;
     if (this.ws && this.ws.readyState === WebSocket.OPEN) this.#setState('registered');
+  }
+
+  /**
+   * Tell the presence server this device is Ready (true) or Not Ready (false) for calls routed by
+   * skill, for the skills named (['spanish', 'billing']). The gateway publishes it for this socket's
+   * address and withdraws it when the socket closes. onPresence reports what the server took, and
+   * onPresenceState what it decides from then on.
+   */
+  setReady(ready, skills = []) {
+    this.#send(EVENT.PRESENCE_PUBLISH, null, { status: ready ? 'open' : 'closed', skills });
   }
 
   /** Send a DTMF digit on an established call. */
@@ -342,6 +363,14 @@ export class BladePhone {
 
       case EVENT.ICE_CANDIDATE:
         await this.#addCandidate(event.data);
+        break;
+
+      case EVENT.PRESENCE_PUBLISHED:
+        this.onPresence(event.data?.status === 'open');
+        break;
+
+      case EVENT.PRESENCE_NOTIFY:
+        if (event.data?.body) this.onPresenceState(presenceView(event.data.body));
         break;
 
       case EVENT.ERROR:
@@ -502,3 +531,23 @@ export class BladePhone {
 }
 
 export { EVENT, SUBPROTOCOL };
+
+/**
+ * Read the presence server's PIDF document: the status word from the agent tuple's note, and each
+ * skill-<name> tuple, open when the agent is Ready for that skill.
+ */
+function presenceView(xml) {
+  const doc = new DOMParser().parseFromString(xml, 'application/xml');
+  const view = { status: 'offline', skills: {} };
+  for (const tuple of doc.getElementsByTagNameNS('*', 'tuple')) {
+    const id = tuple.getAttribute('id') || '';
+    const basic = tuple.getElementsByTagNameNS('*', 'basic')[0]?.textContent.trim();
+    if (id.startsWith('skill-')) {
+      view.skills[id.slice(6)] = basic === 'open';
+    } else {
+      const note = tuple.getElementsByTagNameNS('*', 'note')[0]?.textContent.trim();
+      if (note) view.status = note;
+    }
+  }
+  return view;
+}

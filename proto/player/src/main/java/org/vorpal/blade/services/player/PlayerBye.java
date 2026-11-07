@@ -10,16 +10,20 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v3.events.BladeEventTypes;
 import org.vorpal.blade.framework.v3.media.MediaCallflow;
 
-/// Handle a caller-initiated BYE/CANCEL: release the call's media anchor on the media server, then
-/// `200 OK` the request. Teardown is idempotent, so it is safe whether the caller hangs up or the app
+/// Handle a caller-initiated BYE/CANCEL: `200 OK` the request, then release the call's media anchor
+/// on the media server. Teardown is idempotent, so it is safe whether the caller hangs up or the app
 /// hung up first (after playback).
+///
+/// The answer goes first because teardown can take as long as the media server does: stopping a
+/// recorder that never received audio waits out the driver's timeout (about 30 s). The caller's
+/// BYE must not wait on that, or a caller that gives up first sees the hang-up fail.
 public class PlayerBye extends Callflow {
 	private static final long serialVersionUID = 1L;
 
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
+		sendResponse(request.createResponse(200));
 		teardown(request.getApplicationSession().getId());
-		request.createResponse(200).send();
 		PlayerEvents.ended(request.getApplicationSession(),
 				"CANCEL".equals(request.getMethod()) ? BladeEventTypes.CALL_ABANDONED : BladeEventTypes.CALL_COMPLETED);
 	}

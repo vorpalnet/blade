@@ -4,7 +4,6 @@ import java.io.Serializable;
 import java.util.LinkedList;
 import java.util.List;
 
-import org.vorpal.blade.framework.v2.config.Configuration;
 import org.vorpal.blade.framework.v3.configuration.connectors.Connector;
 import org.vorpal.blade.framework.v3.configuration.routing.Routing;
 

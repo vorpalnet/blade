@@ -51,6 +51,23 @@ public class OutboundFromBrowserTest {
 		assertEquals("sip:13125551212", OutboundFromBrowser.normalizeTarget("13125551212", null));
 	}
 
+	@Test
+	public void parametersOnABareNumberGoAfterTheHost() {
+		// The application router matches them on the Request-URI, so they must stay
+		// URI parameters, not become part of the user.
+		assertEquals("sip:13125551212@example.com;demo=recording",
+				OutboundFromBrowser.normalizeTarget("13125551212;demo=recording", "alice@example.com"));
+		assertEquals("sip:+13125551212@example.com;demo=recording;x=1",
+				OutboundFromBrowser.normalizeTarget("+13125551212;demo=recording;x=1", "alice@example.com"));
+		assertEquals("sip:13125551212;demo=recording",
+				OutboundFromBrowser.normalizeTarget("13125551212;demo=recording", null));
+	}
+
+	@Test
+	public void targetAorShedsParametersOnABareNumber() {
+		assertEquals("1234@vorpal.net", OutboundFromBrowser.targetAor("1234;demo=recording", "alice@vorpal.net"));
+	}
+
 	// ---- targetAor: what the media-mode decision asks BrowserRegistry about --------------------
 
 	@Test

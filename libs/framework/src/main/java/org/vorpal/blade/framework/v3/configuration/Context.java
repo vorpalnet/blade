@@ -148,6 +148,10 @@ public class Context {
 	///   `${now:yyyy-MM-dd'T'HH:mm:ssX}` for ISO-8601 or
 	///   `${now:EEE, dd MMM yyyy HH:mm:ss 'GMT'}` for RFC 2822.
 	///   Invalid patterns leave the placeholder literal.
+	/// - `${now:FORMAT@ZONE}` — the same in a time zone, e.g.
+	///   `${now:H@America/New_York}` for the hour where the callers are.
+	///   Business hours are local and move with daylight saving, which a
+	///   UTC range cannot follow.
 	/// - `${uuid}` — a random UUID (RFC 4122 version-4).
 	///
 	/// Plain `${NAME}` (no colon, not reserved) resolves via the
@@ -208,9 +212,19 @@ public class Context {
 	/// literal.
 	private static String formatInstant(long millis, String pattern) {
 		if (pattern == null || pattern.isEmpty()) return null;
+		ZoneId zone = ZoneId.of("UTC");
+		int at = pattern.lastIndexOf('@');
+		if (at > 0) {
+			try {
+				zone = ZoneId.of(pattern.substring(at + 1));
+				pattern = pattern.substring(0, at);
+			} catch (DateTimeException notAZone) {
+				// the whole thing is the pattern
+			}
+		}
 		try {
 			return DateTimeFormatter.ofPattern(pattern)
-					.withZone(ZoneId.of("UTC"))
+					.withZone(zone)
 					.format(Instant.ofEpochMilli(millis));
 		} catch (IllegalArgumentException | DateTimeException e) {
 			return null;

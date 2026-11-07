@@ -96,4 +96,19 @@ class LegsTest {
 		assertTrue(event.getData().path("responder").isNull() || event.getData().path("responder").isMissingNode(),
 				"nobody answered");
 	}
+
+	@Test
+	void aChallengeIsNotARefusalUntilTheCredentialsAreRefused() throws Exception {
+		DetachedRequest leg = new DetachedRequest(app, "INVITE", "sip:alice@example.com", "sip:bob@trunk.example.net");
+		leg.setRequestURI(Callflow.getSipFactory().createURI("sip:bob@trunk.example.net"));
+		Legs.failed(new DetachedResponse(leg, 407));
+		assertEquals(0, count(), "a challenge the sender will answer");
+
+		DetachedRequest retry = new DetachedRequest(app, "INVITE", "sip:alice@example.com", "sip:bob@trunk.example.net");
+		retry.setRequestURI(Callflow.getSipFactory().createURI("sip:bob@trunk.example.net"));
+		Legs.failed(new DetachedResponse(retry, 407));
+		Legs.failed(new DetachedResponse(retry, 407));
+		assertEquals(1, count(), "challenged again after credentials: refused, once");
+		assertEquals(407, bus.sent.get(0).getData().path("status").asInt());
+	}
 }

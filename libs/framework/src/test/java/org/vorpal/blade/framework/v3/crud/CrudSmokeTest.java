@@ -137,8 +137,8 @@ public final class CrudSmokeTest {
 		req.setHeader("From", "<sip:alice@example.com>;tag=1");
 
 		new ReadOperation("From", "sip:(?<callerUser>[^@]+)@(?<callerHost>[^;>]+)").process(req);
-		check("read.user", "alice".equals(req.getApplicationSession().getAttribute("callerUser")));
-		check("read.host", "example.com".equals(req.getApplicationSession().getAttribute("callerHost")));
+		check("read.user", "alice".equals(MessageHelper.getVariable(req.getApplicationSession(), "callerUser")));
+		check("read.host", "example.com".equals(MessageHelper.getVariable(req.getApplicationSession(), "callerHost")));
 
 		new CreateOperation("X-Caller-Info", "${callerUser}@${callerHost}").process(req);
 		check("create.header", "alice@example.com".equals(req.getHeader("X-Caller-Info")));
@@ -172,8 +172,8 @@ public final class CrudSmokeTest {
 		read.getExpressions().put("agentName", "$.agent.name");
 		read.process(req);
 
-		check("json.read.id", "A123".equals(req.getApplicationSession().getAttribute("agentId")));
-		check("json.read.name", "Carol".equals(req.getApplicationSession().getAttribute("agentName")));
+		check("json.read.id", "A123".equals(MessageHelper.getVariable(req.getApplicationSession(), "agentId")));
+		check("json.read.name", "Carol".equals(MessageHelper.getVariable(req.getApplicationSession(), "agentName")));
 	}
 
 	private static void testJsonCreate() throws Exception {
@@ -208,7 +208,7 @@ public final class CrudSmokeTest {
 		read.getExpressions().put("sid", "//recording/@session-id");
 		read.process(req);
 
-		check("xml.read.attr", "abc-123".equals(req.getApplicationSession().getAttribute("sid")));
+		check("xml.read.attr", "abc-123".equals(MessageHelper.getVariable(req.getApplicationSession(), "sid")));
 	}
 
 	private static void testXmlUpdate() throws Exception {
@@ -241,7 +241,7 @@ public final class CrudSmokeTest {
 		read.process(req);
 
 		String body = (String) req.getContent();
-		check("sdp.read.port", "8000".equals(req.getApplicationSession().getAttribute("port")));
+		check("sdp.read.port", "8000".equals(MessageHelper.getVariable(req.getApplicationSession(), "port")));
 		check("sdp.untouched.preserves-as", body.equals(sdp));
 	}
 
@@ -395,7 +395,7 @@ public final class CrudSmokeTest {
 		String inviteOut = (String) invite.getContent();
 		check("restore.invite-no-video", !inviteOut.contains("m=video"));
 		check("restore.invite-kept-audio", inviteOut.contains("m=audio 8000"));
-		check("restore.session-has-saved", appSession.getAttribute("videoMedia") != null);
+		check("restore.session-has-saved", MessageHelper.getVariable(appSession, "videoMedia") != null);
 
 		// 200 OK comes back from the far side carrying audio-only SDP. We
 		// want to splice the video block we saved earlier back in. Modeled
@@ -500,7 +500,7 @@ public final class CrudSmokeTest {
 		clean.setApplicationSession(appSession);
 		clean.setContent(answer, "application/sdp");
 		save.process(clean);
-		check("minsdp.empty-capture", "[]".equals(appSession.getAttribute("removedMedia")));
+		check("minsdp.empty-capture", "[]".equals(MessageHelper.getVariable(appSession, "removedMedia")));
 		restore.process(clean);
 		int cleanLines = 0;
 		for (String line : ((String) clean.getContent()).split("\r?\n")) if (line.startsWith("m=audio")) cleanLines++;
@@ -557,7 +557,7 @@ public final class CrudSmokeTest {
 
 	private static void testRuleResetVariables() throws Exception {
 		SipApplicationSession appSession = new DetachedApplicationSession("test");
-		appSession.setAttribute("u", "stale-value");
+		MessageHelper.putVariable(appSession, "u", "stale-value");
 
 		DetachedRequest req = invite();
 		req.setApplicationSession(appSession);
@@ -776,7 +776,7 @@ public final class CrudSmokeTest {
 		check("pipeline.selects-update",
 				cfg.selectedRuleSet(ctx) == cfg.getRuleSets().get("example-update"));
 		check("pipeline.promoted-to-appsession",
-				"8003".equals(hit.getApplicationSession().getAttribute("dialedNumber")));
+				"8003".equals(MessageHelper.getVariable(hit.getApplicationSession(), "dialedNumber")));
 
 		DetachedRequest miss = new DetachedRequest("INVITE", "<sip:alice@x>", "<sip:5551000@pbx.example.com>");
 		miss.setSession(new DetachedSipSession(miss.getApplicationSession()));

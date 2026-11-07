@@ -11,7 +11,13 @@ import org.vorpal.blade.framework.v2.config.SessionParametersDefault;
 import org.vorpal.blade.framework.v2.config.TranslationsMap;
 import org.vorpal.blade.framework.v2.logging.LogParameters.LoggingLevel;
 import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
-import org.vorpal.blade.framework.v2.transfer.TransferSettings;
+import org.vorpal.blade.framework.v3.crud.Crud;
+import org.vorpal.blade.framework.v3.crud.ReadOperation;
+import org.vorpal.blade.framework.v3.crud.Rule;
+import org.vorpal.blade.framework.v3.crud.RuleSet;
+import org.vorpal.blade.framework.v3.crud.UpdateOperation;
+import org.vorpal.blade.framework.v3.transfer.TransferSettings;
+import org.vorpal.blade.framework.v3.transfer.Webhook;
 
 public class TransferSettingsSample extends TransferSettings {
 
@@ -98,6 +104,46 @@ public class TransferSettingsSample extends TransferSettings {
 		this.maps.add(hashMap);
 		this.plan.add(prefixMap);
 		this.plan.add(hashMap);
+
+		this.crud = targetRewrite();
+
+		// A REST request with notification {"style": "callback", "callbackName": "myWebhook"}
+		// gets every event of its transfer POSTed here. defaultWebhook (unset) would do the
+		// same for transfers no REST request named a webhook for, such as a REFER's.
+		Webhook webhook = new Webhook("https://webhooks.example.com/transfer");
+		webhook.getHeaders().put("Authorization", "Bearer <token>");
+		this.webhooks.put("myWebhook", webhook);
+	}
+
+	/// A transfer to a 1916 number goes out with a different To header. The
+	/// target is only known when its INVITE is sent, so the decision is a
+	/// `when` on that INVITE rather than a rule set chosen when the call began.
+	private static Crud targetRewrite() {
+		Rule capture = new Rule();
+		capture.setId("capture-target");
+		capture.setDescription("Save the user part of the outgoing INVITE's Request-URI as ${target}");
+		capture.setMethod("INVITE");
+		capture.setMessageType("request");
+		capture.getOperations().add(new ReadOperation("requestURI", "^sips?:(?<target>[^@;>]+)"));
+
+		Rule rewrite = new Rule();
+		rewrite.setId("rewrite-to");
+		rewrite.setDescription("For a 1916 target, replace the To header");
+		rewrite.setMethod("INVITE");
+		rewrite.setMessageType("request");
+		rewrite.setWhen("${target} matches '1916.*'");
+		rewrite.getOperations().add(new UpdateOperation("To", ".*", "<sip:${target}@transfer.example.com>"));
+
+		RuleSet ruleSet = new RuleSet();
+		ruleSet.setId("transfer-target");
+		ruleSet.setDescription("Rewrite To on transfers to 1916 numbers");
+		ruleSet.getRules().add(capture);
+		ruleSet.getRules().add(rewrite);
+
+		Crud crud = new Crud();
+		crud.getRuleSets().put(ruleSet.getId(), ruleSet);
+		crud.setDefaultRuleSet(ruleSet.getId());
+		return crud;
 
 	}
 

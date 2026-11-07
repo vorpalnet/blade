@@ -2,6 +2,7 @@ package org.vorpal.blade.services.tpcc.v1;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -13,6 +14,7 @@ import javax.ejb.Asynchronous;
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
+import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
@@ -34,6 +36,9 @@ import org.vorpal.blade.framework.v3.events.BladeEventTypes;
 import org.vorpal.blade.framework.v3.events.Events;
 import org.vorpal.blade.services.tpcc.TpccServlet;
 import org.vorpal.blade.services.tpcc.callflows.CreateDialog;
+import org.vorpal.blade.framework.v3.media.CallflowHold;
+import org.vorpal.blade.services.tpcc.v1.dialog.CallRequest;
+import org.vorpal.blade.services.tpcc.v1.dialog.CallResponse;
 import org.vorpal.blade.services.tpcc.v1.dialog.Dialog;
 import org.vorpal.blade.services.tpcc.v1.dialog.DialogProperties;
 import org.vorpal.blade.services.tpcc.v1.dialog.DialogPutAttributes;
@@ -52,6 +57,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 /// controller chains to build and manage a call between two or more parties:
 ///
 /// ```
+/// POST   /call                                             -- ring `from`, then connect it to `to`
 /// POST   /session                                          -- create a session, returns {sessionId}
 /// POST   /dialog/{sessionId}                               -- create a dialog, returns {sessionId, dialogId}
 /// GET    /dialog/{sessionId}                               -- list the session's dialogs
@@ -66,9 +72,17 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 /// dialogId so the caller can chain connect/delete; `GET /dialog/{sessionId}`
 /// lets a UI discover and poll every dialog.
 ///
+/// `POST /call` is RFC 3725 Flow I in one request: an offerless INVITE to `from`,
+/// whose 200 OK carries the offer; an INVITE to `to` carrying that offer; and the
+/// ACK to `from` carrying `to`'s answer. Unlike create+create+connect, `to` never
+/// sees an offerless INVITE, so it works for a party that needs an offer up front
+/// (a media-server application anchors media from the INVITE's SDP).
+/// The cost: `from`'s 200 OK waits unacknowledged while `to` rings, and per
+/// RFC 3261 13.3.1.4 `from` gives up on it after 64*T1 (32 s by default). Make `to` the party that answers at once: an
+/// application, a media server, an auto-answer endpoint.
+///
 /// Not yet implemented (roadmap): per-dialog mute / hold (the framework ships
-/// `CallflowMute` / `CallflowHold` / `CallflowResume`), and a friendlier v2
-/// `POST /call {from,to}` that runs create+create+connect in one shot.
+/// `CallflowMute` / `CallflowHold` / `CallflowResume`).
 @OpenAPIDefinition(info = @Info(title = "3PCC API", version = "1", description = "Allows one entity (the controller) to set up and manage a call between two or more other parties."))
 @Path("api/v1")
 public class DialogAPI extends Callflow implements Serializable {
@@ -113,6 +127,114 @@ public class DialogAPI extends Callflow implements Serializable {
 		return null;
 	}
 
+	/// A unique 8-hex application-session key. This IS the sessionId the caller
+	/// uses on every later request.
+	private String newSessionId() {
+		String sessionId;
+		do {
+			sessionId = String.format("%08X", ThreadLocalRandom.current().nextLong(0, 0xFFFFFFFFL));
+		} while (sipUtil.getApplicationSessionByKey(sessionId, false) != null);
+		return sessionId;
+	}
+
+	@POST
+	@Asynchronous
+	@Path("call")
+	@Consumes({ MediaType.APPLICATION_JSON })
+	@Operation(operationId = "call", summary = "Ring `from`, then call `to` with its offer and connect them; returns when `to` answers.")
+	@ApiResponses(value = { @ApiResponse(responseCode = "200", description = "OK"),
+			@ApiResponse(responseCode = "400", description = "Missing from or to"),
+			@ApiResponse(responseCode = "500", description = "Internal Server Error") })
+	public void call(@RequestBody(description = "the two parties", required = true) CallRequest callData,
+			@Suspended AsyncResponse asyncResponse) {
+
+		if (callData == null || callData.from == null || callData.to == null) {
+			asyncResponse.resume(Response.status(Status.BAD_REQUEST).build());
+			return;
+		}
+
+		// Plain strings only: the callbacks below are call state and must serialize.
+		String toLocal = callData.to.localParty;
+		String toRemote = callData.to.remoteParty;
+		String toRequestUri = callData.to.requestUri;
+
+		try {
+			String sessionId = newSessionId();
+			SipApplicationSession appSession = sipUtil.getApplicationSessionByKey(sessionId, true);
+			SipServletRequest fromInvite = createInvite(appSession, callData.from.localParty,
+					callData.from.remoteParty, callData.from.requestUri);
+			TpccServlet.responseMap.put(sessionId, asyncResponse);
+
+			// Offerless, so `from`'s 200 OK carries the offer `to` will answer.
+			sendRequest(fromInvite, (fromResponse) -> {
+				if (failure(fromResponse)) {
+					resumeCall(sessionId, fromResponse, null, null);
+					return;
+				}
+				if (!successful(fromResponse)) {
+					return;
+				}
+
+				SipServletRequest toInvite = createInvite(appSession, toLocal, toRemote, toRequestUri);
+				copyContent(fromResponse, toInvite);
+				// Linked, so a BYE from either party ends the other (and a hang-up
+				// while `to` still rings cancels it).
+				linkSession(fromResponse.getSession(), toInvite.getSession());
+
+				sendRequest(toInvite, (toResponse) -> {
+					if (successful(toResponse)) {
+						sendRequest(copyContent(toResponse, fromResponse.createAck()));
+						sendRequest(toResponse.createAck());
+						Events.publish(appSession, BladeEventTypes.CALL_CONNECTED,
+								data -> data.put("dialog", getVorpalDialogId(fromResponse.getSession()))
+										.put("otherDialog", getVorpalDialogId(toResponse.getSession())));
+						resumeCall(sessionId, toResponse, fromResponse.getSession(), toResponse.getSession());
+
+					} else if (failure(toResponse)) {
+						// `from` answered and is owed an ACK with an answer to its
+						// offer; park it inactive, then hang it up.
+						SipServletRequest ack = fromResponse.createAck();
+						String answer = CallflowHold.inactiveAnswerFor(fromResponse);
+						if (answer != null) {
+							ack.setContent(answer.getBytes(StandardCharsets.UTF_8), "application/sdp");
+						}
+						sendRequest(ack);
+						unlinkSessions(fromResponse.getSession(), toResponse.getSession());
+						sendRequest(fromResponse.getSession().createRequest(BYE));
+						resumeCall(sessionId, toResponse, fromResponse.getSession(), toResponse.getSession());
+					}
+				});
+			});
+
+		} catch (Exception e) {
+			sipLogger.severe(e);
+			asyncResponse.resume(Response.status(500, e.getMessage()).build());
+		}
+	}
+
+	/// An INVITE on `appSession` from `localParty` to `remoteParty`, sent to
+	/// `requestUri` when one is given.
+	private SipServletRequest createInvite(SipApplicationSession appSession, String localParty, String remoteParty,
+			String requestUri) throws ServletException {
+		SipServletRequest invite = sipFactory.createRequest(appSession, INVITE, localParty, remoteParty);
+		if (requestUri != null) {
+			invite.setRequestURI(sipFactory.createURI(requestUri));
+		}
+		return invite;
+	}
+
+	/// Resume-and-remove the parked continuation for a call with the response
+	/// that settled it.
+	private void resumeCall(String sessionId, SipServletResponse settled, SipSession fromLeg, SipSession toLeg) {
+		AsyncResponse parked = TpccServlet.responseMap.remove(sessionId);
+		if (parked != null) {
+			CallResponse body = new CallResponse(sessionId,
+					fromLeg != null ? getVorpalDialogId(fromLeg) : getVorpalDialogId(settled.getSession()),
+					toLeg != null ? getVorpalDialogId(toLeg) : null, settled.getStatus(), settled.getReasonPhrase());
+			parked.resume(Response.status(settled.getStatus(), settled.getReasonPhrase()).entity(body).build());
+		}
+	}
+
 	@POST
 	@Path("session")
 	@Consumes({ MediaType.APPLICATION_JSON })
@@ -123,13 +245,7 @@ public class DialogAPI extends Callflow implements Serializable {
 			@RequestBody(description = "optional session properties", required = false) SessionCreateRequest sessionData) {
 
 		try {
-			// Generate a unique 8-hex application-session key. This IS the
-			// sessionId the caller uses on every later request.
-			String sessionId;
-			do {
-				sessionId = String.format("%08X", ThreadLocalRandom.current().nextLong(0, 0xFFFFFFFFL));
-			} while (sipUtil.getApplicationSessionByKey(sessionId, false) != null);
-
+			String sessionId = newSessionId();
 			SipApplicationSession appSession = sipUtil.getApplicationSessionByKey(sessionId, true);
 
 			if (sessionData != null) {
@@ -381,9 +497,15 @@ public class DialogAPI extends Callflow implements Serializable {
 				return;
 			}
 
+			// The callback is call state and must serialize, so it carries a key to the
+			// parked AsyncResponse, never the AsyncResponse itself.
+			String parkedKey = sessionId + "/" + dialogId + "/" + Long.toHexString(ThreadLocalRandom.current().nextLong());
+			TpccServlet.responseMap.put(parkedKey, asyncResponse);
 			sendRequest(dialog.createRequest(BYE), (byeResponse) -> {
-				asyncResponse.resume(
-						Response.status(byeResponse.getStatus(), byeResponse.getReasonPhrase()).build());
+				AsyncResponse parked = TpccServlet.responseMap.remove(parkedKey);
+				if (parked != null) {
+					parked.resume(Response.status(byeResponse.getStatus(), byeResponse.getReasonPhrase()).build());
+				}
 			});
 
 		} catch (Exception e) {

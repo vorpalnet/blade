@@ -61,6 +61,8 @@
 
 		<!-- Dependency versions -->
 		<jackson.version>2.18.6</jackson.version>
+		<!-- Jersey is the container's (OCCAS 8.1 ships 2.39.1); compiled against, never packaged. -->
+		<jersey.version>2.41</jersey.version>
 		<!-- joschi's threetenbp datatype lags Jackson patch releases — pinned
 		     separately from jackson.version. -->
 		<jackson-threetenbp.version>2.18.2</jackson-threetenbp.version>
@@ -112,6 +114,14 @@
 				<groupId>org.vorpal.blade</groupId>
 				<artifactId>vorpal-blade-library-fsmar</artifactId>
 				<version>${project.version}</version>
+			</dependency>
+
+			<!-- Jersey SPI, provided by the container -->
+			<dependency>
+				<groupId>org.glassfish.jersey.core</groupId>
+				<artifactId>jersey-common</artifactId>
+				<version>${jersey.version}</version>
+				<scope>provided</scope>
 			</dependency>
 
 			<!-- Jackson -->

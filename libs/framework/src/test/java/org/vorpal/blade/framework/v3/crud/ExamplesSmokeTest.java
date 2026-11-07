@@ -138,13 +138,13 @@ public final class ExamplesSmokeTest {
 		Example ex = new Example("read", rs, msg);
 		ex.assertion = (req) -> {
 			SipApplicationSession s = req.getApplicationSession();
-			check("read.regex-user", "alice".equals(s.getAttribute("callerUser")));
-			check("read.regex-host", "vorpal.net".equals(s.getAttribute("callerHost")));
-			check("read.xml-tenant", "acme".equals(s.getAttribute("tenantId")));
-			check("read.xml-session", "abc-123".equals(s.getAttribute("sessionId")));
-			check("read.json-agent", "A-42".equals(s.getAttribute("agentId")));
-			check("read.sdp-port", "8000".equals(s.getAttribute("mediaPort")));
-			check("read.sdp-addr", "1.1.1.1".equals(s.getAttribute("mediaAddr")));
+			check("read.regex-user", "alice".equals(MessageHelper.getVariable(s, "callerUser")));
+			check("read.regex-host", "vorpal.net".equals(MessageHelper.getVariable(s, "callerHost")));
+			check("read.xml-tenant", "acme".equals(MessageHelper.getVariable(s, "tenantId")));
+			check("read.xml-session", "abc-123".equals(MessageHelper.getVariable(s, "sessionId")));
+			check("read.json-agent", "A-42".equals(MessageHelper.getVariable(s, "agentId")));
+			check("read.sdp-port", "8000".equals(MessageHelper.getVariable(s, "mediaPort")));
+			check("read.sdp-addr", "1.1.1.1".equals(MessageHelper.getVariable(s, "mediaAddr")));
 		};
 		return ex;
 	}

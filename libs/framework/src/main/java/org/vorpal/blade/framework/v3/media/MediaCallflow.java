@@ -1403,7 +1403,14 @@ public abstract class MediaCallflow extends Callflow {
 			throw new MsControlException("MediaCallflow: SipApplicationSession " + appId + " no longer valid");
 		}
 		app.setAttribute(cbKey(keyUri, verb), callback);
-		notifier.addListener(new MediaDispatcher<E>(appId, keyUri, verb));
+		// One dispatcher per resource and verb, however often the verb is armed. A continuation that
+		// arms its own verb again (a prompt that plays itself on a loop) would otherwise add one more
+		// each time, and every dispatcher still delivering the event that finished the last play would
+		// find the new continuation and run it too: one play becomes two, then many. Dispatchers for the
+		// same app, resource and verb are equal, so removing first leaves exactly one.
+		MediaDispatcher<E> dispatcher = new MediaDispatcher<E>(appId, keyUri, verb);
+		notifier.removeListener(dispatcher);
+		notifier.addListener(dispatcher);
 		// Hear media-server loss on every container a verb touches. The listener is equal per media
 		// session, so a driver that keeps listeners as a set holds one per container and reports a
 		// loss once per session.
@@ -1674,6 +1681,22 @@ public abstract class MediaCallflow extends Callflow {
 			this.appId = appId;
 			this.msUri = msUri;
 			this.verb = verb;
+		}
+
+		/// Equal when they would run the same continuation: the same app, resource and verb.
+		@Override
+		public boolean equals(Object other) {
+			if (!(other instanceof MediaDispatcher)) {
+				return false;
+			}
+			MediaDispatcher<?> that = (MediaDispatcher<?>) other;
+			return java.util.Objects.equals(appId, that.appId) && java.util.Objects.equals(msUri, that.msUri)
+					&& java.util.Objects.equals(verb, that.verb);
+		}
+
+		@Override
+		public int hashCode() {
+			return java.util.Objects.hash(appId, msUri, verb);
 		}
 
 		@Override

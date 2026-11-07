@@ -406,10 +406,11 @@ public class IRouterInvite extends Callflow {
 	/// Last-resort response sender for terminal error paths in
 	/// [#applyRouting]. `protected` so subclasses' [#executeRoute]
 	/// overrides can use the same fallback (e.g. a redirect-server subclass sending
-	/// a 500 on redirect-build failure).
-	protected static void safeSend(SipServletRequest request, int status) {
+	/// a 500 on redirect-build failure). Sent through the framework, so the
+	/// flight recorder sees the refusal instead of an unanswered INVITE.
+	protected void safeSend(SipServletRequest request, int status) {
 		try {
-			request.createResponse(status).send();
+			sendResponse(request.createResponse(status));
 		} catch (Exception ignore) {
 		}
 	}

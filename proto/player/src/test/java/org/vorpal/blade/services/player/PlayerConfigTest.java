@@ -47,4 +47,14 @@ public class PlayerConfigTest {
 		assertTrue(back.isRecord());
 		assertEquals("file:///tmp/rec.webm", back.getRecordUri());
 	}
+
+	@Test
+	public void aNamedPromptReplacesTheDefaultMedia() throws Exception {
+		PlayerSettings s = M.readValue("{\"mediaUri\":\"http://m/default.wav\","
+				+ "\"prompts\":{\"closed\":\"http://m/closed.wav\"}}", PlayerSettings.class);
+		assertEquals("http://m/closed.wav", s.mediaUriFor("closed"));
+		// Only configured names play; anything else falls back to the default.
+		assertEquals("http://m/default.wav", s.mediaUriFor("http://elsewhere/x.wav"));
+		assertEquals("http://m/default.wav", s.mediaUriFor(null));
+	}
 }

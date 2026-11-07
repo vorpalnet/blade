@@ -1,6 +1,8 @@
 package org.vorpal.blade.services.webrtc;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.servlet.sip.SipApplicationSession;
 import javax.websocket.CloseReason;
@@ -11,10 +13,13 @@ import javax.websocket.OnOpen;
 import javax.websocket.Session;
 import javax.websocket.server.ServerEndpoint;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v3.Callflow;
 import org.vorpal.blade.framework.v3.events.CloudEvent;
 import org.vorpal.blade.services.webrtc.v3.MessageFromBrowser;
+import org.vorpal.blade.services.webrtc.v3.PresenceFromBrowser;
 
 /// The browser's end of the gateway: one WebSocket per browser, carrying
 /// [SignalProtocol] events.
@@ -93,6 +98,9 @@ public class SignalEndpoint {
 			case SignalProtocol.MESSAGE_SEND:
 				postMessage(session, event);
 				break;
+			case SignalProtocol.PRESENCE_PUBLISH:
+				publishPresence(session, event);
+				break;
 			default:
 				if (type.startsWith(FarSideEvents.FAR_SIDE_PREFIX)) {
 					forwardToCall(session, event); // a request to the application behind the call
@@ -142,6 +150,7 @@ public class SignalEndpoint {
 		String aor = BrowserRegistry.addressOf(session);
 		java.util.List<String> calls = BrowserRegistry.callsOf(session);
 		String last = BrowserRegistry.unregister(session);
+		PresenceFromBrowser.withdraw(session.getId(), aor);
 		for (String callId : calls) {
 			SipApplicationSession app = Callflow.getSipUtil().getApplicationSessionById(callId);
 			if (app != null && app.isValid()) {
@@ -274,6 +283,34 @@ public class SignalEndpoint {
 			return;
 		}
 		new MessageFromBrowser().send(session, aor, event);
+	}
+
+	private void publishPresence(Session session, CloudEvent event) throws Exception {
+		String aor = BrowserRegistry.addressOf(session);
+		if (aor == null) {
+			send(session, SignalProtocol.reason(SignalProtocol.ERROR, null, "session.connect required first"));
+			return;
+		}
+		String status = SignalProtocol.field(event, "status");
+		if (!"open".equals(status) && !"closed".equals(status)) {
+			send(session, SignalProtocol.reason(SignalProtocol.ERROR, null, "presence.publish needs status open or closed"));
+			return;
+		}
+		List<String> skills = new ArrayList<>();
+		JsonNode named = (event.getData() == null) ? null : event.getData().get("skills");
+		if (named != null && named.isArray()) {
+			for (JsonNode n : named) {
+				String skill = n.asText("").trim().toLowerCase();
+				if (!skill.matches("[a-z0-9][a-z0-9-]*")) {
+					send(session, SignalProtocol.reason(SignalProtocol.ERROR, null, "presence.publish: bad skill name " + skill));
+					return;
+				}
+				if (!skills.contains(skill)) {
+					skills.add(skill);
+				}
+			}
+		}
+		new PresenceFromBrowser().publish(session.getId(), aor, "open".equals(status), skills);
 	}
 
 	/// Hand an in-call event to the callflow that owns it.

@@ -38,7 +38,7 @@ public class XPathReadOperation implements Operation {
 			for (Map.Entry<String, String> entry : expressions.entrySet()) {
 				String value = XmlHelper.evaluateString(doc, entry.getValue());
 				if (value != null && !value.isEmpty()) {
-					appSession.setAttribute(entry.getKey(), value);
+					MessageHelper.putVariable(appSession, entry.getKey(), value);
 					SettingsManager.getSipLogger().finer(msg,
 							"XPathReadOperation - saved " + entry.getKey() + "=" + value);
 				}

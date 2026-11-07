@@ -78,7 +78,7 @@ public class PreviewEngine implements Serializable {
 			if (appSession != null) {
 				for (Map.Entry<String, String> e : initialVariables.entrySet()) {
 					if (e.getKey() != null && e.getValue() != null) {
-						appSession.setAttribute(e.getKey(), e.getValue());
+						MessageHelper.putVariable(appSession, e.getKey(), e.getValue());
 					}
 				}
 			}
@@ -138,7 +138,7 @@ public class PreviewEngine implements Serializable {
 			if (appSession != null) {
 				for (Map.Entry<String, String> e : initialVariables.entrySet()) {
 					if (e.getKey() != null && e.getValue() != null) {
-						appSession.setAttribute(e.getKey(), e.getValue());
+						MessageHelper.putVariable(appSession, e.getKey(), e.getValue());
 					}
 				}
 			}
@@ -157,13 +157,7 @@ public class PreviewEngine implements Serializable {
 	/// downstream `create` / `update` ops; surfacing them in the UI shows
 	/// operators what their reads actually captured.
 	private static Map<String, String> snapshotVariables(SipApplicationSession appSession) {
-		Map<String, String> out = new LinkedHashMap<>();
-		if (appSession == null) return out;
-		for (String name : appSession.getAttributeNameSet()) {
-			Object v = appSession.getAttribute(name);
-			if (v instanceof String) out.put(name, (String) v);
-		}
-		return out;
+		return new LinkedHashMap<>(MessageHelper.getSessionVariables(appSession));
 	}
 
 	/// Result of a dry-run preview. Either `error` is set (parse / config

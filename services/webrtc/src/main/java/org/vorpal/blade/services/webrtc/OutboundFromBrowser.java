@@ -438,6 +438,9 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 	/// A bare number takes the caller's own domain, so `alice@example.com` dialling `13125551212`
 	/// gets `sip:13125551212@example.com` and the routing decision stays where it belongs, in the
 	/// application router.
+	///
+	/// URI parameters on a bare number stay URI parameters: `13125551212;demo=recording` becomes
+	/// `sip:13125551212@example.com;demo=recording`, not a user part that contains `;demo=`.
 	public static String normalizeTarget(String target, String callerAor) {
 		String trimmed = target.trim();
 		if (trimmed.startsWith("sip:") || trimmed.startsWith("sips:") || trimmed.startsWith("tel:")) {
@@ -446,10 +449,13 @@ public class OutboundFromBrowser extends WebrtcCallflow {
 		if (trimmed.indexOf('@') >= 0) {
 			return "sip:" + trimmed;
 		}
+		int semi = trimmed.indexOf(';');
+		String user = semi < 0 ? trimmed : trimmed.substring(0, semi);
+		String params = semi < 0 ? "" : trimmed.substring(semi);
 		int at = callerAor == null ? -1 : callerAor.indexOf('@');
 		if (at < 0) {
-			return "sip:" + trimmed;
+			return "sip:" + user + params;
 		}
-		return "sip:" + trimmed + callerAor.substring(at);
+		return "sip:" + user + callerAor.substring(at) + params;
 	}
 }

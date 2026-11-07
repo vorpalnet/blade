@@ -8,10 +8,18 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// `type: "register-digest"` — keep the trunk alive with an outbound SIP REGISTER and
 /// HTTP‑digest authentication on the 401/407 challenge (most credentialed
 /// SIP trunks). Refreshed by a SIP servlet timer before {@link #getExpires()} lapses.
-@JsonPropertyOrder({ "type", "userId", "authName", "password", "expires", "contact", "allow", "userAgent" })
+///
+/// With {@link #getRegister()} false the trunk sends no REGISTER, yet its credentials still
+/// answer the carrier's digest challenge on outbound calls. Use it when two trunks reach the
+/// same carrier account through different registrars: a carrier that holds two bindings for
+/// one account delivers each inbound call to both, so the same call arrives twice. Let one
+/// trunk register and keep the other for outbound only.
+@JsonPropertyOrder({ "type", "register", "userId", "authName", "password", "expires", "contact", "allow",
+		"userAgent" })
 public class RegisterDigestStyle extends RegistrationStyle {
 	private static final long serialVersionUID = 1L;
 
+	private boolean register = true;
 	private String userId;
 	private String authName;
 	private String password;
@@ -22,12 +30,23 @@ public class RegisterDigestStyle extends RegistrationStyle {
 
 	@Override
 	public TrunkRegistrar newRegistrar(VirtualGateway gateway) {
-		return new RegisterCallflow(gateway, this);
+		return register ? new RegisterCallflow(gateway, this) : null;
 	}
 
 	@Override
 	public String outboundIdentity() {
 		return userId; // present the registered account/DID on outbound calls
+	}
+
+	@JsonPropertyDescription("Send a REGISTER for this trunk. False keeps the credentials for outbound digest "
+			+ "challenges but takes no inbound calls by registration. When two trunks share one carrier account, "
+			+ "register only one of them, or the carrier delivers each inbound call to both.")
+	public boolean getRegister() {
+		return register;
+	}
+
+	public void setRegister(boolean register) {
+		this.register = register;
 	}
 
 	@JsonPropertyDescription("SIP account / DID used as the address‑of‑record (the From/To user of the REGISTER).")

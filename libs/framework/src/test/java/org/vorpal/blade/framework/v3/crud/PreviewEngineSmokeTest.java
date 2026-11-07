@@ -228,7 +228,8 @@ public final class PreviewEngineSmokeTest {
 				cfg, "example-update", wire, "callStarted");
 		check("preview.update.no-error", r.error == null);
 		check("preview.update.from-anonymized",
-				r.output.contains("From: sip:anonymous@vorpal.net"));
+				// the URI changes; the dialog's tag survives
+				r.output.contains("From: <sip:anonymous@vorpal.net>;tag=1"));
 	}
 
 	private static void testPreviewDelete() throws Exception {

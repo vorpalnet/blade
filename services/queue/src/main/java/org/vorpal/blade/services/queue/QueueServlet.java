@@ -26,7 +26,13 @@ package org.vorpal.blade.services.queue;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
+
+import javax.media.mscontrol.MediaSession;
+import javax.media.mscontrol.MsControlException;
+import javax.media.mscontrol.mediagroup.MediaGroup;
+import javax.media.mscontrol.networkconnection.NetworkConnection;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
@@ -41,6 +47,7 @@ import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.framework.v2.config.Translation;
 import org.vorpal.blade.framework.v2.logging.Color;
 import org.vorpal.blade.framework.v3.metrics.MetricsRegistry;
+import org.vorpal.blade.framework.v3.media.MediaCallflow;
 import org.vorpal.blade.services.queue.config.QueueAttributes;
 import org.vorpal.blade.services.queue.config.QueueConfig;
 import org.vorpal.blade.services.queue.config.QueueConfigSample;
@@ -60,6 +67,36 @@ public class QueueServlet extends B2buaServlet {
 
 	public static Map<String, Queue> queues = new HashMap<>();
 	public static QueueSettingsManager settingsManager;
+
+	/// The media a waiting caller hears when their queue plays `media`, by app-session id. JSR-309
+	/// objects are live connections to the media server, not call state, so they stay on the node
+	/// that answered the caller, beside the replicated session rather than in it. Queues are per
+	/// node already, so a waiting caller never moves.
+	static final Map<String, Waiting> LIVE = new ConcurrentHashMap<>();
+
+	/// One waiting caller's media: the session, the caller's connection, and the player.
+	static final class Waiting {
+		final MediaSession ms;
+		final NetworkConnection nc;
+		volatile MediaGroup mg;
+
+		Waiting(MediaSession ms, NetworkConnection nc) {
+			this.ms = ms;
+			this.nc = nc;
+		}
+	}
+
+	/// Release a waiting caller's media, once; no-op when there is none.
+	static void releaseMedia(String appId) {
+		Waiting w = (appId == null) ? null : LIVE.remove(appId);
+		if (w != null) {
+			try {
+				w.ms.release();
+			} catch (RuntimeException e) {
+				sipLogger.warning("QueueServlet.releaseMedia: " + appId + ": " + e.getMessage());
+			}
+		}
+	}
 
 	/// The gauges a dashboard reads for calls waiting now. Named here because
 	/// the dashboard selects on them by name.
@@ -88,6 +125,25 @@ public class QueueServlet extends B2buaServlet {
 
 	}
 
+	/// Connect to the JSR-309 media server the first time a loaded configuration has a queue that
+	/// plays `media`, through the driver it names; once connected it stays. A queue without `media`
+	/// needs none, so neither does a configuration without one. A failure is logged and does not
+	/// fail the deployment: those queues ring instead.
+	public static void installMediaServer(QueueConfig config) {
+		if (MediaCallflow.getMsControlFactory() != null || config == null
+				|| config.getQueues().values().stream().noneMatch(q -> q.getMedia() != null)) {
+			return;
+		}
+		try {
+			MediaCallflow.setMsControlFactory(MediaCallflow.obtainFactory(config.getDriverName(),
+					config.getDriverProperties(), QueueServlet.class.getClassLoader()));
+			sipLogger.info("QueueServlet: JSR-309 media server connected for queues that play media");
+		} catch (MsControlException e) {
+			sipLogger.severe("QueueServlet: no JSR-309 media server, so queues with media will only ring: "
+					+ e.getMessage());
+		}
+	}
+
 	@Override
 	public void servletDestroyed(SipServletContextEvent event) {
 		try {
@@ -95,6 +151,9 @@ public class QueueServlet extends B2buaServlet {
 
 			for (String key : this.queues.keySet()) {
 				this.queues.get(key).stopTimers();
+			}
+			for (String appId : LIVE.keySet()) {
+				releaseMedia(appId);
 			}
 
 			settingsManager.unregister();

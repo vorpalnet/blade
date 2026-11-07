@@ -87,6 +87,12 @@ public final class SignalProtocol {
 	/// [#MESSAGE_SENT] with the event's `id` as `data.ref`, or [#ERROR] with the same `ref`.
 	public static final String MESSAGE_SEND = "message.send";
 
+	/// Say Ready or Not Ready: `data.status` is `open` or `closed`, for the skills in `data.skills`
+	/// (names; letters, digits and `-`; optional). Sent as a SIP PUBLISH for the socket's address; the
+	/// answer is [#PRESENCE_PUBLISHED], or [#ERROR]. The socket then watches itself: see
+	/// [#PRESENCE_NOTIFY].
+	public static final String PRESENCE_PUBLISH = "presence.publish";
+
 	// ---- gateway -> browser -------------------------------------------------------------------
 
 	/// The address is claimed and calls can now arrive. `data.aor` is the address that was actually
@@ -158,6 +164,16 @@ public final class SignalProtocol {
 	/// `data.seq` the room's number for it and `data.atMs` when it was accepted. Written to every
 	/// socket of the address; a page ignores a `ref` it did not send.
 	public static final String MESSAGE_SENT = "message.sent";
+
+	/// The presence server took a [#PRESENCE_PUBLISH]: `data.status` is what it now holds for this
+	/// device. Written to every socket of the address.
+	public static final String PRESENCE_PUBLISHED = "presence.published";
+
+	/// The presence server's view of this address, after the socket's first [#PRESENCE_PUBLISH] and on
+	/// every change: `data.body` is its PIDF document (a `<note>` with the status word, and a
+	/// `skill-<name>` tuple per skill, open when Ready for it) and `data.state` the
+	/// `Subscription-State`. Written to every socket of the address.
+	public static final String PRESENCE_NOTIFY = "presence.notify";
 
 	/// A room sent this browser a message: `data.room`, `data.seq`, `data.from` (the sender's
 	/// address, as the network asserted it), `data.displayName`, `data.atMs`, `data.to` on a private

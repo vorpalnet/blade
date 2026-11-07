@@ -37,7 +37,7 @@ public class SdpReadOperation implements Operation {
 			for (Map.Entry<String, String> entry : expressions.entrySet()) {
 				String value = SdpHelper.readValue(sdp, entry.getValue());
 				if (value != null && !value.isEmpty()) {
-					appSession.setAttribute(entry.getKey(), value);
+					MessageHelper.putVariable(appSession, entry.getKey(), value);
 					SettingsManager.getSipLogger().finer(msg,
 							"SdpReadOperation - saved " + entry.getKey() + "=" + value);
 				}

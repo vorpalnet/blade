@@ -75,6 +75,13 @@ public final class Legs {
 	/// One `branchFailed` per leg and status, however often it is reported: the
 	/// container may deliver a proxy's branch response, then the same response
 	/// as the best.
+	///
+	/// A 401 or 407 is a challenge, not a refusal: the sender answers it with
+	/// credentials and the server usually takes the call. So the first one for a
+	/// destination is noted and not published, and only a second, which means
+	/// the credentials were refused, is a failed leg. Counting the first made
+	/// every call through a digest-authenticated trunk look refused, and the
+	/// dedupe below then hid the real refusal behind it.
 	@SuppressWarnings("unchecked")
 	private static void publish(SipServletRequest request, int status, String reason, String responder,
 			Integer retryAfter) {
@@ -86,6 +93,10 @@ public final class Legs {
 		HashSet<String> seen = (HashSet<String>) appSession.getAttribute(REPORTED);
 		if (seen == null) {
 			seen = new HashSet<>();
+		}
+		if ((status == 401 || status == 407) && seen.add(destination + "|challenged")) {
+			appSession.setAttribute(REPORTED, seen);
+			return;
 		}
 		if (!seen.add(destination + "|" + status)) {
 			return;

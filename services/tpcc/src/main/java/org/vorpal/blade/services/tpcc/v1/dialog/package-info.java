@@ -7,6 +7,7 @@
 ///
 /// - [Dialog] - Represents a complete SIP dialog with request URI, local party, remote party, and custom attributes
 /// - [DialogResponse] - Response from create-dialog: echoes the sessionId and the new dialogId
+/// - [CallRequest] / [CallResponse] - The one-shot call: its two parties, and the session and dialog ids it created
 /// - [DialogProperties] - Read-only view of dialog properties including remote party and attributes
 /// - [DialogPutAttributes] - Request model for updating dialog attributes with key-value pairs
 ///
@@ -36,4 +37,6 @@
 /// @see DialogProperties
 /// @see DialogPutAttributes
 /// @see DialogResponse
+/// @see CallRequest
+/// @see CallResponse
 package org.vorpal.blade.services.tpcc.v1.dialog;

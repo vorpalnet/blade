@@ -27,22 +27,22 @@ public class QueueConfigSample extends QueueConfig {
 		this.addQueue("fast", new QueueAttributes() //
 				.setPeriod(5 * 1000) // number of milliseconds
 				.setRate(10) //
-				.setRingPeriod(90) //
-				.setRingDuration(60 * 1000) //
+				.setRingPeriod(90) // seconds
+				.setRingDuration(60) // seconds
 				.setAnnouncement("sip:ann1@192.0.2.227"));
 
 		this.addQueue("medium", new QueueAttributes() //
 				.setPeriod(15 * 1000) //
 				.setRate(5) //
-				.setRingPeriod(90) //
-				.setRingDuration(60 * 1000) //
+				.setRingPeriod(90) // seconds
+				.setRingDuration(60) // seconds
 				.setAnnouncement("sip:ann1@192.0.2.227"));
 
 		this.addQueue("slow", new QueueAttributes() //
 				.setPeriod(30 * 1000) //
 				.setRate(1) //
-				.setRingPeriod(90) //
-				.setRingDuration(60 * 1000));
+				.setRingPeriod(90) // seconds
+				.setRingDuration(60)); // seconds
 
 		Selector toSelector = new Selector("toSelector", "To", SIP_ADDRESS_PATTERN, "${user}");
 		toSelector.setDescription("The user part of the To header");

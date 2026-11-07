@@ -521,7 +521,7 @@ public final class BladeEventCatalog {
 
 	private static EventType transferCompleted() {
 		EventType declaration = callScopedBase(BladeEventTypes.TRANSFER_COMPLETED, "Transfer Completed",
-				"The transfer target answered — a success response to the target INVITE, or a 200 OK sipfrag in a NOTIFY.",
+				"The transferee is connected to the target: for a blind transfer the target answering (a success response to the target INVITE, or a 200 OK sipfrag in a NOTIFY); for an attended transfer the transferor hanging up on the target after consulting.",
 				"TransferCompleted");
 		declaration.setFields(callScopedFields());
 		return declaration;
@@ -529,7 +529,7 @@ public final class BladeEventCatalog {
 
 	private static EventType transferDeclined() {
 		EventType declaration = callScopedBase(BladeEventTypes.TRANSFER_DECLINED, "Transfer Declined",
-				"The transfer was refused: either the target's dialog returned a failure response, or the REFER itself was refused. Both land here, so this means the transfer did not happen — not specifically that the target said no.",
+				"The transfer was refused: either the target's dialog returned a failure response, or the REFER itself was refused. Both land here, so this means the transfer did not happen — not specifically that the target said no. An attended transfer also publishes it when the target hangs up during the consultation, or is lost before the transferee reaches her.",
 				"TransferDeclined");
 		declaration.setFields(callScopedFields());
 		return declaration;

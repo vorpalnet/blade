@@ -828,3 +828,17 @@
 .phone-log li[data-dir="err"] span { font-weight: 700; color: var(--vorpal-ink-900); }
 
 .phone-log-empty { color: var(--vorpal-slate-400); font-style: italic; }
+
+/* Agent presence: its own full-width row under the call controls; the words carry the state. */
+.phone-agent {
+	display: flex;
+	gap: 8px;
+	margin-top: 8px;
+}
+.phone-agent input {
+	flex: 1;
+	min-width: 0;
+}
+.phone-agent .phone-btn {
+	flex: none;
+}

@@ -6,12 +6,9 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.v2.config.Configuration;
-import org.vorpal.blade.framework.v2.config.SettingsManager;
-import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v3.configuration.Context;
 import org.vorpal.blade.framework.v3.configuration.Pipelines;
 import org.vorpal.blade.framework.v3.configuration.connectors.Connector;
@@ -90,24 +87,14 @@ public class CrudConfiguration extends Configuration implements Serializable {
 	/// [Context].
 	///
 	/// On completion every enrichment value is **promoted to the
-	/// application session**, because that's where rule operations resolve
-	/// `${var}` from ([MessageHelper#getSessionVariables]) — selectors write
-	/// to the inbound SipSession, which the outbound dialog's messages never
-	/// see. Promotion makes pipeline-extracted values (`${dialedNumber}`)
+	/// application session** as a CRUD variable ([MessageHelper#putVariable]),
+	/// because that's where rule operations resolve `${var}` from
+	/// ([MessageHelper#getSessionVariables]) — selectors write to the inbound
+	/// SipSession, which the outbound dialog's messages never see. Promotion
+	/// makes pipeline-extracted values (`${dialedNumber}`)
 	/// usable inside `create`/`update` templates and `when` clauses.
 	public Context enrich(SipServletRequest request) {
-		Context ctx = Pipelines.enrich(pipeline, request);
-
-		// Promote: snapshot() values are already resolved, so write them
-		// directly rather than through putAppSession (which would resolve
-		// ${...} a second time).
-		SipApplicationSession appSession = (request != null) ? request.getApplicationSession() : null;
-		if (appSession != null) {
-			for (Map.Entry<String, String> e : ctx.snapshot().entrySet()) {
-				appSession.setAttribute(e.getKey(), e.getValue());
-			}
-		}
-		return ctx;
+		return Crud.enrich(pipeline, request);
 	}
 
 	/// Looks up the rule set the enriched `ctx` selected via the
@@ -117,20 +104,6 @@ public class CrudConfiguration extends Configuration implements Serializable {
 	/// exist (a config error worth surfacing, not silence).
 	public RuleSet selectedRuleSet(Context ctx) {
 		String id = (ctx != null) ? ctx.get(RULESET_VARIABLE) : null;
-		if (id == null) {
-			id = defaultRuleSet;
-		}
-		if (id == null) {
-			return null;
-		}
-		RuleSet ruleSet = ruleSets.get(id);
-		if (ruleSet == null) {
-			Logger sipLogger = SettingsManager.getSipLogger();
-			if (sipLogger != null) {
-				sipLogger.warning(ctx.getRequest(),
-						"CRUD pipeline selected unknown ruleSet '" + id + "'");
-			}
-		}
-		return ruleSet;
+		return Crud.ruleSet(ruleSets, defaultRuleSet, id, (ctx != null) ? ctx.getRequest() : null);
 	}
 }

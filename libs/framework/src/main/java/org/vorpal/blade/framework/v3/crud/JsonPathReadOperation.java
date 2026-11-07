@@ -40,7 +40,7 @@ public class JsonPathReadOperation implements Operation {
 				Object result = ctx.read(entry.getValue());
 				if (result == null) continue;
 				String value = (result instanceof String) ? (String) result : result.toString();
-				appSession.setAttribute(entry.getKey(), value);
+				MessageHelper.putVariable(appSession, entry.getKey(), value);
 				SettingsManager.getSipLogger().finer(msg,
 						"JsonPathReadOperation - saved " + entry.getKey() + "=" + value);
 			}

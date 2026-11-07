@@ -33,9 +33,11 @@ import javax.ws.rs.ext.Provider;
 /// built [JwtValidator] is cached and only rebuilt when the config instance
 /// changes.
 ///
-/// **Registration.** Because the filter ships in the shared framework jar
-/// (never bundled in a skinny WAR), JAX-RS classpath scanning won't auto-find
-/// it — an app opts in by returning it from its `Application#getClasses()`.
+/// **Registration.** An app opts in by returning it from its
+/// `Application#getClasses()`. The framework jar is in every WAR's
+/// `WEB-INF/lib`, which the container scans for `@Provider`, so an app that
+/// relies on scanning registers it as well; there it does nothing, because
+/// no supplier is published and the config is therefore absent.
 ///
 /// Cross-WAR note: today the supplier is published by the app that owns the
 /// security settings. Distributing one security config to *every* admin WAR

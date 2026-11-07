@@ -55,7 +55,7 @@ public class ReadOperation implements Operation {
 				try {
 					String extracted = matcher.group(name);
 					if (extracted != null) {
-						appSession.setAttribute(name, extracted);
+						MessageHelper.putVariable(appSession, name, extracted);
 						SettingsManager.getSipLogger().finer(msg,
 								"ReadOperation - saved " + name + "=" + extracted);
 					}

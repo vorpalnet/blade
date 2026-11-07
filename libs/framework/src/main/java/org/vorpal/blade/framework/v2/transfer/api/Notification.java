@@ -10,7 +10,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * Configuration for transfer operation notification delivery.
  *
  * <p>Specifies how the caller should be notified of transfer results:
- * immediate response, async wait, REST callback, or JMS message.
+ * a waited response, an immediate one, or a webhook callback.
  */
 @JsonPropertyOrder({"style", "uid", "callbackName", "jmsQueueName"})
 public class Notification implements Serializable {
@@ -20,7 +20,7 @@ public class Notification implements Serializable {
 		none, async, callback, jms
 	}
 
-	@Schema(description = "Style of notification; none: immediate response, async: request hangs until final response, callback: REST webhook, jms: Java Message Queue", defaultValue = "async", nullable = true)
+	@Schema(description = "Style of notification; async (the default): the request waits and answers with the outcome; none: immediate 202; callback: immediate 202, then every event POSTed to the webhook named by callbackName; jms: not implemented, answers like none (the event bus carries every transfer event regardless)", defaultValue = "async", nullable = true)
 	public Style style;
 
 	@Schema(description = "Unique Identifier provided by the client to match notifications with requests", defaultValue = "1234567890", nullable = true)

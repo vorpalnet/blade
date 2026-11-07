@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Access log</title>
+<!--
+  The examining half of the audit control: one UTC day of access records, newest first.
+  Served from this WAR with nothing fetched from outside it, like the recordings page. The API
+  decides whether this reader may see the log, and records that they asked either way, so the
+  page carries no policy of its own.
+
+  Colour never carries meaning here: a refusal says "Refused" and is marked with a cross.
+-->
+<style>
+  :root { --ink: #1f1f1f; --muted: #5a5a5a; --line: #d8d8d8; --panel: #f6f6f6; --brand: #602671; }
+  body { margin: 0; font: 14px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--ink); background: #fff; }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; align-items: baseline; gap: 16px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  header form { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; }
+  header label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; }
+  header input { font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: 4px; }
+  header button { font: inherit; padding: 5px 12px; border: 1px solid var(--brand); color: var(--brand); background: #fff; border-radius: 4px; cursor: pointer; }
+  .note { padding: 8px 20px; margin: 0; background: var(--panel); border-bottom: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+  main { padding: 12px 20px 32px; overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 760px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; }
+  td.when { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  tr.refused td { background: var(--panel); }
+  tr.refused td.decision { font-weight: 700; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; word-break: break-all; }
+  #status { color: var(--muted); }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink: #ece7f2; --muted: #a99cbc; --line: #3a2c50; --panel: #211630; --brand: #b97cd0; }
+    body, header button, header input { background: #140e1d; color: var(--ink); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Access log</h1>
+  <form id="pick">
+    <label>Day (UTC)<input id="day" type="date" required></label>
+    <label>Who<input id="who" type="search" placeholder="any"></label>
+    <button type="submit">Show</button>
+  </form>
+  <span id="status" aria-live="polite"></span>
+</header>
+<p class="note">Every attempt to reach a recording or a transcript is here, permitted or refused. Reading this log is recorded too, and whoever reads it cannot remove that record.</p>
+<main>
+  <table>
+    <thead><tr><th>When (UTC)</th><th>Who</th><th>Decision</th><th>Tried to</th><th>What</th><th>From</th><th>Rule</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+</main>
+<script>
+(function () {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  let records = [];
+
+  function today() { return new Date().toISOString().slice(0, 10); }
+
+  function cell(text, cls) {
+    const td = document.createElement('td');
+    if (cls) td.className = cls;
+    td.textContent = text == null ? '' : text;
+    return td;
+  }
+
+  function show() {
+    const who = $('who').value.trim().toLowerCase();
+    const body = $('rows');
+    body.replaceChildren();
+    const shown = records.filter((r) => !who || String((r.data || {}).actor || '').toLowerCase().includes(who));
+    for (const r of shown.slice().reverse()) {
+      const d = r.data || {};
+      // permit, deny, or breakglass: an emergency override, permitted and always worth a look.
+      const permitted = d.decision === 'permit' || d.decision === 'breakglass';
+      const tr = document.createElement('tr');
+      if (!permitted || d.decision === 'breakglass') tr.className = 'refused';
+      tr.append(
+        cell(String(r.time || '').replace('T', ' ').replace(/\..*$/, ''), 'when'),
+        cell(d.actor),
+        cell(d.decision === 'breakglass' ? '! Permitted, break glass'
+          : permitted ? '✓ Permitted' : '✗ Refused', 'decision'),
+        cell(d.action),
+        cell([d.resourceKind, d.resourceId].filter(Boolean).join(' '), 'mono'),
+        cell(d.sourceAddress, 'mono'),
+        cell(d.rule || d.reason));
+      body.append(tr);
+    }
+    $('status').textContent = shown.length + ' of ' + records.length + ' records';
+  }
+
+  async function load() {
+    const [y, m, d] = $('day').value.split('-');
+    $('status').textContent = 'Loading…';
+    const res = await fetch('api/v1/audit/' + y + '/' + m + '/' + d, { credentials: 'same-origin' });
+    if (res.status === 403) {
+      records = [];
+      show();
+      $('status').textContent = 'You may not read the access log. That attempt has been recorded.';
+      return;
+    }
+    if (!res.ok) {
+      records = [];
+      show();
+      const body = await res.json().catch(() => ({}));
+      $('status').textContent = body.error || ('The log could not be read (' + res.status + ').');
+      return;
+    }
+    records = (await res.json()).records || [];
+    show();
+  }
+
+  $('day').value = today();
+  $('pick').addEventListener('submit', (e) => { e.preventDefault(); load(); });
+  $('who').addEventListener('input', show);
+  load();
+})();
+</script>
+</body>
+</html>
