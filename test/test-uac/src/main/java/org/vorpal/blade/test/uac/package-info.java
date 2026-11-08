@@ -57,5 +57,5 @@
 /// @see org.vorpal.blade.test.client
 /// @see org.vorpal.blade.framework.v3.tester.TesterServlet
 /// @see org.vorpal.blade.framework.v3.tester.LoadEngine
-/// @see org.vorpal.blade.framework.v2.config.SettingsManager
+/// @see org.vorpal.blade.framework.v3.configuration.SettingsManager
 package org.vorpal.blade.test.uac;

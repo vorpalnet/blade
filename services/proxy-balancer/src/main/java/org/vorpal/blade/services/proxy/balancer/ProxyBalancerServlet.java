@@ -39,8 +39,7 @@ public class ProxyBalancerServlet extends B2buaServlet {
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
 		servletContextName = "sip:" + event.getServletContext().getServletContextName();
-		settingsManager = new ProxyBalancerSettingsManager(event, BalancerConfig.class,
-				new BalancerConfigSample());
+		settingsManager = new ProxyBalancerSettingsManager(event);
 
 		// per-node health view: OPTIONS ping cycle + JMX publication
 		new OptionsPingCallflow().start();

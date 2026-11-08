@@ -4,7 +4,7 @@ import java.io.Serializable;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import org.vorpal.blade.framework.v2.config.Configuration;
+import org.vorpal.blade.framework.v3.configuration.Configuration;
 import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
 import org.vorpal.blade.framework.v3.security.JwtAuthConfig;
 

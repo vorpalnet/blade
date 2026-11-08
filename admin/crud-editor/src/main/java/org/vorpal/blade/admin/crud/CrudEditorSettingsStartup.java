@@ -7,7 +7,7 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 
 /// Registers the CRUD Editor's SettingsManager at startup so its `name` / `tagline` / `description` metadata
 /// (and any future per-app settings) appear in JMX for the Admin Portal
@@ -23,7 +23,16 @@ public class CrudEditorSettingsStartup implements ServletContextListener {
 	@Override
 	public void contextInitialized(ServletContextEvent sce) {
 		try {
-			settingsManager = new SettingsManager<>(sce, CrudEditorSettings.class, new CrudEditorSettingsSample());
+			settingsManager = new SettingsManager<CrudEditorSettings>(sce) {
+				@Override
+				protected CrudEditorSettings sample() {
+					return new CrudEditorSettingsSample();
+				}
+
+				@Override
+				protected void refreshed(CrudEditorSettings config) {
+				}
+			};
 			logger.info("crud-editor SettingsManager registered");
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "crud-editor SettingsManager failed to register", e);

@@ -217,6 +217,15 @@ public class SettingsManager<T> {
 		this.build(name, clazz, null);
 	}
 
+	/// @deprecated Construct a v3
+	///             [org.vorpal.blade.framework.v3.configuration.SettingsManager]
+	///             instead: it names the config class once, in its type argument,
+	///             takes the sample from `sample()`, reloads through `refreshed()`,
+	///             and runs the application's `crud` section. This class stays as
+	///             its base and as home of the static accessors
+	///             (`getSipLogger()`, `getSipFactory()`, ...), which are not
+	///             deprecated.
+	@Deprecated
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz, ObjectMapper mapper)
 			throws ServletException, IOException {
 		this.mapper = mapper;
@@ -224,6 +233,15 @@ public class SettingsManager<T> {
 		this.build(applicationName, clazz, mapper);
 	}
 
+	/// @deprecated Construct a v3
+	///             [org.vorpal.blade.framework.v3.configuration.SettingsManager]
+	///             instead: it names the config class once, in its type argument,
+	///             takes the sample from `sample()`, reloads through `refreshed()`,
+	///             and runs the application's `crud` section. This class stays as
+	///             its base and as home of the static accessors
+	///             (`getSipLogger()`, `getSipFactory()`, ...), which are not
+	///             deprecated.
+	@Deprecated
 	public SettingsManager(ServletContextEvent event, Class<T> clazz, ObjectMapper mapper)
 			throws ServletException, IOException {
 		this.mapper = mapper;
@@ -231,16 +249,43 @@ public class SettingsManager<T> {
 		this.build(applicationName, clazz, mapper);
 	}
 
+	/// @deprecated Construct a v3
+	///             [org.vorpal.blade.framework.v3.configuration.SettingsManager]
+	///             instead: it names the config class once, in its type argument,
+	///             takes the sample from `sample()`, reloads through `refreshed()`,
+	///             and runs the application's `crud` section. This class stays as
+	///             its base and as home of the static accessors
+	///             (`getSipLogger()`, `getSipFactory()`, ...), which are not
+	///             deprecated.
+	@Deprecated
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz) throws ServletException, IOException {
 		initContext(event.getServletContext());
 		this.build(applicationName, clazz, null);
 	}
 
+	/// @deprecated Construct a v3
+	///             [org.vorpal.blade.framework.v3.configuration.SettingsManager]
+	///             instead: it names the config class once, in its type argument,
+	///             takes the sample from `sample()`, reloads through `refreshed()`,
+	///             and runs the application's `crud` section. This class stays as
+	///             its base and as home of the static accessors
+	///             (`getSipLogger()`, `getSipFactory()`, ...), which are not
+	///             deprecated.
+	@Deprecated
 	public SettingsManager(ServletContextEvent event, Class<T> clazz) throws ServletException, IOException {
 		initContext(event.getServletContext());
 		this.build(applicationName, clazz, null);
 	}
 
+	/// @deprecated Construct a v3
+	///             [org.vorpal.blade.framework.v3.configuration.SettingsManager]
+	///             instead: it names the config class once, in its type argument,
+	///             takes the sample from `sample()`, reloads through `refreshed()`,
+	///             and runs the application's `crud` section. This class stays as
+	///             its base and as home of the static accessors
+	///             (`getSipLogger()`, `getSipFactory()`, ...), which are not
+	///             deprecated.
+	@Deprecated
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz, T sample)
 			throws ServletException, IOException {
 		this.sample = sample;
@@ -248,6 +293,15 @@ public class SettingsManager<T> {
 		this.build(applicationName, clazz, null);
 	}
 
+	/// @deprecated Construct a v3
+	///             [org.vorpal.blade.framework.v3.configuration.SettingsManager]
+	///             instead: it names the config class once, in its type argument,
+	///             takes the sample from `sample()`, reloads through `refreshed()`,
+	///             and runs the application's `crud` section. This class stays as
+	///             its base and as home of the static accessors
+	///             (`getSipLogger()`, `getSipFactory()`, ...), which are not
+	///             deprecated.
+	@Deprecated
 	public SettingsManager(ServletContextEvent event, Class<T> clazz, T sample) throws ServletException, IOException {
 		this.sample = sample;
 		initContext(event.getServletContext());

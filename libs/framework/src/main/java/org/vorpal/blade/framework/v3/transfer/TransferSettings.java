@@ -26,6 +26,13 @@ public class TransferSettings extends org.vorpal.blade.framework.v2.transfer.Tra
 
 	protected Crud crud;
 
+	/// The v2 constructor is deprecated so that applications build this class
+	/// instead; this is the one caller it is meant to keep.
+	@SuppressWarnings("deprecation")
+	public TransferSettings() {
+		super();
+	}
+
 	@Override
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	@JsonPropertyDescription("CRUD rules run on every message the transfer service sends, such as the INVITE to a transfer target")

@@ -14,7 +14,12 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 /**
  * Translation map using Apache PatriciaTrie for efficient prefix-based lookups.
+ *
+ * @deprecated Use a longest-prefix table: a v3 {@code TranslationTable} with {@code match: prefix}
+ *             ({@code org.vorpal.blade.framework.v3.configuration.translations}),
+ *             read by the v3 {@code RouterConfiguration} pipeline.
  */
+@Deprecated
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class ConfigPrefixMapApache extends TranslationsMap implements Serializable {
 	private static final long serialVersionUID = 1L;

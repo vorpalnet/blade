@@ -33,7 +33,7 @@ import javax.servlet.sip.SipServletRequest;
 import org.vorpal.blade.framework.tpcc.TestReinvite;
 import org.vorpal.blade.framework.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 
 /**
  * @author Jeff McDonald
@@ -53,8 +53,16 @@ public class TestClientServlet extends AsyncSipServlet {
 	@Override
 	public void servletCreated(SipServletContextEvent event) {
 		try {
-			settingsManager = new SettingsManager<TestClientConfig>(event, TestClientConfig.class,
-					new TestClientConfigDefault());
+			settingsManager = new SettingsManager<TestClientConfig>(event) {
+				@Override
+				protected TestClientConfig sample() {
+					return new TestClientConfigDefault();
+				}
+
+				@Override
+				protected void refreshed(TestClientConfig config) {
+				}
+			};
 			this.sipLogger = SettingsManager.getSipLogger();
 
 //			System.out.println("TestClientServlet... sipLogger.getLevel(): " + sipLogger.getLevel());			

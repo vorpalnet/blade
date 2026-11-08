@@ -10,7 +10,15 @@ import javax.servlet.sip.SipServletResponse;
 /**
  * Callback interface for handling proxy routing decisions.
  * Implement this interface to customize how requests are routed through the proxy.
+ *
+ * @deprecated Write a v3 {@link org.vorpal.blade.framework.v3.Callflow} and set
+ *             {@code session.passthru}: its {@code sendRequest},
+ *             {@code sendRequestsInSerial} and {@code sendRequestsInParallel}
+ *             proxy the caller's INVITE without Record-Route, a tier at a
+ *             time, and the same callflow runs as a B2BUA when passthru is
+ *             off. The proxy-balancer service is the worked example.
  */
+@Deprecated
 public interface ProxyListener {
 
 	/**

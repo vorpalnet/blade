@@ -9,7 +9,7 @@ import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.framework.v2.b2bua.Terminate;
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.framework.v3.AsyncSipServlet;
 import org.vorpal.blade.framework.v3.events.BladeEventTypes;
 import org.vorpal.blade.framework.v3.events.Events;
@@ -31,7 +31,16 @@ public class HoldServlet extends AsyncSipServlet {
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
-		settingsManager = new SettingsManager<>(event, HoldSettings.class, new HoldSettingsSample());
+		settingsManager = new SettingsManager<HoldSettings>(event) {
+			@Override
+			protected HoldSettings sample() {
+				return new HoldSettingsSample();
+			}
+
+			@Override
+			protected void refreshed(HoldSettings config) {
+			}
+		};
 		sipLogger.info("servletCreated...");
 	}
 

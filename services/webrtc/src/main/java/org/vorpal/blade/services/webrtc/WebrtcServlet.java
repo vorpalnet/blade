@@ -11,7 +11,7 @@ import javax.servlet.sip.annotation.SipApplication;
 import javax.servlet.sip.annotation.SipListener;
 import javax.servlet.sip.annotation.SipServlet;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.framework.v3.AsyncSipServlet;
 import org.vorpal.blade.framework.v3.Callflow;
 import org.vorpal.blade.framework.v3.media.MediaCallflow;
@@ -61,7 +61,16 @@ public class WebrtcServlet extends AsyncSipServlet {
 	protected void servletCreated(SipServletContextEvent event) {
 		captureOutboundInterface(event);
 		try {
-			settings = new SettingsManager<>(event, WebrtcSettings.class, new WebrtcSettingsSample());
+			settings = new SettingsManager<WebrtcSettings>(event) {
+				@Override
+				protected WebrtcSettings sample() {
+					return new WebrtcSettingsSample();
+				}
+
+				@Override
+				protected void refreshed(WebrtcSettings config) {
+				}
+			};
 			JwtAuthConfig jwt = jwtConfig();
 			if (jwt == null || !jwt.isEnabled()) {
 				sipLogger.severe("WebrtcServlet: browser authentication is DISABLED — "

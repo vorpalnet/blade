@@ -7,7 +7,7 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 
 /// Registers the Flow app's SettingsManager at startup so its `name` / `tagline` / `description` metadata
 /// appears in JMX for the Admin Portal deck and the Configurator form
@@ -22,7 +22,16 @@ public class FlowSettingsStartup implements ServletContextListener {
 	@Override
 	public void contextInitialized(ServletContextEvent sce) {
 		try {
-			settingsManager = new SettingsManager<>(sce, FlowSettings.class, new FlowSettingsSample());
+			settingsManager = new SettingsManager<FlowSettings>(sce) {
+				@Override
+				protected FlowSettings sample() {
+					return new FlowSettingsSample();
+				}
+
+				@Override
+				protected void refreshed(FlowSettings config) {
+				}
+			};
 			logger.info("flow SettingsManager registered");
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "flow SettingsManager failed to register", e);

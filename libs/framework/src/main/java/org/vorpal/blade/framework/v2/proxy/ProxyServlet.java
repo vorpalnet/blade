@@ -11,7 +11,15 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
 /**
  * Base servlet for SIP proxy applications.
  * Extend this class and implement ProxyListener to create a custom proxy routing application.
+ *
+ * @deprecated Write a v3 {@link org.vorpal.blade.framework.v3.Callflow} and set
+ *             {@code session.passthru}: its {@code sendRequest},
+ *             {@code sendRequestsInSerial} and {@code sendRequestsInParallel}
+ *             proxy the caller's INVITE without Record-Route, a tier at a
+ *             time, and the same callflow runs as a B2BUA when passthru is
+ *             off. The proxy-balancer service is the worked example.
  */
+@Deprecated
 public abstract class ProxyServlet extends AsyncSipServlet implements ProxyListener {
 	private static final long serialVersionUID = 1L;
 

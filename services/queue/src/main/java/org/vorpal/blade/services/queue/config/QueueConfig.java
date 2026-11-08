@@ -8,18 +8,36 @@ import org.vorpal.blade.framework.v2.config.RouterConfig;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
+import org.vorpal.blade.framework.v3.crud.Crud;
+import org.vorpal.blade.framework.v3.crud.CrudCapable;
 
-/**
- * Defines how the Queue application is configured.
- */
+import com.fasterxml.jackson.annotation.JsonInclude;
+
+/// Defines how the Queue application is configured.
+///
+/// On the v2 [RouterConfig] base, so it carries the `crud` section through
+/// [CrudCapable] rather than the v3 `Configuration`.
 @SchemaAbout(
 		name = "Queue",
 		tagline = "Call Queueing",
 		description = "Holds inbound calls in a managed queue when no downstream resource is "
 				+ "available, releasing them to a destination as capacity frees up. B2BUA-based, "
 				+ "so it stays in the dialog for the life of the queued call.")
-public class QueueConfig extends RouterConfig {
+public class QueueConfig extends RouterConfig implements CrudCapable {
 	private static final long serialVersionUID = 1L;
+
+	protected Crud crud;
+
+	@Override
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	@JsonPropertyDescription("CRUD rules run on every message this application sends: create, read, update or delete headers and body parts, without the CRUD service in the call path")
+	public Crud getCrud() {
+		return crud;
+	}
+
+	public void setCrud(Crud crud) {
+		this.crud = crud;
+	}
 	
 	@JsonPropertyDescription("Map of named queues and their configuration attributes.")
 	public Map<String, QueueAttributes> queues = new HashMap<>();

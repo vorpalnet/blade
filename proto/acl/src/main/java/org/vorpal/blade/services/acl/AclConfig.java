@@ -25,7 +25,7 @@ package org.vorpal.blade.services.acl;
 
 import java.util.LinkedList;
 
-import org.vorpal.blade.framework.v2.config.Configuration;
+import org.vorpal.blade.framework.v3.configuration.Configuration;
 import org.vorpal.blade.services.acl.AclRule.Permission;
 
 import org.vorpal.blade.framework.v3.configuration.SchemaAbout;

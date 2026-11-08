@@ -5,10 +5,11 @@ import java.io.IOException;
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
+import javax.servlet.sip.SipServletResponse;
 
-import org.vorpal.blade.framework.v3.AsyncSipServlet;
-import org.vorpal.blade.framework.v2.callflow.Callflow;
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.Callflow;
+import org.vorpal.blade.framework.v3.B2buaServlet;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.framework.v2.snmp.Snmp;
 
 /// Base SIP servlet for the v3 iRouter pipeline — orchestrates the connector
@@ -40,11 +41,17 @@ import org.vorpal.blade.framework.v2.snmp.Snmp;
 /// All have working defaults (plain iRouter), so the standalone WAR's leaf is
 /// pure annotations with an empty body.
 ///
-/// Re-INVITE / ACK / BYE need no handling here: [IRouterInvite] proxies via
-/// [Callflow#proxyRequest], which marks the appSession as a proxy so
-/// [AsyncSipServlet] short-circuits subsequent in-dialog requests through the
-/// container's proxy machinery.
-public class IRouterServlet extends AsyncSipServlet {
+/// ## Passthru or B2BUA
+///
+/// [IRouterInvite] forwards through the v3 callflow, so the application's
+/// `session.passthru` setting decides the role, as it does for every BLADE
+/// application. With passthru on (the samples' setting) the caller's INVITE
+/// is proxied without Record-Route and nothing after it comes back here. With
+/// it off, iRouter stays in the call as a B2BUA: this class extends
+/// [B2buaServlet], whose callflows relay the re-INVITE, ACK, BYE and CANCEL.
+/// The six [org.vorpal.blade.framework.v2.b2bua.B2buaListener] methods are
+/// empty; iRouter publishes its own routing events from [IRouterInvite].
+public class IRouterServlet extends B2buaServlet {
 	private static final long serialVersionUID = 1L;
 
 	/// Per-WAR snapshot of the active routing config. Static so the leaf and
@@ -84,7 +91,27 @@ public class IRouterServlet extends AsyncSipServlet {
 		try {
 			@SuppressWarnings("unchecked")
 			Class<IRouterConfig> type = (Class<IRouterConfig>) configClass();
-			settings = new SettingsManager<>(event, type, newSampleConfig());
+			IRouterConfig seed = newSampleConfig();
+			javax.servlet.ServletContext context = event.getServletContext();
+			// The config class is chosen at run time by [#configClass], so the
+			// v3 manager cannot read it from its type argument. It is built
+			// the way its no-argument constructor allows: by the subclass.
+			settings = new SettingsManager<IRouterConfig>() {
+				{
+					initContext(context);
+					this.sample = seed;
+					build(applicationName, type, null);
+				}
+
+				@Override
+				protected IRouterConfig sample() {
+					return seed;
+				}
+
+				@Override
+				protected void refreshed(IRouterConfig config) {
+				}
+			};
 		} catch (Exception e) {
 			// A failed startup is exactly what an NMS wants to hear about, so
 			// trap it (fail-closed off-OCCAS). getSimpleName() names the actual
@@ -103,11 +130,41 @@ public class IRouterServlet extends AsyncSipServlet {
 		}
 	}
 
+	/// An initial INVITE runs the pipeline. A request inside a call iRouter
+	/// stayed in (passthru off) goes to the b2bua callflows. Any other initial
+	/// request is not iRouter's to route, as before.
 	@Override
 	protected Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException {
 		if (Callflow.INVITE.equals(request.getMethod()) && request.isInitial()) {
 			return newInvite(settings.getCurrent());
 		}
+		if (!request.isInitial()) {
+			return super.chooseCallflow(request);
+		}
 		return null;
+	}
+
+	@Override
+	public void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException {
+	}
+
+	@Override
+	public void callAnswered(SipServletResponse outboundResponse) throws ServletException, IOException {
+	}
+
+	@Override
+	public void callConnected(SipServletRequest outboundRequest) throws ServletException, IOException {
+	}
+
+	@Override
+	public void callCompleted(SipServletRequest outboundRequest) throws ServletException, IOException {
+	}
+
+	@Override
+	public void callDeclined(SipServletResponse outboundResponse) throws ServletException, IOException {
+	}
+
+	@Override
+	public void callAbandoned(SipServletRequest outboundRequest) throws ServletException, IOException {
 	}
 }

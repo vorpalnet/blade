@@ -75,6 +75,12 @@ public class TransferSettings extends RouterConfig implements Serializable {
 		this.preserveReferHeaders = preserveReferHeaders;
 	}
 
+	/// @deprecated Use the v3
+	///             [org.vorpal.blade.framework.v3.transfer.TransferSettings]: the
+	///             same fields plus the `crud` section, and a subclass of this
+	///             one, so every v2 transfer callflow still takes it. This type
+	///             stays because those callflows name it.
+	@Deprecated
 	public TransferSettings() {
 		// Default constructor
 	}

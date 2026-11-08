@@ -7,7 +7,7 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 
 /// Registers the API Explorer's SettingsManager at WAR startup so the framework
 /// auto-creates the `vorpal.blade:Name=blade-api,Type=Configuration,*` MBean —
@@ -28,7 +28,16 @@ public class ApiStartupListener implements ServletContextListener {
 	@Override
 	public void contextInitialized(ServletContextEvent event) {
 		try {
-			settingsManager = new SettingsManager<>(event, ApiSettings.class, new ApiSettingsSample());
+			settingsManager = new SettingsManager<ApiSettings>(event) {
+				@Override
+				protected ApiSettings sample() {
+					return new ApiSettingsSample();
+				}
+
+				@Override
+				protected void refreshed(ApiSettings config) {
+				}
+			};
 			log.info("API Explorer SettingsManager registered; config at ./config/custom/vorpal/blade-api.json");
 		} catch (Exception e) {
 			log.log(Level.SEVERE, "Failed to register API Explorer SettingsManager — discovery and spec proxy will return 503 until configured", e);

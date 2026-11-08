@@ -2,7 +2,7 @@ package org.vorpal.blade.services.hold;
 
 import java.io.Serializable;
 
-import org.vorpal.blade.framework.v2.config.Configuration;
+import org.vorpal.blade.framework.v3.configuration.Configuration;
 
 import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
 

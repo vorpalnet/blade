@@ -41,7 +41,6 @@ import org.vorpal.blade.framework.Callback;
 import org.vorpal.blade.framework.v2.logging.Logger.Direction;
 import org.vorpal.blade.framework.v2.proxy.ProxyPlan;
 import org.vorpal.blade.framework.v2.proxy.ProxyTier;
-import org.vorpal.blade.framework.v2.proxy.ProxyTier.Mode;
 
 /// The v2 Callflow: the version-neutral baseline
 /// [org.vorpal.blade.framework.Callflow] plus the v2-only API.
@@ -51,9 +50,10 @@ import org.vorpal.blade.framework.v2.proxy.ProxyTier.Mode;
 ///
 /// - the container-proxy overloads, [#proxyRequest(Proxy,URI)] and its siblings,
 ///   which drive `javax.servlet.sip.Proxy` rather than a B2BUA dialog. v3 answers
-///   the same need with passthru drop-out on
-///   [org.vorpal.blade.framework.v3.Callflow#sendRequest], and the proxy API
-///   stays here until that is proven in the field.
+///   the same need with passthru on
+///   [org.vorpal.blade.framework.v3.Callflow#sendRequest]: a forwarding
+///   callflow's initial INVITE goes out as a proxy that does not record-route.
+///   Nothing in BLADE calls these overloads, and they are deprecated.
 /// - [#sendAckOrPrack], the retired name for
 ///   [org.vorpal.blade.framework.Callflow#sendAcknowledgement].
 ///
@@ -76,7 +76,11 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	 * @param endpoints      the list of URIs to proxy the request to
 	 * @param lambdaFunction callback invoked when a response is received
 	 * @throws TooManyHopsException if the Max-Forwards header has reached zero
+	 * @deprecated Use a v3 {@link org.vorpal.blade.framework.v3.Callflow} with
+	 *             {@code session.passthru} set: it proxies the caller's INVITE
+	 *             without Record-Route from the ordinary send methods.
 	 */
+	@Deprecated
 	public void proxyRequest(Proxy proxy, List<URI> endpoints, Callback<SipServletResponse> lambdaFunction)
 			throws TooManyHopsException {
 		if (lambdaFunction != null) {
@@ -100,7 +104,11 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	 * @param proxy     the Proxy object from the original request
 	 * @param endpoints the list of URIs to proxy the request to
 	 * @throws TooManyHopsException if the Max-Forwards header has reached zero
+	 * @deprecated Use a v3 {@link org.vorpal.blade.framework.v3.Callflow} with
+	 *             {@code session.passthru} set: it proxies the caller's INVITE
+	 *             without Record-Route from the ordinary send methods.
 	 */
+	@Deprecated
 	public void proxyRequest(Proxy proxy, List<URI> endpoints) throws TooManyHopsException {
 		proxyRequest(proxy, endpoints, (response) -> {
 			// do nothing;
@@ -113,7 +121,11 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	 * @param proxy    the Proxy object from the original request
 	 * @param endpoint the URI to proxy the request to
 	 * @throws TooManyHopsException if the Max-Forwards header has reached zero
+	 * @deprecated Use a v3 {@link org.vorpal.blade.framework.v3.Callflow} with
+	 *             {@code session.passthru} set: it proxies the caller's INVITE
+	 *             without Record-Route from the ordinary send methods.
 	 */
+	@Deprecated
 	public void proxyRequest(Proxy proxy, URI endpoint) throws TooManyHopsException {
 		List<URI> endpoints = new LinkedList<>();
 		endpoints.add(endpoint);
@@ -131,7 +143,11 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	 * @param lambdaFunction callback invoked when the final response is received
 	 * @throws IOException      if an I/O error occurs
 	 * @throws ServletException if a servlet error occurs
+	 * @deprecated Use a v3 {@link org.vorpal.blade.framework.v3.Callflow} with
+	 *             {@code session.passthru} set: it proxies the caller's INVITE
+	 *             without Record-Route from the ordinary send methods.
 	 */
+	@Deprecated
 	public void proxyRequest(SipServletRequest inboundRequest, ProxyPlan proxyPlan,
 			Callback<SipServletResponse> lambdaFunction) throws IOException, ServletException {
 
@@ -144,7 +160,7 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 
 			ProxyTier proxyTier = proxyPlan.getTiers().remove(0);
 
-			proxy.setParallel(proxyTier.getMode().equals(Mode.parallel));
+			proxy.setParallel(proxyTier.getMode().equals(ProxyTier.Mode.parallel));
 
 			List<URI> endpoints = new LinkedList<>();
 			for (URI endpoint : proxyTier.getEndpoints()) {

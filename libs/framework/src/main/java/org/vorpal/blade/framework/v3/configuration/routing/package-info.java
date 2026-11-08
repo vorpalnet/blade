@@ -36,9 +36,4 @@
 /// When new grant-type routing logic is needed (conditional, scripted,
 /// multi-table), add a new `Routing` subclass with a fresh `type`
 /// discriminator — callers don't change.
-///
-/// A legacy package,
-/// [org.vorpal.blade.framework.v3.configuration.routing.LooseRoutingHelper],
-/// hosts OCCAS-specific SIP proxy reflection utilities unrelated to
-/// the iRouter routing model.
 package org.vorpal.blade.framework.v3.configuration.routing;

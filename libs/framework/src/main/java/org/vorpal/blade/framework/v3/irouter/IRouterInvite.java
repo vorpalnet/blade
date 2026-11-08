@@ -7,14 +7,14 @@ import java.util.logging.Level;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.Parameterable;
-import javax.servlet.sip.Proxy;
 import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.URI;
+import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
-import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.Callflow;
 import org.vorpal.blade.framework.v3.configuration.Context;
 import org.vorpal.blade.framework.v3.configuration.connectors.Connector;
 import org.vorpal.blade.framework.v3.configuration.routing.ConditionalHeader;
@@ -34,9 +34,12 @@ import org.vorpal.blade.framework.v3.events.BladeEventTypes;
 ///    container thread is released as soon as the chain starts.
 /// 3. When the chain completes, re-dispatches onto a SIP container
 ///    thread (0-ms ServletTimer), consults `config.routing` for the
-///    routing decision — a concrete [Route] — and proxies via
-///    [Callflow#proxyRequest] (which marks the appSession as a
-///    proxy so re-INVITE / BYE / ACK pass through automatically).
+///    routing decision — a concrete [Route] — and forwards the call
+///    there through [Callflow#sendRequest]. The application's
+///    `session.passthru` setting decides how: on, the caller's INVITE is
+///    proxied without Record-Route and iRouter leaves the call; off, iRouter
+///    stays in it as a B2BUA and the servlet's b2bua callflows relay the
+///    re-INVITE, ACK and BYE.
 public class IRouterInvite extends Callflow {
 	private static final long serialVersionUID = 1L;
 
@@ -144,8 +147,9 @@ public class IRouterInvite extends Callflow {
 		}
 
 		// An async connector (REST) completes the chain on its HttpClient
-		// executor thread, where the container has no call context —
-		// request.getProxy() in executeRoute throws NPE. The 0-ms
+		// executor thread, where the container has no call context, and
+		// sending the INVITE from there fails (a passthru proxy's
+		// request.getProxy() throws NPE). The 0-ms
 		// ServletTimer fires applyRouting on a container thread with
 		// appSession context, whichever thread completed the chain.
 		chain.thenRun(() -> startTimer(request.getApplicationSession(), 0, false,
@@ -342,35 +346,66 @@ public class IRouterInvite extends Callflow {
 	}
 
 	/// Hook for the *forwarding* role: act on the chosen [Route] + resolved
-	/// destination URI. The default implementation **proxies** the INVITE
-	/// downstream with `Record-Route: false` so iRouter drops out of the dialog
-	/// (re-INVITE / ACK / BYE go end-to-end). Route headers and conditional
-	/// headers are stamped on the outbound request before `proxyTo` fires.
+	/// destination URI. The default implementation builds the INVITE to
+	/// `destination` the way a B2BUA does and sends it with [#sendRequest], so
+	/// the application's `session.passthru` setting picks the role:
+	///
+	/// - **passthru on**: the caller's own INVITE is proxied to `destination`
+	///   without Record-Route, and iRouter drops out of the dialog (re-INVITE,
+	///   ACK and BYE go end-to-end). The container relays the responses.
+	/// - **passthru off**: iRouter is a B2BUA. [#relay] answers the caller
+	///   with what the callee sends, and the servlet's b2bua callflows carry
+	///   the rest of the call.
+	///
+	/// The route's headers go on the caller's INVITE, before the outbound one
+	/// is built from it. A passthru proxy forwards that INVITE as it is, and a
+	/// B2BUA copies its headers, so they reach the callee either way.
 	///
 	/// Reached only for routes WITHOUT a `statusCode` — a route that sets a
 	/// status code is a direct response and short-circuits to [#sendStatus] in
 	/// [#applyRouting] before this runs. A screening service can mix both with no Java
 	/// override: allow is a 302 with a `Contact` (sendStatus), block is a 603
 	/// Decline (sendStatus), and redirect is a forward route (`requestUri`,
-	/// no status code) that lands here and proxies to the SBC. Override this
-	/// only to take a different *forwarding* role than proxy-and-drop-out.
+	/// no status code) that lands here. Override this only to take a
+	/// different forwarding role.
 	///
 	/// Throws are caught by [#applyRouting] which sends 500 upstream.
 	protected void executeRoute(SipServletRequest request, URI destination, Route route, Context ctx)
 			throws Exception {
-		Proxy proxy = request.getProxy();
-		proxy.setRecordRoute(false);
-		if (sipLogger.isLoggable(Level.FINER)) {
-			sipLogger.finer(request, "iRouter proxy.recordRoute=" + proxy.getRecordRoute()
-					+ " supervised=" + proxy.getSupervised());
-		}
 		applyHeaders(request, route, ctx);
 		AnalyticsEvent routed = SettingsManager.createEvent(EVENT_ROUTED, request);
 		if (routed != null && destination != null) {
 			routed.addAttribute("destination", destination.toString());
 		}
 		SettingsManager.sendEvent(request);
-		proxyRequest(proxy, destination);
+
+		SipServletRequest outbound = sipFactory.createRequest(request.getApplicationSession(), INVITE,
+				request.getFrom(), request.getTo());
+		outbound.setRoutingDirective(SipApplicationRoutingDirective.CONTINUE, request);
+		copyContentAndHeaders(request, outbound); // links the callee's dialog to the caller's
+		outbound.setRequestURI(destination);
+		sendRequest(outbound, calleeResponse -> relay(request, calleeResponse));
+	}
+
+	/// Answers the caller with the callee's response, when iRouter is a B2BUA.
+	/// Under passthru the container relays every response itself, so this does
+	/// nothing. A caller who cancelled has already been answered; the callee's
+	/// leg is then cancelled or ended instead (see [#endIfAbandoned]).
+	///
+	/// @param caller         the caller's INVITE
+	/// @param calleeResponse a response to the outbound INVITE
+	protected void relay(SipServletRequest caller, SipServletResponse calleeResponse)
+			throws ServletException, IOException {
+		if (isPassthru() || endIfAbandoned(caller, calleeResponse)) {
+			return;
+		}
+		SipServletResponse callerResponse = caller.createResponse(calleeResponse.getStatus());
+		copyContentAndHeaders(calleeResponse, callerResponse); // links the caller to the answering dialog
+		if (successful(calleeResponse)) {
+			sendResponse(callerResponse, ack -> sendAcknowledgement(ack, calleeResponse));
+		} else {
+			sendResponse(callerResponse);
+		}
 	}
 
 	/// Apply [Route#getHeaders] and [Route#getConditionalHeaders] to

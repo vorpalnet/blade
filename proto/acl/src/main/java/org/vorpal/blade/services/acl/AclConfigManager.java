@@ -28,7 +28,7 @@ import java.io.IOException;
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletContextEvent;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 
 /**
  * @author Jeff McDonald
@@ -37,11 +37,16 @@ import org.vorpal.blade.framework.v2.config.SettingsManager;
 public class AclConfigManager extends SettingsManager<AclConfig> {
 
 	public AclConfigManager(SipServletContextEvent name) throws ServletException, IOException {
-		super(name, AclConfig.class);
+		super(name);
 	}
 
 	@Override
-	public void initialize(AclConfig config) {
+	protected AclConfig sample() {
+		return null;
+	}
+
+	@Override
+	protected void refreshed(AclConfig config) {
 		config.initialize();
 	}
 

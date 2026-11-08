@@ -19,7 +19,7 @@ import javax.servlet.sip.SipSessionListener;
 import javax.ws.rs.container.AsyncResponse;
 
 import org.vorpal.blade.framework.v3.B2buaServlet;
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 
 @WebListener
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
@@ -35,7 +35,16 @@ public class TpccServlet extends B2buaServlet //
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
-		settingsManager = new SettingsManager<>(event, TpccSettings.class, new TpccSettingsSample());
+		settingsManager = new SettingsManager<TpccSettings>(event) {
+			@Override
+			protected TpccSettings sample() {
+				return new TpccSettingsSample();
+			}
+
+			@Override
+			protected void refreshed(TpccSettings config) {
+			}
+		};
 		sipLogger.info("TpccServlet servletCreated...");
 	}
 

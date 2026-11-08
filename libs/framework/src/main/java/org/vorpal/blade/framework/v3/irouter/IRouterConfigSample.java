@@ -2,6 +2,8 @@ package org.vorpal.blade.framework.v3.irouter;
 
 import java.util.LinkedList;
 
+import org.vorpal.blade.framework.v2.config.SessionParametersDefault;
+
 import org.vorpal.blade.framework.v3.configuration.MatchStrategy;
 import org.vorpal.blade.framework.v3.configuration.auth.BearerAuthentication;
 import org.vorpal.blade.framework.v3.configuration.connectors.RestConnector;
@@ -61,6 +63,11 @@ public class IRouterConfigSample extends IRouterConfig {
 	private static final long serialVersionUID = 1L;
 
 	public IRouterConfigSample() {
+
+		// Drop out of the dialog after routing, as iRouter always has: set
+		// false to stay in the call as a B2BUA.
+		this.session = new SessionParametersDefault();
+		this.session.setPassthru(true);
 
 		// ----- Pipeline step 1: SIP parse -----
 		SipConnector sip = new SipConnector();

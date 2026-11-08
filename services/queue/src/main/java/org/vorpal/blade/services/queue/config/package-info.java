@@ -51,7 +51,7 @@
 ///
 /// ### QueueSettingsManager
 ///
-/// Specialized `SettingsManager<QueueConfig>` that overrides the `initialize` method to
+/// Specialized `SettingsManager<QueueConfig>` that overrides the `refreshed` hook to
 /// create actual FIFO queue instances. During initialization, it iterates over the configured
 /// queue names, creates new `Queue` objects via `QueueServlet.queues` if they do not already
 /// exist, and calls `queue.initialize(qa)` to apply the attributes. Handles re-initialization
@@ -69,5 +69,5 @@
 /// `ConfigPrefixMap` to route calls to specific queues based on the To header's user part.
 ///
 /// @see [org.vorpal.blade.framework.v2.config.RouterConfig]
-/// @see [org.vorpal.blade.framework.v2.config.SettingsManager]
+/// @see [org.vorpal.blade.framework.v3.configuration.SettingsManager]
 package org.vorpal.blade.services.queue.config;

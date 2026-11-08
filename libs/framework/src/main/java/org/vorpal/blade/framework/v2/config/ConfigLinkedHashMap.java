@@ -12,7 +12,12 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 /**
  * Translation map using LinkedHashMap to preserve insertion order.
+ *
+ * @deprecated Use an exact-match table: a v3 {@code TranslationTable} with {@code match: hash}
+ *             ({@code org.vorpal.blade.framework.v3.configuration.translations}),
+ *             read by the v3 {@code RouterConfiguration} pipeline.
  */
+@Deprecated
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class ConfigLinkedHashMap extends TranslationsMap implements Serializable {
 	private static final long serialVersionUID = 1L;

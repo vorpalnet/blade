@@ -7,7 +7,7 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 
 /// Registers the Analytics admin app's SettingsManager at startup so its
 /// `name` / `tagline` / `description` metadata appear in JMX for the
@@ -23,8 +23,16 @@ public class AnalyticsAdminSettingsStartup implements ServletContextListener {
 	@Override
 	public void contextInitialized(ServletContextEvent sce) {
 		try {
-			settingsManager = new SettingsManager<>(sce, AnalyticsAdminSettings.class,
-					new AnalyticsAdminSettingsSample());
+			settingsManager = new SettingsManager<AnalyticsAdminSettings>(sce) {
+				@Override
+				protected AnalyticsAdminSettings sample() {
+					return new AnalyticsAdminSettingsSample();
+				}
+
+				@Override
+				protected void refreshed(AnalyticsAdminSettings config) {
+				}
+			};
 			logger.info("analytics-admin SettingsManager registered");
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "analytics-admin SettingsManager failed to register", e);

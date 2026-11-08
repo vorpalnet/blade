@@ -9,7 +9,7 @@ import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 
 import org.vorpal.blade.framework.v2.analytics.Analytics;
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.framework.v3.events.SubscriptionRegistrar;
 
 /// Registers the dashboard's SettingsManager so it appears on the Admin Portal
@@ -37,7 +37,16 @@ public class DashboardSettingsStartup implements ServletContextListener {
 	@Override
 	public void contextInitialized(ServletContextEvent sce) {
 		try {
-			settingsManager = new SettingsManager<>(sce, DashboardSettings.class, new DashboardSettingsSample());
+			settingsManager = new SettingsManager<DashboardSettings>(sce) {
+				@Override
+				protected DashboardSettings sample() {
+					return new DashboardSettingsSample();
+				}
+
+				@Override
+				protected void refreshed(DashboardSettings config) {
+				}
+			};
 			sce.getServletContext().setAttribute(SETTINGS_ATTR, settingsManager);
 			logger.info("dashboard settings registered");
 		} catch (Exception e) {

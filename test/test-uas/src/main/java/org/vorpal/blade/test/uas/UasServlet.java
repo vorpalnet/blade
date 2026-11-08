@@ -7,7 +7,7 @@ import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.framework.v3.crud.KeepOnlyPartOperation;
 import org.vorpal.blade.framework.v3.crud.Rule;
 import org.vorpal.blade.framework.v3.tester.Scenario;
@@ -62,7 +62,16 @@ public class UasServlet extends TesterServlet {
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
-		settingsManager = new SettingsManager<>(event, TestUasConfig.class, new TestUasConfigSample());
+		settingsManager = new SettingsManager<TestUasConfig>(event) {
+			@Override
+			protected TestUasConfig sample() {
+				return new TestUasConfigSample();
+			}
+
+			@Override
+			protected void refreshed(TestUasConfig config) {
+			}
+		};
 		initTester(event, settingsManager.getServletContextName());
 		sipLogger.logConfiguration(settingsManager.getCurrent());
 	}

@@ -7,7 +7,7 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 
 /// Registers the Javadoc admin app's SettingsManager at startup so its
 /// `name` / `tagline` / `description` metadata appear in JMX for the Admin
@@ -22,7 +22,16 @@ public class JavadocSettingsStartup implements ServletContextListener {
 	@Override
 	public void contextInitialized(ServletContextEvent sce) {
 		try {
-			settingsManager = new SettingsManager<>(sce, JavadocSettings.class, new JavadocSettingsSample());
+			settingsManager = new SettingsManager<JavadocSettings>(sce) {
+				@Override
+				protected JavadocSettings sample() {
+					return new JavadocSettingsSample();
+				}
+
+				@Override
+				protected void refreshed(JavadocSettings config) {
+				}
+			};
 			logger.info("javadoc SettingsManager registered");
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "javadoc SettingsManager failed to register", e);

@@ -7,7 +7,7 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 
 /// Registers the portal's SettingsManager at WAR startup so the framework
 /// auto-creates the `vorpal.blade:Name=portal,Type=Configuration,*` MBean
@@ -28,7 +28,16 @@ public class PortalStartupListener implements ServletContextListener {
 	@Override
 	public void contextInitialized(ServletContextEvent event) {
 		try {
-			settingsManager = new SettingsManager<>(event, PortalSettings.class, new PortalSettingsSample());
+			settingsManager = new SettingsManager<PortalSettings>(event) {
+				@Override
+				protected PortalSettings sample() {
+					return new PortalSettingsSample();
+				}
+
+				@Override
+				protected void refreshed(PortalSettings config) {
+				}
+			};
 			log.info("Portal SettingsManager registered; config at ./config/custom/vorpal/portal.json");
 		} catch (Exception e) {
 			log.log(Level.SEVERE, "Failed to register portal SettingsManager — manifest endpoint will fall back to bundled defaults", e);

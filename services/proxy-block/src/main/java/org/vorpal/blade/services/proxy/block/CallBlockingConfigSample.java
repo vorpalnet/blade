@@ -4,6 +4,7 @@ import java.util.LinkedList;
 
 import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.v2.analytics.EventSelector;
+import org.vorpal.blade.framework.v2.config.SessionParametersDefault;
 import org.vorpal.blade.framework.v3.configuration.MatchStrategy;
 import org.vorpal.blade.framework.v3.configuration.connectors.RateConnector;
 import org.vorpal.blade.framework.v3.configuration.connectors.SipConnector;
@@ -117,6 +118,11 @@ public class CallBlockingConfigSample extends CallBlockingConfig {
 	private static final String STIR_ON = "${stirShaken} == true && ";
 
 	public CallBlockingConfigSample() {
+
+		// Drop out of the dialog after routing: set false to stay in the call
+		// as a B2BUA.
+		this.session = new SessionParametersDefault();
+		this.session.setPassthru(true);
 
 		// ----- 1. What the INVITE says -----
 		SipConnector sip = new SipConnector();

@@ -400,8 +400,10 @@
 		Three steps: the <em>pipeline</em> decides which rule set each call gets, the
 		<em>rule sets</em> say what happens to it, and the <em>preview</em> runs your
 		unsaved draft against a sample message so you see every change before you save.
-		Save writes <code>crud.json</code> (previous version kept); Publish tells the
-		running CRUD service to reload it. New here? Hit <strong>? Help</strong>.
+		Save writes <code id="targetFile">crud.json</code> (previous version kept); Publish tells
+		the running application to reload it. Pick the CRUD service, or any application whose
+		configuration carries a <code>crud</code> section, in <em>Rules for</em>.
+		New here? Hit <strong>? Help</strong>.
 	</p>
 
 	<details class="editor-shell" id="editorShell" open>
@@ -412,6 +414,12 @@
 		</summary>
 
 		<div class="editor-toolbar editor-actions">
+			<label for="target" style="display:flex;align-items:center;gap:6px;margin:0;text-transform:none;letter-spacing:0;font-size:12px;color:var(--text);">
+				Rules for
+				<select id="target" title="The CRUD service's crud.json, or the crud section of an application's own configuration">
+					<option value="">CRUD service (crud.json)</option>
+				</select>
+			</label>
 			<label style="display:flex;align-items:center;gap:6px;margin:0;text-transform:none;letter-spacing:0;font-size:12px;color:var(--text);">
 				<input type="checkbox" id="livePreview" checked style="width:15px;height:15px;">
 				re-run preview on change
@@ -423,7 +431,7 @@
 			<button id="showVersions" class="secondary" type="button">Versions</button>
 			<button id="saveConfig" type="button">Save</button>
 			<button id="publishConfig" type="button">Publish</button>
-			<a class="handoff" href="/blade/configurator/configurator.html?schema=crud"
+			<a class="handoff" id="handoff" href="/blade/configurator/configurator.html?schema=crud"
 				title="Logging, session settings, and cluster/server overlays are edited in the Configurator">
 				logging &amp; session → Configurator</a>
 		</div>
@@ -436,7 +444,7 @@
 
 		<div class="versions-panel" id="jsonPanel" style="display:none;">
 			<h2 style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 8px;display:flex;justify-content:space-between;align-items:center;">
-				<span>Draft crud.json — read-only, exactly what Save writes</span>
+				<span id="jsonTitle">Draft crud.json — read-only, exactly what Save writes</span>
 				<button id="copyJson" type="button" class="mini">copy</button>
 			</h2>
 			<pre id="jsonBody"></pre>
@@ -496,6 +504,7 @@
 					<option value="callAbandoned">callAbandoned</option>
 					<option value="requestEvent">requestEvent</option>
 					<option value="responseEvent">responseEvent</option>
+					<option value="send">send (in-application rules)</option>
 					<option value="">(none)</option>
 				</select>
 			</div>
@@ -664,6 +673,18 @@
 				what was last saved. Logging, session settings, and per-cluster overlays are edited in
 				the Configurator — both tools share the same file politely.</p>
 			</section>
+			<section id="help-apps">
+				<h3>Rules inside an application</h3>
+				<p>A v3 application carries the same rules in a <code>crud</code> section of its own
+				configuration and runs them on every message it sends, so a header change no longer
+				needs the CRUD service chained in front of it. Pick the application in
+				<em>Rules for</em>. Save writes only that section back into
+				<code>&lt;app&gt;.json</code>; the rest of the file is left as it was.</p>
+				<p>These rules see one lifecycle event, <code>send</code>. Leave a rule's
+				<code>event</code> empty and choose by method, message type, status range and
+				<code>when</code>. The pipeline runs once, on the call's first request, and most
+				applications need none: the default rule set applies to every call.</p>
+			</section>
 		</div>
 	</dialog>
 
@@ -716,6 +737,15 @@
 			return (ctx || '') + '/resources/api/';
 		})();
 
+		// Whose rules: the CRUD service's crud.json (APP empty), or the
+		// `crud` section of one application's own config (`?app=<name>`).
+		// An application's rules see the lifecycle event `send` only.
+		const APP = new URLSearchParams(location.search).get('app') || '';
+		const TARGET_FILE = APP ? APP + '.json' : 'crud.json';
+		function cfgUrl(rest) {
+			return API_BASE + (APP ? 'apps/' + encodeURIComponent(APP) : 'config') + (rest || '');
+		}
+
 		const SAMPLE_INVITE = `INVITE sip:bob@example.com SIP/2.0
 From: <sip:alice@vorpal.net>;tag=1
 To: <sip:bob@example.com>
@@ -738,22 +768,6 @@ a=sendrecv
 		document.getElementById('loadSample').addEventListener('click', () => {
 			document.getElementById('input').value = SAMPLE_INVITE;
 		});
-
-		// Populate the rule-set dropdown from the live config on page load.
-		(async () => {
-			const sel = document.getElementById('ruleSet');
-			try {
-				const resp = await fetch(API_BASE + 'ruleSets');
-				if (!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + resp.statusText);
-				const data = await resp.json();
-				const ids = data.ruleSets || [];
-				sel.innerHTML = ids.length === 0
-					? '<option value="">(no rule sets in config)</option>'
-					: ids.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(id)}</option>`).join('');
-			} catch (e) {
-				sel.innerHTML = '<option value="">(failed to load — ' + escapeHtml(e.message) + ')</option>';
-			}
-		})();
 
 		// --- Variables grid ---
 		// One source of truth: the DOM rows. Each row has two <input>s
@@ -1201,7 +1215,9 @@ a=sendrecv
 		// =====================================================================
 		// Rules editor
 		// =====================================================================
-		// One source of truth: `ed.doc`, the full crud.json document. Only
+		// One source of truth: `ed.doc`, the full crud.json document, or for
+		// an application the `crud` section of its config (the server splices
+		// it back into the file). Only
 		// `ruleSets` and `defaultRuleSet` are edited here; every other section
 		// rides through Save untouched (the Flow editor's round-trip contract).
 		// The preview endpoints receive the draft on every run, so the operator
@@ -1217,7 +1233,7 @@ a=sendrecv
 			dirty: false,
 		};
 
-		const LIFECYCLE_EVENTS = ['callStarted', 'callAnswered', 'callConnected',
+		const LIFECYCLE_EVENTS = APP ? ['send'] : ['callStarted', 'callAnswered', 'callConnected',
 			'callCompleted', 'callDeclined', 'callAbandoned', 'requestEvent', 'responseEvent'];
 
 		function draftFields() {
@@ -1270,7 +1286,7 @@ a=sendrecv
 		async function loadEditor() {
 			const detail = document.getElementById('rsDetail');
 			try {
-				const resp = await fetch(API_BASE + 'config');
+				const resp = await fetch(cfgUrl());
 				if (!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + resp.statusText);
 				const data = await resp.json();
 				if (data.error) throw new Error(data.error);
@@ -1295,9 +1311,9 @@ a=sendrecv
 				clearDirty();
 
 				const badge = document.getElementById('srcBadge');
-				badge.textContent = ed.source === 'live' ? 'live crud.json'
-					: ed.source === 'sample' ? 'generated sample — Save creates crud.json'
-					: 'built-in sample — Save creates crud.json';
+				badge.textContent = ed.source === 'live' ? 'live ' + TARGET_FILE
+					: ed.source === 'sample' ? 'generated sample · Save creates ' + TARGET_FILE
+					: 'built-in sample · Save creates ' + TARGET_FILE;
 
 				const ids = Object.keys(ed.doc.ruleSets);
 				ed.current = ids.includes(ed.current) ? ed.current : (ids[0] || null);
@@ -1626,7 +1642,7 @@ a=sendrecv
 				status.className = 'status';
 				return;
 			}
-			const preamble = ed.source === 'live' ? '' : 'This will CREATE crud.json (currently running on the '
+			const preamble = ed.source === 'live' ? '' : 'This will CREATE ' + TARGET_FILE + ' (currently running on the '
 				+ ed.source + ' sample).\n\n';
 			if (!confirm(preamble + 'Save these changes?\n\n'
 					+ (lines.length ? '• ' + lines.join('\n• ') : '(no rule-set changes — writes the loaded document)'))) return;
@@ -1634,7 +1650,7 @@ a=sendrecv
 			const payload = buildPayload();
 
 			try {
-				const resp = await fetch(API_BASE + 'config/save', {
+				const resp = await fetch(cfgUrl('/save'), {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify(payload),
@@ -1647,7 +1663,7 @@ a=sendrecv
 					pipeline: cleanJson(ed.doc.pipeline || []),
 				};
 				ed.source = 'live';
-				document.getElementById('srcBadge').textContent = 'live crud.json';
+				document.getElementById('srcBadge').textContent = 'live ' + TARGET_FILE;
 				clearDirty();
 				status.textContent = 'Saved (' + data.bytes + ' bytes). Publish to reload the running service.';
 				status.className = 'status ok';
@@ -1660,11 +1676,11 @@ a=sendrecv
 		async function publishConfig() {
 			const status = document.getElementById('status');
 			const warning = ed.dirty
-				? 'You have UNSAVED changes — publish reloads the last SAVED crud.json, not the draft.\n\n'
+				? 'You have UNSAVED changes. Publish reloads the last SAVED ' + TARGET_FILE + ', not the draft.\n\n'
 				: '';
-			if (!confirm(warning + 'Tell the running CRUD service to reload crud.json?')) return;
+			if (!confirm(warning + 'Tell the running ' + (APP || 'CRUD service') + ' to reload ' + TARGET_FILE + '?')) return;
 			try {
-				const resp = await fetch(API_BASE + 'config/publish', { method: 'POST' });
+				const resp = await fetch(cfgUrl('/publish'), { method: 'POST' });
 				const data = await resp.json();
 				if (!resp.ok || data.error) throw new Error(data.error || ('HTTP ' + resp.status));
 				status.textContent = 'Published: ' + (data.actions || []).join(' · ');
@@ -1684,7 +1700,7 @@ a=sendrecv
 			preview.style.display = 'none';
 			body.innerHTML = '<div class="vars-empty">loading…</div>';
 			try {
-				const resp = await fetch(API_BASE + 'config/versions');
+				const resp = await fetch(cfgUrl('/versions'));
 				const data = await resp.json();
 				if (data.error) throw new Error(data.error);
 				const versions = data.versions || [];
@@ -1701,14 +1717,16 @@ a=sendrecv
 					size.textContent = (v.sizeBytes / 1024).toFixed(1) + ' KiB';
 					const act = document.createElement('td');
 					const pv = miniBtn('view', 'Preview this version', async () => {
-						const r = await fetch(API_BASE + 'config/versions/' + v.timestamp);
+						const r = await fetch(cfgUrl('/versions/' + v.timestamp));
 						preview.textContent = await r.text();
 						preview.style.display = '';
 					});
 					const rs = miniBtn('restore', 'Restore this version (current file is backed up first)', async () => {
 						if (!confirm('Restore the version from ' + when.textContent
-							+ '? The current crud.json is backed up first. Unsaved draft changes are discarded.')) return;
-						const r = await fetch(API_BASE + 'config/versions/' + v.timestamp + '/restore', { method: 'POST' });
+							+ '? The current ' + TARGET_FILE + ' is backed up first'
+							+ (APP ? ', and every section of it is restored, not only the rules' : '')
+							+ '. Unsaved draft changes are discarded.')) return;
+						const r = await fetch(cfgUrl('/versions/' + v.timestamp + '/restore'), { method: 'POST' });
 						if (!r.ok) {
 							const err = await r.json().catch(() => ({}));
 							alert('Restore failed: ' + (err.error || r.status));
@@ -1905,6 +1923,36 @@ a=sendrecv
 			copyButton: document.getElementById('copyJson'),
 			getJson: buildPayload,
 		});
+
+		// ---- target picker ----
+
+		(function initTarget() {
+			document.getElementById('targetFile').textContent = TARGET_FILE;
+			document.getElementById('jsonTitle').textContent =
+				'Draft ' + (APP ? 'crud section of ' : '') + TARGET_FILE + ' · read-only, exactly what Save sends';
+			document.getElementById('handoff').href =
+				'/blade/configurator/configurator.html?schema=' + encodeURIComponent(APP || 'crud');
+			if (APP) document.getElementById('event').value = 'send';
+			const sel = document.getElementById('target');
+			sel.addEventListener('change', () => {
+				if (ed.dirty && !confirm('Discard unsaved changes and switch?')) {
+					sel.value = APP;
+					return;
+				}
+				location.search = sel.value ? '?app=' + encodeURIComponent(sel.value) : '';
+			});
+			fetch(API_BASE + 'apps').then(r => r.json()).then(data => {
+				const apps = data.apps || [];
+				if (APP && !apps.includes(APP)) apps.push(APP);
+				for (const app of apps.sort()) {
+					const opt = document.createElement('option');
+					opt.value = app;
+					opt.textContent = app + ' (' + app + '.json)';
+					sel.appendChild(opt);
+				}
+				sel.value = APP;
+			}).catch(() => { sel.value = APP; });
+		})();
 
 		loadEditor();
 	</script>

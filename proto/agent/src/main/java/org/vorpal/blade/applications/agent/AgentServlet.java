@@ -14,7 +14,7 @@ import javax.servlet.sip.annotation.SipListener;
 import javax.servlet.sip.annotation.SipServlet;
 
 import org.vorpal.blade.framework.v2.analytics.Analytics;
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.framework.v3.B2buaServlet;
 import org.vorpal.blade.framework.v3.events.AccessEvent;
 import org.vorpal.blade.framework.v3.events.CallScope;
@@ -56,7 +56,16 @@ public class AgentServlet extends B2buaServlet {
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
-		settingsManager = new SettingsManager<>(event, AgentSettings.class, new AgentSettingsSample());
+		settingsManager = new SettingsManager<AgentSettings>(event) {
+			@Override
+			protected AgentSettings sample() {
+				return new AgentSettingsSample();
+			}
+
+			@Override
+			protected void refreshed(AgentSettings config) {
+			}
+		};
 		int back = ReplayStore.load();
 		if (back > 0) {
 			AgentConsoleRegistry.log("agent: " + back + " call(s) back in the queue from " + ReplayStore.file());

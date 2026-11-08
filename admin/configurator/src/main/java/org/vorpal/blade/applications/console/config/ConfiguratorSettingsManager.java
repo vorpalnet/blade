@@ -10,7 +10,7 @@ import java.util.logging.Logger;
 import javax.servlet.ServletContextEvent;
 import javax.servlet.sip.ServletParseException;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 
 /// SettingsManager for the Configurator that owns the auto-publish
 /// [ConfigurationMonitor] lifecycle.
@@ -18,8 +18,8 @@ import org.vorpal.blade.framework.v2.config.SettingsManager;
 /// The monitor watches `./config/custom/vorpal/*.json` and republishes
 /// on-disk edits to live services via JMX.
 ///
-/// The framework calls [#initialize] on every config reload (see
-/// [SettingsManager#initialize] and `Settings#reload`), including the
+/// The framework calls [#refreshed] on every config reload (see
+/// [SettingsManager#refreshed] and `Settings#reload`), including the
 /// initial load during construction. Starting and stopping the monitor
 /// from that hook makes the [ConfiguratorSettings#isAutoPublish] flag take
 /// effect the moment it is flipped through the UI — no redeploy required.
@@ -29,14 +29,19 @@ public class ConfiguratorSettingsManager extends SettingsManager<ConfiguratorSet
 	private static final Path WATCH_DIR = Paths.get("./config/custom/vorpal/");
 
 	/// Defaults to null. Assigned by [#startMonitor] and cleared by
-	/// [#stopMonitor]. Deliberately NOT a field initializer: [#initialize]
+	/// [#stopMonitor]. Deliberately NOT a field initializer: [#refreshed]
 	/// runs inside the super constructor — before subclass field initializers
 	/// — and null is the correct value at that point.
 	private ConfigurationMonitor monitor;
 
 	public ConfiguratorSettingsManager(ServletContextEvent event) throws Exception {
-		super(event, ConfiguratorSettings.class, new ConfiguratorSettingsSample());
+		super(event);
 		seedDomainConfig();
+	}
+
+	@Override
+	protected ConfiguratorSettings sample() {
+		return new ConfiguratorSettingsSample();
 	}
 
 	/// Copies `_samples/blade-configurator.json.SAMPLE` to
@@ -63,7 +68,7 @@ public class ConfiguratorSettingsManager extends SettingsManager<ConfiguratorSet
 	/// in line with the current `autoPublish` flag. A null config means
 	/// auto-publish stays off.
 	@Override
-	public synchronized void initialize(ConfiguratorSettings config) throws ServletParseException {
+	protected synchronized void refreshed(ConfiguratorSettings config) throws ServletParseException {
 		boolean autoPublish = (config != null) && config.isAutoPublish();
 		if (autoPublish) {
 			startMonitor();

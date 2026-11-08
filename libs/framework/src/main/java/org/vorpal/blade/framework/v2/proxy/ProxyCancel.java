@@ -10,7 +10,15 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
 /**
  * Callflow for handling CANCEL requests in proxy mode.
  * The container automatically handles CANCEL processing, so this is a no-op.
+ *
+ * @deprecated Write a v3 {@link org.vorpal.blade.framework.v3.Callflow} and set
+ *             {@code session.passthru}: its {@code sendRequest},
+ *             {@code sendRequestsInSerial} and {@code sendRequestsInParallel}
+ *             proxy the caller's INVITE without Record-Route, a tier at a
+ *             time, and the same callflow runs as a B2BUA when passthru is
+ *             off. The proxy-balancer service is the worked example.
  */
+@Deprecated
 public class ProxyCancel extends Callflow {
 	private static final long serialVersionUID = 1L;
 

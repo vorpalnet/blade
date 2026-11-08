@@ -238,8 +238,19 @@ public class MessageHelper implements Serializable {
 			SettingsManager.getSipLogger().warning(msg, "MessageHelper - no " + attribute + " header on message");
 			return;
 		}
-		live.setURI(supplied.getURI());
-		live.setDisplayName(supplied.getDisplayName());
+		try {
+			live.setURI(supplied.getURI());
+			live.setDisplayName(supplied.getDisplayName());
+		} catch (IllegalStateException readOnly) {
+			// A request the application received, as a proxy forwards: the
+			// container makes its To and From read-only. Lift that for this
+			// address and try again.
+			if (!HeaderAccess.unlock(live, attribute)) {
+				throw readOnly;
+			}
+			live.setURI(supplied.getURI());
+			live.setDisplayName(supplied.getDisplayName());
+		}
 	}
 
 	/// Copies the header parameters of a textual Contact value onto the

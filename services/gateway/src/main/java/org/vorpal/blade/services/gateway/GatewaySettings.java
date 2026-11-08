@@ -4,7 +4,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.vorpal.blade.framework.v2.config.Configuration;
+import org.vorpal.blade.framework.v3.configuration.Configuration;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 

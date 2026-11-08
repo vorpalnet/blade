@@ -7,7 +7,7 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 
 /// Registers the Files admin app's SettingsManager at startup. Beyond the
 /// `name` / `tagline` / `description` metadata the Admin Portal deck reads from
@@ -27,7 +27,16 @@ public class FilesSettingsStartup implements ServletContextListener {
 	@Override
 	public void contextInitialized(ServletContextEvent sce) {
 		try {
-			settingsManager = new SettingsManager<>(sce, FilesSettings.class, new FilesSettingsSample());
+			settingsManager = new SettingsManager<FilesSettings>(sce) {
+				@Override
+				protected FilesSettings sample() {
+					return new FilesSettingsSample();
+				}
+
+				@Override
+				protected void refreshed(FilesSettings config) {
+				}
+			};
 			sce.getServletContext().setAttribute(SETTINGS_ATTR, settingsManager);
 			logger.info("files SettingsManager registered");
 		} catch (Exception e) {

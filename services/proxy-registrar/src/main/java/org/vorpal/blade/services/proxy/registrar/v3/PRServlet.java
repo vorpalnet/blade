@@ -11,7 +11,7 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.annotation.SipApplicationKey;
 
 import org.vorpal.blade.framework.Callflow;
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.framework.v3.B2buaServlet;
 
 /// The Proxy Registrar — a REGISTER server plus a config-driven forwarder.
@@ -47,7 +47,16 @@ public class PRServlet extends B2buaServlet {
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
-		settingsManager = new SettingsManager<Settings>(event, Settings.class, new SettingsSample());
+		settingsManager = new SettingsManager<Settings>(event) {
+			@Override
+			protected Settings sample() {
+				return new SettingsSample();
+			}
+
+			@Override
+			protected void refreshed(Settings config) {
+			}
+		};
 		sipLogger.finer("PRServlet.servletCreated");
 	}
 

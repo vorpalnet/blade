@@ -2,7 +2,7 @@ package org.vorpal.blade.test.client;
 
 import java.io.Serializable;
 
-import org.vorpal.blade.framework.v2.config.Configuration;
+import org.vorpal.blade.framework.v3.configuration.Configuration;
 
 public class TestClientConfig extends Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;

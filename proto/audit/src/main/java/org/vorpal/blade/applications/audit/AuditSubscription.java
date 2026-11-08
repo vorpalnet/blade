@@ -7,7 +7,7 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.framework.v3.events.BladeEventTypes;
 import org.vorpal.blade.framework.v3.events.SubscriptionRegistrar;
 import org.vorpal.blade.framework.v3.security.AuditSink;
@@ -75,7 +75,16 @@ public class AuditSubscription implements ServletContextListener {
 	@Override
 	public void contextInitialized(ServletContextEvent event) {
 		try {
-			settings = new SettingsManager<>(event, AuditSettings.class, new AuditSettingsSample());
+			settings = new SettingsManager<AuditSettings>(event) {
+				@Override
+				protected AuditSettings sample() {
+					return new AuditSettingsSample();
+				}
+
+				@Override
+				protected void refreshed(AuditSettings config) {
+				}
+			};
 		} catch (Exception e) {
 			// The read API refuses everything without a policy, which is the right
 			// failure. The subscription below still starts: losing the ability to

@@ -7,7 +7,7 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 
 /// Registers the iRouter Editor's SettingsManager at startup so its
 /// `name` / `tagline` / `description` metadata (and any future per-app
@@ -23,8 +23,16 @@ public class IRouterEditorSettingsStartup implements ServletContextListener {
 	@Override
 	public void contextInitialized(ServletContextEvent sce) {
 		try {
-			settingsManager = new SettingsManager<>(sce, IRouterEditorSettings.class,
-					new IRouterEditorSettingsSample());
+			settingsManager = new SettingsManager<IRouterEditorSettings>(sce) {
+				@Override
+				protected IRouterEditorSettings sample() {
+					return new IRouterEditorSettingsSample();
+				}
+
+				@Override
+				protected void refreshed(IRouterEditorSettings config) {
+				}
+			};
 			logger.info("irouter-editor SettingsManager registered");
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "irouter-editor SettingsManager failed to register", e);

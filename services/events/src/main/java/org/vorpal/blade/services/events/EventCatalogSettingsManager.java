@@ -8,7 +8,7 @@ import java.util.logging.Logger;
 import javax.servlet.ServletContextEvent;
 import javax.servlet.sip.ServletParseException;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.framework.v3.events.EventBus;
 import org.vorpal.blade.framework.v3.events.EventCatalog;
 import org.vorpal.blade.framework.v3.events.EventPublisher;
@@ -17,7 +17,7 @@ import org.vorpal.blade.framework.v3.events.EventType;
 /// Owns the event catalog on this engine node and keeps the bus's publishers in
 /// line with it.
 ///
-/// The framework calls [#initialize] on every config reload — including the
+/// The framework calls [#refreshed] on every config reload — including the
 /// initial load during construction — so a destination added or removed through
 /// the Events console takes effect the moment the catalog is published, with no
 /// redeploy. That is the whole reason this is a `SettingsManager` subclass
@@ -38,7 +38,12 @@ public class EventCatalogSettingsManager extends SettingsManager<EventCatalog> {
 	private static final Logger logger = Logger.getLogger(EventCatalogSettingsManager.class.getName());
 
 	public EventCatalogSettingsManager(ServletContextEvent event) throws Exception {
-		super(event, EventCatalog.class, new EventCatalogSample());
+		super(event);
+	}
+
+	@Override
+	protected EventCatalog sample() {
+		return new EventCatalogSample();
 	}
 
 	/// Framework hook, invoked on every `reload()`. Brings the installed
@@ -47,7 +52,7 @@ public class EventCatalogSettingsManager extends SettingsManager<EventCatalog> {
 	/// Deliberately no field initializers in this class: this runs inside the
 	/// super constructor, before subclass fields would be assigned.
 	@Override
-	public synchronized void initialize(EventCatalog catalog) throws ServletParseException {
+	protected synchronized void refreshed(EventCatalog catalog) throws ServletParseException {
 		if (catalog == null) {
 			logger.warning("no event catalog loaded; the bus will publish nothing on this node");
 			return;

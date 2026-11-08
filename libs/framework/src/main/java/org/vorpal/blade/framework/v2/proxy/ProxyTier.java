@@ -12,7 +12,15 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 /**
  * Represents a routing tier within a proxy plan.
  * A tier contains endpoints that can be tried in parallel or serial mode with an optional timeout.
+ *
+ * @deprecated Write a v3 {@link org.vorpal.blade.framework.v3.Callflow} and set
+ *             {@code session.passthru}: its {@code sendRequest},
+ *             {@code sendRequestsInSerial} and {@code sendRequestsInParallel}
+ *             proxy the caller's INVITE without Record-Route, a tier at a
+ *             time, and the same callflow runs as a B2BUA when passthru is
+ *             off. The proxy-balancer service is the worked example.
  */
+@Deprecated
 public class ProxyTier implements Serializable {
 	private static final long serialVersionUID = 1L;
 

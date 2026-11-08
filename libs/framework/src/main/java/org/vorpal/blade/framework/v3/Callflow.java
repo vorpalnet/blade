@@ -953,6 +953,10 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 		PassthruProxy state = (PassthruProxy) appSession.getAttribute(PASSTHRU_PROXY_ATTR);
 		javax.servlet.sip.Proxy proxy = inbound.getProxy();
 		if (state == null) {
+			// The proxy forwards the caller's own INVITE, not the request this
+			// callflow built, so the application's CRUD rules run on that one.
+			// Once: later batches proxy the same request again.
+			CrudHook.apply(inbound);
 			proxy.setRecordRoute(false);
 			proxy.setSupervised(true);
 			proxy.setParallel(true);

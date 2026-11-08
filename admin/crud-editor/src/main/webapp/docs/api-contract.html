@@ -91,6 +91,11 @@
 						<tr><td><code>GET</code></td><td><code>{base}/config/versions</code></td><td>List <code>.versions/</code> snapshots: <code>{versions:[{timestamp,sizeBytes}]}</code>.</td></tr>
 						<tr><td><code>GET</code></td><td><code>{base}/config/versions/{ts}</code></td><td>One snapshot's content.</td></tr>
 						<tr><td><code>POST</code></td><td><code>{base}/config/versions/{ts}/restore</code></td><td>Restore a snapshot (the replaced file is backed up first).</td></tr>
+						<tr><td><code>GET</code></td><td><code>{base}/apps</code></td><td>Applications whose configuration carries a <code>crud</code> section: <code>{apps:[name]}</code>. Read from the generated schemas, so an app is listed once it has started on a node.</td></tr>
+						<tr><td><code>GET</code></td><td><code>{base}/apps/{app}</code></td><td>Load one application's <code>crud</code> section: <code>{source, config, schema}</code>, where <code>config</code> is the section only and <code>source</code> is <code>live</code> or <code>sample</code> (404 when the app has neither).</td></tr>
+						<tr><td><code>POST</code></td><td><code>{base}/apps/{app}/save</code></td><td>Save: body is the section. Rejected (400) if it does not load as a <code>crud</code> section; spliced into <code>{app}.json</code>, every other section written back as read. An empty section removes the key.</td></tr>
+						<tr><td><code>POST</code></td><td><code>{base}/apps/{app}/publish</code></td><td>Reload <code>{app}</code> on every node running it (409 when it isn't deployed).</td></tr>
+						<tr><td><code>GET</code>/<code>POST</code></td><td><code>{base}/apps/{app}/versions</code>, <code>…/versions/{ts}</code>, <code>…/versions/{ts}/restore</code></td><td>History of the whole <code>{app}.json</code>, as for <code>config</code>. A restore brings back every section, not only the rules.</td></tr>
 					</table>
 					<p>
 						The two dry-run endpoints also accept optional

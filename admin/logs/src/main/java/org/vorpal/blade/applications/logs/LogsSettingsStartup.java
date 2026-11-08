@@ -7,7 +7,7 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 
 /// Registers the Logs admin app's SettingsManager at startup so its
 /// `name` / `tagline` / `description` metadata appear in JMX for the
@@ -27,7 +27,16 @@ public class LogsSettingsStartup implements ServletContextListener {
 	@Override
 	public void contextInitialized(ServletContextEvent sce) {
 		try {
-			settingsManager = new SettingsManager<>(sce, LogsSettings.class, new LogsSettingsSample());
+			settingsManager = new SettingsManager<LogsSettings>(sce) {
+				@Override
+				protected LogsSettings sample() {
+					return new LogsSettingsSample();
+				}
+
+				@Override
+				protected void refreshed(LogsSettings config) {
+				}
+			};
 			logger.info("logs SettingsManager registered");
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "logs SettingsManager failed to register", e);

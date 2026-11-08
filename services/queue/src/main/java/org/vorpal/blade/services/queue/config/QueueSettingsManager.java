@@ -5,7 +5,7 @@ import java.io.IOException;
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletContextEvent;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.services.queue.Queue;
 import org.vorpal.blade.services.queue.QueueServlet;
 
@@ -26,8 +26,13 @@ public class QueueSettingsManager extends SettingsManager<QueueConfig> {
 	 * @param event
 	 * @param sample
 	 */
-	public QueueSettingsManager(SipServletContextEvent event, QueueConfig sample) throws ServletException, IOException{
-		super(event, QueueConfig.class, sample);
+	public QueueSettingsManager(SipServletContextEvent event) throws ServletException, IOException {
+		super(event);
+	}
+
+	@Override
+	protected QueueConfig sample() {
+		return new QueueConfigSample();
 	}
 
 //	/**
@@ -53,9 +58,9 @@ public class QueueSettingsManager extends SettingsManager<QueueConfig> {
 	 * @param config
 	 */
 	@Override
-	public void initialize(QueueConfig config) {
+	protected void refreshed(QueueConfig config) {
 
-		sipLogger.fine("QueueSettingsManager.initialize...");
+		sipLogger.fine("QueueSettingsManager.refreshed...");
 		QueueServlet.installMediaServer(config);
 
 		try {
@@ -64,14 +69,14 @@ public class QueueSettingsManager extends SettingsManager<QueueConfig> {
 
 			for (String queueName : config.getQueues().keySet()) {
 				qa = config.getQueues().get(queueName);
-				sipLogger.fine("QueueSettingsManager.initialize, loading attributes for queue=" + queueName);
+				sipLogger.fine("QueueSettingsManager.refreshed, loading attributes for queue=" + queueName);
 				queue = QueueServlet.queues.get(queueName);
 				if (queue == null) {
-					sipLogger.fine("QueueSettingsManager.initialize, creating new queue=" + queueName);
+					sipLogger.fine("QueueSettingsManager.refreshed, creating new queue=" + queueName);
 					queue = new Queue(queueName);
 					QueueServlet.queues.put(queueName, queue);
 				} else {
-					sipLogger.fine("QueueSettingsManager.initialize, reinitializing old queue=" + queueName);
+					sipLogger.fine("QueueSettingsManager.refreshed, reinitializing old queue=" + queueName);
 				}
 
 				queue.initialize(qa);

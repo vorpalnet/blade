@@ -24,6 +24,16 @@ through the framework's `VersionedFileStore` (previous versions kept and restora
 the editor's history panel). Publish tells every node running the CRUD service to
 reload, via the framework's `ConfigPublisher` MBean path.
 
+## Rules inside an application
+
+A v3 application runs the same rules from a `crud` section of its own configuration, on
+every message it sends, with no CRUD service chained in front of it in FSMAR. The
+editor's *Rules for* picker lists every application whose generated schema carries that
+section, which today means any configuration on the v3 base that has started on a node.
+Pick one and the editor works on that section alone: Save splices it into `<app>.json`
+and writes the rest of the file back as it was, and Publish reloads that application.
+In-application rules see one lifecycle event, `send`; filter them by method and `when`.
+
 ## The preview
 
 Two dry-runs, both against the live config. **Selection** (`Auto-select from message`)

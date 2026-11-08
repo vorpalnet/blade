@@ -23,7 +23,11 @@
 /// public class MyServlet extends B2buaServlet {
 ///
 ///     public void servletCreated(SipServletContextEvent event) {
-///         new SettingsManager<>(event, MyConfig.class, new MyConfigSample());
+///         // the v3 org.vorpal.blade.framework.v3.configuration.SettingsManager
+///         new SettingsManager<MyConfig>(event) {
+///             protected MyConfig sample() { return new MyConfigSample(); }
+///             protected void refreshed(MyConfig config) { }
+///         };
 ///     }
 ///
 ///     public void servletDestroyed(SipServletContextEvent event) {

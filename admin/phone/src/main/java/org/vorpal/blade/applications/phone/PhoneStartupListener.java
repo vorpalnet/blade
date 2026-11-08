@@ -7,7 +7,7 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.framework.v3.security.JwtAuthException;
 import org.vorpal.blade.framework.v3.security.JwtIssuer;
 
@@ -39,7 +39,16 @@ public class PhoneStartupListener implements ServletContextListener {
 	@Override
 	public void contextInitialized(ServletContextEvent event) {
 		try {
-			settingsManager = new SettingsManager<>(event, PhoneSettings.class, new PhoneSettingsSample());
+			settingsManager = new SettingsManager<PhoneSettings>(event) {
+				@Override
+				protected PhoneSettings sample() {
+					return new PhoneSettingsSample();
+				}
+
+				@Override
+				protected void refreshed(PhoneSettings config) {
+				}
+			};
 			log.info("WebRTC Phone SettingsManager registered; config at ./config/custom/vorpal/blade-phone.json");
 		} catch (Exception e) {
 			log.log(Level.SEVERE, "Failed to register the WebRTC Phone SettingsManager — "

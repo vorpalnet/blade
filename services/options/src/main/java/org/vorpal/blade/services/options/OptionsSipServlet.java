@@ -33,7 +33,7 @@ import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.v3.AsyncSipServlet;
 import org.vorpal.blade.framework.Callflow;
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 
 @WebListener
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
@@ -53,7 +53,16 @@ public class OptionsSipServlet extends AsyncSipServlet {
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
 		try {
-			settingsManager = new SettingsManager<>(event, OptionsSettings.class, new OptionsSettingsSample());
+			settingsManager = new SettingsManager<OptionsSettings>(event) {
+				@Override
+				protected OptionsSettings sample() {
+					return new OptionsSettingsSample();
+				}
+
+				@Override
+				protected void refreshed(OptionsSettings config) {
+				}
+			};
 		} catch (Exception ex) {
 			if (sipLogger != null) {
 				sipLogger.severe("Unable to load options.json configuration file.");

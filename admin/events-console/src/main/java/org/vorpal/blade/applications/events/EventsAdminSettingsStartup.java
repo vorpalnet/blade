@@ -7,7 +7,7 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 
 /// Registers the console's SettingsManager so it appears on the Admin Portal
 /// deck and its configuration is Configurator-editable.
@@ -25,7 +25,16 @@ public class EventsAdminSettingsStartup implements ServletContextListener {
 	@Override
 	public void contextInitialized(ServletContextEvent sce) {
 		try {
-			settingsManager = new SettingsManager<>(sce, EventsAdminSettings.class, new EventsAdminSettingsSample());
+			settingsManager = new SettingsManager<EventsAdminSettings>(sce) {
+				@Override
+				protected EventsAdminSettings sample() {
+					return new EventsAdminSettingsSample();
+				}
+
+				@Override
+				protected void refreshed(EventsAdminSettings config) {
+				}
+			};
 			sce.getServletContext().setAttribute(SETTINGS_ATTR, settingsManager);
 			logger.info("events console settings registered");
 		} catch (Exception e) {

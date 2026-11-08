@@ -40,7 +40,7 @@
 /// requests to callflows based on method type: INVITE requests are handled by
 /// [TestReinvite][org.vorpal.blade.framework.tpcc.TestReinvite], and BYE requests
 /// by [TestClientBye]. Configuration is managed through a
-/// [SettingsManager][org.vorpal.blade.framework.v2.config.SettingsManager].
+/// [SettingsManager][org.vorpal.blade.framework.v3.configuration.SettingsManager].
 ///
 /// ### TestClientBye Callflow
 /// [TestClientBye] simply responds with 200 OK to any BYE request, cleanly
@@ -64,5 +64,5 @@
 ///
 /// @see org.vorpal.blade.framework.v2.AsyncSipServlet
 /// @see org.vorpal.blade.framework.v2.callflow.Callflow
-/// @see org.vorpal.blade.framework.v2.config.SettingsManager
+/// @see org.vorpal.blade.framework.v3.configuration.SettingsManager
 package org.vorpal.blade.test.client;

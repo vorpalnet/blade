@@ -107,7 +107,7 @@ public class QueueServlet extends B2buaServlet {
 	public void servletCreated(SipServletContextEvent event) {
 
 		try {
-			settingsManager = new QueueSettingsManager(event, new QueueConfigSample());
+			settingsManager = new QueueSettingsManager(event);
 			// Read live by the dashboard's "Queued now" tile, summed over nodes.
 			MetricsRegistry metrics = MetricsRegistry.from(event.getServletContext());
 			metrics.gauge(GAUGE_QUEUED, "Calls waiting in every queue on this node",

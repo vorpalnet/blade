@@ -27,10 +27,12 @@ import org.vorpal.blade.framework.v2.logging.Logger;
 ///
 /// What [#apply] does not reach: messages the container generates itself
 /// (`100 Trying`, its automatic responses), and most of a passthru call. A
-/// passthru hand-off proxies the caller's own INVITE, taking only each
-/// outbound request's Request-URI and attributes, so a `requestURI` rule still
-/// takes effect there but a header rule does not. Nothing after the hand-off
-/// passes through a callflow at all.
+/// passthru hand-off proxies the caller's own INVITE, taking each outbound
+/// request's Request-URI and attributes; the v3 `Callflow` runs the rules on
+/// that INVITE too, so a header rule takes effect, but the container refuses a
+/// change to the From or To of a request it received, and that rule is logged
+/// and skipped. The callee's responses and everything after the hand-off do
+/// not pass through a callflow at all.
 public final class CrudHook {
 
 	/// Message attribute marking a message the rules already ran on. A parked

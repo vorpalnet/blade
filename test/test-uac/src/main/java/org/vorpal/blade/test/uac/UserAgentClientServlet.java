@@ -7,7 +7,7 @@ import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.framework.v3.tester.Scenario;
 import org.vorpal.blade.framework.v3.tester.TesterConfiguration;
 import org.vorpal.blade.framework.v3.tester.TesterServlet;
@@ -37,7 +37,16 @@ public class UserAgentClientServlet extends TesterServlet {
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
-		settingsManager = new SettingsManager<>(event, UserAgentClientConfig.class, new UserAgentClientConfigSample());
+		settingsManager = new SettingsManager<UserAgentClientConfig>(event) {
+			@Override
+			protected UserAgentClientConfig sample() {
+				return new UserAgentClientConfigSample();
+			}
+
+			@Override
+			protected void refreshed(UserAgentClientConfig config) {
+			}
+		};
 		initTester(event, settingsManager.getServletContextName());
 		sipLogger.info("UserAgentClientServlet.servletCreated");
 	}

@@ -4,7 +4,7 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 
 /// Loads the app's settings, and nothing else.
 ///
@@ -19,7 +19,16 @@ public class RecordingsServlet implements ServletContextListener {
 	@Override
 	public void contextInitialized(ServletContextEvent event) {
 		try {
-			settings = new SettingsManager<>(event, RecordingsSettings.class, new RecordingsSettingsSample());
+			settings = new SettingsManager<RecordingsSettings>(event) {
+				@Override
+				protected RecordingsSettings sample() {
+					return new RecordingsSettingsSample();
+				}
+
+				@Override
+				protected void refreshed(RecordingsSettings config) {
+				}
+			};
 		} catch (Exception e) {
 			// Do not fail the deployment. With no settings the evaluator sees a
 			// null policy and refuses everything, which is the right posture for

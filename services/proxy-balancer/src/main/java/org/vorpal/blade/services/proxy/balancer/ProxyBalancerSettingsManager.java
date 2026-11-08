@@ -10,13 +10,14 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletContextEvent;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.services.proxy.balancer.config.BalancerConfig;
+import org.vorpal.blade.services.proxy.balancer.config.BalancerConfigSample;
 import org.vorpal.blade.services.proxy.balancer.config.Endpoint;
 import org.vorpal.blade.services.proxy.balancer.config.Tier;
 
 /**
- * Extends the SettingsManager class to implement the initialize method:
+ * Extends the SettingsManager class to implement the refreshed hook:
  * seeds the endpoint health map (keyed by endpoint NAME) from the registry,
  * and validates that every tier's endpoint and site references resolve.
  * Health objects are carried across config publishes through the node-level
@@ -37,13 +38,17 @@ public class ProxyBalancerSettingsManager extends SettingsManager<BalancerConfig
 	/// names removed from the registry are dropped.
 	private static final ConcurrentHashMap<String, EndpointHealth> nodeHealth = new ConcurrentHashMap<>();
 
-	public ProxyBalancerSettingsManager(SipServletContextEvent event, Class<BalancerConfig> clazz,
-			BalancerConfig sample) throws ServletException, IOException {
-		super(event, clazz, sample);
+	public ProxyBalancerSettingsManager(SipServletContextEvent event) throws ServletException, IOException {
+		super(event);
 	}
 
 	@Override
-	public void initialize(BalancerConfig config) throws ServletParseException {
+	protected BalancerConfig sample() {
+		return new BalancerConfigSample();
+	}
+
+	@Override
+	protected void refreshed(BalancerConfig config) throws ServletParseException {
 
 		for (String name : config.getEndpoints().keySet()) {
 			config.endpointHealth.put(name, nodeHealth.computeIfAbsent(name, (k) -> new EndpointHealth()));

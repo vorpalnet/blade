@@ -7,7 +7,7 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 
 /// Registers the Trace app's SettingsManager at startup so the app's
 /// `name` / `tagline` / `description` appear on the Admin Portal launcher deck
@@ -30,7 +30,16 @@ public class CallflowStartup implements ServletContextListener {
 	@Override
 	public void contextInitialized(ServletContextEvent sce) {
 		try {
-			settingsManager = new SettingsManager<>(sce, CallflowSettings.class, new CallflowSettingsSample());
+			settingsManager = new SettingsManager<CallflowSettings>(sce) {
+				@Override
+				protected CallflowSettings sample() {
+					return new CallflowSettingsSample();
+				}
+
+				@Override
+				protected void refreshed(CallflowSettings config) {
+				}
+			};
 			logger.info("callflow SettingsManager registered");
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "callflow SettingsManager failed to register", e);

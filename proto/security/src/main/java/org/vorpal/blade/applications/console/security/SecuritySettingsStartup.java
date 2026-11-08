@@ -8,7 +8,7 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.framework.v3.security.JwtAuthConfig;
 import org.vorpal.blade.framework.v3.security.JwtAuthFilter;
 
@@ -31,7 +31,16 @@ public class SecuritySettingsStartup implements ServletContextListener {
 	@Override
 	public void contextInitialized(ServletContextEvent sce) {
 		try {
-			settingsManager = new SettingsManager<>(sce, SecuritySettings.class, new SecuritySettingsSample());
+			settingsManager = new SettingsManager<SecuritySettings>(sce) {
+				@Override
+				protected SecuritySettings sample() {
+					return new SecuritySettingsSample();
+				}
+
+				@Override
+				protected void refreshed(SecuritySettings config) {
+				}
+			};
 
 			Supplier<JwtAuthConfig> jwtConfigSupplier = () -> {
 				SecuritySettings current = settingsManager.getCurrent();

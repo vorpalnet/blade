@@ -7,7 +7,7 @@ import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
-import org.vorpal.blade.framework.v2.config.Configuration;
+import org.vorpal.blade.framework.v3.configuration.Configuration;
 import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
 
 /// Configuration for the player/recorder app.

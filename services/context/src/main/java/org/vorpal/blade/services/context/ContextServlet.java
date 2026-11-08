@@ -12,7 +12,7 @@ import javax.servlet.sip.SipServletResponse;
 
 import org.vorpal.blade.framework.v2.b2bua.B2buaListener;
 import org.vorpal.blade.framework.v3.B2buaServlet;
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 
 /// Captures raw inbound SIP headers on initial requests so external apps can
 /// retrieve them via the REST API after a cloud-provider trunk has scrubbed
@@ -38,7 +38,16 @@ public class ContextServlet extends B2buaServlet implements B2buaListener {
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
 		try {
-			settingsManager = new SettingsManager<>(event, ContextSettings.class, new ContextSettingsSample());
+			settingsManager = new SettingsManager<ContextSettings>(event) {
+				@Override
+				protected ContextSettings sample() {
+					return new ContextSettingsSample();
+				}
+
+				@Override
+				protected void refreshed(ContextSettings config) {
+				}
+			};
 			sipLogger.fine("ContextServlet.servletCreated");
 		} catch (Exception e) {
 			sipLogger.severe(e);

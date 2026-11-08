@@ -13,7 +13,7 @@ import javax.servlet.sip.SipServletResponse;
 import org.vorpal.blade.framework.v2.b2bua.B2buaListener;
 import org.vorpal.blade.framework.v3.B2buaServlet;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
@@ -27,8 +27,16 @@ public class AnalyticsSipServlet extends B2buaServlet implements B2buaListener, 
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
 
 		try {
-			settingsManager = new SettingsManager<AnalyticsConfig>(event, AnalyticsConfig.class,
-					new AnalyticsConfigSample());
+			settingsManager = new SettingsManager<AnalyticsConfig>(event) {
+				@Override
+				protected AnalyticsConfig sample() {
+					return new AnalyticsConfigSample();
+				}
+
+				@Override
+				protected void refreshed(AnalyticsConfig config) {
+				}
+			};
 
 			sipLogger.fine("AnalyticsSipServlet.servletCreated");
 		} catch (Exception e) {

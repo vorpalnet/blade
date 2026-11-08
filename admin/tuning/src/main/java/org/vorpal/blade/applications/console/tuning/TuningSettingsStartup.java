@@ -12,7 +12,7 @@ import javax.servlet.annotation.WebListener;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 
 /// Registers the Tuning admin app's SettingsManager at startup so its
 /// `name` / `tagline` / `description` metadata appear in JMX for the
@@ -31,7 +31,16 @@ public class TuningSettingsStartup implements ServletContextListener {
 	@Override
 	public void contextInitialized(ServletContextEvent sce) {
 		try {
-			settingsManager = new SettingsManager<>(sce, TuningSettings.class, new TuningSettingsSample());
+			settingsManager = new SettingsManager<TuningSettings>(sce) {
+				@Override
+				protected TuningSettings sample() {
+					return new TuningSettingsSample();
+				}
+
+				@Override
+				protected void refreshed(TuningSettings config) {
+				}
+			};
 			logger.info("tuning SettingsManager registered");
 			materializeDomainConfigIfMissing(sce);
 			// Pin what install.sh wrote before anyone can change it. If the DomainRuntime

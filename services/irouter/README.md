@@ -15,18 +15,24 @@ An incoming INVITE runs through two phases:
    └────────────────────────────────────────────┘     └─────────────────┘
                                                                │
                                                                ▼
-                                                       proxy.proxyTo(uri)
+                                                    forward to uri
+                                              (proxy, or B2BUA with passthru off)
 ```
 
 **Phase 1 — Pipeline.** An ordered list of `Connector`s. Each reads what earlier stages wrote into a shared per-call `Context`, pulls new values from some source (SIP message, REST API, database, directory, in-memory map, translation table), and writes those new values back to the Context via `${var}` substitution. Pipelines are enrichment only — no routing decisions happen here.
 
-**Phase 2 — Routing.** A single polymorphic `Routing` field that reads the now-enriched Context and returns a concrete `Route`: a destination SIP URI plus optional outbound INVITE headers. The SIP Servlet Proxy API then proxies the call to that URI.
+**Phase 2 — Routing.** A single polymorphic `Routing` field that reads the now-enriched Context and returns a concrete `Route`: a destination SIP URI plus optional outbound INVITE headers. iRouter then forwards the call to that URI.
 
 Why two phases? First gather all the information in the pipeline, then make the routing decision. The split keeps table connectors singular in purpose, makes the routing step visually prominent, and lets any enrichment type (table, REST, JDBC, LDAP) sit alongside any other.
 
-## Proxy, not B2BUA
+## Proxy or B2BUA: `session.passthru`
 
-iRouter uses the JSR 289 Proxy API. Re-INVITEs and in-dialog traffic pass through the container's proxy machinery unchanged once `proxy.proxyTo()` has been called for the initial INVITE. The servlet stays out of the mid-call path — the routing decision is made once, on the initial INVITE, and the proxy handles everything after. Use a B2BUA-based service (e.g. [call queueing](../queue/README.md)) if you need dialog-mid intervention.
+The routing decision is made once, on the initial INVITE. What happens after it is the `session.passthru` setting, the same switch every BLADE application has.
+
+- **`passthru: true`** (the sample's setting): iRouter proxies the caller's INVITE without Record-Route and leaves the call. Re-INVITEs, ACK and BYE go end to end, and the engine carries nothing after setup.
+- **`passthru: false`**: iRouter stays in the call as a B2BUA and relays everything in the dialog. It costs two dialogs per call on the engine, and buys the rest of the call: the re-INVITEs and BYE pass through iRouter, so its CRUD rules reach them too.
+
+A config written before this setting reached iRouter has no `passthru` and runs as a B2BUA. Add `"passthru": true` under `session` to keep the old drop-out.
 
 ## Pipeline connectors
 
@@ -297,8 +303,8 @@ The combination of `requestUri` and `statusCode` selects one of three behaviors 
 
 | `requestUri` | `statusCode` | Framework behavior | Use case |
 |---|---|---|---|
-| set | unset | Forward — base class proxies to `requestUri` via the JSR 289 Proxy API | Plain iRouter proxy decision |
-| unset | unset | Forward (pass-through) — base class proxies to the INVITE's original Request-URI | Pipeline-enrichment-only flows; the routing decision adds headers but doesn't change the destination |
+| set | unset | Forward to `requestUri`, as a proxy or a B2BUA per `session.passthru` | Plain iRouter routing decision |
+| unset | unset | Forward to the INVITE's original Request-URI, the same way | Pipeline-enrichment-only flows; the routing decision adds headers but doesn't change the destination |
 | any | **set** | Direct response — `request.createResponse(statusCode, reasonPhrase)`, then `headers` and `conditionalHeaders` are applied to that response | Rejections (`new Route(403, "Forbidden")`), redirects (`new Route(302, "Moved Temporarily").addHeader("Contact", "sip:…")`), success responses (`new Route(200, "OK")`) |
 
 The direct-response shape is how a redirect server, rather than a proxy, is expressed entirely in config — set `statusCode: 302` plus a `Contact` header, and the framework's `sendStatus` path does the rest. No subclass override required.

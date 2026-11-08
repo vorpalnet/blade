@@ -32,7 +32,7 @@ DECOMPILE='[Dd]ecompil'
 # maintainer the explanation they need.
 # Snmp looks up engine classes by name through reflection;
 # SipTimerSettings edits the sipserver.xml descriptor bean through JMX by its name.
-ALLOW='libs/framework/src/main/java/org/vorpal/blade/framework/v3/configuration/routing/LooseRoutingFilter\.java|libs/framework/src/main/java/org/vorpal/blade/framework/v3/configuration/routing/LooseRoutingHelper\.java|libs/framework/src/main/java/org/vorpal/blade/framework/v2/snmp/Snmp\.java|admin/tuning/src/main/java/org/vorpal/blade/applications/console/tuning/SipTimerSettings\.java|\.githooks/pre-commit'
+ALLOW='libs/framework/src/main/java/org/vorpal/blade/framework/v2/snmp/Snmp\.java|admin/tuning/src/main/java/org/vorpal/blade/applications/console/tuning/SipTimerSettings\.java|\.githooks/pre-commit'
 
 # --- ~/.m2 carries the framework JAR and nothing else. WebLogic deploys from dist/
 # --- and never reads a Maven repository; the parent pom skips install, and only

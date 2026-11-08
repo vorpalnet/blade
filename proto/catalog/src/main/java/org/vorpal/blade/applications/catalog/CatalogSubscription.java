@@ -6,7 +6,7 @@ import java.util.List;
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.framework.v3.events.BladeEventTypes;
 import org.vorpal.blade.framework.v3.events.SubscriptionRegistrar;
 import org.vorpal.blade.framework.v3.media.manifest.ManifestArchive;
@@ -44,7 +44,16 @@ public class CatalogSubscription implements ServletContextListener {
 	@Override
 	public void contextInitialized(ServletContextEvent event) {
 		try {
-			settings = new SettingsManager<>(event, CatalogSettings.class, new CatalogSettingsSample());
+			settings = new SettingsManager<CatalogSettings>(event) {
+				@Override
+				protected CatalogSettings sample() {
+					return new CatalogSettingsSample();
+				}
+
+				@Override
+				protected void refreshed(CatalogSettings config) {
+				}
+			};
 		} catch (Exception e) {
 			throw new IllegalStateException("blade-catalog could not load its settings", e);
 		}

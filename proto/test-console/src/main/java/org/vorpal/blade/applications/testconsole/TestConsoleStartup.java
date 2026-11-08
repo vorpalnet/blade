@@ -7,7 +7,7 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 
 /// Registers the Test Console's SettingsManager at startup so the app's
 /// `name` / `tagline` / `description` appear on the Admin Portal launcher
@@ -22,7 +22,16 @@ public class TestConsoleStartup implements ServletContextListener {
 	@Override
 	public void contextInitialized(ServletContextEvent sce) {
 		try {
-			settingsManager = new SettingsManager<>(sce, TestConsoleSettings.class, new TestConsoleSettingsSample());
+			settingsManager = new SettingsManager<TestConsoleSettings>(sce) {
+				@Override
+				protected TestConsoleSettings sample() {
+					return new TestConsoleSettingsSample();
+				}
+
+				@Override
+				protected void refreshed(TestConsoleSettings config) {
+				}
+			};
 			logger.info("test-console SettingsManager registered");
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "test-console SettingsManager failed to register", e);

@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.vorpal.blade.framework.v2.config.Configuration;
+import org.vorpal.blade.framework.v3.configuration.Configuration;
 import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
 import org.vorpal.blade.services.proxy.balancer.EndpointHealth;

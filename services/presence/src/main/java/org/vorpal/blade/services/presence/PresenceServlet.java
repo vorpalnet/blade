@@ -11,7 +11,7 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.annotation.SipApplicationKey;
 
 import org.vorpal.blade.framework.Callflow;
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.framework.v3.B2buaServlet;
 
 /// Agent presence and skill routing.
@@ -47,7 +47,16 @@ public class PresenceServlet extends B2buaServlet {
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
-		settingsManager = new SettingsManager<>(event, PresenceSettings.class, new PresenceSettingsSample());
+		settingsManager = new SettingsManager<PresenceSettings>(event) {
+			@Override
+			protected PresenceSettings sample() {
+				return new PresenceSettingsSample();
+			}
+
+			@Override
+			protected void refreshed(PresenceSettings config) {
+			}
+		};
 	}
 
 	@Override

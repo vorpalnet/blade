@@ -17,7 +17,7 @@ import javax.servlet.sip.annotation.SipServlet;
 
 import org.vorpal.blade.framework.v2.b2bua.B2buaListener;
 import org.vorpal.blade.framework.v2.b2bua.InitialInvite;
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.framework.v3.B2buaServlet;
 import org.vorpal.blade.framework.v3.media.CallAnalyzer;
 import org.vorpal.blade.framework.v3.media.MediaCallflow;
@@ -98,7 +98,16 @@ public class ListenerServlet extends B2buaServlet implements B2buaListener {
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
 		try {
-			settings = new SettingsManager<>(event, ListenerSettings.class, new ListenerSettingsSample());
+			settings = new SettingsManager<ListenerSettings>(event) {
+				@Override
+				protected ListenerSettings sample() {
+					return new ListenerSettingsSample();
+				}
+
+				@Override
+				protected void refreshed(ListenerSettings config) {
+				}
+			};
 			MediaCallflow.setMsControlFactory(obtainFactory(settings.getCurrent()));
 			sipLogger.info("ListenerServlet: JSR-309 MsControlFactory installed");
 			sipLogger.fine("ListenerServlet.servletCreated");

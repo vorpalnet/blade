@@ -20,7 +20,7 @@ import javax.servlet.sip.annotation.SipListener;
 import javax.servlet.sip.annotation.SipServlet;
 
 import org.vorpal.blade.framework.Callflow;
-import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.framework.v3.AsyncSipServlet;
 import org.vorpal.blade.framework.v3.media.MediaCallflow;
 
@@ -67,7 +67,16 @@ public class PlayerServlet extends AsyncSipServlet {
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
-		settings = new SettingsManager<>(event, PlayerSettings.class, new PlayerSettingsSample());
+		settings = new SettingsManager<PlayerSettings>(event) {
+			@Override
+			protected PlayerSettings sample() {
+				return new PlayerSettingsSample();
+			}
+
+			@Override
+			protected void refreshed(PlayerSettings config) {
+			}
+		};
 		try {
 			MediaCallflow.setMsControlFactory(obtainFactory(settings.getCurrent()));
 			MediaCallflow.setMediaLostListener(PlayerRehome::mediaLost);

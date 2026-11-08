@@ -12,7 +12,13 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
 /**
  * Router configuration with selectors, translation maps and a routing plan.
+ *
+ * @deprecated Use the v3
+ *             {@link org.vorpal.blade.framework.v3.configuration.RouterConfiguration}:
+ *             a connector pipeline and one routing decision. Nothing in BLADE
+ *             uses this class.
  */
+@Deprecated
 public class RouterConfig2 extends Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
 	@JsonPropertyDescription("List of selectors that extract values from SIP messages for routing lookups")

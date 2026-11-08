@@ -2,7 +2,7 @@ package org.vorpal.blade.services.analytics.sip;
 
 import java.io.Serializable;
 
-import org.vorpal.blade.framework.v2.config.Configuration;
+import org.vorpal.blade.framework.v3.configuration.Configuration;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;

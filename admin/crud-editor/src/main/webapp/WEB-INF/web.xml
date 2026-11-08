@@ -31,6 +31,16 @@
 		<url-pattern>/resources/api/config/*</url-pattern>
 	</servlet-mapping>
 
+	<servlet>
+		<servlet-name>apps</servlet-name>
+		<servlet-class>org.vorpal.blade.admin.crud.AppCrudServlet</servlet-class>
+		<load-on-startup>1</load-on-startup>
+	</servlet>
+	<servlet-mapping>
+		<servlet-name>apps</servlet-name>
+		<url-pattern>/resources/api/apps/*</url-pattern>
+	</servlet-mapping>
+
 	<security-constraint>
 		<web-resource-collection>
 			<web-resource-name>public-assets</web-resource-name>

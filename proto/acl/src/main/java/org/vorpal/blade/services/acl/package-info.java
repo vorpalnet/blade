@@ -47,7 +47,7 @@
 /// ### AclConfigManager
 ///
 /// Extends `SettingsManager<AclConfig>` to provide configuration lifecycle management.
-/// Overrides `initialize(AclConfig)` to call `config.initialize()`, which builds the
+/// Overrides `refreshed(AclConfig)` to call `config.initialize()`, which builds the
 /// address trie from the configured rules. Accepts a `SipServletContextEvent` for
 /// framework integration.
 ///
@@ -71,5 +71,5 @@
 ///
 /// @see AclSipServlet
 /// @see AclConfig
-/// @see [org.vorpal.blade.framework.v2.config.SettingsManager]
+/// @see [org.vorpal.blade.framework.v3.configuration.SettingsManager]
 package org.vorpal.blade.services.acl;
