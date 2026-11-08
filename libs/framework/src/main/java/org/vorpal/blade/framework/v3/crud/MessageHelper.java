@@ -174,9 +174,16 @@ public class MessageHelper implements Serializable {
 			break;
 
 		case "requestURI":
-			if (msg instanceof SipServletRequest) {
-				((SipServletRequest) msg).setRequestURI(SettingsManager.sipFactory.createURI(value));
+			// Inside a dialog the Request-URI is the far end's Contact (RFC 3261
+			// section 12.2.1.1), the same reason setAddress leaves To and From
+			// alone there: a rule broad enough to reach a re-INVITE, ACK or BYE
+			// is skipped rather than breaking the dialog.
+			if (!(msg instanceof SipServletRequest) || !((SipServletRequest) msg).isInitial()) {
+				SettingsManager.getSipLogger().finer(msg,
+						"MessageHelper - requestURI is fixed inside a dialog; not changed");
+				return;
 			}
+			((SipServletRequest) msg).setRequestURI(SettingsManager.sipFactory.createURI(value));
 			break;
 
 		case "To":
