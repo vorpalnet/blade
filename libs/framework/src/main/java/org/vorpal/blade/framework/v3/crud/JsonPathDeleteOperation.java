@@ -27,19 +27,27 @@ public class JsonPathDeleteOperation implements Operation {
 	}
 
 	@Override
-	public void process(SipServletMessage msg) {
-		try {
-			String json = MessageHelper.getAttributeValue(msg, "body", contentType);
-			if (json == null || json.isEmpty()) return;
+	public void check() throws Exception {
+		Placeholders.checkJsonPath(jsonPath);
+	}
 
-			DocumentContext ctx = JsonPath.parse(json);
-			ctx.delete(jsonPath);
-			MessageHelper.setAttributeValue(msg, "body", ctx.jsonString(), contentType);
-			SettingsManager.getSipLogger().finer(msg,
-					"JsonPathDeleteOperation - deleted " + jsonPath);
-		} catch (Exception e) {
-			SettingsManager.getSipLogger().logStackTrace(msg, e);
+	@Override
+	public void process(SipServletMessage msg) throws Exception {
+		String json = MessageHelper.getAttributeValue(msg, "body", contentType);
+		if (json == null || json.isEmpty()) return;
+
+		String path = Placeholders.jsonPath(jsonPath, msg);
+		if (path == null) {
+			Placeholders.skipped(msg, "JsonPathDeleteOperation", "the path", jsonPath, null);
+			return;
 		}
+
+		DocumentContext ctx = Placeholders.parseJson(msg, "JsonPathDeleteOperation", json);
+		if (ctx == null) return;
+		ctx.delete(path);
+		MessageHelper.setAttributeValue(msg, "body", ctx.jsonString(), contentType);
+		SettingsManager.getSipLogger().finer(msg,
+				"JsonPathDeleteOperation - deleted " + jsonPath);
 	}
 
 	@JsonPropertyDescription("Optional MIME content type, e.g. application/json. Null targets the entire body.")

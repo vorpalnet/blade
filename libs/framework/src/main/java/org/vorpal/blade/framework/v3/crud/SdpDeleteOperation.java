@@ -26,18 +26,25 @@ public class SdpDeleteOperation implements Operation {
 	}
 
 	@Override
-	public void process(SipServletMessage msg) {
-		try {
-			String sdp = MessageHelper.getAttributeValue(msg, "body", contentType);
-			if (sdp == null || sdp.isEmpty()) return;
+	public void check() throws Exception {
+		Placeholders.checkJsonPath(jsonPath);
+	}
 
-			String result = SdpHelper.deleteValue(sdp, jsonPath);
-			MessageHelper.setAttributeValue(msg, "body", result, contentType);
-			SettingsManager.getSipLogger().finer(msg,
-					"SdpDeleteOperation - deleted " + jsonPath);
-		} catch (Exception e) {
-			SettingsManager.getSipLogger().logStackTrace(msg, e);
+	@Override
+	public void process(SipServletMessage msg) throws Exception {
+		String sdp = MessageHelper.getAttributeValue(msg, "body", contentType);
+		if (sdp == null || sdp.isEmpty()) return;
+
+		String path = Placeholders.jsonPath(jsonPath, msg);
+		if (path == null) {
+			Placeholders.skipped(msg, "SdpDeleteOperation", "the path", jsonPath, null);
+			return;
 		}
+
+		String result = SdpHelper.deleteValue(sdp, path);
+		MessageHelper.setAttributeValue(msg, "body", result, contentType);
+		SettingsManager.getSipLogger().finer(msg,
+				"SdpDeleteOperation - deleted " + jsonPath);
 	}
 
 	@JsonPropertyDescription("Optional MIME content type, e.g. application/sdp. Null targets the entire body.")

@@ -22,6 +22,20 @@
 			<groupId>org.vorpal.blade</groupId>
 			<artifactId>vorpal-blade-library-framework</artifactId>
 		</dependency>
+		<!-- The AI rule builder (RuleBuilderAgent). Bundled in this WAR, as in
+		     the Configurator, not in blade-shared; OkHttp, Okio and
+		     kotlin-stdlib come from blade-shared. -->
+		<dependency>
+			<groupId>com.anthropic</groupId>
+			<artifactId>anthropic-java</artifactId>
+		</dependency>
+		<!-- Named so it stays on the compile class path: the SDK's runtime-scoped
+		     Jackson dependencies would otherwise win Maven's mediation. -->
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-annotations</artifactId>
+			<scope>provided</scope>
+		</dependency>
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter</artifactId>
@@ -31,11 +45,27 @@
 
 	<build>
 		<finalName>blade-crud</finalName>
+		<!-- The CRUD reference the AI rule builder gives the model is the v3.crud
+		     package's own Javadoc, copied in at build time: one source, no copy
+		     to drift (RuleBuilderAgent#reference). -->
+		<resources>
+			<resource>
+				<directory>${project.basedir}/../../libs/framework/src/main/java/org/vorpal/blade/framework/v3/crud</directory>
+				<includes>
+					<include>package-info.java</include>
+				</includes>
+				<targetPath>org/vorpal/blade/admin/crud/reference</targetPath>
+			</resource>
+		</resources>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-war-plugin</artifactId>
 				<configuration>
+					<!-- Skinny-WAR exception, as in the Configurator: the Anthropic
+					     SDK and what it alone needs ride here, not in blade-shared,
+					     whose every class the engines' annotation scan would load. -->
+					<packagingExcludes>%regex[WEB-INF/lib/(?!vorpal-blade-library-framework|anthropic-java|kotlin-reflect|jackson-module-kotlin|jackson-datatype-jdk8|jsonschema-module-swagger-2|standardwebhooks|error_prone_annotations).*\.jar]</packagingExcludes>
 					<!-- The login page is the portal master, injected at build time:
 					     one source file, no per-app copies to drift. Edit
 					     admin/portal/src/main/webapp/login.jsp, never add a per-app

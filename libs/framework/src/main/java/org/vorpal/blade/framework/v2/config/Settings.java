@@ -325,25 +325,30 @@ public class Settings<T> implements SettingsMXBean {
 
 		try {
 
-			JsonNode jsonNode = NullNode.getInstance();
+			// Domain, cluster, server, merged by the one merge the editors show
+			// and check (v3 ConfigFiles.merge), so the two cannot disagree.
+			java.util.List<JsonNode> layers = new java.util.ArrayList<>();
 
 			File domainFile = domainFile();
 			if (domainFile.exists()) {
 				useSampleConfig = false;
-				jsonNode = readConfigTree(domainFile, CONFIG_DOMAIN);
+				layers.add(readConfigTree(domainFile, CONFIG_DOMAIN));
 			}
 
 			File clusterFile = cluster.toFile();
 			if (clusterFile.exists()) {
 				useSampleConfig = false;
-				jsonNode = objectMapper.readerForUpdating(jsonNode).readValue(readConfigTree(clusterFile, CONFIG_CLUSTER));
+				layers.add(readConfigTree(clusterFile, CONFIG_CLUSTER));
 			}
 
 			File serverFile = server.toFile();
 			if (serverFile.exists()) {
 				useSampleConfig = false;
-				jsonNode = objectMapper.readerForUpdating(jsonNode).readValue(readConfigTree(serverFile, CONFIG_SERVER));
+				layers.add(readConfigTree(serverFile, CONFIG_SERVER));
 			}
+
+			JsonNode jsonNode = org.vorpal.blade.framework.v3.configuration.ConfigFiles.merge(layers, objectMapper);
+			if (jsonNode == null) jsonNode = NullNode.getInstance();
 
 			if (useSampleConfig) {
 

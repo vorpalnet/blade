@@ -184,6 +184,14 @@ class ObjectIdFreeConfigTest {
 					if (!name.contains("Selector") && !name.contains("Connector")) {
 						return;
 					}
+					// A map of connectors (the CRUD pipeline) names the base
+					// class, an anyOf over the subtypes: each must be an object
+					// $ref, never a string.
+					if (e.getValue().has("anyOf")) {
+						e.getValue().path("anyOf").forEach(alt -> assertTrue(alt.has("$ref"),
+								() -> name + " has a non-object alternative: " + alt));
+						return;
+					}
 					String type = e.getValue().path("type").asText("");
 					assertEquals("object", type,
 							() -> name + " should be an object, got '" + type + "' — a string"

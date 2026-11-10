@@ -117,9 +117,11 @@
 						untransformed.</dd>
 						<dt>2 · Rule sets</dt>
 						<dd>Say what happens to the selected calls. Each rule
-						filters by method, lifecycle event, status range, or a
+						filters by method, lifecycle event, status range, leg
+						(caller or callee), SDP role (offer or answer), or a
 						<code>when</code> expression, then runs its operations in
-						order.</dd>
+						order. A rule is all or nothing: if one operation fails,
+						the message goes out as it was before the rule ran.</dd>
 						<dt>3 · Preview</dt>
 						<dd>Proves it. Paste a real SIP message and the editor
 						replays your <em>unsaved draft</em> through the same

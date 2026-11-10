@@ -28,24 +28,37 @@ public class JsonPathReadOperation implements Operation {
 	}
 
 	@Override
-	public void process(SipServletMessage msg) {
-		try {
-			String json = MessageHelper.getAttributeValue(msg, "body", contentType);
-			if (json == null || json.isEmpty()) return;
+	public void check() throws Exception {
+		Placeholders.checkEach(expressions, Placeholders::checkJsonPath);
+	}
 
-			DocumentContext ctx = JsonPath.parse(json);
-			SipApplicationSession appSession = msg.getApplicationSession();
+	@Override
+	public void process(SipServletMessage msg) throws Exception {
+		String json = MessageHelper.getAttributeValue(msg, "body", contentType);
+		if (json == null || json.isEmpty()) return;
 
-			for (Map.Entry<String, String> entry : expressions.entrySet()) {
-				Object result = ctx.read(entry.getValue());
-				if (result == null) continue;
-				String value = (result instanceof String) ? (String) result : result.toString();
-				MessageHelper.putVariable(appSession, entry.getKey(), value);
-				SettingsManager.getSipLogger().finer(msg,
-						"JsonPathReadOperation - saved " + entry.getKey() + "=" + value);
+		DocumentContext ctx = Placeholders.parseJson(msg, "JsonPathReadOperation", json);
+		if (ctx == null) return;
+		SipApplicationSession appSession = msg.getApplicationSession();
+
+		for (Map.Entry<String, String> entry : expressions.entrySet()) {
+			String path = Placeholders.jsonPath(entry.getValue(), msg);
+			if (path == null) {
+				Placeholders.skipped(msg, "JsonPathReadOperation", entry.getKey() + "'s path", entry.getValue(), null);
+				continue;
 			}
-		} catch (Exception e) {
-			SettingsManager.getSipLogger().logStackTrace(msg, e);
+			Object result = ctx.read(path);
+			// Nothing found (an indefinite path gives an empty list): the
+			// variable keeps what it had.
+			if (result == null || (result instanceof java.util.List && ((java.util.List<?>) result).isEmpty())) continue;
+			// An object or array is saved as JSON, so `${name}` can put it back
+			// (the save-and-restore pattern); Java's toString would not parse.
+			String value = (result instanceof String) ? (String) result
+					: (result instanceof java.util.Map || result instanceof java.util.List) ? Placeholders.toJson(result)
+					: result.toString();
+			MessageHelper.putVariable(appSession, entry.getKey(), value);
+			SettingsManager.getSipLogger().finer(msg,
+					"JsonPathReadOperation - saved " + entry.getKey() + "=" + value);
 		}
 	}
 

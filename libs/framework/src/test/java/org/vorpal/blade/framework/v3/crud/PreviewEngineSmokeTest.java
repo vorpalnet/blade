@@ -13,6 +13,14 @@ public final class PreviewEngineSmokeTest {
 	private static int failed;
 
 	public static void main(String[] args) throws Exception {
+		if (run() > 0) System.exit(1);
+	}
+
+	/// Runs every check and returns how many failed; [SmokeProgramsTest]
+	/// runs this under JUnit.
+	static int run() throws Exception {
+		passed = 0;
+		failed = 0;
 		Logger testLogger = new TestLogger();
 		SettingsManager.setSipLogger(testLogger);
 		Callflow.setLogger(testLogger);
@@ -53,7 +61,7 @@ public final class PreviewEngineSmokeTest {
 
 		System.out.println();
 		System.out.println("Passed: " + passed + " / " + (passed + failed));
-		if (failed > 0) System.exit(1);
+		return failed;
 	}
 
 	// ---------------------------------------------------------------------
@@ -261,8 +269,8 @@ public final class PreviewEngineSmokeTest {
 
 		RuleSet rs = new RuleSet();
 		rs.setId("status-demo");
-		rs.getRules().add(successOnly);
-		rs.getRules().add(errorOnly);
+		rs.add(successOnly);
+		rs.add(errorOnly);
 
 		CrudConfiguration cfg = new CrudConfiguration();
 		cfg.getRuleSets().put(rs.getId(), rs);
@@ -322,8 +330,8 @@ public final class PreviewEngineSmokeTest {
 
 		RuleSet rs = new RuleSet();
 		rs.setId("multi");
-		rs.getRules().add(a);
-		rs.getRules().add(b);
+		rs.add(a);
+		rs.add(b);
 
 		CrudConfiguration cfg = new CrudConfiguration();
 		cfg.getRuleSets().put(rs.getId(), rs);
@@ -343,7 +351,7 @@ public final class PreviewEngineSmokeTest {
 
 		RuleSet rs = new RuleSet();
 		rs.setId("init-vars-demo");
-		rs.getRules().add(r);
+		rs.add(r);
 
 		CrudConfiguration cfg = new CrudConfiguration();
 		cfg.getRuleSets().put(rs.getId(), rs);
@@ -372,7 +380,7 @@ public final class PreviewEngineSmokeTest {
 
 		RuleSet rs = new RuleSet();
 		rs.setId("override-demo");
-		rs.getRules().add(r);
+		rs.add(r);
 
 		CrudConfiguration cfg = new CrudConfiguration();
 		cfg.getRuleSets().put(rs.getId(), rs);
@@ -509,7 +517,7 @@ public final class PreviewEngineSmokeTest {
 		r.getOperations().add(new CreateOperation("X-Added", "1"));
 		RuleSet rs = new RuleSet();
 		rs.setId("order-demo");
-		rs.getRules().add(r);
+		rs.add(r);
 		CrudConfiguration cfg = new CrudConfiguration();
 		cfg.getRuleSets().put(rs.getId(), rs);
 
@@ -694,7 +702,7 @@ public final class PreviewEngineSmokeTest {
 
 		RuleSet rs = new RuleSet();
 		rs.setId("real-rs-metadata");
-		rs.getRules().add(r);
+		rs.add(r);
 		CrudConfiguration cfg = new CrudConfiguration();
 		cfg.getRuleSets().put(rs.getId(), rs);
 
@@ -745,7 +753,7 @@ public final class PreviewEngineSmokeTest {
 
 		RuleSet rs = new RuleSet();
 		rs.setId("xml-no-ct");
-		rs.getRules().add(r);
+		rs.add(r);
 		CrudConfiguration cfg = new CrudConfiguration();
 		cfg.getRuleSets().put(rs.getId(), rs);
 
@@ -770,7 +778,7 @@ public final class PreviewEngineSmokeTest {
 
 		RuleSet rs = new RuleSet();
 		rs.setId("json-empty-ct");
-		rs.getRules().add(r);
+		rs.add(r);
 		CrudConfiguration cfg = new CrudConfiguration();
 		cfg.getRuleSets().put(rs.getId(), rs);
 
@@ -806,7 +814,7 @@ public final class PreviewEngineSmokeTest {
 
 		RuleSet rs = new RuleSet();
 		rs.setId("xml-mismatch");
-		rs.getRules().add(r);
+		rs.add(r);
 		CrudConfiguration cfg = new CrudConfiguration();
 		cfg.getRuleSets().put(rs.getId(), rs);
 
@@ -924,7 +932,7 @@ public final class PreviewEngineSmokeTest {
 
 		RuleSet rs = new RuleSet();
 		rs.setId("vars-demo");
-		rs.getRules().add(r);
+		rs.add(r);
 
 		CrudConfiguration cfg = new CrudConfiguration();
 		cfg.getRuleSets().put(rs.getId(), rs);

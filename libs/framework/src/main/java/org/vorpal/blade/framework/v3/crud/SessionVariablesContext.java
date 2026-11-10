@@ -12,25 +12,21 @@ import org.vorpal.blade.framework.v3.configuration.expressions.Expression;
 /// messages — requests AND responses — whose variables live on the
 /// application session ([MessageHelper#getSessionVariables]). This adapter
 /// lets a [Rule]'s `when` clause evaluate those variables through the
-/// standard Expression grammar. Lookup falls through to environment
-/// variables and system properties, matching the fallback chain rule
-/// value templates already use ([Context#substitute]).
+/// standard Expression grammar. It resolves as CRUD templates do
+/// ([Context#forRules]): a plain name is the call's variable or nothing, never
+/// an environment variable or system property, and `${env:}`/`${sys:}` read
+/// only names meant for rules, so a `when` cannot test a server secret.
 class SessionVariablesContext extends Context {
-
 	private final Map<String, String> vars;
 
 	SessionVariablesContext(Map<String, String> vars) {
-		super(null);
+		super(null, null, true);
 		this.vars = vars;
 	}
 
 	@Override
 	public String get(String name) {
 		if (name == null) return null;
-		String v = (vars != null) ? vars.get(name) : null;
-		if (v != null) return v;
-		v = System.getenv(name);
-		if (v != null) return v;
-		return System.getProperty(name);
+		return (vars != null) ? vars.get(name) : null;
 	}
 }

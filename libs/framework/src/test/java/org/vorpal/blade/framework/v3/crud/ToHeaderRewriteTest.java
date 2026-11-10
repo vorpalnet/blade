@@ -47,7 +47,7 @@ class ToHeaderRewriteTest {
 		Rule rule = new Rule();
 		rule.setId(id);
 		rule.setMethod("INVITE");
-		rule.setMessageType("request");
+		rule.setMessageType(Rule.MessageType.request);
 		rule.getOperations().add(op);
 		return rule;
 	}
@@ -59,8 +59,8 @@ class ToHeaderRewriteTest {
 		rewrite.setWhen("${target} matches '1916.*'");
 		RuleSet ruleSet = new RuleSet();
 		ruleSet.setId("rules");
-		ruleSet.getRules().add(capture);
-		ruleSet.getRules().add(rewrite);
+		ruleSet.add(capture);
+		ruleSet.add(rewrite);
 		Crud crud = new Crud();
 		crud.getRuleSets().put("rules", ruleSet);
 		crud.setDefaultRuleSet("rules");

@@ -673,14 +673,27 @@ public abstract class AsyncSipServlet extends SipServlet
 			Object handler, String methodHint) {
 	}
 
+	/// Called with each request inside a dialog once the glare and transfer
+	/// guards have let it through, before its callback or callflow runs. Does
+	/// nothing here; the v3 servlet runs the CRUD `receive` rules, which must
+	/// not see a request that is then answered 491 and dropped.
+	///
+	/// @param request the request inside a dialog
+	protected void inDialogRequest(SipServletRequest request) {
+	}
+
 	/// Called with each initial request just before [#chooseCallflow], under the
 	/// application-session lock. Does nothing here. The v3 servlet overrides it
 	/// to run the application's CRUD pipeline, which must finish before the
 	/// callflow sends anything.
 	///
 	/// @param request the initial request
-	protected void initialRequest(SipServletRequest request) {
+	/// @return true when it answered the request itself (a CRUD rule refused
+	///         the call); then no callflow runs
+	protected boolean initialRequest(SipServletRequest request) {
+		return false;
 	}
+
 
 	/// Processes incoming SIP requests with glare detection and callback handling
 	///
@@ -826,6 +839,11 @@ public abstract class AsyncSipServlet extends SipServlet
 				saveCallerInfo(request, sipSession);
 			}
 
+			// Past the glare and transfer guards: the request will be handled.
+			if (!request.isInitial()) {
+				inDialogRequest(request);
+			}
+
 			// ignore reINVITEs, INFO messages, etc if this is a proxy request
 			if (!isProxy(request)) {
 
@@ -841,8 +859,10 @@ public abstract class AsyncSipServlet extends SipServlet
 
 					} else {
 
-						if (request.isInitial()) {
-							initialRequest(request);
+						// initialRequest may answer the request itself (a CRUD rule
+						// refused the call): then nothing else handles it.
+						if (request.isInitial() && initialRequest(request)) {
+							return;
 						}
 
 						Callflow callflow = chooseCallflow(request);

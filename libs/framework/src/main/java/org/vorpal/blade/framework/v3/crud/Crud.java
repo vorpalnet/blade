@@ -19,6 +19,8 @@ import org.vorpal.blade.framework.v3.configuration.connectors.Connector;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
 /// The `crud` section of a v3 application's configuration: the CRUD service's
 /// rules, run inside the application itself, so a header change no longer
@@ -39,24 +41,55 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// `To` only for some targets: the target does not exist when the call's first
 /// INVITE arrives, so the decision has to wait for the INVITE that carries it.
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
-@JsonPropertyOrder({ "pipeline", "defaultRuleSet", "ruleSets" })
+@JsonPropertyOrder({ "variables", "pipeline", "defaultRuleSet", "ruleSets" })
 public class Crud implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	/// The lifecycle event an in-application rule sees: `send`.
 	public static final String SEND_EVENT = "send";
 
-	private List<Connector> pipeline = new LinkedList<>();
+	/// The event a rule sees on a message the application received, before the
+	/// application handles it. Only a rule whose `event` names it runs then.
+	public static final String RECEIVE_EVENT = "receive";
+
+	private Map<String, String> variables = new LinkedHashMap<>();
+	private Map<String, Connector> pipeline = new LinkedHashMap<>();
 	private String defaultRuleSet;
 	private Map<String, RuleSet> ruleSets = new LinkedHashMap<>();
 
-	@JsonPropertyDescription("Ordered enrichment connectors, run once on the call's initial request; may write the `ruleSet` variable to select a rule set. Usually empty.")
-	public List<Connector> getPipeline() {
+	@JsonPropertyDescription("Named values every call starts with, read as `${name}` by the pipeline, `when` and operations. A cluster or server file sets its own by naming them.")
+	public Map<String, String> getVariables() {
+		return variables;
+	}
+
+	/// A `null` value removes the variable: what a cluster or server file
+	/// writes to unset one it inherits.
+	public void setVariables(Map<String, String> variables) {
+		this.variables = new LinkedHashMap<>();
+		if (variables != null) variables.forEach((k, v) -> { if (v != null) this.variables.put(k, v); });
+	}
+
+	@JsonPropertyDescription("Enrichment connectors by id, run in order once on the call's initial request; may write the `ruleSet` variable to select a rule set. Usually empty.")
+	@JsonSerialize(using = Pipeline.Writer.class)
+	public Map<String, Connector> getPipeline() {
 		return pipeline;
 	}
 
-	public void setPipeline(List<Connector> pipeline) {
-		this.pipeline = (pipeline != null) ? pipeline : new LinkedList<>();
+	@JsonDeserialize(using = Pipeline.Reader.class)
+	public void setPipeline(Map<String, Connector> pipeline) {
+		this.pipeline = Pipeline.keyed(pipeline);
+	}
+
+	/// True when there is a pipeline to run on a call's initial request.
+	/// `variables` need no run: they are read when used.
+	public boolean enriches() {
+		return !pipeline.isEmpty();
+	}
+
+	/// Adds each connector under its id, after those already here.
+	public Crud addConnector(Connector... connectors) {
+		for (Connector c : connectors) pipeline.put(c.getId(), c);
+		return this;
 	}
 
 	@JsonPropertyDescription("Rule set applied when the pipeline selects none. With no pipeline, the rule set every call gets.")
@@ -75,22 +108,64 @@ public class Crud implements Serializable {
 
 	public void setRuleSets(Map<String, RuleSet> ruleSets) {
 		this.ruleSets = (ruleSets != null) ? ruleSets : new LinkedHashMap<>();
+		// A rule set's id is its key, as a rule's is ([RuleSet#setRules]).
+		for (Map.Entry<String, RuleSet> e : this.ruleSets.entrySet()) {
+			if (e.getValue() != null) e.getValue().setId(e.getKey());
+		}
 	}
 
-	/// Runs `pipeline` against `request` and copies every value it produced
-	/// into the call's CRUD variables, where `${var}` and `when` read them.
-	/// Shared by the CRUD service ([CrudConfiguration#enrich]) and the
-	/// in-application hook ([CrudHook#select]).
-	static Context enrich(List<Connector> pipeline, SipServletRequest request) {
-		Context ctx = Pipelines.enrich(pipeline, request);
-		// snapshot() values are already resolved, so they are stored as they are.
+	/// Runs `pipeline` against `request` with `variables` beneath the call's
+	/// own, and copies every value the pipeline produced into the call's CRUD
+	/// variables, where `${var}` and `when` read them. The file's variables
+	/// themselves are not copied: they are read from the configuration when
+	/// used ([CrudHook#fileVariables]). Shared by the CRUD service
+	/// ([CrudConfiguration#enrich]) and the in-application hook
+	/// ([CrudHook#select]).
+	static Context enrich(Map<String, Connector> pipeline, Map<String, String> variables, SipServletRequest request) {
+		// A context for rules: strict templates, and connector output kept in
+		// the context, never written onto the hosting application's sessions.
+		Context ctx = Pipelines.run(pipeline.values(), Context.forRules(request, variables));
 		SipApplicationSession appSession = (request != null) ? request.getApplicationSession() : null;
 		if (appSession != null) {
-			for (Map.Entry<String, String> e : ctx.snapshot().entrySet()) {
+			// Exactly what the connectors wrote; the file's variables are read
+			// from the configuration when used ([CrudHook#fileVariables]).
+			for (Map.Entry<String, String> e : ctx.written().entrySet()) {
 				MessageHelper.putVariable(appSession, e.getKey(), e.getValue());
 			}
 		}
 		return ctx;
+	}
+
+
+
+	/// Every problem [Rule#problems] finds in `ruleSets`, each prefixed with
+	/// where it is (`rule set minsdp, rule strip: operation 2: …`), plus a
+	/// `defaultRuleSet` that names no rule set. Empty when there is none. The
+	/// editors call it on Save, for the CRUD service and an application's
+	/// own `crud` section alike.
+	public static List<String> problems(Map<String, RuleSet> ruleSets, String defaultRuleSet) {
+		List<String> out = new java.util.ArrayList<>();
+		if (defaultRuleSet != null && !defaultRuleSet.isEmpty()
+				&& (ruleSets == null || ruleSets.get(defaultRuleSet) == null)) {
+			out.add("defaultRuleSet: no rule set is named \"" + defaultRuleSet + "\"");
+		}
+		if (ruleSets == null) return out;
+		for (Map.Entry<String, RuleSet> set : ruleSets.entrySet()) {
+			if (set.getValue() == null) continue;
+			for (String id : set.getValue().getRules().keySet()) {
+				if (id.matches("\\d+")) {
+					// JavaScript, and so the editors, put such keys first.
+					out.add("rule set " + set.getKey() + ", rule " + id
+							+ ": an id of digits only changes the rules' order in an editor; give it a name");
+				}
+			}
+			for (Map.Entry<String, Rule> rule : set.getValue().getRules().entrySet()) {
+				if (rule.getValue() == null) continue;
+				String where = "rule set " + set.getKey() + ", rule " + rule.getKey() + ": ";
+				for (String problem : rule.getValue().problems()) out.add(where + problem);
+			}
+		}
+		return out;
 	}
 
 	/// The rule set named `id`, or `defaultId` when `id` is null. Null means

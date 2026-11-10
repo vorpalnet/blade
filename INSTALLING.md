@@ -97,6 +97,10 @@ Everything below is how the installer delivers those five properties.
   database on the "Analytics database" page. The database is yours; its schema
   is built and kept current by `./upgrade.sh` ([UPGRADING.md](UPGRADING.md)).
   Headless: `./install.sh <env> jms` and `./install.sh <env> datasource`.
+- **AI assistant (optional):** STEP 7 turns on drafting with Claude in the CRUD
+  editor ("Describe a rule") and the Configurator ("Use AI"). It takes an
+  Anthropic API key and writes the domain's `blade-ai.json`. Headless:
+  `./install.sh <env> ai`.
 
 ### Windows, for development
 
@@ -282,12 +286,21 @@ error queue on the engine cluster. The **db** page takes your database's dialect
 afterward to build the schema. Skip the database and events still flow on the
 topic, yet nothing keeps them.
 
-**STEP 7 — Deploy settings.** The build mode (dev or prod), SSH user, and the admin URL that
+**STEP 7 — AI assistant (optional).** The **ai** page sets the switch, the
+Anthropic API key, the model, an optional gateway URL, and whether phone numbers
+in sample messages are masked before they reach the model. The **aiw** row writes
+them into `config/custom/vorpal/blade-ai.json`, the file the Configurator edits as
+`blade-ai`. The key is encrypted with the domain's own key, so the AdminServer
+need not be running. The write merges, so a field set only in the Configurator
+survives. Only the AdminServer calls the API; engines never do. Off by default,
+and the change applies on the next draft, with no restart.
+
+**STEP 8 — Deploy settings.** The build mode (dev or prod), SSH user, and the admin URL that
 `deploy.sh` will use. `install.sh` computes the admin URL from the live domain
 (preferring `t3s` when SSL is on) and writes it, plus the WebLogic target names,
 into the profile.
 
-**STEP 8 — Deploy to WebLogic.** After `./build.sh`, deploy everything. This step
+**STEP 9 — Deploy to WebLogic.** After `./build.sh`, deploy everything. This step
 delegates to `deploy.sh` — the single deploy authority — which pushes the shared
 library first, then the EARs and service WARs in dependency order. See
 [DEPLOYING.md](DEPLOYING.md).

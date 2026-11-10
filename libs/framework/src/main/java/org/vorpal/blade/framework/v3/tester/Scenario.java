@@ -37,7 +37,7 @@ public class Scenario implements Serializable {
 	private String role = ROLE_B2BUA;
 	private String template;
 	private String ruleSet;
-	private List<Rule> rules = new LinkedList<>();
+	private java.util.Map<String, Rule> rules = new java.util.LinkedHashMap<>();
 	private ResponseScript responseScript;
 	private List<Assertion> assertions = new LinkedList<>();
 
@@ -57,9 +57,9 @@ public class Scenario implements Serializable {
 		RuleSet merged = new RuleSet();
 		merged.setId((ruleSet != null ? ruleSet : "scenario") + "+inline");
 		if (referenced != null) {
-			merged.getRules().addAll(referenced.getRules());
+			merged.add(referenced.getRules().values());
 		}
-		merged.getRules().addAll(rules);
+		merged.add(rules.values());
 		return merged;
 	}
 
@@ -99,13 +99,15 @@ public class Scenario implements Serializable {
 		this.ruleSet = ruleSet;
 	}
 
-	@JsonPropertyDescription("Inline rules for this scenario, applied after the referenced ruleSet. Handy when a scenario's transforms aren't shared with anything else.")
-	public List<Rule> getRules() {
+	@JsonPropertyDescription("Inline rules by id, applied after the referenced ruleSet; one with the same id as a referenced rule replaces it. Handy when a scenario's transforms aren't shared with anything else.")
+	public java.util.Map<String, Rule> getRules() {
 		return rules;
 	}
 
-	public void setRules(List<Rule> rules) {
-		this.rules = rules;
+	@com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = RuleSet.RulesReader.class)
+	public void setRules(java.util.Map<String, Rule> rules) {
+		this.rules = (rules != null) ? rules : new java.util.LinkedHashMap<>();
+		this.rules.forEach((id, rule) -> { if (rule != null) rule.setId(id); });
 	}
 
 	@JsonPropertyDescription("What to send (answer role) or expect (originate role): status sequences, delays, transfer, auto-BYE.")

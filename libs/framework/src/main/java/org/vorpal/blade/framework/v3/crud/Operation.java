@@ -35,16 +35,27 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 		@JsonSubTypes.Type(value = SdpReadOperation.class, name = "sdpRead"),
 		@JsonSubTypes.Type(value = SdpCreateOperation.class, name = "sdpCreate"),
 		@JsonSubTypes.Type(value = SdpUpdateOperation.class, name = "sdpUpdate"),
-		@JsonSubTypes.Type(value = SdpDeleteOperation.class, name = "sdpDelete")
+		@JsonSubTypes.Type(value = SdpDeleteOperation.class, name = "sdpDelete"),
+		@JsonSubTypes.Type(value = RejectOperation.class, name = "reject")
 })
 public interface Operation extends Serializable {
 
-	void process(SipServletMessage msg);
+	/// Applies this operation to `msg`. Throws when it fails, so the [Rule]
+	/// can put the message back as it was; returns quietly when there is
+	/// nothing to do (no such header, no matching part, an unset variable).
+	void process(SipServletMessage msg) throws Exception;
 
 	/// Names of session-attribute variables this operation populates when it
 	/// runs. Used by [Rule] to clear stale values before a read-heavy rule
 	/// re-fires. Non-read operations return an empty list.
 	default List<String> variableNames() {
 		return Collections.emptyList();
+	}
+
+	/// Throws if a regex, XPath or JsonPath in this operation would fail to
+	/// compile when a call reaches it. Placeholders stand in for values
+	/// ([Placeholders#standIn]). Save runs it ([Crud#problems]), so a typo is
+	/// refused in the editor rather than undoing its rule on live calls.
+	default void check() throws Exception {
 	}
 }

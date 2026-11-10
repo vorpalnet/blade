@@ -77,8 +77,23 @@
 						</tr>
 						<tr>
 							<td>A rule doesn't fire in preview</td>
-							<td>One of its filters failed — method, messageType, lifecycle event, statusRange, or <code>when</code></td>
-							<td>Check the lifecycle-event dropdown matches the rule's <code>event</code> filter. A <code>statusRange</code> restricts the rule to responses. A malformed <code>when</code> expression never fires — by design.</td>
+							<td>One of its filters failed: method, messageType, lifecycle event, statusRange, leg, sdp, or <code>when</code></td>
+							<td>Check the lifecycle-event dropdown matches the rule's <code>event</code> filter; a rule with no <code>event</code> never runs on <code>receive</code>. A <code>statusRange</code> restricts the rule to responses. Set the preview's Leg and "Request had SDP" controls to the case you mean. A <code>when</code> that does not parse never fires: Save refuses one, and a file edited by hand logs <code>Rule[id] - when … cannot be evaluated</code> once.</td>
+						</tr>
+						<tr>
+							<td>A rule fired but the message is unchanged</td>
+							<td>One of its operations failed, so the whole rule was undone</td>
+							<td>Look in the application's log for <code>Rule[id] - operation N failed, rule undone</code>; it names the operation and the exception. Common causes: writing <code>status</code> on a request, writing a read-only attribute (<code>originIP</code>, <code>peerIP</code>, <code>transport</code>, <code>isSecure</code>), or changing a 2xx status.</td>
+						</tr>
+						<tr>
+							<td>An operation did nothing, and its rule fired</td>
+							<td>A <code>${name}</code> in its value, pattern or path has no value, so the operation was skipped</td>
+							<td>Placeholders resolve from session variables only. Make sure an earlier read sets the variable. For an environment variable or system property write <code>${env:NAME}</code> or <code>${sys:NAME}</code>. The skip is logged at FINE.</td>
+						</tr>
+						<tr>
+							<td>Save says "not saved: N problem(s)"</td>
+							<td>A <code>when</code>, status range, regex, XPath or JsonPath does not compile, <code>defaultRuleSet</code> names no rule set, or (domain file) a saved test no longer gives its result</td>
+							<td>The list under the toolbar names each one: rule set, rule, operation, and for a read the variable; a test by name, with the first line that differs. Every preview refreshes the rule checks; Run tests refreshes the tests. If a test's change is intended, run it and click <em>update</em>. Nothing was written.</td>
 						</tr>
 						<tr>
 							<td>Save returns 400 "config rejected"</td>

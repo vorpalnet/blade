@@ -15,6 +15,8 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.vorpal.blade.framework.io.VersionedFileStore;
+import org.vorpal.blade.framework.v3.configuration.ClusterMembership;
+import org.vorpal.blade.framework.v3.configuration.ConfigFiles;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,14 +41,23 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /// Routes, under whatever `/config/*` mapping the subclass's web.xml
 /// declares:
 ///
-/// - `GET  …/config` — `{source, config, schema}`; config from the live
-///   file, else the generated sample file, else the built-in [#sample];
-///   schema from `_schemas/<app>.jschema`, else generated in-process.
-/// - `POST …/config/save` — body is the full config document.
-/// - `POST …/config/publish` — reload the app's Configuration MBeans.
-/// - `GET  …/config/versions` — `.versions/` history.
-/// - `GET  …/config/versions/{ts}` — one snapshot's content.
-/// - `POST …/config/versions/{ts}/restore` — restore it (the replaced
+/// Every route takes `?file=` to name the file it works on: `domain` (the
+/// default), `cluster/<name>` or `server/<name>` ([ConfigFiles]).
+///
+/// - `GET  …/config/files`: the app's files: the domain file, and every
+///   cluster and server file that exists.
+/// - `GET  …/config/merged`: read only: the file's layers in the loader's
+///   order and what they merge to ([ConfigFiles#mergedView]).
+/// - `GET  …/config`: `{source, file, path, version, config, schema}`;
+///   config from the file, else (domain only) the generated sample file,
+///   else the built-in [#sample]; a cluster or server file not written yet
+///   loads as `{}`. Schema from `_schemas/<app>.jschema`, else generated
+///   in-process.
+/// - `POST …/config/save`: body is the full config document.
+/// - `POST …/config/publish`: reload the app's Configuration MBeans.
+/// - `GET  …/config/versions`: `.versions/` history.
+/// - `GET  …/config/versions/{ts}`: one snapshot's content.
+/// - `POST …/config/versions/{ts}/restore`: restore it (the replaced
 ///   content is itself backed up first).
 public abstract class ConfigEditorServlet extends HttpServlet {
 	private static final long serialVersionUID = 1L;
@@ -66,8 +77,10 @@ public abstract class ConfigEditorServlet extends HttpServlet {
 	/// sample file exists yet.
 	protected abstract Object sample();
 
-	protected Path configFile() {
-		return Paths.get("config/custom/vorpal/" + appName() + ".json");
+	/// The file this request edits: `?file=` names the domain file (the
+	/// default) or a cluster or server file ([ConfigFiles#resolve]).
+	protected Path configFile(HttpServletRequest req) {
+		return ConfigFiles.resolve(appName(), req.getParameter("file"));
 	}
 
 	protected Path schemaFile() {
@@ -82,15 +95,29 @@ public abstract class ConfigEditorServlet extends HttpServlet {
 	protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
 		try {
 			String path = subPath(req);
-			if (path.isEmpty()) {
-				handleLoad(resp);
-			} else if (path.equals("versions")) {
-				handleVersionList(resp);
-			} else if (path.startsWith("versions/")) {
-				handleVersionContent(resp, path.substring("versions/".length()));
-			} else {
-				respondError(resp, HttpServletResponse.SC_NOT_FOUND, "unknown endpoint", null);
+			switch (path) {
+			case "":
+				handleLoad(req, resp);
+				break;
+			case "files":
+				writeJson(resp, HttpServletResponse.SC_OK, MAPPER.valueToTree(ConfigFiles.of(appName(), ClusterMembership.read())));
+				break;
+			case "merged":
+				writeJson(resp, HttpServletResponse.SC_OK, ConfigFiles.mergedView(appName(), req.getParameter("file"), null,
+						ClusterMembership.read(), MAPPER));
+				break;
+			case "versions":
+				handleVersionList(req, resp);
+				break;
+			default:
+				if (path.startsWith("versions/")) {
+					handleVersionContent(req, resp, path.substring("versions/".length()));
+				} else {
+					respondError(resp, HttpServletResponse.SC_NOT_FOUND, "unknown endpoint", null);
+				}
 			}
+		} catch (IllegalArgumentException e) {
+			respondError(resp, HttpServletResponse.SC_BAD_REQUEST, e.getMessage(), null);
 		} catch (Throwable t) {
 			respondError(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
 					"unexpected " + t.getClass().getSimpleName() + ": " + t.getMessage(), stackTrace(t));
@@ -103,7 +130,7 @@ public abstract class ConfigEditorServlet extends HttpServlet {
 			String path = subPath(req);
 			switch (path) {
 			case "save":
-				handleSave(req, resp);
+				handleSave(req, resp, readBody(req));
 				break;
 			case "publish":
 				handlePublish(resp);
@@ -111,11 +138,13 @@ public abstract class ConfigEditorServlet extends HttpServlet {
 			default:
 				if (path.startsWith("versions/") && path.endsWith("/restore")) {
 					String ts = path.substring("versions/".length(), path.length() - "/restore".length());
-					handleVersionRestore(resp, ts);
+					handleVersionRestore(req, resp, ts);
 				} else {
 					respondError(resp, HttpServletResponse.SC_NOT_FOUND, "unknown endpoint", null);
 				}
 			}
+		} catch (IllegalArgumentException e) {
+			respondError(resp, HttpServletResponse.SC_BAD_REQUEST, e.getMessage(), null);
 		} catch (Throwable t) {
 			respondError(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
 					"unexpected " + t.getClass().getSimpleName() + ": " + t.getMessage(), stackTrace(t));
@@ -126,14 +155,24 @@ public abstract class ConfigEditorServlet extends HttpServlet {
 	// Handlers
 	// ------------------------------------------------------------------
 
-	private void handleLoad(HttpServletResponse resp) throws IOException {
+	private void handleLoad(HttpServletRequest req, HttpServletResponse resp) throws IOException {
 		ObjectNode out = MAPPER.createObjectNode();
+		Path file = configFile(req);
 
 		String source;
 		JsonNode config;
-		if (Files.exists(configFile())) {
+		String version;
+		// Content and version under one lock, so a save landing between the
+		// two reads cannot tag the old content with the new version.
+		synchronized (org.vorpal.blade.framework.v3.configuration.FileVersion.lock(file)) {
+		version = org.vorpal.blade.framework.v3.configuration.FileVersion.of(file);
+		if (Files.exists(file)) {
 			source = "live";
-			config = MAPPER.readTree(Files.readAllBytes(configFile()));
+			config = MAPPER.readTree(Files.readAllBytes(file));
+		} else if (!ConfigFiles.isDomain(req.getParameter("file"))) {
+			// A cluster or server file holds only what it changes: start empty.
+			source = "new";
+			config = MAPPER.createObjectNode();
 		} else if (Files.exists(sampleFile())) {
 			source = "sample";
 			config = MAPPER.readTree(Files.readAllBytes(sampleFile()));
@@ -141,7 +180,11 @@ public abstract class ConfigEditorServlet extends HttpServlet {
 			source = "builtin";
 			config = MAPPER.valueToTree(sample());
 		}
+		}
 		out.put("source", source);
+		out.put("file", ConfigFiles.isDomain(req.getParameter("file")) ? ConfigFiles.DOMAIN : req.getParameter("file"));
+		out.put("path", file.toString());
+		out.put("version", version);
 		out.set("config", config);
 
 		JsonNode schema = null;
@@ -162,32 +205,54 @@ public abstract class ConfigEditorServlet extends HttpServlet {
 		writeJson(resp, HttpServletResponse.SC_OK, out);
 	}
 
-	private void handleSave(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+	/// Checks `body` as the file's new content and writes it. A restore
+	/// comes here too, so an old version passes the checks a save does.
+	private void handleSave(HttpServletRequest req, HttpServletResponse resp, String body) throws IOException {
+		Path file = configFile(req);
 		JsonNode tree;
 		try {
-			tree = MAPPER.readTree(readBody(req));
+			tree = MAPPER.readTree(body);
 		} catch (Exception e) {
 			respondError(resp, HttpServletResponse.SC_BAD_REQUEST, "not valid JSON: " + e.getMessage(), null);
 			return;
 		}
 
-		// Reject anything the service itself couldn't load — unknown fields,
-		// wrong subtypes, malformed shapes — before it can clobber a working
-		// config.
+		java.util.Map<String, String> membership;
 		try {
-			MAPPER.treeToValue(tree, settingsClass());
-		} catch (Exception e) {
-			respondError(resp, HttpServletResponse.SC_BAD_REQUEST,
-					"config rejected — the " + appName() + " service could not load it: " + e.getMessage(), null);
+			membership = ClusterMembership.forSave(appName());
+		} catch (IOException e) {
+			respondError(resp, HttpServletResponse.SC_SERVICE_UNAVAILABLE, "not saved: " + e.getMessage(), null);
 			return;
 		}
+		// The draft as it runs, what it does to the files above it, and what
+		// the service itself would refuse (DraftCheck).
+		java.util.List<String> problems = org.vorpal.blade.framework.v3.configuration.DraftCheck.problems(appName(),
+				req.getParameter("file"), tree, null, membership, MAPPER,
+				(doc, domainFile) -> problems(MAPPER.treeToValue(doc, settingsClass()), domainFile));
+		if (!problems.isEmpty()) {
+			respondProblems(resp, problems);
+			return;
+		}
+		java.util.List<String> warnings = ConfigFiles.isDomain(req.getParameter("file")) ? saveWarnings()
+				: java.util.Collections.emptyList();
 
 		CredentialEncryption.encryptTree(tree);
 		String pretty = MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(tree);
-		store.write(configFile(), pretty);
+		String version;
+		synchronized (org.vorpal.blade.framework.v3.configuration.FileVersion.lock(file)) {
+			if (!org.vorpal.blade.framework.v3.configuration.FileVersion.current(req, file)) {
+				respondError(resp, HttpServletResponse.SC_CONFLICT, org.vorpal.blade.framework.v3.configuration.FileVersion.conflict(file), null);
+				return;
+			}
+			store.write(file, pretty);
+			version = org.vorpal.blade.framework.v3.configuration.FileVersion.of(file); // what this save wrote
+		}
 
 		ObjectNode out = MAPPER.createObjectNode();
-		out.put("path", configFile().toAbsolutePath().toString());
+		out.put("version", version);
+		ArrayNode warned = out.putArray("warnings");
+		for (String w : warnings) warned.add(w);
+		out.put("path", file.toAbsolutePath().toString());
 		out.put("bytes", pretty.getBytes(StandardCharsets.UTF_8).length);
 		writeJson(resp, HttpServletResponse.SC_OK, out);
 	}
@@ -209,10 +274,10 @@ public abstract class ConfigEditorServlet extends HttpServlet {
 		}
 	}
 
-	private void handleVersionList(HttpServletResponse resp) throws IOException {
+	private void handleVersionList(HttpServletRequest req, HttpServletResponse resp) throws IOException {
 		ObjectNode out = MAPPER.createObjectNode();
 		ArrayNode arr = out.putArray("versions");
-		for (VersionedFileStore.VersionInfo v : store.listVersions(configFile())) {
+		for (VersionedFileStore.VersionInfo v : store.listVersions(configFile(req))) {
 			ObjectNode item = arr.addObject();
 			item.put("timestamp", v.getTimestamp());
 			item.put("sizeBytes", v.getSizeBytes());
@@ -220,10 +285,10 @@ public abstract class ConfigEditorServlet extends HttpServlet {
 		writeJson(resp, HttpServletResponse.SC_OK, out);
 	}
 
-	private void handleVersionContent(HttpServletResponse resp, String ts) throws IOException {
+	private void handleVersionContent(HttpServletRequest req, HttpServletResponse resp, String ts) throws IOException {
 		long timestamp = parseTimestamp(resp, ts);
 		if (timestamp < 0) return;
-		String content = store.readVersion(configFile(), timestamp);
+		String content = store.readVersion(configFile(req), timestamp);
 		if (content == null) {
 			respondError(resp, HttpServletResponse.SC_NOT_FOUND, "no version " + ts, null);
 			return;
@@ -234,18 +299,21 @@ public abstract class ConfigEditorServlet extends HttpServlet {
 		resp.getWriter().write(content);
 	}
 
-	private void handleVersionRestore(HttpServletResponse resp, String ts) throws IOException {
+	private void handleVersionRestore(HttpServletRequest req, HttpServletResponse resp, String ts) throws IOException {
 		long timestamp = parseTimestamp(resp, ts);
 		if (timestamp < 0) return;
-		String restored = store.restore(configFile(), timestamp);
-		if (restored == null) {
+		String restored;
+		try {
+			restored = store.readVersion(configFile(req), timestamp);
+			if (restored == null) throw new IOException("no version " + ts);
+		} catch (IOException e) {
 			respondError(resp, HttpServletResponse.SC_NOT_FOUND, "no version " + ts, null);
 			return;
 		}
-		resp.setStatus(HttpServletResponse.SC_OK);
-		resp.setContentType("application/json");
-		resp.setCharacterEncoding("UTF-8");
-		resp.getWriter().write(restored);
+		// Saved as a draft is: an old version must pass today's checks (a
+		// rule a cluster file changes may have been renamed since), and the
+		// current file is backed up as any save backs it up.
+		handleSave(req, resp, restored);
 	}
 
 	// ------------------------------------------------------------------
@@ -285,6 +353,29 @@ public abstract class ConfigEditorServlet extends HttpServlet {
 		resp.setCharacterEncoding("UTF-8");
 		resp.setContentLength(payload.length);
 		resp.getOutputStream().write(payload);
+	}
+
+	/// What in a config that loads would still fail once calls reach it (a
+	/// regex that does not compile, say). Save refuses a config with any.
+	/// None by default. For a cluster or server file, `settings` is what it
+	/// runs ([ConfigFiles#applied]); `domainFile` says which was saved.
+	/// What a domain Save should say without refusing, such as a check that
+	/// could not run. None by default.
+	protected java.util.List<String> saveWarnings() {
+		return java.util.Collections.emptyList();
+	}
+
+	protected java.util.List<String> problems(Object settings, boolean domainFile) {
+		return java.util.Collections.emptyList();
+	}
+
+	/// 400 with `error` and the `problems` list, for the editor to show.
+	public static void respondProblems(HttpServletResponse resp, java.util.List<String> problems) throws IOException {
+		ObjectNode err = MAPPER.createObjectNode();
+		err.put("error", "not saved: " + problems.size() + " problem(s)");
+		com.fasterxml.jackson.databind.node.ArrayNode list = err.putArray("problems");
+		problems.forEach(list::add);
+		writeJson(resp, HttpServletResponse.SC_BAD_REQUEST, err);
 	}
 
 	/// Always JSON, even on error, so the page can always parse what it

@@ -18,6 +18,8 @@ import org.vorpal.blade.framework.v3.configuration.Context;
 import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.framework.v3.crud.CrudConfigurationSample;
 import org.vorpal.blade.framework.v3.crud.CrudSettings;
+import org.vorpal.blade.framework.v3.crud.CrudHook;
+import org.vorpal.blade.framework.v3.crud.MessageHelper;
 import org.vorpal.blade.framework.v3.crud.RuleSet;
 
 /**
@@ -32,7 +34,6 @@ import org.vorpal.blade.framework.v3.crud.RuleSet;
 @SipListener
 public class CrudServlet extends B2buaServlet {
 
-	private static final String RULESET_ATTR = "crud.ruleSet";
 	public static SettingsManager<CrudSettings> settingsManager;
 
 	@Override
@@ -45,7 +46,9 @@ public class CrudServlet extends B2buaServlet {
 
 			@Override
 			protected void refreshed(CrudSettings config) throws ServletParseException {
-				// do nothing;
+				// The file's variables, for every message from now on: in-dialog
+				// ones too, after a restart, a failover or a Publish.
+				CrudHook.useVariables(config != null ? config.getVariables() : null);
 			}
 		};
 	}
@@ -63,11 +66,22 @@ public class CrudServlet extends B2buaServlet {
 	protected Callflow chooseCallflow(SipServletRequest inboundRequest) throws ServletException, IOException {
 		CrudSettings settings = settingsManager.getCurrent();
 
-		if (inboundRequest.isInitial() && settings != null && !settings.getPipeline().isEmpty()) {
-			Context ctx = settings.enrich(inboundRequest);
+		// The file's variables, read beneath each call's own when a rule
+		// resolves ${name}.
+		if (settings != null) CrudHook.useVariables(settings.getVariables());
+
+		// Every initial request gets a rule set: the pipeline's choice, else
+		// the file's `ruleSet` variable, else `defaultRuleSet`. Its id is kept
+		// as the call's `ruleSet` variable, not the RuleSet itself: the
+		// session stays small and replicates across framework versions, and
+		// each message runs the rule set the configuration holds now.
+		if (inboundRequest.isInitial() && settings != null) {
+			Context ctx = settings.enriches() ? settings.enrich(inboundRequest)
+					: new Context(inboundRequest, settings.getVariables());
 			RuleSet ruleSet = settings.selectedRuleSet(ctx);
 			if (ruleSet != null) {
-				inboundRequest.getApplicationSession().setAttribute(RULESET_ATTR, ruleSet);
+				MessageHelper.putVariable(inboundRequest.getApplicationSession(),
+						org.vorpal.blade.framework.v3.crud.CrudConfiguration.RULESET_VARIABLE, ruleSet.getId());
 			}
 		}
 
@@ -75,7 +89,10 @@ public class CrudServlet extends B2buaServlet {
 	}
 
 	private void applyRules(javax.servlet.sip.SipServletMessage msg, String lifecycleEvent) {
-		RuleSet ruleSet = (RuleSet) msg.getApplicationSession().getAttribute(RULESET_ATTR);
+		CrudSettings settings = settingsManager.getCurrent();
+		String id = MessageHelper.getVariable(msg.getApplicationSession(),
+				org.vorpal.blade.framework.v3.crud.CrudConfiguration.RULESET_VARIABLE);
+		RuleSet ruleSet = (settings != null && id != null) ? settings.getRuleSets().get(id) : null;
 		if (ruleSet != null) {
 			ruleSet.applyRules(msg, lifecycleEvent);
 		}

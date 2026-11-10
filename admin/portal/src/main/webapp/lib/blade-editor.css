@@ -166,6 +166,12 @@
 	min-height: 80px;
 	font: 11px/1.4 "JetBrains Mono", Menlo, monospace;
 }
+.raw-error {
+	margin-top: 4px;
+	font-size: 12px;
+	color: var(--bad);
+}
+.raw-error::before { content: "\2715  "; }
 /* ---- numbered sections + pipeline + help ---- */
 .section-head {
 	display: flex;
@@ -336,3 +342,99 @@
 	line-height: 1;
 }
 .kv-grid .remove:hover { color: var(--bad); }
+
+/* ---- file picker: the app's domain, cluster and server files ---- */
+.file-picker {
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 10px;
+	background: var(--panel);
+	font-size: 12px;
+	margin-bottom: 12px;
+}
+/* Beside the page when there is room; above the editor otherwise. */
+@media (min-width: 1480px) {
+	.file-picker {
+		position: fixed;
+		left: 20px;
+		top: 90px;
+		width: 170px;
+		max-height: calc(100vh - 120px);
+		overflow-y: auto;
+		margin: 0;
+	}
+}
+.file-picker-title {
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	color: var(--muted);
+	margin-bottom: 6px;
+}
+.file-picker-group {
+	font-size: 11px;
+	color: var(--muted);
+	margin: 8px 0 3px;
+}
+.file-picker-item {
+	display: block;
+	width: 100%;
+	text-align: left;
+	background: transparent;
+	color: var(--text);
+	border: 1px solid transparent;
+	border-radius: 5px;
+	padding: 4px 6px;
+	font: 12px "JetBrains Mono", Menlo, monospace;
+	font-weight: 400;
+	cursor: pointer;
+	overflow-wrap: anywhere;
+}
+.file-picker-item:hover { border-color: var(--border); }
+/* The current file: marker, weight and a solid border, not colour alone. */
+.file-picker-item.current { border-color: var(--accent); font-weight: 600; cursor: default; }
+.file-picker-note { color: var(--muted); margin-top: 8px; line-height: 1.4; }
+/* Nesting shows the merge order: a file merges over those above it on its line. */
+.file-picker-group.depth-1, .file-picker-item.depth-1 { margin-left: 8px; }
+.file-picker-group.depth-2, .file-picker-item.depth-2 { margin-left: 16px; width: calc(100% - 16px); }
+.file-picker-item.depth-1 { width: calc(100% - 8px); }
+.file-picker-rule { border-top: 1px solid var(--border); margin: 10px 0 6px; }
+.file-picker-merged { font-style: italic; }
+
+/* ---- merged view: read-only, each line names the file that set it ---- */
+.merged-view {
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: var(--panel);
+	padding: 12px 14px;
+	margin-bottom: 12px;
+}
+.merged-head { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.merged-close { margin-left: auto; font-size: 12px; padding: 2px 8px; }
+.merged-head strong { cursor: help; }
+.merged-chain { font-size: 12px; color: var(--muted); }
+.merged-tag { font: 600 12px "JetBrains Mono", Menlo, monospace; color: var(--text); cursor: help; }
+.merged-running { font-size: 12px; margin: 8px 0 0; cursor: help; }
+.merged-running.differs { font-weight: 600; }
+.merged-warn { font-size: 12px; font-weight: 600; border: 2px solid var(--bad); border-radius: 6px; padding: 6px 8px; }
+.merged-lines {
+	font: 12px/1.55 "JetBrains Mono", Menlo, monospace;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	padding: 6px 0;
+	overflow-x: auto;
+	white-space: pre;
+}
+.merged-line { display: flex; gap: 10px; padding: 0 8px; border-left: 4px solid transparent; }
+/* A line an upper file set: thick left rule and bold file name, beside the text label. */
+.merged-line.upper { border-left-color: var(--accent); }
+.merged-line.upper .merged-gutter { font-weight: 700; color: var(--text); }
+.merged-gutter { flex: 0 0 80px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.merged-code { flex: 0 0 auto; }
+.merged-note { color: var(--muted); font-style: italic; }
+.merged-note::before { content: "← "; }
+.merged-bar { margin: 8px 0 6px; }
+.merged-bar button { font-size: 12px; padding: 4px 10px; }
+/* A folded block: the ellipsis in the text says so; underline on hover says it opens. */
+.merged-line.folded { cursor: pointer; }
+.merged-line.folded:hover .merged-code { text-decoration: underline; }

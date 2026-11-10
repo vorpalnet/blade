@@ -1,5 +1,8 @@
 package org.vorpal.blade.applications.console.config;
 
+import org.vorpal.blade.framework.v3.ai.AiConfig;
+import org.vorpal.blade.framework.v3.ai.AiSettings;
+
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -53,6 +56,18 @@ public class AiConfigService {
 			+ "- Change only what the instruction requires; preserve every other field of the current configuration.\n"
 			+ "- Never alter, remove, or invent a value equal to \"" + REDACTED + "\" — copy it through unchanged.\n"
 			+ "- If the instruction cannot be expressed in this schema, return the current configuration unchanged.";
+
+	/// The AI settings to use: the domain's shared `blade-ai.json`, which
+	/// every admin editor reads ([AiConfig]), when it exists; else the
+	/// Configurator's own `ai` section, read in process (the Configuration
+	/// MBean's JSON masks the key). Publishes blade-ai's schema, so the
+	/// Configurator lists it.
+	static AiSettings settings() {
+		AiConfig.publishSchema();
+		if (AiConfig.exists()) return AiConfig.load();
+		ConfiguratorSettings settings = ConfigurationMonitorStartup.currentSettings();
+		return (settings != null && settings.getAi() != null) ? settings.getAi() : new AiSettings();
+	}
 
 	/// Runs the full generate flow. Returns a JSON string:
 	/// `{"config": <object>, "valid": true|false, "errors": [ ... ]}`.

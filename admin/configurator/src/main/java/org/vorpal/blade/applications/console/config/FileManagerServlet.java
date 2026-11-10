@@ -1,5 +1,7 @@
 package org.vorpal.blade.applications.console.config;
 
+import org.vorpal.blade.framework.v3.ai.AiSettings;
+
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
@@ -557,7 +559,18 @@ public class FileManagerServlet {
 		}
 		Path root = Paths.get(CONFIG_BASE).toAbsolutePath().normalize();
 		Path candidate = Paths.get(requested.trim());
-		candidate = (candidate.isAbsolute() ? candidate : root.resolve(candidate)).toAbsolutePath().normalize();
+		// The page names files by the target paths this servlet hands it, which
+		// start with CONFIG_BASE; with DOMAIN_HOME unset that is the relative
+		// "./config/custom/vorpal", relative to the working directory like the
+		// root itself. Only a bare name ("x.json") is relative to the root.
+		// Resolving the first kind against the root nested a new file in
+		// config/custom/vorpal/config/custom/vorpal.
+		if (!candidate.isAbsolute()) {
+			candidate = candidate.normalize().startsWith(Paths.get(CONFIG_BASE).normalize())
+					? candidate.toAbsolutePath()
+					: root.resolve(candidate);
+		}
+		candidate = candidate.toAbsolutePath().normalize();
 		String name = candidate.getFileName().toString();
 		if (!candidate.startsWith(root) || !(name.endsWith(".json") || name.endsWith(".json.SAMPLE"))) {
 			throw new IOException("not a configuration file: " + requested);
@@ -729,11 +742,10 @@ public class FileManagerServlet {
 		}
 	}
 
-	/// The Configurator's own AI settings, read in process: the Configuration
-	/// MBean's JSON masks the API key.
+	/// The AI settings: the domain's shared `blade-ai.json` when it exists
+	/// ([AiConfigService#settings]), else the Configurator's own `ai` section.
 	private AiSettings loadAiSettings() {
-		ConfiguratorSettings settings = ConfigurationMonitorStartup.currentSettings();
-		return (settings != null && settings.getAi() != null) ? settings.getAi() : new AiSettings();
+		return AiConfigService.settings();
 	}
 
 	private void broadcastMessage(String message) {

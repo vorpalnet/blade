@@ -34,7 +34,21 @@ public final class Pipelines {
 
 	/// Runs `pipeline` against `request`, returning the enriched [Context].
 	public static Context enrich(List<Connector> pipeline, SipServletRequest request) {
-		Context ctx = new Context(request);
+		return enrich(pipeline, request, null);
+	}
+
+	/// Runs `pipeline` against `request` with `preset` beneath the call's
+	/// sessions ([Context#Context(SipServletRequest, java.util.Map)]): the
+	/// connectors read those values (`${name}`) and may overwrite them, and
+	/// none is written into a session.
+	public static Context enrich(java.util.Collection<Connector> pipeline, SipServletRequest request,
+			java.util.Map<String, String> preset) {
+		return run(pipeline, new Context(request, preset));
+	}
+
+	/// Runs `pipeline` in `ctx` (a context [Context#forRules], say).
+	public static Context run(java.util.Collection<Connector> pipeline, Context ctx) {
+		SipServletRequest request = ctx.getRequest();
 		Logger sipLogger = SettingsManager.getSipLogger();
 		if (pipeline != null) {
 			for (Connector connector : pipeline) {

@@ -60,12 +60,35 @@ class AppCrudSectionTest {
 	}
 
 	@Test
+	void aSectionThatSwitchesTheDefaultOffIsKept() throws Exception {
+		ObjectNode doc = (ObjectNode) MAPPER.readTree("{}");
+		AppCrudSection.splice(doc, (ObjectNode) MAPPER.readTree("{\"defaultRuleSet\":null}"));
+		org.junit.jupiter.api.Assertions.assertTrue(doc.path("crud").has("defaultRuleSet"));
+	}
+
+	@Test
 	void sectionSchemaHasTheShapeThePageReads() {
 		JsonNode schema = AppCrudSection.schema();
-		assertTrue(schema.path("properties").path("pipeline").path("items").path("anyOf").isArray(),
-				"properties.pipeline.items.anyOf");
+		// The pipeline is keyed: a map whose value type is the anyOf of connectors.
+		String map = schema.path("properties").path("pipeline").path("$ref").asText().replace("#/$defs/", "");
+		String value = schema.path("$defs").path(map).path("additionalProperties").path("$ref").asText().replace("#/$defs/", "");
+		assertTrue(schema.path("$defs").path(value).path("anyOf").isArray(), "pipeline values: anyOf of connectors");
 		assertTrue(schema.path("$defs").path("Rule").path("properties").path("operations")
 				.path("items").path("anyOf").isArray(), "$defs.Rule.properties.operations.items.anyOf");
+	}
+
+	@Test
+	void anAppsOwnSchemaIsUsedWhenItHasOne(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+		// An app on an older framework: rules as a list, no variables.
+		java.nio.file.Files.write(dir.resolve("old.jschema"), ("{\"$defs\":{\"Crud\":{\"type\":\"object\",\"properties\":"
+				+ "{\"pipeline\":{\"type\":\"array\"},\"ruleSets\":{}}},\"RuleSet\":{\"properties\":{\"rules\":{\"type\":\"array\"}}}},"
+				+ "\"properties\":{\"crud\":{\"$ref\":\"#/$defs/Crud\"}}}").getBytes());
+		JsonNode schema = AppCrudSection.schema(dir, "old");
+		assertEquals("array", schema.path("properties").path("pipeline").path("type").asText());
+		assertFalse(schema.path("properties").has("variables"));
+		assertEquals("array", schema.path("$defs").path("RuleSet").path("properties").path("rules").path("type").asText());
+		// No file: this server's own.
+		assertTrue(AppCrudSection.schema(dir, "missing").path("properties").has("variables"));
 	}
 
 	private static List<String> fieldNames(JsonNode node) {

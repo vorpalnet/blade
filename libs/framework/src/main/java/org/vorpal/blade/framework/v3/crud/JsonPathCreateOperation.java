@@ -6,7 +6,6 @@ import javax.servlet.sip.SipServletMessage;
 
 import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
-import org.vorpal.blade.framework.v3.configuration.Context;
 
 import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
@@ -38,32 +37,47 @@ public class JsonPathCreateOperation implements Operation {
 	}
 
 	@Override
-	public void process(SipServletMessage msg) {
-		try {
-			String json = MessageHelper.getAttributeValue(msg, "body", contentType);
-			if (json == null || json.isEmpty()) return;
+	public void check() throws Exception {
+		Placeholders.checkJsonPath(parentPath);
+	}
 
-			Map<String, String> vars = MessageHelper.getSessionVariables(msg.getApplicationSession());
-			String resolved = (value != null) ? Context.substitute(value, vars) : null;
-			Object inserted = (resolved != null) ? MessageHelper.jsonOrString(resolved) : null;
+	@Override
+	public void process(SipServletMessage msg) throws Exception {
+		String json = MessageHelper.getAttributeValue(msg, "body", contentType);
+		if (json == null || json.isEmpty()) return;
 
-			DocumentContext ctx = JsonPath.parse(json);
-			try {
-				if (key != null) ctx.put(parentPath, key, inserted);
-				else ctx.add(parentPath, inserted);
-			} catch (PathNotFoundException e) {
-				SettingsManager.getSipLogger().warning(msg,
-						"JsonPathCreateOperation - parent path does not exist: " + parentPath);
-				return;
-			}
-
-			MessageHelper.setAttributeValue(msg, "body", ctx.jsonString(), contentType);
-			SettingsManager.getSipLogger().finer(msg,
-					"JsonPathCreateOperation - added " + key + "=" + resolved + " at " + parentPath);
-
-		} catch (Exception e) {
-			SettingsManager.getSipLogger().logStackTrace(msg, e);
+		String path = Placeholders.jsonPath(parentPath, msg);
+		if (path == null) {
+			Placeholders.skipped(msg, "JsonPathCreateOperation", "the path", parentPath, null);
+			return;
 		}
+
+		Map<String, String> vars = MessageHelper.getSessionVariables(msg.getApplicationSession());
+		com.fasterxml.jackson.databind.JsonNode node = (value != null) ? Placeholders.json(value, vars) : null;
+		if (value != null && node == null) {
+			Placeholders.skipped(msg, "JsonPathCreateOperation", "the value", value, vars);
+			return;
+		}
+		// Text goes in as a string, which JsonPath never parses.
+		// As plain Java values: JsonPath's default provider writes a Jackson
+		// node as nested arrays.
+		Object inserted = (node == null) ? null : Placeholders.plain(node);
+
+		DocumentContext ctx = Placeholders.parseJson(msg, "JsonPathCreateOperation", json);
+		if (ctx == null) return;
+		// A missing parent is nothing to do: the body is left as it was.
+		if (ctx.read(path) == null) {
+			SettingsManager.getSipLogger().fine(msg,
+					"JsonPathCreateOperation - parent path does not exist: " + parentPath + "; nothing added");
+			return;
+		}
+		if (key != null) ctx.put(path, key, inserted);
+		else ctx.add(path, inserted);
+
+		MessageHelper.setAttributeValue(msg, "body", ctx.jsonString(), contentType);
+		SettingsManager.getSipLogger().finer(msg,
+				"JsonPathCreateOperation - added " + key + "=" + inserted + " at " + parentPath);
+
 	}
 
 	@JsonPropertyDescription("Content type of the JSON MIME part to target, e.g. application/json. Null targets the entire body.")

@@ -44,6 +44,12 @@ public final class MetricsRegistry {
 	/// a name but no ServletContext.
 	private static final ConcurrentHashMap<String, MetricsRegistry> BY_APP = new ConcurrentHashMap<>();
 
+	/// The registry last bound in this class loader. Each application carries
+	/// its own copy of the framework in `WEB-INF/lib`, so this is that
+	/// application's: what code with no name and no ServletContext (a CRUD
+	/// rule firing) counts into.
+	private static volatile MetricsRegistry lastBound;
+
 	MetricsRegistry() {
 	}
 
@@ -79,14 +85,21 @@ public final class MetricsRegistry {
 	public static void bind(String app, MetricsRegistry registry) {
 		if (app != null && registry != null) {
 			BY_APP.put(app, registry);
+			lastBound = registry;
 		}
 	}
 
 	/// Forget a name binding at undeploy.
 	public static void unbind(String app) {
 		if (app != null) {
-			BY_APP.remove(app);
+			if (BY_APP.remove(app) == lastBound) lastBound = null;
 		}
+	}
+
+	/// This application's registry ([#lastBound]); null outside a deployed
+	/// application.
+	public static MetricsRegistry ofThisApp() {
+		return lastBound;
 	}
 
 	/// Declare an unlabeled counter.

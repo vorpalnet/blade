@@ -63,6 +63,16 @@ public class SdpHelper implements Serializable {
 		return collectionToSdp(ctx.json());
 	}
 
+	/// `value` as given: a node is inserted as it is, a String is parsed as
+	/// JSON when it looks like JSON.
+	public static String updateValue(String sdpText, String jsonPath, Object value) throws Exception {
+		if (value instanceof String) return updateValue(sdpText, jsonPath, (String) value);
+		Object root = sdpToCollection(sdpText);
+		DocumentContext ctx = JsonPath.using(jsonPathConfig).parse(root);
+		ctx.set(jsonPath, splice(value));
+		return collectionToSdp(ctx.json());
+	}
+
 	public static String createValue(String sdpText, String parentPath, String key, Object value) throws Exception {
 		Object root = sdpToCollection(sdpText);
 		DocumentContext ctx = JsonPath.using(jsonPathConfig).parse(root);

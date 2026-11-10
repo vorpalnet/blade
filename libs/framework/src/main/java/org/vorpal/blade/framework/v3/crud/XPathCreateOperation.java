@@ -6,7 +6,6 @@ import javax.servlet.sip.SipServletMessage;
 
 import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
-import org.vorpal.blade.framework.v3.configuration.Context;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
@@ -29,32 +28,43 @@ public class XPathCreateOperation implements Operation {
 	}
 
 	@Override
-	public void process(SipServletMessage msg) {
-		try {
-			String xml = MessageHelper.getAttributeValue(msg, "body", contentType);
-			if (xml == null || xml.isEmpty()) return;
+	public void check() throws Exception {
+		Placeholders.checkXPath(parentXpath);
+	}
 
-			Document doc = XmlHelper.parse(xml);
-			Map<String, String> vars = MessageHelper.getSessionVariables(msg.getApplicationSession());
-			String resolved = (value != null) ? Context.substitute(value, vars) : null;
+	@Override
+	public void process(SipServletMessage msg) throws Exception {
+		String xml = MessageHelper.getAttributeValue(msg, "body", contentType);
+		if (xml == null || xml.isEmpty()) return;
 
-			boolean modified = false;
-			if (elementName != null) {
-				Element created = XmlHelper.createChildElement(doc, parentXpath, elementName, resolved);
-				modified = (created != null);
-				if (modified) SettingsManager.getSipLogger().finer(msg,
-						"XPathCreateOperation - created " + elementName + " under " + parentXpath);
-			} else if (attributeName != null) {
-				modified = XmlHelper.setElementAttribute(doc, parentXpath, attributeName, resolved);
-				if (modified) SettingsManager.getSipLogger().finer(msg,
-						"XPathCreateOperation - set @" + attributeName + " on " + parentXpath);
-			}
+		Document doc = Placeholders.parseXml(msg, "XPathCreateOperation", xml);
+		if (doc == null) return;
+		Map<String, String> vars = MessageHelper.getSessionVariables(msg.getApplicationSession());
+		String resolved = (value != null) ? Placeholders.value(value, vars) : null;
+		if (value != null && resolved == null) {
+			Placeholders.skipped(msg, "XPathCreateOperation", "the value", value, vars);
+			return;
+		}
 
-			if (modified) {
-				MessageHelper.setAttributeValue(msg, "body", XmlHelper.serialize(doc), contentType);
-			}
-		} catch (Exception e) {
-			SettingsManager.getSipLogger().logStackTrace(msg, e);
+		String parent = Placeholders.xpath(parentXpath, msg);
+		if (parent == null) {
+			Placeholders.skipped(msg, "XPathCreateOperation", "the XPath", parentXpath, null);
+			return;
+		}
+		boolean modified = false;
+		if (elementName != null) {
+			Element created = XmlHelper.createChildElement(doc, parent, elementName, resolved);
+			modified = (created != null);
+			if (modified) SettingsManager.getSipLogger().finer(msg,
+					"XPathCreateOperation - created " + elementName + " under " + parentXpath);
+		} else if (attributeName != null) {
+			modified = XmlHelper.setElementAttribute(doc, parent, attributeName, resolved);
+			if (modified) SettingsManager.getSipLogger().finer(msg,
+					"XPathCreateOperation - set @" + attributeName + " on " + parentXpath);
+		}
+
+		if (modified) {
+			MessageHelper.setAttributeValue(msg, "body", XmlHelper.serialize(xml, doc), contentType);
 		}
 	}
 

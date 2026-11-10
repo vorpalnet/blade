@@ -15,6 +15,8 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.vorpal.blade.framework.io.VersionedFileStore;
+import org.vorpal.blade.framework.v3.configuration.ClusterMembership;
+import org.vorpal.blade.framework.v3.configuration.ConfigFiles;
 import org.vorpal.blade.framework.v2.config.ConfigPublisher;
 import org.vorpal.blade.framework.v2.config.CredentialEncryption;
 import org.vorpal.blade.framework.v3.crud.Crud;
@@ -46,7 +48,14 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /// Routes, under `/resources/api/apps`:
 ///
 /// - `GET  …/apps`: `{apps: [name, …]}`.
-/// - `GET  …/apps/{app}`: `{source, config, schema}`; `config` is the
+/// Each per-app route takes `?file=`: `domain` (the default), `cluster/<name>`
+/// or `server/<name>` ([ConfigFiles]).
+///
+/// - `GET  …/apps/{app}/files`: the app's files that exist, domain first.
+/// - `GET  …/apps/{app}/merged`: read only, the `crud` section of each layer
+///   the loader merges, in its order, and what they merge to
+///   (`ConfigFiles.mergedView`).
+/// - `GET  …/apps/{app}`: `{source, file, path, version, config, schema}`; `config` is the
 ///   section (empty when absent), `schema` the section's schema, shaped like
 ///   `crud.jschema` so the page's form resolver needs no second path.
 /// - `POST …/apps/{app}/save`: body is the section.
@@ -61,8 +70,16 @@ public class AppCrudServlet extends HttpServlet {
 	private static final String SECTION = AppCrudSection.NAME;
 
 
-	private static Path configFile(String app) {
-		return CONFIG_DIR.resolve(app + ".json");
+	/// The file this request edits: `?file=` names the domain file (the
+	/// default) or a cluster or server file ([ConfigFiles#resolve]).
+	private static Path configFile(HttpServletRequest req, String app) {
+		return ConfigFiles.resolve(app, req.getParameter("file"));
+	}
+
+	/// True when the request edits the domain file, the only one with a
+	/// sample to fall back on.
+	private static boolean domain(HttpServletRequest req) {
+		return ConfigFiles.isDomain(req.getParameter("file"));
 	}
 
 	private static Path sampleFile(String app) {
@@ -80,14 +97,29 @@ public class AppCrudServlet extends HttpServlet {
 			String app = appOf(resp, path[0]);
 			if (app == null) return;
 			if (path.length == 1) {
-				handleLoad(resp, app);
-			} else if (path.length == 2 && path[1].equals("versions")) {
-				handleVersionList(resp, app);
+				handleLoad(req, resp, app);
+			} else if (path.length == 2) {
+				switch (path[1]) {
+				case "files":
+					writeJson(resp, HttpServletResponse.SC_OK, MAPPER.valueToTree(ConfigFiles.of(app, ClusterMembership.read())));
+					break;
+				case "merged":
+					writeJson(resp, HttpServletResponse.SC_OK,
+							ConfigFiles.mergedView(app, req.getParameter("file"), SECTION, ClusterMembership.read(), MAPPER));
+					break;
+				case "versions":
+					handleVersionList(req, resp, app);
+					break;
+				default:
+					respondError(resp, HttpServletResponse.SC_NOT_FOUND, "unknown endpoint", null);
+				}
 			} else if (path.length == 3 && path[1].equals("versions")) {
-				handleVersionContent(resp, app, path[2]);
+				handleVersionContent(req, resp, app, path[2]);
 			} else {
 				respondError(resp, HttpServletResponse.SC_NOT_FOUND, "unknown endpoint", null);
 			}
+		} catch (IllegalArgumentException e) {
+			respondError(resp, HttpServletResponse.SC_BAD_REQUEST, e.getMessage(), null);
 		} catch (Throwable t) {
 			respondError(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
 					"unexpected " + t.getClass().getSimpleName() + ": " + t.getMessage(), stackTrace(t));
@@ -105,14 +137,16 @@ public class AppCrudServlet extends HttpServlet {
 			String app = appOf(resp, path[0]);
 			if (app == null) return;
 			if (path.length == 2 && path[1].equals("save")) {
-				handleSave(req, resp, app);
+				handleSave(req, resp, app, readBody(req), null);
 			} else if (path.length == 2 && path[1].equals("publish")) {
 				handlePublish(resp, app);
 			} else if (path.length == 4 && path[1].equals("versions") && path[3].equals("restore")) {
-				handleVersionRestore(resp, app, path[2]);
+				handleVersionRestore(req, resp, app, path[2]);
 			} else {
 				respondError(resp, HttpServletResponse.SC_NOT_FOUND, "unknown endpoint", null);
 			}
+		} catch (IllegalArgumentException e) {
+			respondError(resp, HttpServletResponse.SC_BAD_REQUEST, e.getMessage(), null);
 		} catch (Throwable t) {
 			respondError(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
 					"unexpected " + t.getClass().getSimpleName() + ": " + t.getMessage(), stackTrace(t));
@@ -130,32 +164,54 @@ public class AppCrudServlet extends HttpServlet {
 		writeJson(resp, HttpServletResponse.SC_OK, out);
 	}
 
-	private void handleLoad(HttpServletResponse resp, String app) throws IOException {
+	private void handleLoad(HttpServletRequest req, HttpServletResponse resp, String app) throws IOException {
 		String source;
 		JsonNode doc;
-		if (Files.exists(configFile(app))) {
-			source = "live";
-			doc = MAPPER.readTree(configFile(app).toFile());
-		} else if (Files.exists(sampleFile(app))) {
-			source = "sample";
-			doc = MAPPER.readTree(sampleFile(app).toFile());
-		} else {
+		String version;
+		Path file = configFile(req, app);
+		// Content and version under one lock, so a save landing between the
+		// two reads cannot tag the old content with the new version.
+		synchronized (org.vorpal.blade.framework.v3.configuration.FileVersion.lock(file)) {
+			version = org.vorpal.blade.framework.v3.configuration.FileVersion.of(file);
+			if (Files.exists(file)) {
+				source = "live";
+				doc = MAPPER.readTree(file.toFile());
+			} else if (!domain(req)) {
+				// A cluster or server file holds only what it changes: start empty.
+				source = "new";
+				doc = MAPPER.createObjectNode();
+			} else if (Files.exists(sampleFile(app))) {
+				source = "sample";
+				doc = MAPPER.readTree(sampleFile(app).toFile());
+			} else {
+				source = null;
+				doc = null;
+			}
+		}
+		if (doc == null) {
 			respondError(resp, HttpServletResponse.SC_NOT_FOUND,
 					"no " + app + ".json and no generated sample: start " + app + " once on a node first", null);
 			return;
 		}
 		ObjectNode out = MAPPER.createObjectNode();
 		out.put("source", source);
+		out.put("file", domain(req) ? ConfigFiles.DOMAIN : req.getParameter("file"));
+		out.put("path", file.toString());
+		out.put("version", version);
 		JsonNode section = doc.get(SECTION);
 		out.set("config", section != null && section.isObject() ? section : MAPPER.createObjectNode());
-		out.set("schema", AppCrudSection.schema());
+		out.set("schema", AppCrudSection.schema(CONFIG_DIR.resolve("_schemas"), app));
 		writeJson(resp, HttpServletResponse.SC_OK, out);
 	}
 
-	private void handleSave(HttpServletRequest req, HttpServletResponse resp, String app) throws IOException {
+	/// Checks `body`, the file's new `crud` section, and splices it into the
+	/// file. A restore passes the whole old file as `whole` (and its section
+	/// as `body`): it is checked as a save is, then written whole.
+	private void handleSave(HttpServletRequest req, HttpServletResponse resp, String app, String body, ObjectNode whole)
+			throws IOException {
 		JsonNode section;
 		try {
-			section = MAPPER.readTree(readBody(req));
+			section = MAPPER.readTree(body);
 		} catch (Exception e) {
 			respondError(resp, HttpServletResponse.SC_BAD_REQUEST, "not valid JSON: " + e.getMessage(), null);
 			return;
@@ -164,33 +220,79 @@ public class AppCrudServlet extends HttpServlet {
 			respondError(resp, HttpServletResponse.SC_BAD_REQUEST, "the crud section must be a JSON object", null);
 			return;
 		}
+		java.util.Map<String, String> membership;
 		try {
-			MAPPER.treeToValue(section, Crud.class);
-		} catch (Exception e) {
-			respondError(resp, HttpServletResponse.SC_BAD_REQUEST,
-					"crud section rejected, " + app + " could not load it: " + e.getMessage(), null);
+			membership = ClusterMembership.forSave(app);
+		} catch (IOException e) {
+			respondError(resp, HttpServletResponse.SC_SERVICE_UNAVAILABLE, "not saved: " + e.getMessage(), null);
+			return;
+		}
+		// The draft as it runs, what it does to the files above it (DraftCheck).
+		java.util.List<String> problems = org.vorpal.blade.framework.v3.configuration.DraftCheck.problems(app,
+				req.getParameter("file"), MAPPER.createObjectNode().set(SECTION, section), SECTION, membership, MAPPER,
+				(doc, domainFile) -> {
+					JsonNode s = doc.get(SECTION);
+					Crud c = MAPPER.treeToValue(s != null ? s : MAPPER.createObjectNode(), Crud.class);
+					return Crud.problems(c.getRuleSets(), c.getDefaultRuleSet());
+				});
+		java.util.List<String> warnings = new java.util.ArrayList<>();
+		// Saved tests guard the domain file ([CrudConfigServlet#problems]).
+		if (domain(req) && problems.isEmpty()) {
+			try {
+				problems.addAll(CrudTests.failures(CrudTests.of(MAPPER.treeToValue(section, Crud.class)),
+						CrudTests.load(app), "domain"));
+			} catch (IOException unreadable) {
+				// The rules still save; the operator learns why no test ran.
+				warnings.addAll(CrudTests.unreadable(app));
+			}
+		}
+
+		if (!problems.isEmpty()) {
+			org.vorpal.blade.framework.v2.config.ConfigEditorServlet.respondProblems(resp, problems);
 			return;
 		}
 
-		Path base = Files.exists(configFile(app)) ? configFile(app) : sampleFile(app);
-		if (!Files.exists(base)) {
-			respondError(resp, HttpServletResponse.SC_NOT_FOUND,
-					"no " + app + ".json and no generated sample: start " + app + " once on a node first", null);
-			return;
-		}
-		JsonNode doc = MAPPER.readTree(base.toFile());
-		if (!doc.isObject()) {
-			respondError(resp, HttpServletResponse.SC_CONFLICT, base + " is not a JSON object", null);
-			return;
-		}
 		CredentialEncryption.encryptTree(section);
-		AppCrudSection.splice((ObjectNode) doc, (ObjectNode) section);
-
-		String pretty = MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(doc);
-		store.write(configFile(app), pretty);
+		String pretty;
+		String version;
+		// Read, splice and write under one lock, so two saves to the same
+		// file cannot interleave and drop one another's section.
+		synchronized (org.vorpal.blade.framework.v3.configuration.FileVersion.lock(configFile(req, app))) {
+			if (!org.vorpal.blade.framework.v3.configuration.FileVersion.current(req, configFile(req, app))) {
+				respondError(resp, HttpServletResponse.SC_CONFLICT, org.vorpal.blade.framework.v3.configuration.FileVersion.conflict(configFile(req, app)), null);
+				return;
+			}
+			Path base = Files.exists(configFile(req, app)) ? configFile(req, app)
+					: domain(req) ? sampleFile(app) : null;
+			if (domain(req) && !Files.exists(base)) {
+				respondError(resp, HttpServletResponse.SC_NOT_FOUND,
+						"no " + app + ".json and no generated sample: start " + app + " once on a node first", null);
+				return;
+			}
+			// A new cluster or server file starts empty: it holds only the section.
+			JsonNode doc = (base != null) ? MAPPER.readTree(base.toFile()) : MAPPER.createObjectNode();
+			if (!doc.isObject()) {
+				respondError(resp, HttpServletResponse.SC_CONFLICT, base + " is not a JSON object", null);
+				return;
+			}
+			if (whole != null) {
+				doc = whole;
+				if (whole.has(SECTION)) whole.set(SECTION, section); // as checked and encrypted
+			} else {
+				AppCrudSection.splice((ObjectNode) doc, (ObjectNode) section);
+			}
+			pretty = MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(doc);
+			store.write(configFile(req, app), pretty);
+			// The version of what this save wrote, taken before another
+			// writer can get in.
+			version = org.vorpal.blade.framework.v3.configuration.FileVersion.of(configFile(req, app));
+		}
 
 		ObjectNode out = MAPPER.createObjectNode();
-		out.put("path", configFile(app).toAbsolutePath().toString());
+		out.put("version", version);
+		ArrayNode warned = out.putArray("warnings");
+		for (String w : warnings) warned.add(w);
+		out.put("path", configFile(req, app).toAbsolutePath().toString());
 		out.put("bytes", pretty.getBytes(StandardCharsets.UTF_8).length);
 		writeJson(resp, HttpServletResponse.SC_OK, out);
 	}
@@ -211,10 +313,10 @@ public class AppCrudServlet extends HttpServlet {
 		}
 	}
 
-	private void handleVersionList(HttpServletResponse resp, String app) throws IOException {
+	private void handleVersionList(HttpServletRequest req, HttpServletResponse resp, String app) throws IOException {
 		ObjectNode out = MAPPER.createObjectNode();
 		ArrayNode arr = out.putArray("versions");
-		for (VersionedFileStore.VersionInfo v : store.listVersions(configFile(app))) {
+		for (VersionedFileStore.VersionInfo v : store.listVersions(configFile(req, app))) {
 			ObjectNode item = arr.addObject();
 			item.put("timestamp", v.getTimestamp());
 			item.put("sizeBytes", v.getSizeBytes());
@@ -222,16 +324,32 @@ public class AppCrudServlet extends HttpServlet {
 		writeJson(resp, HttpServletResponse.SC_OK, out);
 	}
 
-	private void handleVersionContent(HttpServletResponse resp, String app, String ts) throws IOException {
+	private void handleVersionContent(HttpServletRequest req, HttpServletResponse resp, String app, String ts) throws IOException {
 		long timestamp = parseTimestamp(resp, ts);
 		if (timestamp < 0) return;
-		writeRaw(resp, store.readVersion(configFile(app), timestamp), ts);
+		writeRaw(resp, store.readVersion(configFile(req, app), timestamp), ts);
 	}
 
-	private void handleVersionRestore(HttpServletResponse resp, String app, String ts) throws IOException {
+	private void handleVersionRestore(HttpServletRequest req, HttpServletResponse resp, String app, String ts) throws IOException {
 		long timestamp = parseTimestamp(resp, ts);
 		if (timestamp < 0) return;
-		writeRaw(resp, store.restore(configFile(app), timestamp), ts);
+		JsonNode old;
+		try {
+			String text = store.readVersion(configFile(req, app), timestamp);
+			if (text == null) throw new IOException("no version " + ts);
+			old = MAPPER.readTree(text);
+		} catch (IOException e) {
+			respondError(resp, HttpServletResponse.SC_NOT_FOUND, "no version " + ts, null);
+			return;
+		}
+		if (!(old instanceof ObjectNode)) {
+			respondError(resp, HttpServletResponse.SC_CONFLICT, "version " + ts + " is not a JSON object", null);
+			return;
+		}
+		// Saved as a draft is, whole: an old version must pass today's checks
+		// (a rule a cluster file changes may have been renamed since).
+		JsonNode section = old.get(SECTION);
+		handleSave(req, resp, app, (section != null && section.isObject()) ? section.toString() : "{}", (ObjectNode) old);
 	}
 
 	// ------------------------------------------------------------------

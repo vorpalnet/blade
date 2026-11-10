@@ -6,7 +6,6 @@ import javax.servlet.sip.SipServletMessage;
 
 import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
-import org.vorpal.blade.framework.v3.configuration.Context;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
@@ -26,21 +25,33 @@ public class SdpCreateOperation implements Operation {
 	}
 
 	@Override
-	public void process(SipServletMessage msg) {
-		try {
-			String sdp = MessageHelper.getAttributeValue(msg, "body", contentType);
-			if (sdp == null || sdp.isEmpty()) return;
+	public void check() throws Exception {
+		Placeholders.checkJsonPath(parentPath);
+	}
 
-			Map<String, String> vars = MessageHelper.getSessionVariables(msg.getApplicationSession());
-			String resolved = (value != null) ? Context.substitute(value, vars) : null;
+	@Override
+	public void process(SipServletMessage msg) throws Exception {
+		String sdp = MessageHelper.getAttributeValue(msg, "body", contentType);
+		if (sdp == null || sdp.isEmpty()) return;
 
-			String result = SdpHelper.createValue(sdp, parentPath, key, resolved);
-			MessageHelper.setAttributeValue(msg, "body", result, contentType);
-			SettingsManager.getSipLogger().finer(msg,
-					"SdpCreateOperation - added " + key + " at " + parentPath);
-		} catch (Exception e) {
-			SettingsManager.getSipLogger().logStackTrace(msg, e);
+		String path = Placeholders.jsonPath(parentPath, msg);
+		if (path == null) {
+			Placeholders.skipped(msg, "SdpCreateOperation", "the path", parentPath, null);
+			return;
 		}
+
+		Map<String, String> vars = MessageHelper.getSessionVariables(msg.getApplicationSession());
+		com.fasterxml.jackson.databind.JsonNode resolved = (value != null) ? Placeholders.json(value, vars) : null;
+		if (value != null && resolved == null) {
+			Placeholders.skipped(msg, "SdpCreateOperation", "the value", value, vars);
+			return;
+		}
+
+		// A node, not a String: SdpHelper parses a String as JSON.
+		String result = SdpHelper.createValue(sdp, path, key, resolved);
+		MessageHelper.setAttributeValue(msg, "body", result, contentType);
+		SettingsManager.getSipLogger().finer(msg,
+				"SdpCreateOperation - added " + key + " at " + parentPath);
 	}
 
 	@JsonPropertyDescription("Optional MIME content type, e.g. application/sdp. Null targets the entire body.")

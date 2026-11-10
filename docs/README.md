@@ -1,12 +1,17 @@
 # Application decks
 
 One HTML slide deck per application, explaining how it works. Written for an engineer
-reading it without the source open — the same audience as the application's README, in a
+reading it without the source open: the same audience as the application's README, in a
 form you can present.
 
 `deck-template.html` is the shell every deck shares: palette, slide chrome, keyboard and
 swipe navigation, present mode, the light/dark toggle, and the Vorpal footer. A deck is
 that file with its slides filled in.
+
+Every slide is laid out on one fixed 1240×760 canvas, and the script scales the whole stage to
+fit the window. A slide therefore looks the same on a laptop, a projector and in present mode:
+text never reflows, and nothing clips at the bottom of a short window. Size everything in `px`;
+a `vw` unit would shrink text a second time on top of the scaling.
 
 ## Building one
 
@@ -24,26 +29,29 @@ Then replace the two example `<section class="slide">` blocks. The first slide c
 runtime**, so slides can be added or removed with nothing else to update.
 
 Decks live beside the application they describe and are named for the app itself,
-`<project>.html` — e.g. `services/webrtc/webrtc.html` — so a deck versions with its code and
+`<project>.html` (e.g. `services/webrtc/webrtc.html`), so a deck versions with its code and
 staleness is a comparison against the README next to it.
 
 ## Writing the slides
 
 **Build it from the application's README.** The README is the source of truth; the deck is
-a rendering of it. Following the README's own section order keeps the deck honest — where
+a rendering of it. Following the README's own section order keeps the deck honest: where
 the deck reads oddly, the README reads oddly, and that is worth knowing. Anything that is
 true of the app but absent from the README belongs in the README first.
 
 **A heading is a statement, not a topic.** "Signaling is always SIP; only the media varies"
 tells the reader something. "Media handling" does not.
 
+**Plain text.** Bold almost nothing: one term on a slide at most, and only when it must stand
+out. Beside a diagram, don't restate the picture; give the one fact it cannot show.
+
 **Both themes.** Colours come from the tokens at the top of the file; never write a literal
-colour into a slide. Two accents carry meaning — `--sig` for signaling, `--med` for media —
+colour into a slide. Two accents carry meaning, `--sig` for signaling and `--med` for media,
 and both are always labelled in words, never colour alone.
 
 **Self-contained.** Decks are self-contained HTML with no external assets: no external fonts,
 scripts, images or stylesheets.
-The Vorpal mark is inlined in the shell for that reason — a copy of the canonical
+The Vorpal mark is inlined in the shell for that reason: a copy of the canonical
 `admin/portal/src/main/webapp/brand/vorpal_logo.svg`, filled through the `--brand` token so
 it tracks the light/dark theme instead of a fixed purple or white. **When the logo changes
 in `brand/`, re-sync the inline copies** in `deck-template.html` and `tutorial-template.html`
@@ -55,6 +63,10 @@ in `brand/`, re-sync the inline copies** in `deck-template.html` and `tutorial-t
 |---|---|
 | `.two` | two columns; `.two.l` / `.two.r` shift the weight |
 | `.stack` | vertical group inside a column |
+| `.note` | framed side panel beside a list, for the one fact that matters; `.k2` is its small caption |
+| `.tags` | a row of `.tag` labels, e.g. `Config: x.json` · `Stays in the call: yes` |
+| `.title-grid` + `ol.line` | title slide with a vertical sequence (a call path) on the right; `li.front` is drawn heavier, `li.arr` holds the ↓ |
+| `.contact` | a `<dl>` of label/value pairs for a closing contact slide |
 | `ul.facts` | bulleted points; add `.m` for the media accent |
 | `.lede` `.sub` `.pull` | body text, deck under a heading, emphatic line |
 | `.tag` `.tag.s` `.tag.m` | small labels; `<span class="dot"></span>` inside |

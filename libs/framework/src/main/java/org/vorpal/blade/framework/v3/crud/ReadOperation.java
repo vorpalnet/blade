@@ -42,28 +42,46 @@ public class ReadOperation implements Operation {
 	}
 
 	@Override
-	public void process(SipServletMessage msg) {
-		try {
-			String value = MessageHelper.getAttributeValue(msg, attribute, contentType);
-			if (value == null) return;
+	public void check() throws Exception {
+		if (attribute == null || attribute.isEmpty()) throw new IllegalArgumentException("attribute: required");
+		if (pattern == null || pattern.isEmpty()) throw new IllegalArgumentException("pattern: required");
+		Placeholders.checkRegex(pattern);
+	}
 
-			Matcher matcher = compiled().matcher(value);
-			if (!matcher.find()) return;
-
-			SipApplicationSession appSession = msg.getApplicationSession();
-			for (String name : variableNames()) {
-				try {
-					String extracted = matcher.group(name);
-					if (extracted != null) {
-						MessageHelper.putVariable(appSession, name, extracted);
-						SettingsManager.getSipLogger().finer(msg,
-								"ReadOperation - saved " + name + "=" + extracted);
-					}
-				} catch (IllegalArgumentException ignore) {
-				}
+	@Override
+	public void process(SipServletMessage msg) throws Exception {
+		Pattern compiled = compiled(msg);
+		if (compiled == null) {
+			Placeholders.skipped(msg, "ReadOperation", "the pattern for " + attribute, pattern, null);
+			return;
+		}
+		// A header may appear more than once; read the first occurrence the
+		// pattern matches, so `tel:` finds the tel identity whichever comes first.
+		List<String> candidates = MessageHelper.isPlainHeader(attribute)
+				? MessageHelper.getHeaderValues(msg, attribute)
+				: java.util.Collections.singletonList(MessageHelper.getAttributeValue(msg, attribute, contentType));
+		Matcher matcher = null;
+		for (String value : candidates) {
+			if (value == null) continue;
+			Matcher m = compiled.matcher(value);
+			if (m.find()) {
+				matcher = m;
+				break;
 			}
-		} catch (Exception e) {
-			SettingsManager.getSipLogger().logStackTrace(msg, e);
+		}
+		if (matcher == null) return;
+
+		SipApplicationSession appSession = msg.getApplicationSession();
+		for (String name : variableNames()) {
+			try {
+				String extracted = matcher.group(name);
+				if (extracted != null) {
+					MessageHelper.putVariable(appSession, name, extracted);
+					SettingsManager.getSipLogger().finer(msg,
+							"ReadOperation - saved " + name + "=" + extracted);
+				}
+			} catch (IllegalArgumentException ignore) {
+			}
 		}
 	}
 
@@ -76,11 +94,13 @@ public class ReadOperation implements Operation {
 		return names;
 	}
 
-	private Pattern compiled() {
-		if (compiledPattern == null && pattern != null) {
-			compiledPattern = Pattern.compile(pattern, Pattern.DOTALL);
+	/// The pattern for this message, with any `${name}` filled in from the
+	/// session ([Placeholders]); null when one has no value.
+	private Pattern compiled(SipServletMessage msg) {
+		if (compiledPattern == null) {
+			compiledPattern = Placeholders.compileStatic(pattern);
 		}
-		return compiledPattern;
+		return Placeholders.compileFor(pattern, compiledPattern, msg);
 	}
 
 	@JsonPropertyDescription("SIP attribute to read from: a header name, Request-URI, status, reason, originIP, peerIP, transport, isSecure, or body.")
@@ -92,7 +112,7 @@ public class ReadOperation implements Operation {
 		this.attribute = attribute;
 	}
 
-	@JsonPropertyDescription("Regular expression with named groups, e.g. sip:(?<user>[^@]+)@(?<host>[^;>]+)")
+	@JsonPropertyDescription("Regular expression with named groups, e.g. sip:(?<user>[^@]+)@(?<host>[^;>]+). ${name} inserts a session variable, matched literally.")
 	@FormLayout(wide = true, regexTest = true)
 	public String getPattern() {
 		return pattern;
@@ -100,7 +120,7 @@ public class ReadOperation implements Operation {
 
 	public void setPattern(String pattern) {
 		this.pattern = pattern;
-		this.compiledPattern = (pattern != null) ? Pattern.compile(pattern, Pattern.DOTALL) : null;
+		this.compiledPattern = Placeholders.compileStatic(pattern);
 	}
 
 	@JsonPropertyDescription("Optional MIME content type when targeting one part of a multipart body, e.g. application/sdp")

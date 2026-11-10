@@ -29,6 +29,14 @@ public final class ExamplesSmokeTest {
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
 	public static void main(String[] args) throws Exception {
+		if (run() > 0) System.exit(1);
+	}
+
+	/// Runs every check and returns how many failed; [SmokeProgramsTest]
+	/// runs this under JUnit.
+	static int run() throws Exception {
+		passed = 0;
+		failed = 0;
 		Logger testLogger = new TestLogger();
 		SettingsManager.setSipLogger(testLogger);
 		Callflow.setLogger(testLogger);
@@ -40,7 +48,7 @@ public final class ExamplesSmokeTest {
 
 		System.out.println();
 		System.out.println("Passed: " + passed + " / " + (passed + failed));
-		if (failed > 0) System.exit(1);
+		return failed;
 	}
 
 	// =========================================================================
@@ -65,7 +73,7 @@ public final class ExamplesSmokeTest {
 		attach.setContentType("application/recording-metadata+xml");
 		attach.setValue("<recording><session id=\"abc-123\" tenant=\"acme\"/></recording>");
 		r.getOperations().add(attach);
-		rs.getRules().add(r);
+		rs.add(r);
 
 		// Starting message: outbound INVITE with SDP, plus a session var that
 		// Trace-Id will pick up via ${userPart}.
@@ -132,7 +140,7 @@ public final class ExamplesSmokeTest {
 		sdp.getExpressions().put("mediaPort", "$.media[0].port");
 		r.getOperations().add(sdp);
 
-		rs.getRules().add(r);
+		rs.add(r);
 
 		DetachedRequest msg = mixedBodyRequest();
 		Example ex = new Example("read", rs, msg);
@@ -185,7 +193,7 @@ public final class ExamplesSmokeTest {
 		sdp.setValue("10.99.0.1");
 		r.getOperations().add(sdp);
 
-		rs.getRules().add(r);
+		rs.add(r);
 
 		DetachedRequest msg = mixedBodyRequest();
 		Example ex = new Example("update", rs, msg);
@@ -232,7 +240,7 @@ public final class ExamplesSmokeTest {
 		sdp.setJsonPath("$.media[0].attributes[?(@.name=='sendrecv')]");
 		r.getOperations().add(sdp);
 
-		rs.getRules().add(r);
+		rs.add(r);
 
 		DetachedRequest msg = mixedBodyRequest();
 		msg.setHeader("P-Asserted-Identity", "<sip:secret@internal>");

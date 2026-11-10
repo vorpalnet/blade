@@ -30,20 +30,16 @@ public class KeepOnlyPartOperation implements Operation {
 	}
 
 	@Override
-	public void process(SipServletMessage msg) {
-		try {
-			if (msg.getContent() == null) return;
-			boolean kept = MimeHelper.keepOnlyPart(msg, contentType);
-			if (kept) {
-				SettingsManager.getSipLogger().finer(msg,
-						"KeepOnlyPartOperation - kept only " + contentType + " part(s)");
-			} else if (msg.getContentType() != null
-					&& msg.getContentType().toLowerCase().startsWith("multipart/")) {
-				SettingsManager.getSipLogger().warning(msg,
-						"KeepOnlyPartOperation - no " + contentType + " part in multipart body; leaving body alone");
-			}
-		} catch (Exception e) {
-			SettingsManager.getSipLogger().logStackTrace(msg, e);
+	public void process(SipServletMessage msg) throws Exception {
+		if (msg.getContent() == null) return;
+		boolean kept = MimeHelper.keepOnlyPart(msg, contentType);
+		if (kept) {
+			SettingsManager.getSipLogger().finer(msg,
+					"KeepOnlyPartOperation - kept only " + contentType + " part(s)");
+		} else if (msg.getContentType() != null
+				&& msg.getContentType().toLowerCase().startsWith("multipart/")) {
+			SettingsManager.getSipLogger().warning(msg,
+					"KeepOnlyPartOperation - no " + contentType + " part in multipart body; leaving body alone");
 		}
 	}
 

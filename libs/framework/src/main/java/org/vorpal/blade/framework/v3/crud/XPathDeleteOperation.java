@@ -25,19 +25,26 @@ public class XPathDeleteOperation implements Operation {
 	}
 
 	@Override
-	public void process(SipServletMessage msg) {
-		try {
-			String xml = MessageHelper.getAttributeValue(msg, "body", contentType);
-			if (xml == null || xml.isEmpty()) return;
+	public void check() throws Exception {
+		Placeholders.checkXPath(xpath);
+	}
 
-			Document doc = XmlHelper.parse(xml);
-			if (XmlHelper.removeNodes(doc, xpath)) {
-				MessageHelper.setAttributeValue(msg, "body", XmlHelper.serialize(doc), contentType);
-				SettingsManager.getSipLogger().finer(msg,
-						"XPathDeleteOperation - removed " + xpath);
-			}
-		} catch (Exception e) {
-			SettingsManager.getSipLogger().logStackTrace(msg, e);
+	@Override
+	public void process(SipServletMessage msg) throws Exception {
+		String xml = MessageHelper.getAttributeValue(msg, "body", contentType);
+		if (xml == null || xml.isEmpty()) return;
+
+		Document doc = Placeholders.parseXml(msg, "XPathDeleteOperation", xml);
+		if (doc == null) return;
+		String path = Placeholders.xpath(xpath, msg);
+		if (path == null) {
+			Placeholders.skipped(msg, "XPathDeleteOperation", "the XPath", xpath, null);
+			return;
+		}
+		if (XmlHelper.removeNodes(doc, path)) {
+			MessageHelper.setAttributeValue(msg, "body", XmlHelper.serialize(xml, doc), contentType);
+			SettingsManager.getSipLogger().finer(msg,
+					"XPathDeleteOperation - removed " + xpath);
 		}
 	}
 

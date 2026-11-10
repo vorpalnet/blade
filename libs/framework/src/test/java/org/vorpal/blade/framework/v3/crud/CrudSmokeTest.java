@@ -33,6 +33,14 @@ public final class CrudSmokeTest {
 	private static final ObjectMapper mapper = new ObjectMapper();
 
 	public static void main(String[] args) throws Exception {
+		if (run() > 0) System.exit(1);
+	}
+
+	/// Runs every check and returns how many failed; [SmokeProgramsTest]
+	/// runs this under JUnit.
+	static int run() throws Exception {
+		passed = 0;
+		failed = 0;
 		// Operations log via SettingsManager.getSipLogger(); the production
 		// LogManager wires WebLogic MBeans, so use a quiet test subclass instead.
 		// Configuration.resolveVariables logs via Callflow's logger — wire it too,
@@ -96,7 +104,7 @@ public final class CrudSmokeTest {
 
 		System.out.println();
 		System.out.println("Passed: " + passed + " / " + (passed + failed));
-		if (failed > 0) System.exit(1);
+		return failed;
 	}
 
 	// --- rule filters ---
@@ -109,8 +117,8 @@ public final class CrudSmokeTest {
 	}
 
 	private static void testRuleMatchMessageType() throws Exception {
-		Rule rq = new Rule(); rq.setMessageType("request");
-		Rule rs = new Rule(); rs.setMessageType("response");
+		Rule rq = new Rule(); rq.setMessageType(Rule.MessageType.request);
+		Rule rs = new Rule(); rs.setMessageType(Rule.MessageType.response);
 		check("rule.type.req-on-req", rq.matches(invite(), null));
 		check("rule.type.req-not-on-resp", !rq.matches(response200(), null));
 		check("rule.type.resp-on-resp", rs.matches(response200(), null));
@@ -549,8 +557,8 @@ public final class CrudSmokeTest {
 		r2.getOperations().add(new CreateOperation("X-Stamp", "${u}"));
 		r2.getOperations().add(new ReadOperation("From", "sip:(?<u>[^@]+)@"));
 		r2.process(req2);
-		check("order.create-before-read-leaves-placeholder",
-				"${u}".equals(req2.getHeader("X-Stamp")));
+		// An unset variable skips the operation rather than sending "${u}".
+		check("order.create-before-read-skips", req2.getHeader("X-Stamp") == null);
 	}
 
 	// --- resetVariables ---
@@ -596,13 +604,22 @@ public final class CrudSmokeTest {
 		if (home == null) home = System.getProperty("user.home");
 		check("env.fallback-precondition", home != null);
 
+		// CRUD output goes on the wire, so a plain name never reaches the
+		// environment: a misspelt `${HOME}` is unset and the op is skipped.
 		DetachedRequest req = invite();
-		new CreateOperation("X-User-Home", "${HOME:-}${user.home}").process(req);
-		// `${HOME:-}` isn't a valid form (we ignore unknown args on plain
-		// names), so it lookups env "HOME" directly. `${user.home}` falls
-		// back to System.getProperty.
-		String stamped = req.getHeader("X-User-Home");
-		check("env.user-home-resolved", stamped != null && stamped.contains(home));
+		new CreateOperation("X-User-Home", "${HOME}").process(req);
+		check("env.plain-name-not-resolved", req.getHeader("X-User-Home") == null);
+		// The explicit forms reach only settings named for rules (crud.…,
+		// CRUD_…); the server's others stay out of reach.
+		new CreateOperation("X-User-Home", "${sys:user.home}").process(req);
+		check("env.explicit-unexposed-skipped", req.getHeader("X-User-Home") == null);
+		System.setProperty("crud.smoke", "exposed");
+		try {
+			new CreateOperation("X-Crud-Smoke", "${sys:crud.smoke}").process(req);
+			check("env.explicit-resolved", "exposed".equals(req.getHeader("X-Crud-Smoke")));
+		} finally {
+			System.clearProperty("crud.smoke");
+		}
 	}
 
 	/// A variable's value is data: `${greeting}` inserts "Hello ${name}!" and
@@ -641,16 +658,16 @@ public final class CrudSmokeTest {
 
 	private static void testPeerIpPseudoHeader() throws Exception {
 		DetachedRequest req = invite();
-		// DetachedMessage.getRemoteAddr returns null; the test confirms the
-		// pseudo-header is wired (no exception, no header-lookup fallthrough).
+		// DetachedMessage reports the loopback address; the test confirms the
+		// pseudo-header is wired to getRemoteAddr, not to a header lookup.
 		String peer = MessageHelper.getAttributeValue(req, "peerIP", null);
-		check("peerIP.no-throw", peer == null);
+		check("peerIP.wired", "127.0.0.1".equals(peer));
 	}
 
 	private static void testTransportPseudoHeader() throws Exception {
 		DetachedRequest req = invite();
 		String transport = MessageHelper.getAttributeValue(req, "transport", null);
-		check("transport.no-throw", transport == null);
+		check("transport.wired", "UDP".equals(transport));
 	}
 
 	private static void testIsSecurePseudoHeader() throws Exception {

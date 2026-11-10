@@ -50,17 +50,12 @@ public class PreviewServlet extends HttpServlet {
 
 	@Override
 	public void init() throws ServletException {
-		// The CRUD engine and its operation classes log via
-		// SettingsManager.getSipLogger() / Callflow.getSipLogger(); on a
-		// real managed node those statics are wired by the SIP servlet's
-		// servletCreated. The AdminServer-side preview WAR doesn't go
-		// through that path, so install a CapturingLogger that (a)
-		// prevents the catch handlers from NPE'ing on a null logger, and
-		// (b) stashes per-request errors so the Diagnostics panel can show
-		// them.
-		CapturingLogger logger = new CapturingLogger();
-		if (SettingsManager.getSipLogger() == null) SettingsManager.setSipLogger(logger);
-		if (Callflow.getSipLogger() == null) Callflow.setLogger(logger);
+		// The engine logs through the static SIP loggers. Wrap whatever the
+		// WAR already has (the editor's own settings start one; it may be
+		// null) so each preview request's warnings and notes are captured
+		// for the operator and still reach the log.
+		SettingsManager.setSipLogger(CapturingLogger.wrap(SettingsManager.getSipLogger()));
+		Callflow.setLogger(CapturingLogger.wrap(Callflow.getSipLogger()));
 	}
 
 	@Override
@@ -114,7 +109,8 @@ public class PreviewServlet extends HttpServlet {
 		CapturingLogger.begin();
 		try {
 			result = PreviewEngine.preview(
-					config, body.ruleSet, body.message, body.lifecycleEvent, body.variables);
+					config, body.ruleSet, body.message, body.lifecycleEvent, body.variables,
+					body.leg, body.requestSdp);
 		} catch (Throwable t) {
 			captured = CapturingLogger.end();
 			String hint = captured.isEmpty() ? "" : " · " + captured.size() + " logged event(s)";
@@ -128,6 +124,10 @@ public class PreviewServlet extends HttpServlet {
 		// log lines so the operator can see what went wrong even when the
 		// engine itself completed.
 		result.warnings = captured;
+		// The draft's problems ride along on every preview, so a broken
+		// regex or `when` shows while it is being typed, not only at Save.
+		result.problems = org.vorpal.blade.framework.v3.crud.Crud.problems(config.getRuleSets(),
+				config.getDefaultRuleSet());
 
 		// Serialize to a buffer first — if it fails, we can still send a
 		// JSON error rather than a partially-written body that WebLogic
@@ -241,28 +241,40 @@ public class PreviewServlet extends HttpServlet {
 	/// Overlays the rules editor's unsaved buffer onto the live config so
 	/// preview and selection run against what the operator is TYPING, not
 	/// what was last published. Null draft fields mean "no draft — use live".
-	private static void applyDraft(CrudConfiguration config, DraftFields draft) {
-		if (draft.draftRuleSets != null) {
-			config.setRuleSets(draft.draftRuleSets);
-		}
-		if (draft.draftDefaultRuleSet != null) {
-			config.setDefaultRuleSet(draft.draftDefaultRuleSet.isEmpty() ? null : draft.draftDefaultRuleSet);
-		}
-		if (draft.draftPipeline != null) {
-			config.setPipeline(draft.draftPipeline);
-		}
+	static void applyDraft(CrudConfiguration config, DraftFields draft) {
+		draft.applyTo(config);
 	}
 
 	/// The editor's unsaved buffer, shared by preview and selection requests.
 	public static class DraftFields {
+		/// Lays this draft over `config` ([PreviewServlet#applyDraft]); here so
+		/// code outside a servlet (RuleBuilderAgent) can use it.
+		void applyTo(CrudConfiguration config) {
+			if (draftRuleSets != null) {
+				config.setRuleSets(draftRuleSets);
+			}
+			if (draftDefaultRuleSet != null) {
+				config.setDefaultRuleSet(draftDefaultRuleSet.isEmpty() ? null : draftDefaultRuleSet);
+			}
+			if (draftPipeline != null) {
+				config.setPipeline(draftPipeline);
+			}
+			if (draftVariables != null) {
+				config.setVariables(draftVariables);
+			}
+		}
+
 		/// When present, replaces the live config's rule sets for this run
 		/// only. Nothing touches disk.
 		public java.util.Map<String, org.vorpal.blade.framework.v3.crud.RuleSet> draftRuleSets;
 		/// Draft defaultRuleSet; empty string means "draft cleared it".
 		public String draftDefaultRuleSet;
-		/// Draft enrichment pipeline — lets Auto-select dry-run an unsaved
-		/// selection table.
-		public java.util.List<org.vorpal.blade.framework.v3.configuration.connectors.Connector> draftPipeline;
+		/// Draft enrichment pipeline, keyed by connector id: lets Auto-select
+		/// dry-run an unsaved selection table.
+		@com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = org.vorpal.blade.framework.v3.crud.Pipeline.Reader.class)
+		public java.util.Map<String, org.vorpal.blade.framework.v3.configuration.connectors.Connector> draftPipeline;
+		/// Draft `variables`.
+		public java.util.Map<String, String> draftVariables;
 	}
 
 	private static String readBody(HttpServletRequest req) throws IOException {
@@ -315,6 +327,10 @@ public class PreviewServlet extends HttpServlet {
 		/// Pre-set session attributes — simulate the enrichment pipeline
 		/// having run earlier, or override env vars. Applied before rules fire.
 		public java.util.Map<String, String> variables;
+		/// `caller` or `callee`; empty takes the side a B2BUA puts the message on.
+		public String leg;
+		/// For a response: whether its request carried SDP. Null means it did.
+		public Boolean requestSdp;
 	}
 
 	public static class SelectionRequest extends DraftFields {

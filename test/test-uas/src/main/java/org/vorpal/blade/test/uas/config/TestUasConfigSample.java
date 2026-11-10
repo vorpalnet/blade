@@ -68,10 +68,10 @@ public class TestUasConfigSample extends TestUasConfig {
 		Rule stripRule = new Rule();
 		stripRule.setId("strip");
 		stripRule.setMethod("INVITE");
-		stripRule.setMessageType("request");
+		stripRule.setMessageType(Rule.MessageType.request);
 		stripRule.setEvent("callStarted");
 		stripRule.getOperations().add(new KeepOnlyPartOperation("application/sdp"));
-		strip.getRules().add(stripRule);
+		strip.add(stripRule);
 		this.getRuleSets().put(strip.getId(), strip);
 
 		Scenario passthrough = new Scenario();

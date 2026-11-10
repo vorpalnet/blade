@@ -131,6 +131,10 @@
 		}
 		.vars-table td.name { color: var(--accent); white-space: nowrap; }
 		.vars-table td.value { color: var(--text); word-break: break-all; }
+		.cfg-vars { display: grid; grid-template-columns: minmax(140px, 220px) 1fr auto; gap: 6px 8px; margin-bottom: 8px; }
+		.cfg-vars input { font: 12px "JetBrains Mono", Menlo, monospace; }
+		.cfg-vars input.name { color: var(--accent); }
+		.cfg-vars input[readonly] { color: var(--muted); }
 		.vars-empty { color: var(--muted); font-style: italic; padding: 6px 0; }
 		.vars-grid {
 			display: grid;
@@ -190,6 +194,32 @@
 		}
 		.vars-toolbar button:hover { border-color: var(--accent); color: var(--accent); }
 		.vars-toolbar .clear-btn:hover { border-color: var(--bad); color: var(--bad); }
+		.run-state { font-size: 12px; cursor: help; }
+		.tests-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+		.tests-bar input { width: 260px; font-size: 12px; }
+		.tests-bar select { width: auto; max-width: 520px; font-size: 12px; }
+		.tests-bar button { font-size: 11px; padding: 4px 10px; }
+		.tests-summary { font-size: 11px; font-weight: 400; text-transform: none; letter-spacing: 0; margin-left: 8px; }
+		.tests-list { font: 12px "JetBrains Mono", Menlo, monospace; }
+		.tests-list .row { display: flex; gap: 10px; align-items: center; padding: 3px 0; border-bottom: 1px solid var(--border); }
+		.tests-list .row .what { flex: 1; overflow-wrap: anywhere; }
+		.tests-list .row.fail .what { font-weight: 600; }
+		.tests-list .row button { font-size: 11px; padding: 2px 8px; }
+		.rule-hits { font-size: 11px; color: var(--muted); margin-left: 8px; margin-right: auto; cursor: help; }
+		.run-state.behind { font-weight: 600; }
+		.rule-card.proposed { border-left: 4px double var(--brand); }
+		.ai-panel { margin: 4px 0 14px; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+		.ai-panel summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+		.ai-panel textarea { width: 100%; min-height: 64px; margin: 8px 0; font: inherit; box-sizing: border-box; }
+		.ai-panel .ai-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 12px; }
+		.ai-panel ol { font-size: 12px; color: var(--muted); margin: 8px 0 0; padding-left: 20px; }
+		.ai-panel .ai-done { font-size: 13px; margin: 10px 0 0; }
+		.ai-panel details summary { font-weight: 400; font-size: 12px; margin-top: 6px; }
+		.inherit-note { font-size: 12px; color: var(--muted); margin: 0 0 8px; cursor: help; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+		.inherit-pick { font-size: 12px; padding: 2px 6px; width: auto; cursor: pointer; }
+		/* A rule switched off: the word "off" in its title and on its toggle, and faded. */
+		.rule-card.off .card-body { opacity: 0.5; }
+		.chip.undone { background: transparent; border: 1px solid var(--bad); color: inherit; }
 		.chip {
 			display: inline-block;
 			background: var(--vorpal-purple-100);
@@ -220,6 +250,9 @@
 			font-size: 12px;
 		}
 		.diag.err { border-color: var(--bad); }
+		.draft-problems { border: 2px solid var(--bad); border-radius: 6px; padding: 8px 12px; margin: 8px 0; }
+		.draft-problems-title { font-weight: 600; font-size: 13px; }
+		.draft-problems ul { margin: 6px 0 0 18px; padding: 0; font-family: "JetBrains Mono", Menlo, monospace; font-size: 12px; }
 		.diag summary {
 			cursor: pointer;
 			color: var(--muted);
@@ -396,14 +429,8 @@
 
 	<main class="crud-content">
 	<h1>CRUD rule preview</h1>
-	<p class="subtitle">
-		Three steps: the <em>pipeline</em> decides which rule set each call gets, the
-		<em>rule sets</em> say what happens to it, and the <em>preview</em> runs your
-		unsaved draft against a sample message so you see every change before you save.
-		Save writes <code id="targetFile">crud.json</code> (previous version kept); Publish tells
-		the running application to reload it. Pick the CRUD service, or any application whose
-		configuration carries a <code>crud</code> section, in <em>Rules for</em>.
-		New here? Hit <strong>? Help</strong>.
+	<p class="subtitle" title="Save keeps the previous version; Publish tells the running application to reload. Rules for: the CRUD service, or any application with a crud section.">
+		Editing <code id="targetFile">crud.json</code>
 	</p>
 
 	<details class="editor-shell" id="editorShell" open>
@@ -431,9 +458,15 @@
 			<button id="showVersions" class="secondary" type="button">Versions</button>
 			<button id="saveConfig" type="button">Save</button>
 			<button id="publishConfig" type="button">Publish</button>
+			<span id="runState" class="run-state" style="display:none;"></span>
 			<a class="handoff" id="handoff" href="/blade/configurator/configurator.html?schema=crud"
 				title="Logging, session settings, and cluster/server overlays are edited in the Configurator">
 				logging &amp; session → Configurator</a>
+		</div>
+
+		<div id="draftProblems" class="draft-problems" role="alert" style="display:none;">
+			<div class="draft-problems-title" title="Each of these would fail only once a call reaches it.">&#x2715; Save refuses this draft</div>
+			<ul id="draftProblemsList"></ul>
 		</div>
 
 		<div class="versions-panel" id="versionsPanel" style="display:none;">
@@ -452,20 +485,22 @@
 
 		<div class="section-head">
 			<span class="step">1</span>
-			<span class="section-title">Pipeline — which rule set does each call get?</span>
+			<span class="section-title" title="Values every call starts with, read as ${name} by the pipeline, when and operations. Saved with the file; a cluster or server file sets its own by naming them.">Variables</span>
+			<button class="mini help-mini" type="button" data-help="variables">?</button>
+		</div>
+		<div id="configVarsPanel" class="pipeline-panel"></div>
+
+		<div class="section-head">
+			<span class="step">2</span>
+			<span class="section-title" title="Connectors run in order on each initial request, extracting values into variables; the one that writes ruleSet picks the rule set.">Pipeline</span>
 			<button class="mini help-mini" type="button" data-help="pipeline">?</button>
-			<span class="section-sub">Connectors run in order on each initial request, extracting values from
-				the message into variables; selection happens when one of them writes the
-				<code>ruleSet</code> variable.</span>
 		</div>
 		<div id="pipelinePanel" class="pipeline-panel"></div>
 
 		<div class="section-head">
-			<span class="step">2</span>
-			<span class="section-title">Rule sets — what happens to the selected calls?</span>
+			<span class="step">3</span>
+			<span class="section-title" title="Each rule filters by method, lifecycle event and when, then runs its operations in order.">Rule sets</span>
 			<button class="mini help-mini" type="button" data-help="rulesets">?</button>
-			<span class="section-sub">Each rule filters by method / lifecycle event / <code>when</code>
-				expression, then runs its operations in order.</span>
 		</div>
 		<div class="editor-body">
 			<div class="rs-list" id="rsList"></div>
@@ -477,10 +512,9 @@
 	</details>
 
 	<div class="section-head on-glass">
-		<span class="step">3</span>
-		<span class="section-title">Preview — try it on a real message</span>
+		<span class="step">4</span>
+		<span class="section-title" title="Runs the unsaved draft in-process on the AdminServer; nothing touches the wire.">Preview</span>
 		<button class="mini help-mini" type="button" data-help="preview">?</button>
-		<span class="section-sub">Runs your unsaved draft in-process on the AdminServer; nothing touches the wire.</span>
 	</div>
 
 	<div class="grid">
@@ -495,18 +529,20 @@
 			</div>
 			<div>
 				<label for="event">Lifecycle event</label>
-				<select id="event">
-					<option value="callStarted" selected>callStarted</option>
-					<option value="callAnswered">callAnswered</option>
-					<option value="callConnected">callConnected</option>
-					<option value="callCompleted">callCompleted</option>
-					<option value="callDeclined">callDeclined</option>
-					<option value="callAbandoned">callAbandoned</option>
-					<option value="requestEvent">requestEvent</option>
-					<option value="responseEvent">responseEvent</option>
-					<option value="send">send (in-application rules)</option>
-					<option value="">(none)</option>
+				<select id="event"></select>
+			</div>
+			<div>
+				<label for="leg">Leg</label>
+				<select id="leg" title="Which side of the call the message is on, for rules with a leg filter">
+					<option value="" selected>as a B2BUA would</option>
+					<option value="caller">caller</option>
+					<option value="callee">callee</option>
 				</select>
+			</div>
+			<div>
+				<label title="For a response: did its request carry SDP? Then SDP in the response is an answer; otherwise it is a late offer.">
+					<input type="checkbox" id="requestSdp" checked> Request had SDP
+				</label>
 			</div>
 			<button id="run">Run</button>
 			<span id="status" class="status"></span>
@@ -526,22 +562,40 @@
 		</div>
 
 		<div class="panel" style="grid-column: 1 / -1;">
-			<h2>
-				<span>Variables</span>
-				<span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;">
-					editable · persists across runs · simulates the enrichment pipeline / env-var overrides
-				</span>
-			</h2>
+			<h2><span title="Set before this run, over the file's variables: stand in for what the pipeline extracts, or for an earlier message in the call. Never saved.">Inputs</span></h2>
 			<div id="varsGrid" class="vars-grid">
 				<div class="header">Name</div>
 				<div class="header">Value</div>
 				<div></div>
 			</div>
-			<div id="varsEmpty" class="vars-empty">no variables — click Add, or run a rule with a read operation</div>
+			<div id="varsEmpty" class="vars-empty">none</div>
 			<div class="vars-toolbar">
 				<button id="addVar" type="button">+ Add</button>
 				<button id="clearVars" type="button" class="clear-btn">Clear</button>
 			</div>
+		</div>
+
+		<div class="panel" style="grid-column: 1 / -1;">
+			<h2><span title="Saved runs of this file: these inputs must still give this result. Saving the domain file runs its tests and refuses on a failure; a cluster or server file's tests run here, against what that file runs.">Tests</span>
+				<button class="mini help-mini" type="button" data-help="tests">?</button>
+				<span id="testsSummary" class="tests-summary"></span></h2>
+			<div class="tests-bar">
+				<input id="testName" placeholder="name for the last run" spellcheck="false">
+				<button id="saveTest" type="button" title="Save the last run's inputs and its result (refusal and output) as a test">Save as test</button>
+				<button id="runTests" type="button">Run tests</button>
+			</div>
+			<div id="testsList" class="tests-list"></div>
+		</div>
+
+		<div class="panel" style="grid-column: 1 / -1;">
+			<h2><span title="Calls the Callflow trace caught for this application, with every message as it went over the wire. Arm a trace in Callflow, make the call, then pick it here.">A traced call</span>
+				<button class="mini help-mini" type="button" data-help="tests">?</button></h2>
+			<div class="tests-bar">
+				<select id="tracedCall"><option value="">pick a traced call…</option></select>
+				<button id="refreshTraces" type="button" title="Read the trace buffers again">↻</button>
+				<button id="replayCall" type="button" title="Run every message of the call in order, carrying what each run sets to the next" disabled>Run whole call</button>
+			</div>
+			<div id="tracedSteps" class="tests-list"></div>
 		</div>
 	</div>
 
@@ -554,12 +608,21 @@
 	</div>
 
 	<div id="firedPanel" class="fired" style="display:none; margin-top:12px;">
-		<span class="label">Rules fired:</span><span id="firedList"></span>
+		<div id="outcome"></div>
+		<div><span class="label">Rules applied:</span><span id="firedList"></span></div>
+		<div id="undoneRow" style="display:none;"><span class="label">Rules undone:</span><span id="undoneList"></span></div>
+	</div>
+
+	<div id="capturedPanel" class="fired" style="display:none; margin-top:12px;">
+		<span class="label">Set by this run:</span><span id="capturedList"></span>
+		<button id="carryVars" type="button" class="mini" style="margin-left:8px;"
+			title="Copy these into the variables above, to preview the next message in the same call (the 200 OK after the INVITE)">
+			Carry to the next message</button>
 	</div>
 
 	<div id="warnPanel" class="diag err" style="display:none; margin-top:12px;">
 		<div style="color:var(--bad);text-transform:uppercase;letter-spacing:0.5px;font-size:12px;font-weight:600;">
-			Warnings (operation errors swallowed by the engine)
+			Engine log for this run (warnings and skipped operations)
 		</div>
 		<pre id="warnBody" style="border-color:var(--bad);"></pre>
 	</div>
@@ -626,52 +689,112 @@
 			</section>
 			<section id="help-rulesets">
 				<h3>Rule sets, rules, and filters</h3>
-				<p>A rule set is an ordered list of rules, applied at every point in the call's life —
-				the outbound INVITE (<code>callStarted</code>), the answer (<code>callAnswered</code>),
-				the ACK (<code>callConnected</code>), the BYE (<code>callCompleted</code>), and
-				in-dialog traffic (<code>requestEvent</code> / <code>responseEvent</code>). Every rule
-				whose filters all pass runs its operations, in order.</p>
-				<p>Filters are null-tolerant — an empty filter matches everything. <code>method</code>
-				and <code>event</code> accept comma-separated alternatives and <code>!</code> negation
-				(<code>INVITE,REGISTER</code>, <code>!BYE</code>). <code>statusRange</code> matches
-				response codes: <code>200-299</code>, <code>4xx</code>, <code>!5xx</code> — setting it
-				implicitly limits the rule to responses. <code>when</code> is a boolean expression over
-				variables: <code>${customerTier} == premium</code>, with
+				<p>A rule set is an ordered list of rules. In an application's own <code>crud</code>
+				section a rule runs on every message the application sends (<code>send</code>), and,
+				only if its <code>event</code> names <code>receive</code>, on every message it receives,
+				before the application handles it. The CRUD service runs rules at points in the call's
+				life instead: <code>callStarted</code>, <code>callAnswered</code>,
+				<code>callConnected</code>, <code>callCompleted</code>, and in-dialog traffic
+				(<code>requestEvent</code> / <code>responseEvent</code>). Every rule whose filters all
+				pass runs its operations, in order.</p>
+				<p>An empty filter matches everything. <code>method</code> and <code>event</code> accept
+				comma-separated alternatives and <code>!</code> negation (<code>INVITE,REGISTER</code>,
+				<code>!BYE</code>). <code>statusRange</code> matches response codes: <code>200-299</code>,
+				<code>4xx</code>, <code>!5xx</code>; setting it limits the rule to responses.
+				<code>leg</code> picks the side of a B2BUA the message is on: <code>caller</code> or
+				<code>callee</code>. <code>sdp</code> picks messages carrying an SDP <code>offer</code> or
+				<code>answer</code>, wherever the offer/answer exchange puts it: an INVITE, a re-INVITE, an
+				UPDATE, a 2xx to an INVITE without SDP, an ACK, a PRACK. <code>when</code> is a boolean
+				expression over variables: <code>${customerTier} == premium</code>, with
 				<code>==&nbsp;!=&nbsp;&lt;&nbsp;&gt;&nbsp;&amp;&amp;&nbsp;||&nbsp;!</code> plus
-				<code>matches</code> (regex), <code>contains</code>, and <code>insubnet</code>
-				(CIDR). A malformed <code>when</code> never fires the rule.</p>
+				<code>matches</code> (regex), <code>contains</code>, and <code>insubnet</code> (CIDR). A
+				malformed <code>when</code> never fires the rule.</p>
+				<p>A rule is all or nothing. If one of its operations fails, the message and the
+				variables go back to how they were before the rule ran, and the next rule runs as usual.
+				An operation with nothing to do (no such header, a variable with no value) is not a
+				failure.</p>
+				<p>Rules are keyed by id and run in the order written. In a cluster or server file, a
+				rule with an inherited id changes that rule: its fields replace the inherited ones and
+				its operations run after them. <em>off</em> switches a rule off, which is how such a
+				file removes one. A new id runs after the inherited rules.</p>
 			</section>
 			<section id="help-operations">
-				<h3>Operations — where the name CRUD comes from</h3>
-				<p>CRUD = <strong>Create, Read, Update, Delete</strong> — the four verbs a rule can
-				apply to any part of a message. <strong>create</strong> adds a header, body part, or
+				<h3>Operations: where the name CRUD comes from</h3>
+				<p>CRUD = <strong>Create, Read, Update, Delete</strong>, the four verbs a rule can apply
+				to any part of a message. <strong>create</strong> adds a header occurrence, body part, or
 				node; <strong>read</strong> captures values into variables; <strong>update</strong>
 				rewrites in place; <strong>delete</strong> removes. Each verb comes in four addressing
-				modes: the plain family addresses SIP headers, the Request-URI, and the raw body by
-				regex; the <code>xml*</code> family uses XPath; <code>json*</code> uses JsonPath;
-				<code>sdp*</code> uses JsonPath over the SDP parsed to a structured model
-				(<code>$.media[0].port</code>,
-				<code>$.media[?('inactive' in @.attributes[*].name)]</code>). Multipart MIME bodies
-				are handled part by part — target one part by content type, the rest ride through —
-				and <code>keepPart</code> strips a multipart down to one part.</p>
-				<p>Values support <code>${var}</code> substitution from everything read so far
-				— pipeline variables, read-operation captures, plus <code>${now}</code> and
-				<code>${uuid}</code>. The remove-and-restore trick: an <code>sdpRead</code> of a
-				filter path saves whole media blocks in a variable; a later <code>sdpCreate</code> with
-				parent <code>$.media</code> and value <code>${thatVariable}</code> splices them
-				back — that's the minsdp pattern.</p>
+				modes: the plain family addresses SIP headers, the Request-URI, the response
+				<code>status</code> and <code>reasonPhrase</code>, and the raw body by regex; the
+				<code>xml*</code> family uses XPath; <code>json*</code> uses JsonPath; <code>sdp*</code>
+				uses JsonPath over the SDP parsed to a structured model (<code>$.media[0].port</code>,
+				<code>$.media[?('inactive' in @.attributes[*].name)]</code>). Multipart MIME bodies are
+				handled part by part: target one part by content type, the rest ride through.
+				<code>keepPart</code> strips a multipart down to one part.</p>
+				<p>A header can appear more than once. <strong>read</strong> takes the first occurrence
+				its pattern matches, <strong>update</strong> changes each occurrence it matches and
+				leaves the rest, <strong>create</strong> adds another occurrence, and
+				<strong>delete</strong> with a pattern removes only the occurrences it matches.
+				<strong>update</strong> replaces the whole value unless <code>everyMatch</code> is set,
+				which replaces each match in place.</p>
+				<p>Writing <code>status</code> turns one failure into another (300 to 699,
+				such as 486 into 480, but never a 4xx-6xx into a redirect, which needs a Contact); an answered call cannot become a failure. <strong>reject</strong>
+				refuses an initial INVITE: the caller gets the status you give, and the INVITE goes no
+				further. Messages inside a call cannot be refused, since the other end would never
+				learn of it.</p>
+				<p>Values, regex patterns, JsonPaths and XPaths support <code>${var}</code> from
+				everything read so far: pipeline variables, read captures, plus <code>${now}</code> and
+				<code>${uuid}</code>. A value goes in as data, never as syntax: quoted in a regex, escaped
+				in a JsonPath string (write <code>'${var}'</code>), a whole string literal in an XPath
+				(write <code>${var}</code> bare). A variable with no value skips the operation, so
+				<code>${var}</code> never goes out on the wire. Environment variables and system
+				properties are used only when named: <code>${env:NAME}</code>,
+				<code>${sys:NAME}</code>.</p>
+				<p>The remove-and-restore trick: an <code>sdpRead</code> of a filter path saves whole
+				media blocks in a variable; a later <code>sdpCreate</code> with parent
+				<code>$.media</code> and value <code>${thatVariable}</code> splices them back. That's the
+				minsdp pattern.</p>
 			</section>
 			<section id="help-preview">
 				<h3>Preview, Save, Publish</h3>
 				<p>The preview always runs your <em>unsaved draft</em>: Auto-select runs the draft
-				pipeline and reports which rule set it picks (and fills the variables grid with what it
+				pipeline and reports which rule set it picks (and fills <em>Inputs</em> with what it
 				extracted); Run replays the message through a rule set and shows the before/after diff,
 				which rules fired, and any warnings the engine logged. Nothing touches the wire.</p>
 				<p><strong>Save</strong> validates the document exactly as the CRUD service would load
-				it, keeps the previous file in version history, and writes <code>crud.json</code>.
+				it, and also compiles every <code>when</code>, status range, regex, XPath and JsonPath,
+				which at run time would only fail quietly on a live call. Problems are listed under
+				the toolbar, and every preview refreshes that list. Save keeps the previous file in version history, and writes <code>crud.json</code>.
 				<strong>Publish</strong> is the separate act that tells the running service to reload
-				what was last saved. Logging, session settings, and per-cluster overlays are edited in
-				the Configurator — both tools share the same file politely.</p>
+				what was last saved; beside it, <em>running</em> says whether every server running this
+				file holds what was saved. Logging and session settings are edited in the Configurator;
+				both tools share the same file.</p>
+			</section>
+			<section id="help-variables">
+				<h3>Variables and the three files</h3>
+				<p><code>variables</code> are values every call starts with: the pipeline, <code>when</code>
+				and operations read them as <code>${name}</code>, and a connector may overwrite one.
+				Use them for what differs between servers (a carrier host, a trunk prefix), so a
+				server file sets one value instead of changing rules.</p>
+				<p>An application has up to three files, listed beside the page: the domain file, a
+				cluster file, a server file. A server runs them merged in that order: variables,
+				connectors and rules merge by name, so a lower file changes one by naming it, and a new
+				name is added after the inherited ones. A rule switched <em>off</em> stops running; in the
+				JSON, <code>null</code> removes an inherited rule, connector or variable. <em>merged (read-only)</em> shows what a file runs, with the file that set
+				each line.</p>
+			</section>
+			<section id="help-tests">
+				<h3>Tests and traced calls</h3>
+				<p><em>Save as test</em> keeps the last preview's inputs and its result: whether it was
+				refused, and the whole output message. Saving the domain file runs the domain's tests
+				and refuses on a failure, naming the first line that differs; <em>update</em> accepts
+				an intended change. A cluster or server file keeps its own tests, run with <em>Run
+				tests</em>. Tests are stored in <code>_tests/&lt;app&gt;.json</code> beside the
+				configuration, and never reach an engine.</p>
+				<p><em>A traced call</em> lists calls the Callflow trace captured for this application:
+				load one message into the preview, or run the whole call in order, carrying what each
+				run sets to the next. Arm a trace in Callflow first. Each rule's <em>hits</em> count
+				the messages it matched on the running servers since the application was deployed.</p>
 			</section>
 			<section id="help-apps">
 				<h3>Rules inside an application</h3>
@@ -716,11 +839,9 @@
 		// (/blade/portal/lib/blade-editor.js) — schema resolution, field
 		// renderers, card lists, help dialog. Initialized in loadEditor once
 		// the schema arrives.
-		const { escapeHtml, cleanJson, derefNode, variantsFromAnyOf, isStringMapDef,
-			titleEl, miniBtn, smallAddBtn, moveInArr,
-			fieldEl, blurFieldEl, listFieldEl, selectFieldEl, checkboxFieldEl, kvFieldEl,
-			renderSchemaField, renderFieldsInto, polyListField, objListField,
-			mapOfObjectsField, polyObjectField, rawJsonBound, helpMini, openHelp } = BladeEditor;
+		const { escapeHtml, cleanJson, variantsFromAnyOf,
+			titleEl, miniBtn, smallAddBtn, moveInArr, fieldEl, blurFieldEl,
+			renderFieldsInto, rawJsonBound, helpMini, openHelp } = BladeEditor;
 
 		// Compute the API base from the document URL so the fetches work
 		// regardless of how the operator landed on the page (with or
@@ -741,9 +862,30 @@
 		// `crud` section of one application's own config (`?app=<name>`).
 		// An application's rules see the lifecycle event `send` only.
 		const APP = new URLSearchParams(location.search).get('app') || '';
-		const TARGET_FILE = APP ? APP + '.json' : 'crud.json';
+		// Which of the app's files this page edits: `domain` (the default),
+		// `cluster/<name>` or `server/<name>`, picked in the file rail.
+		const FILE = new URLSearchParams(location.search).get('file') || 'domain';
+		const DOMAIN_FILE = (APP || 'crud') + '.json';
+		// The files below the one being edited, for "inherited from …".
+		function belowText() { return (ed.belowNames || []).join(' + ') || DOMAIN_FILE; }
+		const TARGET_FILE = (function () {
+			const base = (APP || 'crud') + '.json';
+			if (FILE === 'domain') return base;
+			const [scope, name] = FILE.split('/');
+			return (scope === 'cluster' ? '_clusters/' : '_servers/') + name + '/' + base;
+		})();
 		function cfgUrl(rest) {
-			return API_BASE + (APP ? 'apps/' + encodeURIComponent(APP) : 'config') + (rest || '');
+			return API_BASE + (APP ? 'apps/' + encodeURIComponent(APP) : 'config') + (rest || '')
+				+ (FILE === 'domain' ? '' : '?file=' + encodeURIComponent(FILE));
+		}
+
+		/// Opens another of this app's files, after the usual unsaved-draft check.
+		function pickFile(id) {
+			if (ed.dirty && !confirm('Discard unsaved changes and open the other file?')) return;
+			ed.dirty = false; // confirmed above
+			const q = new URLSearchParams(location.search);
+			if (id === 'domain') q.delete('file'); else q.set('file', id);
+			location.search = q.toString();
 		}
 
 		const SAMPLE_INVITE = `INVITE sip:bob@example.com SIP/2.0
@@ -845,6 +987,9 @@ a=sendrecv
 			});
 			return out;
 		}
+
+		let lastCaptured = {};
+		document.getElementById('carryVars').addEventListener('click', () => mergeCapturedVars(lastCaptured));
 
 		function mergeCapturedVars(captured) {
 			// Update existing rows by name; append rows for new names.
@@ -1096,6 +1241,8 @@ a=sendrecv
 				lifecycleEvent: event || null,
 				message: message,
 				variables: initVars,
+				leg: document.getElementById('leg').value || null,
+				requestSdp: document.getElementById('requestSdp').checked,
 			}, draftFields());
 			const requestBody = JSON.stringify(requestPayload, null, 2);
 
@@ -1187,22 +1334,44 @@ a=sendrecv
 				return;
 			}
 
+			showDraftProblems(data.problems || []);
+			ed.lastRun = { payload: requestPayload, result: data };
 			output.value = data.output || '';
 			renderDiff(message, data.output || '');
 			const fired = data.rulesFired || [];
+			const undone = data.rulesUndone || [];
 			firedPanel.style.display = '';
+			document.getElementById('outcome').innerHTML =
+				'<span class="label">Taken as:</span>' +
+				escapeHtml((data.leg || '?') + ' leg' + (data.sdp ? ' · SDP ' + data.sdp : ' · no SDP')) +
+				(data.rejected
+					? ' · <strong>refused: the caller would get ' + escapeHtml(data.rejected) + '</strong>'
+					: '');
 			firedList.innerHTML = fired.length === 0
-				? '<span class="label" style="font-style:italic;">none — no rule matched</span>'
+				? '<span class="label" style="font-style:italic;">none</span>'
 				: fired.map(id => `<span class="chip">${escapeHtml(id)}</span>`).join('');
+			document.getElementById('undoneRow').style.display = undone.length ? '' : 'none';
+			document.getElementById('undoneList').innerHTML = undone
+				.map(id => `<span class="chip undone">&#x2715; ${escapeHtml(id)} (undone)</span>`).join('');
 
-			const vars = data.variables || {};
+			// Only what the rules read or changed: the inputs echoed back
+			// would make "Carry" look like it does something.
+			const vars = {};
+			Object.entries(data.variables || {}).forEach(([n, v]) => {
+				if (initVars[n] !== v) vars[n] = v;
+			});
 			const varNames = Object.keys(vars);
-			mergeCapturedVars(vars);
+			lastCaptured = vars;
+			document.getElementById('capturedPanel').style.display = varNames.length ? '' : 'none';
+			document.getElementById('capturedList').innerHTML = varNames
+				.map(n => `<span class="chip">${escapeHtml(n)} = ${escapeHtml(vars[n])}</span>`).join('');
 
-			status.textContent = 'OK · ' + fired.length + ' rule(s) fired · ' +
-				varNames.length + ' var(s) captured' +
-				(warnings.length > 0 ? ' · ' + warnings.length + ' warning(s)' : '');
-			status.className = warnings.length > 0 ? 'status err' : 'status ok';
+			const problems = undone.length + warnings.filter(w => !w.startsWith('NOTE')).length;
+			status.textContent = (problems ? 'Ran with problems · ' : 'OK · ') + fired.length + ' applied' +
+				(undone.length ? ' · ' + undone.length + ' undone' : '') +
+				(data.rejected ? ' · refused ' + data.rejected : '') +
+				(warnings.length > 0 ? ' · ' + warnings.length + ' log line(s)' : '');
+			status.className = problems ? 'status err' : 'status ok';
 			showDiagnostics({
 				url: url, requestBody: requestBody, status: resp.status + ' ' + resp.statusText,
 				contentType: contentType, rawResponse: rawResponse,
@@ -1233,15 +1402,196 @@ a=sendrecv
 			dirty: false,
 		};
 
-		const LIFECYCLE_EVENTS = APP ? ['send'] : ['callStarted', 'callAnswered', 'callConnected',
+		const LIFECYCLE_EVENTS = APP ? ['send', 'receive'] : ['callStarted', 'callAnswered', 'callConnected',
 			'callCompleted', 'callDeclined', 'callAbandoned', 'requestEvent', 'responseEvent'];
+
+		// Rules are keyed by id in the file (RuleSet.rules); the editor keeps
+		// each rule set's rules as a list with ids, for ordering. These two
+		// convert at the edges: load, preview and Save. keyedRuleSets also
+		// reads the earlier list form, so any file on disk can be merged.
+		/// `id`, or `id-2` (the next free) when `taken` has it: two list
+		/// entries with one id (an earlier Duplicate) both survive, as the
+		/// server reads them (KeyedReader).
+		function freeKey(taken, id) {
+			let key = id;
+			for (let k = 2; key in taken; k++) key = id + '-' + k;
+			return key;
+		}
+
+		function keyedRuleSets(ruleSets) {
+			const out = {};
+			for (const [key, rs] of Object.entries(ruleSets || {})) {
+				if (rs == null) continue; // null removes an inherited rule set
+				const copy = Object.assign({}, rs);
+				delete copy.id;
+				if (Array.isArray(rs.rules)) {
+					copy.rules = {};
+					rs.rules.forEach((r, i) => {
+						if (r == null) return;
+						const rule = Object.assign({}, r);
+						const id = freeKey(copy.rules, rule.id || 'rule-' + (i + 1));
+						delete rule.id;
+						copy.rules[id] = rule;
+					});
+				}
+				out[key] = copy;
+			}
+			return out;
+		}
+		function listedRuleSets(ruleSets) {
+			const out = {};
+			for (const [key, rs] of Object.entries(keyedRuleSets(ruleSets))) {
+				out[key] = Object.assign({}, rs, {
+					id: key,
+					rules: Object.entries(rs.rules || {}).filter(([, r]) => r != null).map(([id, r]) => Object.assign({ id }, r)),
+				});
+			}
+			return out;
+		}
+		// The pipeline the same way: the editor keeps a list with ids.
+		function keyedPipeline(pipeline) {
+			if (!pipeline) return {};
+			if (!Array.isArray(pipeline)) return pipeline;
+			const out = {};
+			pipeline.forEach((c, i) => {
+				if (c == null) return;
+				const conn = Object.assign({}, c);
+				const id = freeKey(out, conn.id || 'connector-' + (i + 1));
+				delete conn.id;
+				out[id] = conn;
+			});
+			return out;
+		}
+		function listedPipeline(pipeline) {
+			return Object.entries(keyedPipeline(pipeline)).filter(([, c]) => c != null).map(([id, c]) => Object.assign({ id }, c));
+		}
+
+		// Everything keyed: the form preview and the merge with lower files use,
+		// since the editor's own framework reads it and the loader merges keys.
+		function keyedDoc(doc) {
+			const out = Object.assign({}, doc, { ruleSets: keyedRuleSets(doc.ruleSets) });
+			if (doc.pipeline) out.pipeline = keyedPipeline(doc.pipeline);
+			return out;
+		}
+
+		// What Save writes: the shapes this application reads, from its own
+		// schema (ed.form). An application on an older framework gets lists.
+		function savedDoc(doc) {
+			// The file's removals (null entries) go back in; the list form an
+			// older application reads cannot say them, so there they drop.
+			const out = withNulls(keyedDoc(doc));
+			if (ed.form.rules === 'list') {
+				for (const [k, rs] of Object.entries(out.ruleSets)) {
+					if (rs === null) { delete out.ruleSets[k]; continue; }
+					rs.rules = Object.entries(rs.rules || {}).filter(([, r]) => r !== null).map(([id, r]) => Object.assign({ id }, r));
+					rs.id = k;
+				}
+			}
+			if (ed.form.pipeline === 'list' && out.pipeline) out.pipeline = listedPipeline(Object.fromEntries(
+				Object.entries(out.pipeline).filter(([, c]) => c !== null)));
+			if (!ed.form.variables) delete out.variables;
+			return out;
+		}
+
+		/// The shapes the schema says this application reads: `rules` and
+		/// `pipeline` keyed (an object) or listed (an array), and whether it
+		/// knows `variables`.
+		function formOf(schema) {
+			const defs = (schema && schema.$defs) || {};
+			const deref = n => (n && n.$ref) ? defs[n.$ref.replace('#/$defs/', '')] || {} : (n || {});
+			const props = (schema && schema.properties) || {};
+			const rsDef = defs.RuleSet || {};
+			const rules = deref((rsDef.properties || {}).rules);
+			const pipe = deref(props.pipeline);
+			return {
+				rules: rules.type === 'array' ? 'list' : 'keyed',
+				pipeline: pipe.type === 'array' ? 'list' : 'keyed',
+				variables: !!props.variables,
+			};
+		}
+
+		/// The connector variants, wherever the schema puts them: `items` of a
+		/// list, or the map's value type.
+		function connectorAnyOf(schema) {
+			const defs = (schema && schema.$defs) || {};
+			const deref = n => (n && n.$ref) ? defs[n.$ref.replace('#/$defs/', '')] || {} : (n || {});
+			const pipe = deref(((schema && schema.properties) || {}).pipeline);
+			const value = pipe.type === 'array' ? pipe.items : deref(pipe.additionalProperties);
+			return value && value.anyOf ? value.anyOf : null;
+		}
+
+		/// The `null` entries a file holds: how a cluster or server file removes
+		/// a variable, connector, rule set or rule it inherits. Kept apart from
+		/// the editable draft, which drops nulls, and put back on Save and in
+		/// the preview draft.
+		function nullsOf(doc) {
+			const n = { variables: [], pipeline: [], ruleSets: [], rules: {},
+				// `"defaultRuleSet": null` switches off the default inherited.
+				defaultRuleSet: !!doc && 'defaultRuleSet' in doc && doc.defaultRuleSet === null };
+			for (const [k, v] of Object.entries((doc && doc.variables) || {})) if (v === null) n.variables.push(k);
+			const pipe = doc && doc.pipeline;
+			if (pipe && !Array.isArray(pipe)) for (const [k, v] of Object.entries(pipe)) if (v === null) n.pipeline.push(k);
+			for (const [id, rs] of Object.entries((doc && doc.ruleSets) || {})) {
+				if (rs === null) { n.ruleSets.push(id); continue; }
+				if (rs && rs.rules && !Array.isArray(rs.rules)) {
+					for (const [k, v] of Object.entries(rs.rules)) if (v === null) (n.rules[id] = n.rules[id] || []).push(k);
+				}
+			}
+			return n;
+		}
+		function withNulls(doc) {
+			const n = ed.nulls;
+			if (!n) return doc;
+			// A removal stands only while the draft has nothing under that
+			// name: re-creating it in the editor takes the removal back.
+			const vars = n.variables.filter(k => !(doc.variables && k in doc.variables));
+			if (vars.length) {
+				doc.variables = Object.assign({}, doc.variables || {});
+				vars.forEach(k => { doc.variables[k] = null; });
+			}
+			const conns = n.pipeline.filter(k => !(doc.pipeline && !Array.isArray(doc.pipeline) && k in doc.pipeline));
+			if (conns.length && !Array.isArray(doc.pipeline)) {
+				doc.pipeline = Object.assign({}, doc.pipeline || {});
+				conns.forEach(k => { doc.pipeline[k] = null; });
+			}
+			if (n.defaultRuleSet && !doc.defaultRuleSet) doc.defaultRuleSet = null;
+			doc.ruleSets = Object.assign({}, doc.ruleSets || {});
+			n.ruleSets.forEach(k => { if (!(k in doc.ruleSets)) doc.ruleSets[k] = null; });
+			for (const [id, ks] of Object.entries(n.rules)) {
+				// A rule set deleted in the editor takes its rule removals with it.
+				if (!(id in doc.ruleSets) || doc.ruleSets[id] === null) continue;
+				const rs = doc.ruleSets[id] = Object.assign({}, doc.ruleSets[id]);
+				if (Array.isArray(rs.rules)) continue; // the list form cannot say null
+				rs.rules = Object.assign({}, rs.rules || {});
+				ks.forEach(k => { if (!(k in rs.rules)) rs.rules[k] = null; });
+			}
+			return doc;
+		}
+
+		/// The file's own variables as typed: an empty value is a value (a
+		/// server that drops a prefix), which cleanJson would remove.
+		function ownVariables() {
+			const out = {};
+			for (const [k, v] of Object.entries((ed.doc && ed.doc.variables) || {})) if (v != null) out[k] = v;
+			return out;
+		}
 
 		function draftFields() {
 			if (!ed.doc) return {};
+			// A cluster or server file runs merged over the files below it, so
+			// preview what that cluster or server would run.
+			// This file as Save would write it, over the lower files as they
+			// are, merged as the loader merges them (BladeEditor.mergeOver, the
+			// same merge as v3 ConfigFiles.merge), then keyed for the server.
+			const mine = savedDoc(Object.assign(cleanJson(ed.doc), { variables: ownVariables() }));
+			const doc = keyedDoc(ed.belowRaw ? BladeEditor.mergeOver(ed.belowRaw, mine) : mine);
 			return {
-				draftRuleSets: cleanJson(ed.doc.ruleSets || {}),
-				draftDefaultRuleSet: ed.doc.defaultRuleSet || '',
-				draftPipeline: cleanJson(ed.doc.pipeline || []),
+				draftRuleSets: cleanJson(doc.ruleSets || {}),
+				draftDefaultRuleSet: doc.defaultRuleSet || '',
+				draftPipeline: cleanJson(doc.pipeline || {}),
+				// Not cleanJson: an empty value is a value (a prefix of nothing),
+				// as on the engines. A removal (null) is just absent here.
+				draftVariables: Object.fromEntries(Object.entries(doc.variables || {}).filter(([, v]) => v != null)),
 			};
 		}
 
@@ -1255,6 +1605,42 @@ a=sendrecv
 			if (jsonViewerRef) jsonViewerRef.refresh();
 			scheduleAutoPreview();
 		}
+
+		// The rules a cluster or server file's rule set `id` adds to: the
+		// domain file's rule set of the same name. None when editing the
+		// domain file.
+		/// The rule `ruleId` of rule set `rsId` below this file, when this
+		/// file's entry of that id changes it (not for an application that
+		/// reads rules as a list, whose same-id rule is a separate one).
+		function inheritedRule(rsId, ruleId) {
+			if (ed.form && ed.form.rules === 'list') return null;
+			return inheritedRules(rsId).find(r => r.id === ruleId) || null;
+		}
+
+		function inheritedRules(id) {
+			const rs = ed.belowDoc && ed.belowDoc.ruleSets && ed.belowDoc.ruleSets[id];
+			return Object.entries((rs && rs.rules) || {}).map(([rid, r]) => Object.assign({ id: rid }, r));
+		}
+
+		// Rule ids name the rule in the preview and in the engine's log
+		// lines, so a new or duplicated rule gets one nobody else has,
+		// counting the rules an overlay adds to (inheritedRules).
+		function uniqueRuleId(rs, base) {
+			const taken = new Set((rs.rules || []).concat(inheritedRules(rs.id)).map(r => r.id));
+			const stem = String(base).replace(/-\d+$/, '');
+			for (let n = 2; ; n++) {
+				const id = stem + '-' + n;
+				if (!taken.has(id)) return id;
+			}
+		}
+
+		// Reload or close with an unsaved draft asks first, as switching
+		// "Rules for" already does.
+		window.addEventListener('beforeunload', e => {
+			if (!ed.dirty) return;
+			e.preventDefault();
+			e.returnValue = '';
+		});
 
 		function clearDirty() {
 			ed.dirty = false;
@@ -1292,39 +1678,354 @@ a=sendrecv
 				if (data.error) throw new Error(data.error);
 
 				ed.doc = data.config || {};
-				if (!ed.doc.ruleSets) ed.doc.ruleSets = {};
+				ed.nulls = nullsOf(ed.doc);
+				ed.doc.ruleSets = listedRuleSets(ed.doc.ruleSets);
+				ed.doc.pipeline = listedPipeline(ed.doc.pipeline);
+				if (!ed.doc.variables) ed.doc.variables = {};
+				ed.form = formOf(data.schema);
+				// For a cluster or server file, what it merges over: the domain
+				// file and, for a server, its cluster's, merged.
+				ed.belowDoc = null;
+				ed.belowRaw = null;
+				ed.belowNames = [];
+				ed.mergedData = null;
+				if (FILE !== 'domain') {
+					const b = await BladeEditor.below(cfgUrl('/merged'), config => config ? keyedDoc(config) : config);
+					ed.belowDoc = b.doc;
+					ed.belowRaw = b.raw;
+					ed.belowNames = b.names;
+					ed.mergedData = b.data;
+				}
 				if (!ed.doc.pipeline) ed.doc.pipeline = [];
 				ed.source = data.source;
+				ed.version = data.version || null;
 				ed.defs = (data.schema && data.schema.$defs) || null;
 				// Init the kit BEFORE resolving variants — variantsFromAnyOf
 				// reads the kit's internal defs and returns null until then.
 				BladeEditor.init({ defs: ed.defs, onDirty: markDirty });
 				ed.opVariants = data.schema ? buildOpVariants(data.schema) : null;
-				ed.connVariants = (data.schema && data.schema.properties && data.schema.properties.pipeline)
-					? variantsFromAnyOf(data.schema.properties.pipeline.items.anyOf) : null;
+				const connAnyOf = connectorAnyOf(data.schema);
+				ed.connVariants = connAnyOf ? variantsFromAnyOf(connAnyOf) : null;
 				ed.ruleProps = (ed.defs && ed.defs.Rule) ? ed.defs.Rule.properties : {};
 				ed.baseline = {
 					ruleSets: cleanJson(ed.doc.ruleSets),
 					defaultRuleSet: ed.doc.defaultRuleSet || '',
 					pipeline: cleanJson(ed.doc.pipeline),
+					variables: ownVariables(),
 				};
 				clearDirty();
+				ed.proposedRule = null;
 
 				const badge = document.getElementById('srcBadge');
-				badge.textContent = ed.source === 'live' ? 'live ' + TARGET_FILE
-					: ed.source === 'sample' ? 'generated sample · Save creates ' + TARGET_FILE
-					: 'built-in sample · Save creates ' + TARGET_FILE;
+				badge.textContent = ed.source === 'live' ? 'live' : ed.source === 'new' ? 'new file' : 'sample · not saved yet';
 
 				const ids = Object.keys(ed.doc.ruleSets);
 				ed.current = ids.includes(ed.current) ? ed.current : (ids[0] || null);
 				renderAll();
+				refreshRunState(ed.mergedData);
 			} catch (e) {
 				detail.innerHTML = '<div class="vars-empty">failed to load configuration — '
 					+ escapeHtml(e.message) + '</div>';
 			}
 		}
 
+		// ---- saved tests ----
+
+		const TESTS_URL = API_BASE + 'tests/' + encodeURIComponent(APP || 'crud');
+		ed.tests = {};
+		ed.testResults = {};
+
+		async function loadTests() {
+			// Unread tests cannot be saved: the save replaces the file whole.
+			ed.testsVersion = null;
+			try {
+				const r = await fetch(TESTS_URL, { cache: 'no-store' });
+				const tests = await r.json();
+				if (r.ok && tests && !tests.error) {
+					ed.tests = tests;
+					ed.testsVersion = r.headers.get('X-Version');
+				} else {
+					ed.tests = {};
+					ed.testsError = (tests && tests.error) || ('HTTP ' + r.status);
+				}
+			} catch (e) { ed.tests = {}; ed.testsError = e.message; }
+			renderTests();
+		}
+
+		async function storeTests() {
+			if (!ed.testsVersion) throw new Error('the saved tests could not be read (' + (ed.testsError || 'unknown')
+				+ '), so saving would replace them; reload the page');
+			const headers = { 'Content-Type': 'application/json' };
+			headers['If-Match'] = ed.testsVersion;
+			const r = await fetch(TESTS_URL, { method: 'POST', headers, body: JSON.stringify(ed.tests) });
+			const j = await r.json();
+			if (r.status === 409) {
+				await loadTests(); // someone else saved: show theirs, ask to redo
+				throw new Error(j.error);
+			}
+			if (!r.ok || j.error) throw new Error(j.error || 'HTTP ' + r.status);
+			ed.testsVersion = j.version;
+		}
+
+		/// [storeTests], saying in the status line when it refuses.
+		async function storeOrSay() {
+			try {
+				await storeTests();
+			} catch (e) {
+				const status = document.getElementById('status');
+				status.textContent = 'Tests not saved: ' + e.message;
+				status.className = 'status err';
+			}
+		}
+
+		/// A test from the last run: its inputs, and the refusal and output it gave.
+		function testFromLastRun() {
+			const p = ed.lastRun.payload, d = ed.lastRun.result;
+			const t = { file: FILE, ruleSet: p.ruleSet, event: p.lifecycleEvent, leg: p.leg, requestSdp: p.requestSdp,
+				message: p.message, variables: p.variables || {}, expect: { output: d.output || '' } };
+			if (d.rejected) t.expect.refused = d.rejected;
+			return t;
+		}
+
+		function renderTests() {
+			const list = document.getElementById('testsList');
+			list.innerHTML = '';
+			// This file's tests: a cluster or server file changes behaviour on
+			// purpose, so each file keeps its own.
+			const names = Object.keys(ed.tests).filter(n => (ed.tests[n].file || 'domain') === FILE);
+			const failed = names.filter(n => ed.testResults[n] && !ed.testResults[n].pass).length;
+			const ran = names.filter(n => ed.testResults[n]).length;
+			document.getElementById('testsSummary').textContent = !names.length ? 'none'
+				: ran ? (failed ? '✕ ' + failed + ' of ' + names.length + ' fail' : '✓ ' + names.length + ' pass')
+				: names.length + ' saved';
+			for (const name of names) {
+				const r = ed.testResults[name];
+				const row = document.createElement('div');
+				row.className = 'row' + (r && !r.pass ? ' fail' : '');
+				const what = document.createElement('span');
+				what.className = 'what';
+				what.textContent = (r ? (r.pass ? '✓ ' : '✕ ') : '· ') + name + (r && !r.pass ? ': ' + r.why : '');
+				row.appendChild(what);
+				row.appendChild(Object.assign(document.createElement('button'), { type: 'button', textContent: 'load',
+					title: 'Put this test\'s inputs in the preview', onclick: () => loadTestInputs(ed.tests[name]) }));
+				row.appendChild(Object.assign(document.createElement('button'), { type: 'button', textContent: 'update',
+					title: 'Replace the expected result with the last run\'s', onclick: async () => {
+						if (!ed.lastRun) return;
+						ed.tests[name] = testFromLastRun(); await storeOrSay(); delete ed.testResults[name]; renderTests();
+					} }));
+				row.appendChild(Object.assign(document.createElement('button'), { type: 'button', textContent: '×',
+					title: 'Delete this test', onclick: async () => {
+						delete ed.tests[name]; delete ed.testResults[name]; await storeOrSay(); renderTests();
+					} }));
+				list.appendChild(row);
+			}
+		}
+
+		function loadTestInputs(t) {
+			document.getElementById('input').value = t.message || '';
+			if (t.ruleSet) document.getElementById('ruleSet').value = t.ruleSet;
+			if (t.event) document.getElementById('event').value = t.event;
+			document.getElementById('leg').value = t.leg || '';
+			document.getElementById('requestSdp').checked = t.requestSdp !== false;
+			clearAllVars();
+			for (const [k, v] of Object.entries(t.variables || {})) addVarRow(k, v);
+			scheduleAutoPreview();
+		}
+
+		document.getElementById('saveTest').addEventListener('click', async () => {
+			const status = document.getElementById('status');
+			const name = document.getElementById('testName').value.trim();
+			if (!ed.lastRun || !ed.lastRun.result || ed.lastRun.result.error) {
+				status.textContent = 'Run the preview first; its inputs and result become the test.';
+				status.className = 'status err'; return;
+			}
+			if (!name) { status.textContent = 'Name the test.'; status.className = 'status err'; return; }
+			ed.tests[name] = testFromLastRun();
+			try {
+				await storeTests();
+				document.getElementById('testName').value = '';
+				ed.testResults[name] = { pass: true };
+				status.textContent = 'Saved test "' + name + '".'; status.className = 'status ok';
+			} catch (e) { status.textContent = 'Test not saved: ' + e.message; status.className = 'status err'; }
+			renderTests();
+		});
+
+		document.getElementById('runTests').addEventListener('click', async () => {
+			const r = await fetch(TESTS_URL + '/run?file=' + encodeURIComponent(FILE), { method: 'POST', headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(draftFields()) });
+			const rows = await r.json();
+			ed.testResults = {};
+			if (Array.isArray(rows)) rows.forEach(x => { ed.testResults[x.name] = x; });
+			renderTests();
+		});
+
+		// ---- a traced call ----
+
+		/// The Callflow trace buffers (`/blade/callflow/api/traces`), this
+		/// application's steps grouped by call (X-Vorpal-Session), each with
+		/// the raw message.
+		ed.traced = {};
+		async function loadTraces() {
+			const sel = document.getElementById('tracedCall');
+			sel.innerHTML = '<option value="">pick a traced call…</option>';
+			ed.traced = {};
+			try {
+				const data = await (await fetch('/blade/callflow/api/traces', { cache: 'no-store' })).json();
+				const app = APP || 'crud';
+				for (const src of data.sources || []) {
+					if (src.app !== app) continue;
+					for (const st of src.steps || []) {
+						if (!st.message) continue;
+						(ed.traced[st.sessionId] = ed.traced[st.sessionId] || []).push(Object.assign({ server: src.server }, st));
+					}
+				}
+			} catch (e) { /* Callflow not deployed: nothing to pick */ }
+			for (const [id, steps] of Object.entries(ed.traced)) {
+				steps.sort((a, b) => a.epochMillis - b.epochMillis || a.order - b.order);
+				const first = steps[0];
+				const o = document.createElement('option');
+				o.value = id;
+				o.textContent = new Date(first.epochMillis).toLocaleTimeString() + ' · ' + first.label + ' · '
+					+ steps.length + ' messages · ' + first.server;
+				sel.appendChild(o);
+			}
+			if (!Object.keys(ed.traced).length) sel.options[0].textContent = 'no traced calls for ' + (APP || 'crud');
+		}
+
+		/// The preview's lifecycle event for a traced step: in an application,
+		/// a message it sent is `send` and one it received `receive`.
+		function eventOf(step) {
+			if (APP) return step.direction === 'in' ? 'receive' : 'send';
+			return step.kind === 'request' ? (step.label === 'INVITE' ? 'callStarted' : 'requestEvent') : 'responseEvent';
+		}
+
+		/// The message a step's rules ran on. A message the application
+		/// received is traced as it arrived; one it sent is traced after its
+		/// rules ran, so for that the input is the latest message of the same
+		/// kind it received before: what a B2BUA forwarded.
+		function replayInput(steps, i) {
+			const st = steps[i];
+			if (st.direction === 'in') return { message: st.message, from: null };
+			for (let j = i - 1; j >= 0; j--) {
+				if (steps[j].direction === 'in' && steps[j].kind === st.kind && steps[j].label === st.label) {
+					return { message: steps[j].message, from: j };
+				}
+			}
+			return { message: st.message, from: i };
+		}
+
+		function renderTracedSteps(results) {
+			const list = document.getElementById('tracedSteps');
+			list.innerHTML = '';
+			const steps = ed.traced[document.getElementById('tracedCall').value] || [];
+			document.getElementById('replayCall').disabled = !steps.length;
+			steps.forEach((st, i) => {
+				const row = document.createElement('div');
+				row.className = 'row';
+				const what = document.createElement('span');
+				what.className = 'what';
+				const r = results && results[i];
+				const input = replayInput(steps, i);
+				what.title = st.direction === 'in' ? 'Received; its receive rules run on it as it arrived'
+					: input.from === i ? 'Sent; no received message of this kind came before it, so the sent one (rules already applied) is used'
+					: 'Sent; replayed from the ' + st.label + ' received before it, which the rules turned into this';
+				what.textContent = (st.direction === 'in' ? '← ' : '→ ') + st.label
+					+ (st.direction === 'out' && input.from !== i ? ' (from ← ' + st.label + ')' : '')
+					+ (r ? '   ' + (r.error ? '✕ ' + r.error : (r.rejected ? 'refused ' + r.rejected + ' · ' : '')
+						+ (r.rulesFired || []).join(', ') + ((r.rulesUndone || []).length ? ' · undone ' + r.rulesUndone.join(', ') : '')) : '');
+				row.appendChild(what);
+				row.appendChild(Object.assign(document.createElement('button'), { type: 'button', textContent: 'load',
+					title: 'Put this message in the preview', onclick: () => {
+						document.getElementById('input').value = replayInput(steps, i).message.replace(/\r?\n/g, '\r\n');
+						const ev = document.getElementById('event');
+						if ([...ev.options].some(o => o.value === eventOf(st))) ev.value = eventOf(st);
+						scheduleAutoPreview();
+					} }));
+				list.appendChild(row);
+			});
+		}
+
+		document.getElementById('tracedCall').addEventListener('change', () => renderTracedSteps(null));
+		document.getElementById('refreshTraces').addEventListener('click', loadTraces);
+		document.getElementById('replayCall').addEventListener('click', async () => {
+			const steps = ed.traced[document.getElementById('tracedCall').value] || [];
+			const ruleSet = document.getElementById('ruleSet').value;
+			let vars = getVarsMap();
+			const results = [];
+			for (let i = 0; i < steps.length; i++) {
+				const st = steps[i];
+				const payload = Object.assign({ ruleSet, lifecycleEvent: eventOf(st), message: replayInput(steps, i).message,
+					variables: vars, leg: null, requestSdp: true }, draftFields());
+				try {
+					const d = await (await fetch(API_BASE + 'preview', { method: 'POST',
+						headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })).json();
+					results.push(d);
+					if (d.variables) vars = Object.assign({}, vars, d.variables);
+				} catch (e) { results.push({ error: e.message }); }
+			}
+			renderTracedSteps(results);
+		});
+
+		// ---- the file's variables ----
+
+		/// The file's `variables`: one row each, plus, in a cluster or server
+		/// file, each inherited one with its value as the placeholder; typing
+		/// a value sets this file's own. Hidden for an application whose
+		/// framework has no `variables`.
+		function renderConfigVars() {
+			const panel = document.getElementById('configVarsPanel');
+			panel.innerHTML = '';
+			if (!ed.form.variables) {
+				panel.innerHTML = '<div class="inherit-note" title="Its schema has no variables: it runs an older framework.">not supported by this application</div>';
+				return;
+			}
+			const own = ed.doc.variables;
+			const inherited = (ed.belowDoc && ed.belowDoc.variables) || {};
+			const names = [...new Set(Object.keys(inherited).concat(Object.keys(own)))];
+			const grid = document.createElement('div');
+			grid.className = 'cfg-vars';
+			for (const name of names) {
+				const k = document.createElement('input');
+				k.className = 'name';
+				k.value = name;
+				k.readOnly = name in inherited;
+				k.title = name in inherited ? 'Inherited from ' + belowText() : 'Name';
+				const v = document.createElement('input');
+				v.value = own[name] != null ? own[name] : '';
+				if (name in inherited) {
+					v.placeholder = inherited[name];
+					v.title = 'Inherited: ' + inherited[name] + '. A value here replaces it on this ' + (FILE.startsWith('server/') ? 'server' : 'cluster') + '.';
+				}
+				const rm = miniBtn('×', name in inherited ? 'Use the inherited value' : 'Remove', () => {
+					delete own[name]; markDirty(); renderConfigVars();
+				});
+				if (name in inherited && !(name in own)) rm.style.visibility = 'hidden';
+				k.addEventListener('change', () => {
+					const nn = k.value.trim();
+					if (!nn || nn === name) { k.value = name; return; }
+					if (nn in own || nn in inherited) { k.value = name; return; }
+					const rebuilt = {};
+					for (const [kk, vv] of Object.entries(own)) rebuilt[kk === name ? nn : kk] = vv;
+					ed.doc.variables = rebuilt;
+					markDirty(); renderConfigVars();
+				});
+				v.addEventListener('input', () => {
+					if (v.value === '' && name in inherited) delete own[name]; else own[name] = v.value;
+					markDirty();
+				});
+				grid.append(k, v, rm);
+			}
+			panel.appendChild(grid);
+			panel.appendChild(smallAddBtn('+ variable', () => {
+				let n = 1;
+				while (('var' + n) in own || ('var' + n) in inherited) n++;
+				own['var' + n] = '';
+				markDirty(); renderConfigVars();
+			}));
+		}
+
 		function renderAll() {
+			renderConfigVars();
 			renderPipeline();
 			renderRuleSetList();
 			renderRuleSetDetail();
@@ -1332,7 +2033,11 @@ a=sendrecv
 		}
 
 		function syncRuleSetDropdowns() {
-			const ids = Object.keys(ed.doc.ruleSets);
+			// A cluster or server file can use (and preview) the domain
+			// file's rule sets as well as its own.
+			const ids = Object.keys(ed.belowDoc
+				? BladeEditor.mergeOver(ed.belowDoc.ruleSets || {}, ed.doc.ruleSets)
+				: ed.doc.ruleSets);
 			const sel = document.getElementById('ruleSet');
 			const prev = sel.value;
 			sel.innerHTML = ids.length === 0
@@ -1344,9 +2049,15 @@ a=sendrecv
 			const dflt = document.getElementById('defaultRuleSetSel');
 			if (dflt) {
 				const prevD = ed.doc.defaultRuleSet || '';
-				dflt.innerHTML = '<option value="">(none — passthrough)</option>'
+				const inheritedD = ed.belowDoc && ed.belowDoc.defaultRuleSet;
+				dflt.innerHTML = '<option value="">' + (ed.belowDoc
+					? '(inherited: ' + escapeHtml(inheritedD || 'none') + ')'
+					: '(none · passthrough)') + '</option>'
+					// An overlay can switch the inherited default off.
+					+ (ed.belowDoc ? '<option value="" data-off="1">(none · passthrough here)</option>' : '')
 					+ ids.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(id)}</option>`).join('');
-				dflt.value = ids.includes(prevD) ? prevD : '';
+				if (ids.includes(prevD)) dflt.value = prevD;
+				else dflt.selectedIndex = (ed.belowDoc && ed.nulls && ed.nulls.defaultRuleSet) ? 1 : 0;
 			}
 		}
 
@@ -1416,9 +2127,44 @@ a=sendrecv
 			desc.classList.add('wide');
 			head.appendChild(desc);
 			detail.appendChild(head);
+			// First under the header: below the rules it scrolled out of sight.
+			const ai = aiPanel(rs);
+			if (ai) detail.appendChild(ai);
 
-			// Rules
+			// Rules. In a cluster or server file, a rule set the domain file
+			// also has keeps the domain's rules: the loader appends these.
 			if (!rs.rules) rs.rules = [];
+			const removedHere = (ed.nulls && ed.nulls.rules[ed.current]) || [];
+			const inherited = inheritedRules(ed.current).filter(r => !removedHere.includes(r.id));
+			// An application that reads rules as a list appends this file's to
+			// the ones below: a list below is its own form, and an inherited
+			// rule cannot be changed, only added to.
+			const listForm = ed.form && ed.form.rules === 'list';
+			if (inherited.length) {
+				const row = document.createElement('div');
+				row.className = 'inherit-note';
+				row.textContent = 'inherits ' + inherited.map(r => r.id).join(', ')
+					+ (removedHere.length ? ' · removes ' + removedHere.join(', ') : '');
+				row.title = listForm
+					? 'From ' + belowText() + '. ' + (APP || 'The CRUD service') + ' reads rules as a list, so the rules here run after them; an inherited rule cannot be changed from this file.'
+					: 'From ' + belowText() + '. A rule here with an inherited id changes that rule '
+					+ '(its operations are added after the inherited ones); "off" switches it off. A new id runs after them.';
+				const mine = new Set(rs.rules.map(r => r.id));
+				const free = inherited.filter(r => !mine.has(r.id));
+				if (free.length && !listForm) {
+					const pick = document.createElement('select');
+					pick.className = 'inherit-pick';
+					pick.innerHTML = '<option value="">change inherited…</option>'
+						+ free.map(r => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.id)}</option>`).join('');
+					pick.addEventListener('change', () => {
+						if (!pick.value) return;
+						rs.rules.push({ id: pick.value });
+						markDirty(); renderRuleSetDetail();
+					});
+					row.appendChild(pick);
+				}
+				detail.appendChild(row);
+			}
 			rs.rules.forEach((rule, idx) => detail.appendChild(ruleCard(rs, rule, idx)));
 
 			const addRule = document.createElement('button');
@@ -1426,11 +2172,148 @@ a=sendrecv
 			addRule.textContent = '+ add rule';
 			addRule.style.cssText = 'font-size:12px;padding:5px 12px;';
 			addRule.addEventListener('click', () => {
-				rs.rules.push({ id: 'rule-' + (rs.rules.length + 1), operations: [] });
+				rs.rules.push({ id: uniqueRuleId(rs, 'rule'), operations: [] });
 				markDirty();
 				renderRuleSetDetail();
 			});
 			detail.appendChild(addRule);
+		}
+
+		// ---- AI rule builder (RuleBuilderServlet) ----
+
+		ed.ai = null;      // GET …/ai: {enabled, reason, maskNumbers}
+		ed.aiText = '';    // what the operator typed, kept across renders
+		ed.aiTarget = '';  // '' for a new rule, else the id to change
+		ed.aiJob = null;   // {id, steps, error} while a draft runs or after it fails
+		ed.aiDone = null;  // {ruleId, summary, steps} of the last accepted draft
+		ed.aiClosed = false; // the operator folded the panel away
+
+		async function loadAi() {
+			try {
+				ed.ai = await (await fetch(API_BASE + 'ai', { cache: 'no-store' })).json();
+			} catch (e) {
+				ed.ai = null;
+			}
+			if (ed.doc) renderRuleSetDetail();
+		}
+
+		/// "Describe a rule": the operator's words go to the model with this
+		/// rule set and the preview's sample message; the rule it proposes
+		/// lands here as a draft edit, marked, for the operator to check and
+		/// save. Hidden while blade-ai is off.
+		function aiPanel(rs) {
+			if (!ed.ai || !ed.ai.enabled) return null;
+			const panel = document.createElement('details');
+			panel.className = 'ai-panel';
+			// The last draft, shown until it is saved or the file reloads (both
+			// clear ed.proposedRule). Not in the status line: the auto-preview
+			// that follows a draft writes there at once.
+			const done = (ed.aiDone && ed.aiDone.ruleId === ed.proposedRule) ? ed.aiDone : null;
+			// Open unless the operator closed it; a draft in hand opens it again.
+			panel.open = !ed.aiClosed || !!(ed.aiText || ed.aiJob || done);
+			panel.addEventListener('toggle', () => { ed.aiClosed = !panel.open; });
+			const sum = document.createElement('summary');
+			sum.textContent = 'Describe a rule · Claude drafts it';
+			sum.title = 'Claude drafts the rule and checks it with the preview and the saved tests before proposing it. '
+				+ 'It is sent this rule set, the preview\'s sample message and your words'
+				+ (ed.ai.maskNumbers ? ', with phone numbers masked' : '') + '; secrets are never sent. Nothing is saved until you Save.';
+			panel.appendChild(sum);
+			const text = document.createElement('textarea');
+			text.placeholder = 'e.g. On INVITEs to the recorder, remove the second audio m-line and remember it for the 200 OK';
+			text.value = ed.aiText;
+			text.addEventListener('input', () => { ed.aiText = text.value; });
+			panel.appendChild(text);
+			const row = document.createElement('div');
+			row.className = 'ai-row';
+			const target = document.createElement('select');
+			target.title = 'Draft a new rule, or change one of this set\'s';
+			target.innerHTML = '<option value="">new rule</option>'
+				+ (rs.rules || []).map(r => `<option value="${escapeHtml(r.id)}">change ${escapeHtml(r.id)}</option>`).join('');
+			target.value = (rs.rules || []).some(r => r.id === ed.aiTarget) ? ed.aiTarget : '';
+			target.addEventListener('change', () => { ed.aiTarget = target.value; });
+			row.appendChild(target);
+			const go = document.createElement('button');
+			go.type = 'button';
+			go.textContent = ed.aiJob && !ed.aiJob.error ? 'drafting…' : 'Draft';
+			go.disabled = !!(ed.aiJob && !ed.aiJob.error);
+			go.addEventListener('click', () => draftRule(rs));
+			row.appendChild(go);
+			if (!document.getElementById('input').value.trim()) {
+				const hint = document.createElement('span');
+				hint.textContent = 'No sample message in the preview: the model will write one.';
+				row.appendChild(hint);
+			}
+			panel.appendChild(row);
+			if (ed.aiJob) {
+				const steps = document.createElement('ol');
+				for (const st of ed.aiJob.steps || []) steps.appendChild(Object.assign(document.createElement('li'), { textContent: st }));
+				if (ed.aiJob.error) steps.appendChild(Object.assign(document.createElement('li'), { textContent: '✕ ' + ed.aiJob.error }));
+				panel.appendChild(steps);
+			}
+			if (done && !ed.aiJob) {
+				const note = document.createElement('p');
+				note.className = 'ai-done';
+				note.textContent = 'Drafted "' + done.ruleId + '": ' + (done.summary || '')
+					+ ' Check it in the preview, then Save to keep it.';
+				panel.appendChild(note);
+				if (done.steps.length) {
+					const how = document.createElement('details');
+					how.appendChild(Object.assign(document.createElement('summary'), { textContent: 'How it was checked (' + done.steps.length + ' steps)' }));
+					const steps = document.createElement('ol');
+					for (const st of done.steps) steps.appendChild(Object.assign(document.createElement('li'), { textContent: st }));
+					how.appendChild(steps);
+					panel.appendChild(how);
+				}
+			}
+			return panel;
+		}
+
+		async function draftRule(rs) {
+			const status = document.getElementById('status');
+			if (!ed.aiText.trim()) { status.textContent = 'Say what the rule should do.'; status.className = 'status err'; return; }
+			const body = {
+				app: APP || null, file: FILE, ruleSet: rs.id, ruleId: ed.aiTarget || null, instruction: ed.aiText,
+				message: document.getElementById('input').value, lifecycleEvent: document.getElementById('event').value,
+				leg: document.getElementById('leg').value || null, requestSdp: document.getElementById('requestSdp').checked,
+				variables: getVarsMap(), draft: draftFields(),
+			};
+			ed.aiJob = { steps: ['sending'] };
+			renderRuleSetDetail();
+			try {
+				const r = await fetch(API_BASE + 'ai/draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+				const j = await r.json();
+				if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+				ed.aiJob.id = j.job;
+				for (;;) {
+					await new Promise(res => setTimeout(res, 1500));
+					const p = await (await fetch(API_BASE + 'ai/jobs/' + encodeURIComponent(ed.aiJob.id), { cache: 'no-store' })).json();
+					ed.aiJob.steps = p.steps || [];
+					renderRuleSetDetail();
+					if (p.state === 'failed') throw new Error(p.error || 'the draft failed');
+					if (p.state === 'done') { acceptDraft(rs, p.result); return; }
+					if (p.error) throw new Error(p.error);
+				}
+			} catch (e) {
+				ed.aiJob = Object.assign(ed.aiJob || {}, { error: e.message });
+				status.textContent = 'No draft: ' + e.message;
+				status.className = 'status err';
+				renderRuleSetDetail();
+			}
+		}
+
+		/// The proposed rule into the rule set, as a draft edit: replaces the
+		/// rule it changes, or is added. Marked until the next load or Save.
+		function acceptDraft(rs, result) {
+			const rule = Object.assign({ id: result.ruleId }, result.rule);
+			const at = rs.rules.findIndex(r => r.id === result.ruleId);
+			if (at >= 0) rs.rules[at] = rule; else rs.rules.push(rule);
+			ed.proposedRule = result.ruleId;
+			ed.aiDone = { ruleId: result.ruleId, summary: result.summary, steps: (ed.aiJob && ed.aiJob.steps) || [] };
+			ed.aiJob = null;
+			ed.aiText = '';
+			markDirty();
+			renderRuleSetDetail();
+			scheduleAutoPreview();
 		}
 
 		function deleteRuleSet(id) {
@@ -1446,7 +2329,25 @@ a=sendrecv
 
 		function renameRuleSet(oldId, newId) {
 			newId = newId.trim();
-			if (!newId || newId === oldId || ed.doc.ruleSets[newId]) return;
+			if (newId === oldId) return;
+			const below = (ed.belowDoc && ed.belowDoc.ruleSets) || {};
+			if (below[oldId] || below[newId]) {
+				const status = document.getElementById('status');
+				status.textContent = 'Not renamed: "' + (below[oldId] ? oldId : newId) + '" is a rule set of ' + belowText()
+					+ ', and the id is what ties this file\'s change to it. Rename it there.';
+				status.className = 'status err';
+				renderRuleSetDetail();
+				return;
+			}
+			if (!newId || ed.doc.ruleSets[newId]) {
+				const status = document.getElementById('status');
+				status.textContent = newId
+					? 'Not renamed: a rule set named "' + newId + '" already exists.'
+					: 'Not renamed: a rule set needs an id.';
+				status.className = 'status err';
+				renderRuleSetDetail(); // put the old id back in the field
+				return;
+			}
 			const rebuilt = {};
 			for (const [k, v] of Object.entries(ed.doc.ruleSets)) {
 				if (k === oldId) { v.id = newId; rebuilt[newId] = v; }
@@ -1459,20 +2360,89 @@ a=sendrecv
 			renderAll();
 		}
 
+		/// A rule's id is its key, so it must be set and not taken in this
+		/// rule set.
+		function renameRule(rs, idx, newId) {
+			newId = newId.trim();
+			const rule = rs.rules[idx];
+			if (newId === rule.id) return;
+			// The id is what ties a change here to the rule below it.
+			if (inheritedRule(rs.id, rule.id) || inheritedRule(rs.id, newId)) {
+				const status = document.getElementById('status');
+				status.textContent = 'Not renamed: "' + (inheritedRule(rs.id, rule.id) ? rule.id : newId)
+					+ '" is a rule of ' + belowText() + ', and the id is what ties this file\'s change to it. Rename it there.';
+				status.className = 'status err';
+				renderRuleSetDetail();
+				return;
+			}
+			if (/^\d+$/.test(newId)) {
+				const status = document.getElementById('status');
+				status.textContent = 'Not renamed: an id of digits only would change the rules\' order in the file; give it a name.';
+				status.className = 'status err';
+				renderRuleSetDetail();
+				return;
+			}
+			if (!newId || rs.rules.some((r, i) => i !== idx && r.id === newId)) {
+				const status = document.getElementById('status');
+				status.textContent = newId ? 'Not renamed: rule "' + newId + '" already exists here.' : 'Not renamed: a rule needs an id.';
+				status.className = 'status err';
+				renderRuleSetDetail();
+				return;
+			}
+			rule.id = newId;
+			markDirty(); renderRuleSetDetail();
+		}
+
 		function ruleCard(rs, rule, idx) {
 			const card = document.createElement('div');
 			card.className = 'rule-card';
 
 			const head = document.createElement('div');
 			head.className = 'card-head';
-			head.appendChild(titleEl('rule ' + (idx + 1) + ' — ' + (rule.id || '(no id)')));
+			// A list-form application appends this file's rules: none changes
+			// an inherited one.
+			const changes = !(ed.form && ed.form.rules === 'list');
+			const inheritedIds = new Set(changes ? inheritedRules(rs.id).map(r => r.id) : []);
+			// On or off as it runs: this file's `enabled`, else the one below.
+			const below = changes ? inheritedRules(rs.id).find(r => r.id === rule.id) : null;
+			const offBelow = !!below && below.enabled === false;
+			const off = (rule.enabled !== undefined) ? rule.enabled === false : offBelow;
+			if (off) card.classList.add('off');
+			const proposed = ed.proposedRule === rule.id;
+			if (proposed) card.classList.add('proposed');
+			head.appendChild(titleEl(rule.id + (inheritedIds.has(rule.id) ? ' · changes inherited' : '') + (off ? ' · off' : '')
+				+ (proposed ? ' · AI draft, check before saving' : '')));
+			// Messages this rule matched on the servers running it, since each
+			// deployed the application.
+			if (ed.hits) {
+				const n = ed.hits['crud.rule.' + rs.id + '/' + rule.id] || 0;
+				const h = document.createElement('span');
+				h.className = 'rule-hits';
+				h.textContent = n ? n.toLocaleString() + ' hit' + (n === 1 ? '' : 's') : 'no hits';
+				h.title = 'Messages this rule matched on ' + (ed.hitsOn || []).join(', ') + ' since the application was deployed there.';
+				head.appendChild(h);
+			}
+			const toggle = miniBtn(off ? 'off' : 'on', off ? 'Switched off: click to switch on' : 'Click to switch this rule off', () => {
+				// Only what differs from below is written.
+				if (off === offBelow) rule.enabled = off; else delete rule.enabled;
+				markDirty(); renderRuleSetDetail();
+			});
+			toggle.classList.add('rule-toggle');
+			head.appendChild(toggle);
 			head.appendChild(miniBtn('▲', 'Move up', () => moveItem(rs.rules, idx, -1)));
 			head.appendChild(miniBtn('▼', 'Move down', () => moveItem(rs.rules, idx, +1)));
 			head.appendChild(miniBtn('⧉', 'Duplicate', () => {
-				rs.rules.splice(idx + 1, 0, JSON.parse(JSON.stringify(rule)));
+				// A change to an inherited rule copies the rule as it runs, not
+				// the change alone, which would be a rule without its filters.
+				const base = inheritedRule(rs.id, rule.id);
+				const copy = JSON.parse(JSON.stringify(base ? BladeEditor.mergeOver(base, rule) : rule));
+				copy.id = uniqueRuleId(rs, rule.id || 'rule');
+				rs.rules.splice(idx + 1, 0, copy);
 				markDirty(); renderRuleSetDetail();
 			}));
 			head.appendChild(miniBtn('×', 'Remove rule', () => {
+				const ops = (rule.operations || []).length;
+				if (ops && !confirm('Remove rule "' + (rule.id || idx + 1) + '" and its ' + ops + ' operation(s)?')) return;
 				rs.rules.splice(idx, 1);
 				markDirty(); renderRuleSetDetail();
 			}, true));
@@ -1481,31 +2451,21 @@ a=sendrecv
 			const body = document.createElement('div');
 			body.className = 'card-body';
 
-			const row1 = document.createElement('div');
-			row1.className = 'field-row';
-			row1.appendChild(fieldEl('id', rule.id || '', ruleHint('id'), v => {
-				rule.id = v; markDirty();
-				head.querySelector('.card-title').textContent = 'rule ' + (idx + 1) + ' — ' + (v || '(no id)');
-			}));
-			row1.appendChild(listFieldEl('method', rule.method || '', ruleHint('method'),
-				['INVITE', 'BYE', 'CANCEL', 'ACK', 'INFO', 'MESSAGE', 'OPTIONS', 'REFER', 'UPDATE', '!BYE'],
-				v => { rule.method = v; markDirty(); }));
-			row1.appendChild(selectFieldEl('messageType', rule.messageType || '', ruleHint('messageType'),
-				['', 'request', 'response'], v => { rule.messageType = v; markDirty(); }));
-			row1.appendChild(listFieldEl('event', rule.event || '', ruleHint('event'),
-				LIFECYCLE_EVENTS, v => { rule.event = v; markDirty(); }));
-			row1.appendChild(fieldEl('statusRange', rule.statusRange || '', ruleHint('statusRange'),
-				v => { rule.statusRange = v; markDirty(); }));
-			body.appendChild(row1);
-
-			const row2 = document.createElement('div');
-			row2.className = 'field-row';
-			const when = fieldEl('when', rule.when || '', ruleHint('when'), v => { rule.when = v; markDirty(); });
-			when.classList.add('wide');
-			row2.appendChild(when);
-			row2.appendChild(checkboxFieldEl('resetVariables', !!rule.resetVariables, ruleHint('resetVariables'),
-				v => { rule.resetVariables = v; markDirty(); }));
-			body.appendChild(row2);
+			// The rule's own fields come from the Rule schema: every filter
+			// the engine knows, with its enum choices and description, and
+			// nothing the engine doesn't. Operations get their own cards below.
+			body.appendChild(blurFieldEl('id', rule.id, 'The rule\'s key. In a cluster or server file, an inherited id changes that rule.',
+				v => renameRule(rs, idx, v)));
+			const ruleFields = {};
+			for (const [name, prop] of Object.entries(ed.ruleProps || {})) {
+				if (name !== 'operations' && name !== 'enabled') ruleFields[name] = prop;
+			}
+			if (Object.keys(ruleFields).length) {
+				renderFieldsInto(ruleFields, rule, body);
+				decorateRuleFields(body, rule, head, idx, inheritedRules(rs.id).find(r => r.id === rule.id));
+			} else {
+				body.appendChild(rawJsonBound(rule));
+			}
 
 			// Operations
 			if (!rule.operations) rule.operations = [];
@@ -1540,17 +2500,22 @@ a=sendrecv
 			const types = ed.opVariants ? ed.opVariants.map(v => v.type)
 				: ['read', 'create', 'update', 'delete', 'xmlRead', 'xmlCreate', 'xmlUpdate', 'xmlDelete',
 					'jsonRead', 'jsonCreate', 'jsonUpdate', 'jsonDelete', 'keepPart',
-					'sdpRead', 'sdpCreate', 'sdpUpdate', 'sdpDelete'];
+					'sdpRead', 'sdpCreate', 'sdpUpdate', 'sdpDelete', 'reject'];
 			typeSel.innerHTML = types.map(t => `<option value="${t}">${t}</option>`).join('');
 			if (op.type && !types.includes(op.type)) {
 				typeSel.innerHTML += `<option value="${escapeHtml(op.type)}">${escapeHtml(op.type)}</option>`;
 			}
 			typeSel.value = op.type || types[0];
 			typeSel.addEventListener('change', () => {
-				const keep = op.contentType; // shared by nearly every operation
-				for (const k of Object.keys(op)) delete op[k];
+				// Keep every field the new type also has (attribute,
+				// contentType, value...), so xmlRead -> xmlUpdate or
+				// create -> update loses nothing it can still use.
+				const next = ed.opVariants ? ed.opVariants.find(v => v.type === typeSel.value) : null;
+				const fields = next ? Object.keys(next.fields || {}) : ['contentType'];
+				for (const k of Object.keys(op)) {
+					if (!fields.includes(k)) delete op[k];
+				}
 				op.type = typeSel.value;
-				if (keep) op.contentType = keep;
 				markDirty(); renderRuleSetDetail();
 			});
 			head.appendChild(typeSel);
@@ -1595,9 +2560,40 @@ a=sendrecv
 
 
 
-		function ruleHint(name) {
-			return (ed.ruleProps && ed.ruleProps[name] && ed.ruleProps[name].description) || '';
+		/// Value suggestions the schema can't carry (method and event are
+		/// open-ended filter expressions, not enums), and the card title
+		/// following the id as it is typed.
+		function decorateRuleFields(body, rule, head, idx, inherited) {
+			const suggest = {
+				method: ['INVITE', 'BYE', 'CANCEL', 'ACK', 'INFO', 'MESSAGE', 'OPTIONS', 'PRACK', 'REFER', 'UPDATE', '!BYE'],
+				event: LIFECYCLE_EVENTS,
+			};
+			body.querySelectorAll('.field').forEach(field => {
+				const label = field.querySelector('label');
+				const select = field.querySelector('select');
+				if (inherited && label && select && select.options.length && !select.value
+						&& inherited[label.textContent] != null) {
+					select.options[0].textContent = '(inherited: ' + inherited[label.textContent] + ')';
+				}
+				const input = field.querySelector('input');
+				if (!label || !input) return;
+				const name = label.textContent;
+				// Changing an inherited rule: an empty field keeps the
+				// inherited value, shown as the placeholder.
+				if (inherited && inherited[name] != null && typeof inherited[name] !== 'object') {
+					input.placeholder = String(inherited[name]);
+					input.title = 'Inherited: ' + inherited[name] + '. Empty keeps it.';
+				}
+				if (suggest[name]) {
+					const dl = document.createElement('datalist');
+					dl.id = 'rule-' + idx + '-' + name + '-' + Math.random().toString(36).slice(2, 8);
+					dl.innerHTML = suggest[name].map(v => `<option value="${escapeHtml(v)}">`).join('');
+					input.setAttribute('list', dl.id);
+					field.appendChild(dl);
+				}
+			});
 		}
+
 
 		// ---- save / publish / versions ----
 
@@ -1620,22 +2616,59 @@ a=sendrecv
 			if (JSON.stringify(pipeNow) !== JSON.stringify(ed.baseline.pipeline)) {
 				lines.push('changed pipeline (' + pipeNow.length + ' connector(s))');
 			}
+			if (JSON.stringify(ownVariables()) !== JSON.stringify(ed.baseline.variables || {})) {
+				lines.push('changed variables');
+			}
 			return lines;
 		}
 
 		/// The exact document Save writes — also what the JSON viewer shows.
 		function buildPayload() {
-			const payload = Object.assign({}, ed.doc, {
+			const payload = savedDoc(Object.assign({}, ed.doc, {
 				ruleSets: cleanJson(ed.doc.ruleSets),
 				pipeline: cleanJson(ed.doc.pipeline || []),
-			});
-			if (!payload.defaultRuleSet) delete payload.defaultRuleSet;
-			if (payload.pipeline.length === 0) delete payload.pipeline;
+				variables: ownVariables(),
+			}));
+			if (!payload.defaultRuleSet && !(ed.nulls && ed.nulls.defaultRuleSet)) delete payload.defaultRuleSet;
+			if (!payload.pipeline || Object.keys(payload.pipeline).length === 0) delete payload.pipeline;
+			if (!payload.variables || Object.keys(payload.variables).length === 0) delete payload.variables;
 			return payload;
+		}
+
+		/// The draft's problems (Crud.problems on the server), listed under the
+		/// toolbar beside Save. Empty hides the list.
+		function showDraftProblems(problems) {
+			document.getElementById('draftProblems').style.display = problems.length ? '' : 'none';
+			document.getElementById('draftProblemsList').innerHTML =
+				problems.map(p => `<li>${escapeHtml(p)}</li>`).join('');
 		}
 
 		async function saveConfig() {
 			const status = document.getElementById('status');
+			// Ids of digits only: a JSON object puts them first, reordering
+			// what runs.
+			const digits = (ed.doc.pipeline || []).map(c => c.id || '')
+				.concat(...Object.values(ed.doc.ruleSets || {}).map(rs => (rs.rules || []).map(r => r.id || '')))
+				.find(id => /^\d+$/.test(id));
+			if (digits) {
+				status.textContent = 'Not saved: the id "' + digits + '" is digits only, which reorders it in the file; give it a name.';
+				status.className = 'status err';
+				return;
+			}
+			// Connectors are keyed by id: two with one id would lose one.
+			const ids = (ed.doc.pipeline || []).map(c => c.id || '');
+			const dup = ids.find((id, i) => !id || ids.indexOf(id) !== i);
+			if (dup !== undefined) {
+				status.textContent = dup ? 'Not saved: two connectors have the id "' + dup + '".' : 'Not saved: every connector needs an id.';
+				status.className = 'status err';
+				return;
+			}
+			const badJson = BladeEditor.invalidRawJson();
+			if (badJson) {
+				status.textContent = 'Not saved: ' + badJson + ' JSON box(es) hold text that does not parse. Fix or undo them first.';
+				status.className = 'status err';
+				return;
+			}
 			const lines = changeSummary();
 			if (lines.length === 0 && ed.source === 'live') {
 				status.textContent = 'Nothing to save — no rule-set changes.';
@@ -1650,26 +2683,69 @@ a=sendrecv
 			const payload = buildPayload();
 
 			try {
+				const headers = { 'Content-Type': 'application/json' };
+				// The file as this page loaded it: the server refuses (409) to
+				// overwrite a change made since.
+				if (ed.version) headers['If-Match'] = ed.version;
 				const resp = await fetch(cfgUrl('/save'), {
 					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
+					headers: headers,
 					body: JSON.stringify(payload),
 				});
 				const data = await resp.json();
+				if (data.problems) showDraftProblems(data.problems);
 				if (!resp.ok || data.error) throw new Error(data.error || ('HTTP ' + resp.status));
+				showDraftProblems([]);
 				ed.baseline = {
 					ruleSets: cleanJson(ed.doc.ruleSets),
 					defaultRuleSet: ed.doc.defaultRuleSet || '',
 					pipeline: cleanJson(ed.doc.pipeline || []),
+					variables: ownVariables(),
 				};
+				ed.version = data.version || null;
 				ed.source = 'live';
-				document.getElementById('srcBadge').textContent = 'live ' + TARGET_FILE;
+				document.getElementById('srcBadge').textContent = 'live';
 				clearDirty();
+				ed.proposedRule = null;
 				status.textContent = 'Saved (' + data.bytes + ' bytes). Publish to reload the running service.';
-				status.className = 'status ok';
+				// Saved, with something to know (saved tests that could not run).
+				if ((data.warnings || []).length) status.textContent = 'Saved, but: ' + data.warnings.join(' · ');
+				refreshRunState();
+				status.className = (data.warnings || []).length ? 'status err' : 'status ok';
 			} catch (e) {
 				status.textContent = 'Save failed: ' + e.message;
 				status.className = 'status err';
+			}
+		}
+
+		/// Beside Publish: whether every server running this file holds what
+		/// the saved files merge to (RunningConfig on the server). Saved but
+		/// not published reads as "✕ not running: engine0".
+		async function refreshRunState(known) {
+			const el = document.getElementById('runState');
+			try {
+				// On load, the response below() already fetched; after Save or
+				// Publish, a fresh one.
+				const data = (known && known.running) ? known
+					: await (await fetch(cfgUrl('/merged'), { cache: 'no-store' })).json();
+				const running = data.running || [];
+				const hits = data.counters || null;
+				if (JSON.stringify(hits) !== JSON.stringify(ed.hits)) {
+					ed.hits = hits;
+					if (running.length) renderRuleSetDetail();
+				}
+				ed.hitsOn = running.map(r => r.server);
+				if (!running.length) { el.style.display = 'none'; return; }
+				const behind = running.filter(r => !r.matches);
+				el.style.display = '';
+				el.className = 'run-state' + (behind.length ? ' behind' : '');
+				el.textContent = behind.length ? '✕ not running: ' + behind.map(r => r.server).join(', ')
+					: '✓ running';
+				el.title = behind.length
+					? behind.map(r => r.server + ' differs at ' + r.differences.join(', ')).join('\n') + '\nPublish reloads it.'
+					: 'Running on ' + running.map(r => r.server).join(', ') + ', as saved.';
+			} catch (e) {
+				el.style.display = 'none';
 			}
 		}
 
@@ -1682,9 +2758,11 @@ a=sendrecv
 			try {
 				const resp = await fetch(cfgUrl('/publish'), { method: 'POST' });
 				const data = await resp.json();
-				if (!resp.ok || data.error) throw new Error(data.error || ('HTTP ' + resp.status));
+				if (!resp.ok || data.error) throw new Error((data.error || ('HTTP ' + resp.status))
+					+ (data.problems ? ': ' + data.problems.join(' · ') : ''));
 				status.textContent = 'Published: ' + (data.actions || []).join(' · ');
 				status.className = 'status ok';
+				setTimeout(refreshRunState, 1500);
 			} catch (e) {
 				status.textContent = 'Publish failed: ' + e.message;
 				status.className = 'status err';
@@ -1717,8 +2795,12 @@ a=sendrecv
 					size.textContent = (v.sizeBytes / 1024).toFixed(1) + ' KiB';
 					const act = document.createElement('td');
 					const pv = miniBtn('view', 'Preview this version', async () => {
-						const r = await fetch(cfgUrl('/versions/' + v.timestamp));
-						preview.textContent = await r.text();
+						try {
+							const r = await fetch(cfgUrl('/versions/' + v.timestamp));
+							preview.textContent = r.ok ? await r.text() : 'Could not load this version: HTTP ' + r.status;
+						} catch (e) {
+							preview.textContent = 'Could not load this version: ' + e.message;
+						}
 						preview.style.display = '';
 					});
 					const rs = miniBtn('restore', 'Restore this version (current file is backed up first)', async () => {
@@ -1726,10 +2808,16 @@ a=sendrecv
 							+ '? The current ' + TARGET_FILE + ' is backed up first'
 							+ (APP ? ', and every section of it is restored, not only the rules' : '')
 							+ '. Unsaved draft changes are discarded.')) return;
-						const r = await fetch(cfgUrl('/versions/' + v.timestamp + '/restore'), { method: 'POST' });
+						let r;
+						try {
+							r = await fetch(cfgUrl('/versions/' + v.timestamp + '/restore'), { method: 'POST' });
+						} catch (e) {
+							alert('Restore failed: ' + e.message);
+							return;
+						}
 						if (!r.ok) {
 							const err = await r.json().catch(() => ({}));
-							alert('Restore failed: ' + (err.error || r.status));
+							alert('Restore failed: ' + (err.error || r.status) + (err.problems ? '\n\n' + err.problems.join('\n') : ''));
 							return;
 						}
 						panel.style.display = 'none';
@@ -1763,6 +2851,9 @@ a=sendrecv
 			loadEditor();
 		});
 		document.getElementById('input').addEventListener('input', () => scheduleAutoPreview());
+		for (const id of ['event', 'leg', 'requestSdp']) {
+			document.getElementById(id).addEventListener('change', () => scheduleAutoPreview());
+		}
 
 		// =====================================================================
 		// Pipeline editor — generic schema-driven forms
@@ -1796,14 +2887,24 @@ a=sendrecv
 			if (!ed.doc.pipeline) ed.doc.pipeline = [];
 			const pipe = ed.doc.pipeline;
 
-			if (pipe.length === 0) {
+			const inheritedN = ed.belowDoc ? Object.keys(ed.belowDoc.pipeline || {}).length : 0;
+			if (pipe.length === 0 && ed.belowDoc) {
+				// A cluster or server file adds to the domain file's pipeline: the
+				// loader appends a list here to the list below it.
 				const guide = document.createElement('div');
-				guide.className = 'empty-guide';
-				guide.innerHTML = 'No pipeline yet — every call gets the <em>default rule set</em> below, '
-					+ 'or passes through untransformed when there is none. The usual shape is two steps: '
-					+ 'a <code>sip</code> connector extracts a value from the message (like the dialed '
-					+ 'number), then a <code>table</code> connector looks it up and writes the '
-					+ '<code>ruleSet</code> variable. The starter buttons below add exactly that.';
+				guide.className = 'inherit-note';
+				guide.textContent = inheritedN + ' connector' + (inheritedN === 1 ? '' : 's') + ' inherited from ' + belowText();
+				guide.title = 'Inherited: ' + Object.keys(ed.belowDoc.pipeline || {}).join(', ') + '. A connector here with an inherited id changes that connector; a new id runs after them.';
+				panel.appendChild(guide);
+				panel.appendChild(smallAddBtn('+ add connector', () => {
+					pipe.push({ type: ed.connVariants ? ed.connVariants[0].type : 'sip' });
+					markDirty(); renderAll();
+				}));
+			} else if (pipe.length === 0) {
+				const guide = document.createElement('div');
+				guide.className = 'inherit-note';
+				guide.textContent = 'No pipeline: every call gets the default rule set.';
+				guide.title = 'The usual shape: a sip connector extracts a value (the dialed number), then a table connector maps it to a rule set. The buttons add exactly that.';
 				panel.appendChild(guide);
 
 				const starters = document.createElement('div');
@@ -1829,6 +2930,13 @@ a=sendrecv
 				}));
 				panel.appendChild(starters);
 			} else {
+				if (ed.belowDoc && inheritedN) {
+					const guide = document.createElement('div');
+					guide.className = 'inherit-note';
+					guide.textContent = 'after ' + inheritedN + ' inherited from ' + belowText();
+					guide.title = 'Inherited: ' + Object.keys(ed.belowDoc.pipeline || {}).join(', ') + '. A connector here with an inherited id changes that connector; a new id runs after them.';
+					panel.appendChild(guide);
+				}
 				pipe.forEach((conn, idx) => panel.appendChild(connectorCard(pipe, conn, idx)));
 				panel.appendChild(smallAddBtn('+ add connector', () => {
 					pipe.push({ type: ed.connVariants ? ed.connVariants[0].type : 'sip' });
@@ -1847,16 +2955,15 @@ a=sendrecv
 			const sel = document.createElement('select');
 			sel.id = 'defaultRuleSetSel';
 			sel.addEventListener('change', () => {
-				ed.doc.defaultRuleSet = sel.value || null;
+				// The overlay's "(none · passthrough here)" writes "defaultRuleSet": null.
+				const off = !!(sel.selectedOptions[0] && sel.selectedOptions[0].dataset.off);
+				if (ed.nulls) ed.nulls.defaultRuleSet = off;
+				ed.doc.defaultRuleSet = off ? null : (sel.value || null);
 				markDirty();
 			});
 			dfltWrap.appendChild(dl);
 			dfltWrap.appendChild(sel);
 			dfltRow.appendChild(dfltWrap);
-			const note = document.createElement('span');
-			note.style.cssText = 'font-size:12px;color:var(--muted);align-self:center;';
-			note.textContent = 'Applied when no connector writes the ruleSet variable.';
-			dfltRow.appendChild(note);
 			panel.appendChild(dfltRow);
 		}
 
@@ -1913,7 +3020,7 @@ a=sendrecv
 		document.getElementById('helpBtn').addEventListener('click', () => openHelp(null));
 		document.getElementById('helpClose').addEventListener('click', () =>
 			document.getElementById('helpDialog').close());
-		document.querySelectorAll('.section-head .help-mini').forEach(b =>
+		document.querySelectorAll('.help-mini[data-help]').forEach(b =>
 			b.addEventListener('click', () => openHelp(b.dataset.help)));
 
 		jsonViewerRef = BladeEditor.jsonViewer({
@@ -1928,17 +3035,33 @@ a=sendrecv
 
 		(function initTarget() {
 			document.getElementById('targetFile').textContent = TARGET_FILE;
+			const shell = document.getElementById('editorShell');
+			shell.parentNode.insertBefore(BladeEditor.filePicker({
+				listUrl: API_BASE + (APP ? 'apps/' + encodeURIComponent(APP) : 'config') + '/files',
+				current: FILE,
+				onPick: pickFile,
+				mergedUrl: cfgUrl('/merged'),
+				shell: shell,
+			}), shell);
 			document.getElementById('jsonTitle').textContent =
-				'Draft ' + (APP ? 'crud section of ' : '') + TARGET_FILE + ' · read-only, exactly what Save sends';
+				'Draft · ' + (APP ? 'crud section of ' : '') + TARGET_FILE + ' · read-only';
 			document.getElementById('handoff').href =
 				'/blade/configurator/configurator.html?schema=' + encodeURIComponent(APP || 'crud');
-			if (APP) document.getElementById('event').value = 'send';
+			const eventSel = document.getElementById('event');
+			for (const ev of LIFECYCLE_EVENTS.concat([''])) {
+				const o = document.createElement('option');
+				o.value = ev;
+				o.textContent = ev || '(none: skip event filters)';
+				eventSel.appendChild(o);
+			}
+			eventSel.value = LIFECYCLE_EVENTS[0];
 			const sel = document.getElementById('target');
 			sel.addEventListener('change', () => {
 				if (ed.dirty && !confirm('Discard unsaved changes and switch?')) {
 					sel.value = APP;
 					return;
 				}
+				ed.dirty = false; // already confirmed above
 				location.search = sel.value ? '?app=' + encodeURIComponent(sel.value) : '';
 			});
 			fetch(API_BASE + 'apps').then(r => r.json()).then(data => {
@@ -1955,6 +3078,9 @@ a=sendrecv
 		})();
 
 		loadEditor();
+		loadTests();
+		loadAi();
+		loadTraces();
 	</script>
 </body>
 </html>

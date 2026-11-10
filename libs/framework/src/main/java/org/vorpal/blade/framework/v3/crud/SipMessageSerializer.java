@@ -42,9 +42,13 @@ public class SipMessageSerializer implements Serializable {
 			if (uri == null) uri = "sip:unknown";
 			sb.append(req.getMethod()).append(' ').append(uri).append(" SIP/2.0\r\n");
 		} else if (msg instanceof SipServletResponse) {
+			// A rule's status rewrite is pending until the response is sent
+			// (CrudHook.restatus); show the response as it would go out.
 			SipServletResponse resp = (SipServletResponse) msg;
-			sb.append("SIP/2.0 ").append(resp.getStatus());
-			String reason = resp.getReasonPhrase();
+			Object pendingStatus = resp.getAttribute(MessageHelper.PENDING_STATUS);
+			Object pendingReason = resp.getAttribute(MessageHelper.PENDING_REASON);
+			sb.append("SIP/2.0 ").append(pendingStatus instanceof Integer ? pendingStatus : resp.getStatus());
+			String reason = (pendingReason instanceof String) ? (String) pendingReason : resp.getReasonPhrase();
 			if (reason != null && !reason.isEmpty()) sb.append(' ').append(reason);
 			sb.append("\r\n");
 		}
@@ -63,9 +67,7 @@ public class SipMessageSerializer implements Serializable {
 			for (Object o : (List<?>) orderAttr) {
 				if (!(o instanceof String)) continue;
 				String name = (String) o;
-				String value = msg.getHeader(name);
-				if (value == null) continue; // dropped by a delete op
-				sb.append(name).append(": ").append(value).append("\r\n");
+				if (!appendAll(sb, msg, name)) continue; // dropped by a delete op
 				emitted.add(name.toLowerCase());
 				if ("content-type".equalsIgnoreCase(name)) ctSeen = true;
 			}
@@ -78,9 +80,7 @@ public class SipMessageSerializer implements Serializable {
 		if (all != null) {
 			for (String name : all) {
 				if (emitted.contains(name.toLowerCase())) continue;
-				String value = msg.getHeader(name);
-				if (value == null) continue;
-				sb.append(name).append(": ").append(value).append("\r\n");
+				if (!appendAll(sb, msg, name)) continue;
 				emitted.add(name.toLowerCase());
 				if ("content-type".equalsIgnoreCase(name)) ctSeen = true;
 			}
@@ -93,6 +93,16 @@ public class SipMessageSerializer implements Serializable {
 			String ct = msg.getContentType();
 			if (ct != null) sb.append("Content-Type: ").append(ct).append("\r\n");
 		}
+	}
+
+	/// Writes every occurrence of `name`; false if there is none.
+	private static boolean appendAll(StringBuilder sb, SipServletMessage msg, String name) {
+		boolean any = false;
+		for (java.util.ListIterator<String> it = msg.getHeaders(name); it != null && it.hasNext();) {
+			sb.append(name).append(": ").append(it.next()).append("\r\n");
+			any = true;
+		}
+		return any;
 	}
 
 	private static void appendBody(StringBuilder sb, SipServletMessage msg) {

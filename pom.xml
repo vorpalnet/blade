@@ -274,6 +274,20 @@
 				<artifactId>anthropic-java</artifactId>
 				<version>${anthropic-java.version}</version>
 			</dependency>
+			<!-- The two Jackson modules the SDK brings and its WARs bundle, held
+			     to the platform's Jackson. At the SDK's own 2.19 they call
+			     JsonProperty.isRequired(), which blade-shared's 2.18 annotations
+			     lack: every model call failed with NoSuchMethodError. -->
+			<dependency>
+				<groupId>com.fasterxml.jackson.module</groupId>
+				<artifactId>jackson-module-kotlin</artifactId>
+				<version>${jackson.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.fasterxml.jackson.datatype</groupId>
+				<artifactId>jackson-datatype-jdk8</artifactId>
+				<version>${jackson.version}</version>
+			</dependency>
 
 			<!-- OAuth2 — Nimbus OAuth 2.0 + OIDC SDK: the comprehensive
 			     OAuth/OIDC client library. Drives every RestConnector

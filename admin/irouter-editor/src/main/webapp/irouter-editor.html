@@ -156,12 +156,8 @@
 
 	<main class="page-content">
 	<h1>iRouter pipeline &amp; routing</h1>
-	<p class="subtitle">
-		Three steps: the <em>pipeline</em> gathers facts about each call into variables,
-		the <em>routing</em> decision turns them into a Route, and the <em>dry-run</em>
-		shows exactly what would happen to a pasted request — against your unsaved
-		draft. Save writes <code>irouter.json</code> (previous version kept); Publish
-		tells the running iRouter to reload it. New here? Hit <strong>? Help</strong>.
+	<p class="subtitle" title="Save keeps the previous version; Publish tells the running iRouter to reload.">
+		Editing <code id="targetFile">irouter.json</code>
 	</p>
 
 	<details class="editor-shell" id="editorShell" open>
@@ -196,7 +192,7 @@
 
 		<div class="versions-panel" id="jsonPanel" style="display:none;">
 			<h2 style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 8px;display:flex;justify-content:space-between;align-items:center;">
-				<span>Draft irouter.json — read-only, exactly what Save writes</span>
+				<span id="jsonTitle">Draft irouter.json · read-only, exactly what Save writes</span>
 				<button id="copyJson" type="button" class="mini">copy</button>
 			</h2>
 			<pre id="jsonBody"></pre>
@@ -204,21 +200,15 @@
 
 		<div class="section-head">
 			<span class="step">1</span>
-			<span class="section-title">Pipeline — gather the facts</span>
+			<span class="section-title" title="Connectors run in order on each initial INVITE, extracting values (and REST, database or directory lookups) into variables the routing decision reads.">Pipeline</span>
 			<button class="mini help-mini" type="button" data-help="pipeline">?</button>
-			<span class="section-sub">Connectors run in order on each initial INVITE, extracting values from
-				the message (and, optionally, REST / database / directory lookups) into variables the
-				routing decision reads.</span>
 		</div>
 		<div id="pipelinePanel" class="pipeline-panel"></div>
 
 		<div class="section-head">
 			<span class="step">2</span>
-			<span class="section-title">Routing — make the decision</span>
+			<span class="section-title" title="One strategy (table, conditional or direct) produces the Route: forward downstream, or answer with a final response.">Routing</span>
 			<button class="mini help-mini" type="button" data-help="routing">?</button>
-			<span class="section-sub">One decision strategy — a key-driven <code>table</code>, an
-				if/else-if <code>conditional</code> chain, or a fixed <code>direct</code> route —
-				produces the Route: forward downstream, or answer with a final response.</span>
 		</div>
 		<div id="routingPanel" class="pipeline-panel"></div>
 
@@ -226,10 +216,9 @@
 
 	<div class="section-head on-glass">
 		<span class="step">3</span>
-		<span class="section-title">Dry-run — which Route does this request get?</span>
+		<span class="section-title" title="Runs the unsaved draft in-process on the AdminServer; nothing is proxied.">Dry-run</span>
 		<button class="mini help-mini" type="button" data-help="dryrun">?</button>
-		<span class="section-sub">Runs your unsaved draft in-process on the AdminServer; nothing is proxied.
-			An I/O connector (rest / jdbc / ldap) in the pipeline really contacts its backend.</span>
+		<span class="section-sub">rest, jdbc and ldap connectors really call their backends</span>
 	</div>
 
 	<div class="dry-grid">
@@ -363,6 +352,24 @@
 			return (ctx || '') + '/resources/api/';
 		})();
 
+		// Which iRouter file this page edits: `domain` (the default),
+		// `cluster/<name>` or `server/<name>`, picked in the file rail.
+		const FILE = new URLSearchParams(location.search).get('file') || 'domain';
+		const TARGET_FILE = FILE === 'domain' ? 'irouter.json'
+			: (FILE.startsWith('cluster/') ? '_clusters/' : '_servers/') + FILE.split('/')[1] + '/irouter.json';
+
+		/// `config` + `rest`, for the file this page edits.
+		function cfgUrl(rest) {
+			return API_BASE + 'config' + (rest || '') + (FILE === 'domain' ? '' : '?file=' + encodeURIComponent(FILE));
+		}
+
+		/// Opens another iRouter file, after the usual unsaved-draft check.
+		function pickFile(id) {
+			if (ed.dirty && !confirm('Discard unsaved changes and open the other file?')) return;
+			ed.dirty = false; // confirmed above
+			location.search = id === 'domain' ? '' : '?file=' + encodeURIComponent(id);
+		}
+
 		const SAMPLE_INVITE = `INVITE sip:18005551234@pbx.example.com SIP/2.0
 Via: SIP/2.0/TCP 10.0.0.10:5060;branch=z9hG4bK-demo
 From: <sip:+18165550100@example.com>;tag=1
@@ -391,9 +398,12 @@ Max-Forwards: 70
 
 		function draftFields() {
 			if (!ed.doc) return {};
+			// A cluster or server file runs merged over the domain file, so
+			// preview what that cluster or server would run.
+			const doc = ed.belowDoc ? BladeEditor.mergeOver(ed.belowDoc, cleanJson(ed.doc)) : ed.doc;
 			return {
-				draftPipeline: cleanJson(ed.doc.pipeline || []),
-				draftRouting: ed.doc.routing ? cleanJson(ed.doc.routing) : null,
+				draftPipeline: cleanJson(doc.pipeline || []),
+				draftRouting: doc.routing ? cleanJson(doc.routing) : null,
 			};
 		}
 
@@ -424,14 +434,24 @@ Max-Forwards: 70
 		async function loadEditor() {
 			const pipelinePanel = document.getElementById('pipelinePanel');
 			try {
-				const resp = await fetch(API_BASE + 'config');
+				const resp = await fetch(cfgUrl());
 				if (!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + resp.statusText);
 				const data = await resp.json();
 				if (data.error) throw new Error(data.error);
 
 				ed.doc = data.config || {};
+				// For a cluster or server file, what it merges over: the domain
+				// file and, for a server, its cluster's, merged.
+				ed.belowDoc = null;
+				ed.belowNames = [];
+				if (FILE !== 'domain') {
+					const b = await BladeEditor.below(cfgUrl('/merged'));
+					ed.belowDoc = b.doc;
+					ed.belowNames = b.names;
+				}
 				if (!ed.doc.pipeline) ed.doc.pipeline = [];
 				ed.source = data.source;
+				ed.version = data.version || null;
 				BladeEditor.init({ defs: (data.schema && data.schema.$defs) || null, onDirty: markDirty });
 				ed.connVariants = (data.schema && data.schema.properties && data.schema.properties.pipeline)
 					? variantsFromAnyOf(data.schema.properties.pipeline.items.anyOf) : null;
@@ -444,9 +464,7 @@ Max-Forwards: 70
 				clearDirty();
 
 				document.getElementById('srcBadge').textContent =
-					ed.source === 'live' ? 'live irouter.json'
-					: ed.source === 'sample' ? 'generated sample — Save creates irouter.json'
-					: 'built-in sample — Save creates irouter.json';
+					ed.source === 'live' ? 'live' : ed.source === 'new' ? 'new file' : 'sample · not saved yet';
 
 				renderAll();
 			} catch (e) {
@@ -469,10 +487,8 @@ Max-Forwards: 70
 			if (pipe.length === 0) {
 				const guide = document.createElement('div');
 				guide.className = 'empty-guide';
-				guide.innerHTML = 'No pipeline yet — the routing decision below will run with no '
-					+ 'variables, so only a <code>direct</code> route (or literal table keys) can '
-					+ 'work. The usual first step: a <code>sip</code> connector extracting values '
-					+ 'like the dialed number and caller into variables the decision reads.';
+				guide.textContent = 'No pipeline: routing runs with no variables.';
+				guide.title = 'Only a direct route or literal table keys can work. The usual first step: a sip connector extracting the dialed number and caller.';
 				panel.appendChild(guide);
 
 				const starters = document.createElement('div');
@@ -561,10 +577,7 @@ Max-Forwards: 70
 					const guide = document.createElement('div');
 					guide.className = 'empty-guide';
 					guide.style.marginTop = '8px';
-					guide.innerHTML = 'No routing strategy selected — every call would be answered '
-						+ '<code>503</code>. Pick a type above: <code>conditional</code> for '
-						+ 'if/else-if rules, <code>table</code> for key-driven lookups, '
-						+ '<code>direct</code> for a fixed route.';
+					guide.textContent = 'No strategy: every call gets 503.';
 					panel.appendChild(guide);
 				}
 			} else {
@@ -706,13 +719,19 @@ Max-Forwards: 70
 
 		async function saveConfig() {
 			const status = document.getElementById('status');
+			const badJson = BladeEditor.invalidRawJson();
+			if (badJson) {
+				status.textContent = 'Not saved: ' + badJson + ' JSON box(es) hold text that does not parse. Fix or undo them first.';
+				status.className = 'status err';
+				return;
+			}
 			const lines = changeSummary();
 			if (lines.length === 0 && ed.source === 'live') {
 				status.textContent = 'Nothing to save — no changes.';
 				status.className = 'status';
 				return;
 			}
-			const preamble = ed.source === 'live' ? '' : 'This will CREATE irouter.json (currently showing the '
+			const preamble = ed.source === 'live' ? '' : 'This will CREATE ' + TARGET_FILE + ' (currently showing the '
 				+ ed.source + ' sample).\n\n';
 			if (!confirm(preamble + 'Save these changes?\n\n'
 					+ (lines.length ? '• ' + lines.join('\n• ') : '(no changes — writes the loaded document)'))) return;
@@ -720,9 +739,13 @@ Max-Forwards: 70
 			const payload = buildPayload();
 
 			try {
-				const resp = await fetch(API_BASE + 'config/save', {
+				const headers = { 'Content-Type': 'application/json' };
+				// The file as this page loaded it: the server refuses (409) to
+				// overwrite a change made since.
+				if (ed.version) headers['If-Match'] = ed.version;
+				const resp = await fetch(cfgUrl('/save'), {
 					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
+					headers: headers,
 					body: JSON.stringify(payload),
 				});
 				const data = await resp.json();
@@ -731,11 +754,13 @@ Max-Forwards: 70
 					pipeline: cleanJson(ed.doc.pipeline || []),
 					routing: ed.doc.routing ? cleanJson(ed.doc.routing) : null,
 				};
+				ed.version = data.version || null;
 				ed.source = 'live';
-				document.getElementById('srcBadge').textContent = 'live irouter.json';
+				document.getElementById('srcBadge').textContent = 'live';
 				clearDirty();
 				status.textContent = 'Saved (' + data.bytes + ' bytes). Publish to reload the running iRouter.';
-				status.className = 'status ok';
+				if ((data.warnings || []).length) status.textContent = 'Saved, but: ' + data.warnings.join(' · ');
+				status.className = (data.warnings || []).length ? 'status err' : 'status ok';
 			} catch (e) {
 				status.textContent = 'Save failed: ' + e.message;
 				status.className = 'status err';
@@ -745,13 +770,14 @@ Max-Forwards: 70
 		async function publishConfig() {
 			const status = document.getElementById('status');
 			const warning = ed.dirty
-				? 'You have UNSAVED changes — publish reloads the last SAVED irouter.json, not the draft.\n\n'
+				? 'You have UNSAVED changes — publish reloads the last SAVED ' + TARGET_FILE + ', not the draft.\n\n'
 				: '';
-			if (!confirm(warning + 'Tell the running iRouter to reload irouter.json?')) return;
+			if (!confirm(warning + 'Tell the running iRouter to reload ' + TARGET_FILE + '?')) return;
 			try {
-				const resp = await fetch(API_BASE + 'config/publish', { method: 'POST' });
+				const resp = await fetch(cfgUrl('/publish'), { method: 'POST' });
 				const data = await resp.json();
-				if (!resp.ok || data.error) throw new Error(data.error || ('HTTP ' + resp.status));
+				if (!resp.ok || data.error) throw new Error((data.error || ('HTTP ' + resp.status))
+					+ (data.problems ? ': ' + data.problems.join(' · ') : ''));
 				status.textContent = 'Published: ' + (data.actions || []).join(' · ');
 				status.className = 'status ok';
 			} catch (e) {
@@ -769,7 +795,7 @@ Max-Forwards: 70
 			preview.style.display = 'none';
 			body.innerHTML = '<div class="result-note">loading…</div>';
 			try {
-				const resp = await fetch(API_BASE + 'config/versions');
+				const resp = await fetch(cfgUrl('/versions'));
 				const data = await resp.json();
 				if (data.error) throw new Error(data.error);
 				const versions = data.versions || [];
@@ -786,17 +812,17 @@ Max-Forwards: 70
 					size.textContent = (v.sizeBytes / 1024).toFixed(1) + ' KiB';
 					const act = document.createElement('td');
 					const pv = miniBtn('view', 'Preview this version', async () => {
-						const r = await fetch(API_BASE + 'config/versions/' + v.timestamp);
+						const r = await fetch(cfgUrl('/versions/' + v.timestamp));
 						preview.textContent = await r.text();
 						preview.style.display = '';
 					});
 					const rs = miniBtn('restore', 'Restore this version (current file is backed up first)', async () => {
 						if (!confirm('Restore the version from ' + when.textContent
-							+ '? The current irouter.json is backed up first. Unsaved draft changes are discarded.')) return;
-						const r = await fetch(API_BASE + 'config/versions/' + v.timestamp + '/restore', { method: 'POST' });
+							+ '? The current ' + TARGET_FILE + ' is backed up first. Unsaved draft changes are discarded.')) return;
+						const r = await fetch(cfgUrl('/versions/' + v.timestamp + '/restore'), { method: 'POST' });
 						if (!r.ok) {
 							const err = await r.json().catch(() => ({}));
-							alert('Restore failed: ' + (err.error || r.status));
+							alert('Restore failed: ' + (err.error || r.status) + (err.problems ? '\n\n' + err.problems.join('\n') : ''));
 							return;
 						}
 						panel.style.display = 'none';
@@ -851,6 +877,15 @@ Max-Forwards: 70
 			openHelp(null);
 		}
 
+		document.getElementById('editorShell').parentNode.insertBefore(BladeEditor.filePicker({
+			listUrl: API_BASE + 'config/files',
+			current: FILE,
+			onPick: pickFile,
+			mergedUrl: cfgUrl('/merged'),
+			shell: document.getElementById('editorShell'),
+		}), document.getElementById('editorShell'));
+		document.getElementById('jsonTitle').textContent = 'Draft · ' + TARGET_FILE + ' · read-only';
+		document.getElementById('targetFile').textContent = TARGET_FILE;
 		loadEditor();
 	</script>
 </body>

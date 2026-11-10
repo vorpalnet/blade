@@ -6,7 +6,6 @@ import javax.servlet.sip.SipServletMessage;
 
 import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
-import org.vorpal.blade.framework.v3.configuration.Context;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
@@ -32,31 +31,44 @@ public class CreateOperation implements Operation {
 	}
 
 	@Override
-	public void process(SipServletMessage msg) {
-		try {
-			Map<String, String> vars = MessageHelper.getSessionVariables(msg.getApplicationSession());
-			String resolved = Context.substitute(value, vars);
+	public void check() {
+		if (attribute == null || attribute.isEmpty()) throw new IllegalArgumentException("attribute: required");
+	}
 
-			// `body` + contentType → attach a new MIME part, wrapping into
-			// multipart/mixed if needed. Anything else takes the normal path
-			// (set header, set body, set Request-URI).
-			if (isBody(attribute) && contentType != null) {
-				MessageHelper.addBodyPart(msg, contentType, resolved);
-				SettingsManager.getSipLogger().finer(msg,
-						"CreateOperation - attached " + contentType + " part");
-				return;
-			}
-
-			MessageHelper.setAttributeValue(msg, attribute, resolved, contentType);
-			SettingsManager.getSipLogger().finer(msg,
-					"CreateOperation - set " + attribute + "=" + resolved);
-		} catch (Exception e) {
-			SettingsManager.getSipLogger().logStackTrace(msg, e);
+	@Override
+	public void process(SipServletMessage msg) throws Exception {
+		Map<String, String> vars = MessageHelper.getSessionVariables(msg.getApplicationSession());
+		String resolved = Placeholders.value(value, vars);
+		if (resolved == null) {
+			Placeholders.skipped(msg, "CreateOperation", "the value of " + attribute, value, vars);
+			return;
 		}
+
+		// `body` + contentType → attach a new MIME part, wrapping into
+		// multipart/mixed if needed. Anything else takes the normal path
+		// (set header, set body, set Request-URI).
+		if (isBody(attribute) && contentType != null) {
+			MessageHelper.addBodyPart(msg, contentType, resolved);
+			SettingsManager.getSipLogger().finer(msg,
+					"CreateOperation - attached " + contentType + " part");
+			return;
+		}
+
+		if (MessageHelper.isPlainHeader(attribute)) {
+			// Create adds; it never overwrites. A second Diversion or
+			// History-Info entry goes after the ones already there.
+			msg.addHeader(attribute, resolved);
+			SettingsManager.getSipLogger().finer(msg, "CreateOperation - added " + attribute + "=" + resolved);
+			return;
+		}
+		MessageHelper.setAttributeValue(msg, attribute, resolved, contentType);
+		SettingsManager.getSipLogger().finer(msg,
+				"CreateOperation - set " + attribute + "=" + resolved);
 	}
 
 	private static boolean isBody(String attr) {
-		return "body".equalsIgnoreCase(attr) || "content".equalsIgnoreCase(attr);
+		// As MessageHelper names it: `body` or `content`, in any case.
+		return "body".equals(MessageHelper.canonical(attr));
 	}
 
 	@JsonPropertyDescription("SIP attribute to create — header name, Request-URI, or body.")

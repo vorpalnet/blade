@@ -599,22 +599,45 @@ window.BladeEditor = (function () {
 		return wrap;
 	}
 
+	// Raw-JSON boxes whose text does not parse. The model still holds the
+	// last good value, so a page must not save while any is listed here:
+	// see invalidRawJson().
+	const invalidRaw = new Set();
+
 	function rawJsonBound(target) {
+		const box = document.createElement('div');
 		const ta = document.createElement('textarea');
 		ta.className = 'raw-op';
 		ta.value = JSON.stringify(target, null, 2);
+		const error = document.createElement('div');
+		error.className = 'raw-error';
+		error.setAttribute('role', 'alert');
+		error.hidden = true;
 		ta.addEventListener('change', () => {
 			try {
 				const parsed = JSON.parse(ta.value);
 				for (const k of Object.keys(target)) delete target[k];
 				Object.assign(target, parsed);
 				ta.style.borderColor = '';
+				error.hidden = true;
+				invalidRaw.delete(ta);
 				dirty();
 			} catch (e) {
 				ta.style.borderColor = 'var(--bad)';
+				error.textContent = 'Not valid JSON, so not applied: ' + e.message;
+				error.hidden = false;
+				invalidRaw.add(ta);
 			}
 		});
-		return ta;
+		box.appendChild(ta);
+		box.appendChild(error);
+		return box;
+	}
+
+	/// How many raw-JSON boxes on the page hold text that does not parse.
+	function invalidRawJson() {
+		for (const ta of invalidRaw) if (!ta.isConnected) invalidRaw.delete(ta);
+		return invalidRaw.size;
 	}
 
 	// ---- help dialog (both pages use the same #helpDialog / #help-<topic>
@@ -677,6 +700,400 @@ window.BladeEditor = (function () {
 		return { refresh };
 	}
 
+	/// A non-empty list of objects that each name a non-empty `id`.
+	function keyable(v) {
+		return Array.isArray(v) && v.length > 0 && v.every(i => i !== null && typeof i === 'object'
+			&& !Array.isArray(i) && typeof i.id === 'string' && i.id !== '');
+	}
+
+	/// The list keyed by each item's `id`, without it; a repeated id becomes
+	/// `<id>-2` (or the next free), as the server reads it.
+	function keyedForm(list) {
+		const out = {};
+		for (const item of list) {
+			const copy = Object.assign({}, item);
+			const id = copy.id;
+			delete copy.id;
+			let key = id;
+			for (let k = 2; Object.prototype.hasOwnProperty.call(out, key); k++) key = id + '-' + k;
+			out[key] = copy;
+		}
+		return out;
+	}
+
+	/// `over` merged onto `base` the way the settings loader merges a
+	/// cluster or server file (Jackson `readerForUpdating` on the tree):
+	/// objects merge key by key, all the way down; an array is appended to
+	/// the array below it, so an overlay can add list items but never
+	/// replace or remove one; anything else (an array over a missing value or
+	/// a non-array included) replaces what is below it. An empty array adds
+	/// nothing to an array. As v3 `ConfigFiles.merge`: where one side is an
+	/// object and the other a list of objects each naming an `id`, the list
+	/// is read keyed by those ids first ([keyedForm]), so the two merge by id.
+	function mergeOver(base, over) {
+		if (over === undefined) return base;
+		const plain = v => v !== null && typeof v === 'object' && !Array.isArray(v);
+		if (plain(base) && keyable(over)) over = keyedForm(over);
+		else if (plain(over) && keyable(base)) base = keyedForm(base);
+		if (Array.isArray(over)) return Array.isArray(base) ? base.concat(over) : over;
+		if (over === null || typeof over !== 'object' || typeof base !== 'object' || base === null || Array.isArray(base)) return over;
+		const out = Object.assign({}, base);
+		for (const [k, v] of Object.entries(over)) out[k] = mergeOver(base[k], v);
+		return out;
+	}
+
+	/// The application's configuration files, beside its editor, laid out
+	/// in the order the settings loader merges them: the domain file, then
+	/// each cluster, then each server under the cluster it is in
+	/// (`GET …/files`, v3 `ConfigFiles` and `ClusterMembership`). A file lower
+	/// down merges over the ones above it on its line. Only files that exist
+	/// are listed; a cluster with no file but a server file under it is shown
+	/// as a heading. Picking one calls `onPick(id)`; the editor then edits
+	/// that file as it is.
+	///
+	/// With `mergedUrl` and `shell`, the list ends with a read-only
+	/// "merged" entry: it hides `shell` and shows [#mergedView] of the
+	/// current file in its place, until picked again.
+	function filePicker(opts) {
+		const rail = document.createElement('nav');
+		rail.className = 'file-picker';
+		rail.setAttribute('aria-label', 'Configuration files');
+		rail.innerHTML = '<div class="file-picker-title">Files</div><div class="file-picker-body">loading…</div>';
+		const body = rail.querySelector('.file-picker-body');
+		const currentId = opts.current || 'domain';
+		let mergedPanel = null;
+
+		function item(f, label, depth) {
+			const b = document.createElement('button');
+			b.type = 'button';
+			b.className = 'file-picker-item depth-' + depth;
+			const current = f.id === currentId;
+			if (current) {
+				b.classList.add('current');
+				b.setAttribute('aria-current', 'true');
+			}
+			b.textContent = (current ? '▸ ' : '') + label + (f.exists ? '' : ' (not written yet)');
+			b.title = f.path;
+			b.addEventListener('click', () => {
+				if (mergedPanel) closeMerged();
+				if (!current) opts.onPick(f.id);
+			});
+			return b;
+		}
+		function heading(text, depth, title) {
+			const h = document.createElement('div');
+			h.className = 'file-picker-group depth-' + depth;
+			h.textContent = text;
+			if (title) h.title = title;
+			return h;
+		}
+		function closeMerged() {
+			mergedPanel.remove();
+			mergedPanel = null;
+			opts.shell.style.display = '';
+			mergedBtn.classList.remove('current');
+			mergedBtn.removeAttribute('aria-current');
+			mergedBtn.textContent = 'merged (read-only)';
+		}
+		const mergedBtn = document.createElement('button');
+		mergedBtn.type = 'button';
+		mergedBtn.className = 'file-picker-item file-picker-merged';
+		mergedBtn.textContent = 'merged (read-only)';
+		mergedBtn.title = 'What the current file runs: it and the files below it, merged as the server merges them';
+		mergedBtn.addEventListener('click', () => {
+			if (mergedPanel) { closeMerged(); return; }
+			mergedPanel = mergedView({ url: opts.mergedUrl, onClose: closeMerged });
+			opts.shell.parentNode.insertBefore(mergedPanel, opts.shell);
+			opts.shell.style.display = 'none';
+			mergedBtn.classList.add('current');
+			mergedBtn.setAttribute('aria-current', 'true');
+			mergedBtn.textContent = '▸ merged (read-only)';
+		});
+
+		fetch(opts.listUrl).then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))).then(files => {
+			body.innerHTML = '';
+			const domain = files.find(f => f.scope === 'domain');
+			const clusterFiles = files.filter(f => f.scope === 'cluster');
+			const servers = files.filter(f => f.scope === 'server');
+			if (domain) {
+				body.appendChild(heading('Domain', 0));
+				body.appendChild(item(domain, domain.path.split('/').pop(), 0));
+			}
+			const clusters = [...new Set(clusterFiles.map(f => f.name).concat(servers.map(f => f.cluster).filter(Boolean)))].sort();
+			for (const c of clusters) {
+				const cf = clusterFiles.find(f => f.name === c);
+				body.appendChild(heading('Cluster', 1));
+				if (cf) body.appendChild(item(cf, c, 1));
+				else body.appendChild(heading(c + ' · no file', 1, 'No ' + c + ' file: its servers merge over the domain file alone'));
+				const inC = servers.filter(f => f.cluster === c);
+				if (inC.length) {
+					body.appendChild(heading('Server', 2));
+					for (const f of inC) body.appendChild(item(f, f.name, 2));
+				}
+			}
+			const loose = servers.filter(f => !f.cluster);
+			if (loose.length) {
+				body.appendChild(heading('Server, no cluster', 1));
+				for (const f of loose) body.appendChild(item(f, f.name, 1));
+			}
+			if (files.length === 1) {
+				const note = document.createElement('div');
+				note.className = 'file-picker-note';
+				note.textContent = 'domain only';
+				note.title = 'A file in _clusters/<name>/ or _servers/<name>/ shows here.';
+				body.appendChild(note);
+			}
+			if (opts.mergedUrl && opts.shell) {
+				const rule = document.createElement('div');
+				rule.className = 'file-picker-rule';
+				body.appendChild(rule);
+				body.appendChild(mergedBtn);
+			}
+		}).catch(e => {
+			body.textContent = 'Could not list files: ' + e.message;
+		});
+		return rail;
+	}
+
+	/// `layers` merged as the loader merges them ([#mergeOver]), each value
+	/// remembering which layer set it: `{src, kind: 'obj'|'arr'|'val', …}`.
+	/// A value that replaced another keeps what it replaced in `was`.
+	function traceMerge(layers) {
+		function wrap(v, src) {
+			if (Array.isArray(v)) return { kind: 'arr', src, items: v.map(x => wrap(x, src)) };
+			if (v !== null && typeof v === 'object') {
+				const keys = {};
+				for (const [k, x] of Object.entries(v)) keys[k] = wrap(x, src);
+				return { kind: 'obj', src, keys };
+			}
+			return { kind: 'val', src, v };
+		}
+		function over(base, v, src) {
+			if (v === undefined) return base;
+			if (base === undefined) return wrap(v, src);
+			if (Array.isArray(v) && base.kind === 'arr') {
+				return { kind: 'arr', src: base.src, items: base.items.concat(v.map(x => wrap(x, src))) };
+			}
+			if (v !== null && typeof v === 'object' && !Array.isArray(v) && base.kind === 'obj') {
+				const keys = Object.assign({}, base.keys);
+				for (const [k, x] of Object.entries(v)) keys[k] = over(base.keys[k], x, src);
+				return { kind: 'obj', src: base.src, keys };
+			}
+			const t = wrap(v, src);
+			t.was = { src: base.src, text: plainText(unwrap(base)) };
+			return t;
+		}
+		let out;
+		for (const l of layers) if (l.config !== null && l.config !== undefined) out = over(out, l.config, l.label);
+		return out;
+	}
+	function unwrap(t) {
+		if (t === undefined) return undefined;
+		if (t.kind === 'arr') return t.items.map(unwrap);
+		if (t.kind === 'obj') {
+			const o = {};
+			for (const [k, x] of Object.entries(t.keys)) o[k] = unwrap(x);
+			return o;
+		}
+		return t.v;
+	}
+	function plainText(v) {
+		const s = JSON.stringify(v);
+		return s.length > 60 ? s.slice(0, 57) + '…' : s;
+	}
+	/// JSON with object keys sorted, to compare two documents by content.
+	function canonical(v) {
+		if (Array.isArray(v)) return '[' + v.map(canonical).join(',') + ']';
+		if (v !== null && typeof v === 'object') {
+			return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + canonical(v[k])).join(',') + '}';
+		}
+		return JSON.stringify(v === undefined ? null : v);
+	}
+
+	/// What file `mergedUrl` (`GET …/merged`) merges over: every layer below
+	/// it, merged, and those files' short names (`crudlab.json`, `cluster`).
+	/// `{doc: null, names: []}` for the domain file. `raw` is the same merge
+	/// of the files as they are, which is what the loader builds; `doc` has
+	/// each layer through `normalize(config, name)` first, when given,
+	/// when given, rewrites each layer before it is merged (an editor bringing
+	/// an older file form up to date).
+	async function below(mergedUrl, normalize) {
+		const r = await fetch(mergedUrl, { cache: 'no-store' });
+		const data = r.ok ? await r.json() : null;
+		const layers = (data && data.layers) ? data.layers.slice(0, -1) : [];
+		let doc, raw;
+		const names = [];
+		for (const l of layers) {
+			if (l.config == null) continue;
+			const name = l.scope === 'domain' ? l.path.split('/').pop() : l.scope === 'server' ? l.name : 'cluster';
+			const config = normalize ? normalize(l.config, name) : l.config;
+			doc = doc === undefined ? config : mergeOver(doc, config);
+			// As the loader merges them, files unchanged: what a preview runs.
+			raw = raw === undefined ? l.config : mergeOver(raw, l.config);
+			names.push(name);
+		}
+		return { doc: doc === undefined ? null : doc, raw: raw === undefined ? null : raw, names, data };
+	}
+
+	/// The read-only merged view of one file (`GET …/merged`): the files the
+	/// loader merges for it, in order, then the merged document with the
+	/// file that set each line beside it. A value an upper file replaced
+	/// says what it was and where; list items an upper file appended carry
+	/// that file's name. The page's own merge is checked against the
+	/// server's (Jackson's), and a difference is shown, not hidden.
+	function mergedView(opts) {
+		const panel = document.createElement('section');
+		panel.className = 'merged-view';
+		panel.innerHTML = '<div class="merged-head"><strong title="Read-only, saved files only. Each file merges over '
+			+ 'the ones before it: objects key by key, lists get items added on the end, other values replaced. '
+			+ 'Nothing can be removed.">Merged</strong><span class="merged-chain"></span></div>'
+			+ '<div class="merged-body">loading…</div>';
+		const close = document.createElement('button');
+		close.type = 'button';
+		close.className = 'merged-close';
+		close.textContent = '✕';
+		close.title = 'Back to editing';
+		close.addEventListener('click', opts.onClose);
+		panel.querySelector('.merged-head').appendChild(close);
+		const body = panel.querySelector('.merged-body');
+
+		fetch(opts.url, { cache: 'no-store' }).then(r => r.json()).then(data => {
+			if (data.error) throw new Error(data.error);
+			body.innerHTML = '';
+			const layers = data.layers.map(l => Object.assign({}, l, {
+				label: l.scope === 'server' ? l.name : l.scope,
+			}));
+
+			const chain = panel.querySelector('.merged-chain');
+			layers.forEach((l, i) => {
+				if (i) chain.appendChild(document.createTextNode(' → '));
+				const tag = document.createElement('span');
+				tag.className = 'merged-tag';
+				tag.textContent = l.label + (l.exists ? '' : ' (no file)');
+				tag.title = l.path;
+				chain.appendChild(tag);
+			});
+
+			// Each server whose files include this one: does it run what its
+			// files (domain, its cluster, itself) merge to?
+			const running = data.running || [];
+			const same = running.filter(r => r.matches).map(r => r.server);
+			if (same.length) {
+				const row = document.createElement('div');
+				row.className = 'merged-running';
+				row.textContent = '✓ running as filed: ' + same.join(', ');
+				row.title = 'Each server\'s configuration (CurrentJson) holds every value its own files merge to.';
+				body.appendChild(row);
+			}
+			for (const r of running.filter(r => !r.matches)) {
+				const row = document.createElement('div');
+				row.className = 'merged-running differs';
+				row.textContent = '✕ ' + r.server + ' differs at ' + r.differences.join(', ');
+				row.title = 'Not reloaded since a file changed, or it could not load one. Publish reloads it.';
+				body.appendChild(row);
+			}
+
+			const traced = traceMerge(layers);
+			if (traced === undefined) {
+				body.appendChild(Object.assign(document.createElement('p'), { textContent: 'No file is written yet.' }));
+				return;
+			}
+			if (canonical(unwrap(traced)) !== canonical(data.merged)) {
+				const warn = document.createElement('p');
+				warn.className = 'merged-warn';
+				warn.textContent = '✕ This page merged the files differently from the server. What the server builds '
+					+ 'is below, without the per-line file names.';
+				body.appendChild(warn);
+				const pre = document.createElement('pre');
+				pre.className = 'merged-lines';
+				pre.textContent = JSON.stringify(data.merged, null, 2);
+				body.appendChild(pre);
+				return;
+			}
+
+			const top = layers[0].label;
+			// True when an upper file set or replaced something in `t`.
+			function touched(t) {
+				if (t.src !== top || t.was) return true;
+				if (t.kind === 'obj') return Object.values(t.keys).some(touched);
+				if (t.kind === 'arr') return t.items.some(touched);
+				return false;
+			}
+			// Folded: a block only the domain file sets is one line, to open
+			// on demand, so what the upper files change stands out.
+			let folded = layers.length > 1;
+			const open = new Set();
+			const bar = document.createElement('div');
+			bar.className = 'merged-bar';
+			const foldBtn = document.createElement('button');
+			foldBtn.type = 'button';
+			bar.appendChild(foldBtn);
+			body.appendChild(bar);
+			const table = document.createElement('div');
+			table.className = 'merged-lines';
+			body.appendChild(table);
+			function render() {
+				foldBtn.textContent = folded ? 'Show every line' : 'Fold what only ' + top + ' sets';
+				table.innerHTML = '';
+				emit(traced, 0, '', '', '$');
+			}
+			foldBtn.addEventListener('click', () => { folded = !folded; open.clear(); render(); });
+			function line(src, indent, text, note) {
+				const row = document.createElement('div');
+				row.className = 'merged-line' + (src && src !== top ? ' upper' : '');
+				const g = document.createElement('span');
+				g.className = 'merged-gutter';
+				g.textContent = src || '';
+				const c = document.createElement('span');
+				c.className = 'merged-code';
+				c.textContent = '  '.repeat(indent) + text;
+				row.appendChild(g);
+				row.appendChild(c);
+				if (note) {
+					const n = document.createElement('span');
+					n.className = 'merged-note';
+					n.textContent = note;
+					row.appendChild(n);
+				}
+				table.appendChild(row);
+			}
+			function emit(t, indent, prefix, comma, path) {
+				const note = t.was ? 'replaces ' + t.was.text + ' from ' + t.was.src : '';
+				if (folded && path !== '$' && t.kind !== 'val' && !touched(t) && !open.has(path)) {
+					const n = t.kind === 'obj' ? Object.keys(t.keys).length : t.items.length;
+					const id = t.kind === 'obj' && t.keys.id && t.keys.id.kind === 'val' ? t.keys.id.v : null;
+					const what = id != null ? '{ "id": ' + JSON.stringify(id) + ', … }'
+						: t.kind === 'obj' ? '{ … ' + n + ' key' + (n === 1 ? '' : 's') + ' }'
+						: '[ … ' + n + ' item' + (n === 1 ? '' : 's') + ' ]';
+					line(t.src, indent, prefix + what + comma, '');
+					const row = table.lastChild;
+					row.classList.add('folded');
+					row.title = 'Click to open';
+					row.addEventListener('click', () => { open.add(path); render(); });
+					return;
+				}
+				if (t.kind === 'obj') {
+					const keys = Object.keys(t.keys);
+					if (!keys.length) { line(t.src, indent, prefix + '{}' + comma, note); return; }
+					line(t.src, indent, prefix + '{', note);
+					keys.forEach((k, i) => emit(t.keys[k], indent + 1, JSON.stringify(k) + ': ', i < keys.length - 1 ? ',' : '', path + '.' + k));
+					line('', indent, '}' + comma);
+				} else if (t.kind === 'arr') {
+					if (!t.items.length) { line(t.src, indent, prefix + '[]' + comma, note); return; }
+					line(t.src, indent, prefix + '[', note);
+					t.items.forEach((x, i) => emit(x, indent + 1, '', i < t.items.length - 1 ? ',' : '', path + '[' + i + ']'));
+					line('', indent, ']' + comma);
+				} else {
+					line(t.src, indent, prefix + JSON.stringify(t.v) + comma, note);
+				}
+			}
+			render();
+		}).catch(e => {
+			body.textContent = 'Could not build the merged view: ' + e.message;
+		});
+		return panel;
+	}
+
 	return {
 		init, escapeHtml, cleanJson,
 		derefNode, variantsFromAnyOf, isStringMapDef,
@@ -684,7 +1101,7 @@ window.BladeEditor = (function () {
 		fieldEl, blurFieldEl, listFieldEl, selectFieldEl, checkboxFieldEl, kvFieldEl,
 		renderSchemaField, renderFieldsInto,
 		polyListField, polyCard, objListField, mapOfObjectsField, polyObjectField,
-		rawJsonField, rawJsonBound,
-		helpMini, openHelp, jsonViewer,
+		rawJsonField, rawJsonBound, invalidRawJson,
+		helpMini, openHelp, jsonViewer, filePicker, mergeOver, mergedView, below,
 	};
 })();

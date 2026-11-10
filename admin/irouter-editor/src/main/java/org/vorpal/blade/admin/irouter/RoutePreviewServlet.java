@@ -46,12 +46,12 @@ public class RoutePreviewServlet extends HttpServlet {
 
 	@Override
 	public void init() throws ServletException {
-		// Same wiring as the crud-editor's preview: the AdminServer-side WAR
-		// never initializes the SIP logging stack, so install the capturing
-		// logger that both prevents NPEs and surfaces per-request warnings.
-		CapturingLogger logger = new CapturingLogger();
-		if (SettingsManager.getSipLogger() == null) SettingsManager.setSipLogger(logger);
-		if (Callflow.getSipLogger() == null) Callflow.setLogger(logger);
+		// The engine logs through the static SIP loggers. Wrap whatever the
+		// WAR already has (the editor's own settings start one; it may be
+		// null) so each preview request's warnings and notes are captured
+		// for the operator and still reach the log.
+		SettingsManager.setSipLogger(CapturingLogger.wrap(SettingsManager.getSipLogger()));
+		Callflow.setLogger(CapturingLogger.wrap(Callflow.getSipLogger()));
 	}
 
 	@Override

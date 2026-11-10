@@ -43,6 +43,10 @@ public class DetachedMessage implements SipServletMessage, Serializable {
 	// order — tests that round-trip a message through the Dummy* mocks
 	// rely on stable header ordering for diff/serialization.
 	protected Map<String, String> headers = new LinkedHashMap<>();
+
+	/// The second and later occurrences of a header that appears more than
+	/// once, as `addHeader` makes them; `headers` holds the first.
+	protected Map<String, List<String>> repeated = new LinkedHashMap<>();
 	protected Locale acceptLanguage;
 	protected String characterEncoding;
 	protected Object content;
@@ -138,7 +142,11 @@ public class DetachedMessage implements SipServletMessage, Serializable {
 
 	@Override
 	public void addHeader(String key, String value) {
-		this.headers.put(key, value);
+		if (this.headers.containsKey(key)) {
+			this.repeated.computeIfAbsent(key, k -> new ArrayList<>()).add(value);
+		} else {
+			this.headers.put(key, value);
+		}
 	}
 
 	@Override
@@ -259,10 +267,10 @@ public class DetachedMessage implements SipServletMessage, Serializable {
 	@Override
 	public List<String> getHeaderList(String key) {
 		List<String> headerList = new LinkedList<>();
-
-		// Really shouldn't use Map
-		headerList.add(headers.get(key));
-
+		if (headers.containsKey(key)) {
+			headerList.add(headers.get(key));
+			headerList.addAll(repeated.getOrDefault(key, java.util.Collections.emptyList()));
+		}
 		return headerList;
 	}
 
@@ -277,8 +285,8 @@ public class DetachedMessage implements SipServletMessage, Serializable {
 	}
 
 	@Override
-	public ListIterator<String> getHeaders(String arg0) {
-		return new ArrayList<>(headers.keySet()).listIterator();
+	public ListIterator<String> getHeaders(String name) {
+		return new ArrayList<>(getHeaderList(name)).listIterator();
 	}
 
 	@Override
@@ -342,7 +350,10 @@ public class DetachedMessage implements SipServletMessage, Serializable {
 
 	@Override
 	public byte[] getRawContent() throws IOException {
-		return content.toString().getBytes();
+		// As the container does: null for no body, the bytes for a binary one.
+		if (content == null) return null;
+		if (content instanceof byte[]) return (byte[]) content;
+		return content.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
 	}
 
 	@Override
@@ -431,6 +442,7 @@ public class DetachedMessage implements SipServletMessage, Serializable {
 	@Override
 	public void removeHeader(String key) {
 		this.headers.remove(key);
+		this.repeated.remove(key);
 	}
 
 	@Override
@@ -491,6 +503,7 @@ public class DetachedMessage implements SipServletMessage, Serializable {
 	@Override
 	public void setHeader(String key, String value) {
 		this.headers.put(key, value);
+		this.repeated.remove(key);
 	}
 
 	@Override

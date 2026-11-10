@@ -28,22 +28,28 @@ public class SdpReadOperation implements Operation {
 	}
 
 	@Override
-	public void process(SipServletMessage msg) {
-		try {
-			String sdp = MessageHelper.getAttributeValue(msg, "body", contentType);
-			if (sdp == null || sdp.isEmpty()) return;
+	public void check() throws Exception {
+		Placeholders.checkEach(expressions, Placeholders::checkJsonPath);
+	}
 
-			SipApplicationSession appSession = msg.getApplicationSession();
-			for (Map.Entry<String, String> entry : expressions.entrySet()) {
-				String value = SdpHelper.readValue(sdp, entry.getValue());
-				if (value != null && !value.isEmpty()) {
-					MessageHelper.putVariable(appSession, entry.getKey(), value);
-					SettingsManager.getSipLogger().finer(msg,
-							"SdpReadOperation - saved " + entry.getKey() + "=" + value);
-				}
+	@Override
+	public void process(SipServletMessage msg) throws Exception {
+		String sdp = MessageHelper.getAttributeValue(msg, "body", contentType);
+		if (sdp == null || sdp.isEmpty()) return;
+
+		SipApplicationSession appSession = msg.getApplicationSession();
+		for (Map.Entry<String, String> entry : expressions.entrySet()) {
+			String path = Placeholders.jsonPath(entry.getValue(), msg);
+			if (path == null) {
+				Placeholders.skipped(msg, "SdpReadOperation", entry.getKey() + "'s path", entry.getValue(), null);
+				continue;
 			}
-		} catch (Exception e) {
-			SettingsManager.getSipLogger().logStackTrace(msg, e);
+			String value = SdpHelper.readValue(sdp, path);
+			if (value != null && !value.isEmpty()) {
+				MessageHelper.putVariable(appSession, entry.getKey(), value);
+				SettingsManager.getSipLogger().finer(msg,
+						"SdpReadOperation - saved " + entry.getKey() + "=" + value);
+			}
 		}
 	}
 

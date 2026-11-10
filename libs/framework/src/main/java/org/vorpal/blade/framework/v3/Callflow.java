@@ -297,6 +297,24 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	/// dialog's), and the [#traceEvent] beside the superArrow (fires AFTER the
 	/// send, so the recorded message carries every header v2 stamped on the way
 	/// out).
+	/// True, after answering `lambdaFunction` with the 491 the peer would owe,
+	/// when an INVITE or UPDATE cannot go out because a transaction is in
+	/// progress on its dialog (see the glare notes in [#sendRequest]).
+	private boolean heldByGlare(SipServletRequest request, Callback<SipServletResponse> lambdaFunction)
+			throws ServletException, IOException {
+		SipSession sipSession = request.getSession();
+		if (sipSession == null || !sipSession.isValid()) return false;
+		String method = request.getMethod();
+		if (!INVITE.equals(method) && !UPDATE.equals(method)) return false;
+		if (getGlareState(sipSession) == GlareState.ALLOW) return false;
+		sipLogger.warning(request, "Callflow.sendRequest - transaction in progress on this dialog, "
+				+ method + " not sent, 491 returned");
+		if (lambdaFunction != null) {
+			lambdaFunction.accept(requestPending(request));
+		}
+		return true;
+	}
+
 	@SuppressWarnings("serial")
 	@Override
 	public void sendRequest(SipServletRequest request, Callback<SipServletResponse> lambdaFunction)
@@ -306,9 +324,18 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 			return;
 		}
 
+		// Held back by glare first: the rules must not change, count or
+		// capture from a request that is never sent.
+		if (heldByGlare(request, lambdaFunction)) {
+			return;
+		}
+
 		// The application's CRUD rules get the last word. They run before the
 		// passthru hand-off too, which keeps this request's Request-URI.
 		CrudHook.apply(request);
+		if (crudRefused(java.util.Collections.singletonList(request))) {
+			return;
+		}
 
 		if (passthruEnabled() && isInitialInvite(request)
 				&& proxyPassthru(new java.util.ArrayList<>(java.util.Collections.singletonList(request)), true, 0,
@@ -334,15 +361,7 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 					// and protected alike. Sending anyway would let the next ACK or final response clear
 					// protection while this request is still open. The callback gets the 491 the peer
 					// would owe it and handles it as a peer's: a B2BUA relays it, a refresh waits.
-					if (getGlareState(sipSession) != GlareState.ALLOW) {
-						sipLogger.warning(request,
-								"Callflow.sendRequest - transaction in progress on this dialog, "
-										+ request.getMethod() + " not sent, 491 returned");
-						if (lambdaFunction != null) {
-							lambdaFunction.accept(requestPending(request));
-						}
-						return;
-					}
+					// ([#heldByGlare], checked before the CRUD rules run.)
 					if (request.isInitial()) {
 						stampVorpalIdHeaders(request, appSession, sipSession);
 					}
@@ -440,6 +459,7 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 		}
 
 		CrudHook.apply(response);
+		response = CrudHook.restatus(response);
 
 		SipApplicationSession appSession = response.getApplicationSession();
 		SipSession sipSession = response.getSession();
@@ -583,8 +603,8 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 			sipLogger.warning("Callflow.sendRequestsInSerial - empty request list");
 			return;
 		}
-		for (SipServletRequest request : requests) {
-			CrudHook.apply(request);
+		if (crudDecided(requests)) {
+			return;
 		}
 		if (passthruEnabled() && isInitialInvite(requests.get(0)) && proxyPassthru(
 				new java.util.ArrayList<>(requests), false, milliseconds, lambdaFunction, dialogResponse, advance)) {
@@ -642,6 +662,10 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 		if (!requests.isEmpty() && passthruEnabled() && isInitialInvite(requests.get(0))) {
 			sendRequestsInSerial(milliseconds, requests, lambdaFunction, dialogResponse, (response) -> true);
 		} else {
+			// The rules decide for the whole list first, as in the v3 form: a
+			// refused destination is dropped and the hunt tries the rest. The
+			// baseline then sends one at a time, each already decided.
+			if (crudDecided(requests)) return;
 			super.sendRequestsInSerial(milliseconds, requests, lambdaFunction, dialogResponse);
 		}
 	}
@@ -706,8 +730,11 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 			sipLogger.warning("Callflow.sendRequestsInParallel - empty request list");
 			return;
 		}
-		for (SipServletRequest request : requests) {
-			CrudHook.apply(request);
+		// From a copy: the application's list keeps every branch it built,
+		// refused ones included.
+		requests = new java.util.ArrayList<>(requests);
+		if (crudDecided(requests)) {
+			return;
 		}
 		if (passthruEnabled() && isInitialInvite(requests.get(0)) && proxyPassthru(
 				new java.util.ArrayList<>(requests), true, timeout, lambdaFunction, dialogResponse, retryable)) {
@@ -806,7 +833,12 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 		if (!requests.isEmpty() && passthruEnabled() && isInitialInvite(requests.get(0))) {
 			sendRequestsInParallel(timeout, requests, lambdaFunction, dialogResponse, (response) -> true);
 		} else {
-			super.sendRequestsInParallel(timeout, requests, lambdaFunction, dialogResponse);
+			// The rules decide for every branch before any is sent: a refused
+			// branch is dropped, and the caller is refused only if none is left.
+			// From a copy: the application's list keeps every branch it built.
+			List<SipServletRequest> branches = new java.util.ArrayList<>(requests);
+			if (crudDecided(branches)) return;
+			super.sendRequestsInParallel(timeout, branches, lambdaFunction, dialogResponse);
 		}
 	}
 
@@ -908,6 +940,148 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	/// that each batch's timer decides.
 	static final int PASSTHRU_NO_TIMEOUT_SECONDS = 24 * 60 * 60;
 
+	/// Runs the send rules on every request in `requests`, then
+	/// [#crudRefused]: true when the caller was refused and nothing is to be
+	/// sent.
+	private boolean crudDecided(List<SipServletRequest> requests) throws ServletException, IOException {
+		if (requests.isEmpty()) return false;
+		for (SipServletRequest request : requests) {
+			CrudHook.apply(request);
+		}
+		return crudRefused(requests);
+	}
+
+	/// Applies what the application's CRUD rules decided about `requests`
+	/// ([org.vorpal.blade.framework.v3.crud.RejectOperation]). Refused ones
+	/// are taken out of the list: a race's own copy, or the list a hunt
+	/// consumes anyway, and the rest are sent. If none is left, the caller's
+	/// unanswered initial INVITE is answered with the first refusal and this
+	/// returns true. With no such INVITE to answer (the application
+	/// originated the call, the caller has gone, or the call is answered),
+	/// nothing is sent and [ServletException] tells the application: a
+	/// refused destination is never dialled.
+	private boolean crudRefused(List<SipServletRequest> requests) throws ServletException, IOException {
+		SipServletRequest refused = null;
+		for (SipServletRequest request : requests) {
+			if (CrudHook.refusal(request) != null) {
+				refused = request;
+				break;
+			}
+		}
+		if (refused == null) {
+			return false;
+		}
+		org.vorpal.blade.framework.v3.crud.RejectOperation.Refusal refusal = CrudHook.refusal(refused);
+		// The caller, found while the refused request's session is still
+		// live: dropping a branch ends that session, and its link with it.
+		SipSession callerLeg = getLinkedSession(refused.getSession());
+		if (callerLeg == null) callerLeg = callerSession(refused);
+		SipServletRequest upstream = (callerLeg != null) ? callerLeg.getActiveInvite(UAMode.UAS) : null;
+		if (requests.size() > 1) {
+			try {
+				java.util.List<SipServletRequest> dropped = new java.util.ArrayList<>();
+				for (SipServletRequest request : requests) {
+					if (CrudHook.refusal(request) != null) dropped.add(request);
+				}
+				requests.removeIf(request -> CrudHook.refusal(request) != null);
+				// A refused branch is never sent: its session goes, so it does not
+				// hold the call's state until it expires. Only once the list has
+				// let go of it.
+				dropped.forEach(Callflow::invalidateUnsent);
+			} catch (UnsupportedOperationException fixedList) {
+				sipLogger.warning(refused, "Callflow - a CRUD rule rejected a branch, but the branch list "
+						+ "cannot change; sending every branch");
+				// Sent one at a time next, a branch still marked would refuse
+				// the caller while the others ring.
+				for (SipServletRequest request : requests) request.removeAttribute(org.vorpal.blade.framework.v3.crud.MessageHelper.PENDING_REJECT);
+				return false;
+			}
+			if (!requests.isEmpty()) {
+				return false;
+			}
+		}
+		if (upstream == null || !upstream.isInitial() || upstream.isCommitted()) {
+			// Only the call's own unanswered initial INVITE takes the refusal.
+			// Without one the INVITE is still not sent.
+			invalidateUnsent(refused);
+			throw new ServletException("a CRUD rule refused this INVITE (" + refusal.status + "); it was not sent"
+					+ ((callerLeg == null) ? "" : ", and the caller's INVITE is answered or gone, so nobody was told"));
+		}
+		SipServletResponse answer = CrudHook.refuse(upstream, refusal);
+		reportRefusal(answer, b2buaListenerOrNull());
+		sendResponse(answer);
+		for (SipServletRequest request : requests) invalidateUnsent(request);
+		invalidateUnsent(refused);
+		return true;
+	}
+
+	/// Ends the session of a request that will never be sent.
+	private static void invalidateUnsent(SipServletRequest request) {
+		try {
+			SipSession unsent = (request != null) ? request.getSession() : null;
+			if (unsent != null && unsent.isValid() && !request.isCommitted()) unsent.invalidate();
+		} catch (Exception ignore) {
+			// already gone
+		}
+	}
+
+	/// The session in `request`'s call holding an unanswered initial INVITE
+	/// it received: the caller's, for a B2BUA that built its outbound INVITE
+	/// without linking the sessions. Null when there is none, the call having
+	/// been originated here, or more than one, which cannot be told apart.
+	private static SipSession callerSession(SipServletRequest request) {
+		// Only when exactly one caller is waiting: an application session that
+		// holds several calls (a room, a queue) must not refuse the wrong one.
+		SipSession found = null;
+		try {
+			java.util.Iterator<?> sessions = request.getApplicationSession().getSessions("SIP");
+			while (sessions.hasNext()) {
+				Object o = sessions.next();
+				if (!(o instanceof SipSession) || o == request.getSession()) continue;
+				SipServletRequest invite = ((SipSession) o).getActiveInvite(UAMode.UAS);
+				if (invite != null && invite.isInitial() && !invite.isCommitted()) {
+					if (found != null) return null;
+					found = (SipSession) o;
+				}
+			}
+		} catch (Exception ignore) {
+			// no sessions to look at
+		}
+		return found;
+	}
+
+	/// The call's outcome when a CRUD rule refused it, reported before the
+	/// refusal is sent, in the order a callee's failure is: the
+	/// `callDeclined` event, the B2BUA's `callDeclined` (which may still edit
+	/// the response), the event sent, the analytics stopped. The INVITE was
+	/// never sent, so no callee response will report it. A failing listener
+	/// does not stop the rest.
+	public static void reportRefusal(SipServletResponse refusal, org.vorpal.blade.framework.v2.b2bua.B2buaListener listener) {
+		try {
+			org.vorpal.blade.framework.v2.config.SettingsManager.createEvent("callDeclined", refusal);
+		} catch (Exception e) {
+			sipLogger.warning(refusal, "Callflow - callDeclined event not created for a CRUD refusal: " + e);
+		}
+		if (listener != null) {
+			try {
+				listener.callDeclined(refusal);
+			} catch (Exception e) {
+				sipLogger.warning(refusal, "Callflow - callDeclined listener failed for a CRUD refusal: " + e);
+			}
+		}
+		try {
+			org.vorpal.blade.framework.v2.config.SettingsManager.sendEvent(refusal);
+			Analytics.sessionStop(refusal);
+		} catch (Exception e) {
+			sipLogger.warning(refusal, "Callflow - a CRUD refusal's outcome was not reported: " + e);
+		}
+	}
+
+	private org.vorpal.blade.framework.v2.b2bua.B2buaListener b2buaListenerOrNull() {
+		return (this instanceof org.vorpal.blade.framework.v2.b2bua.InitialInvite)
+				? ((org.vorpal.blade.framework.v2.b2bua.InitialInvite) this).getB2buaListener() : null;
+	}
+
 	/// Sends an initial INVITE's `requests` as branches of a proxy on the
 	/// caller's INVITE, without Record-Route, instead of as new dialogs. Each
 	/// branch gets its request's Request-URI and attributes; the requests
@@ -951,12 +1125,28 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 
 		SipApplicationSession appSession = inbound.getApplicationSession();
 		PassthruProxy state = (PassthruProxy) appSession.getAttribute(PASSTHRU_PROXY_ATTR);
-		javax.servlet.sip.Proxy proxy = inbound.getProxy();
 		if (state == null) {
 			// The proxy forwards the caller's own INVITE, not the request this
-			// callflow built, so the application's CRUD rules run on that one.
-			// Once: later batches proxy the same request again.
-			CrudHook.apply(inbound);
+			// callflow built, so the application's CRUD rules run on that one,
+			// as the message going to the callee. Once: later batches proxy
+			// the same request again. Before getProxy, so a refusal answers a
+			// request that is not yet a proxy's.
+			inbound.setAttribute(org.vorpal.blade.framework.v3.crud.Rule.LEG_ATTR, "callee");
+			try {
+				CrudHook.apply(inbound);
+			} finally {
+				inbound.removeAttribute(org.vorpal.blade.framework.v3.crud.Rule.LEG_ATTR);
+			}
+			if (CrudHook.refusal(inbound) != null) {
+				SipServletResponse answer = CrudHook.refuse(inbound, CrudHook.refusal(inbound));
+				reportRefusal(answer, b2buaListenerOrNull());
+				sendResponse(answer);
+				for (SipServletRequest request : requests) invalidateUnsent(request); // built, never sent
+				return true;
+			}
+		}
+		javax.servlet.sip.Proxy proxy = inbound.getProxy();
+		if (state == null) {
 			proxy.setRecordRoute(false);
 			proxy.setSupervised(true);
 			proxy.setParallel(true);

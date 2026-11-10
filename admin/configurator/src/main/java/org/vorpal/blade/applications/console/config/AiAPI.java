@@ -1,5 +1,7 @@
 package org.vorpal.blade.applications.console.config;
 
+import org.vorpal.blade.framework.v3.ai.AiSettings;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -75,10 +77,9 @@ public class AiAPI {
 		}
 	}
 
-	/// The Configurator's own AI settings, read in process: the Configuration
-	/// MBean's JSON masks the API key.
+	/// The AI settings: the domain's shared `blade-ai.json` when it exists
+	/// ([AiConfigService#settings]), else the Configurator's own `ai` section.
 	private AiSettings loadAiSettings() {
-		ConfiguratorSettings settings = ConfigurationMonitorStartup.currentSettings();
-		return (settings != null && settings.getAi() != null) ? settings.getAi() : new AiSettings();
+		return AiConfigService.settings();
 	}
 }

@@ -24,8 +24,16 @@ then fires at every point in the call lifecycle:
 
 Each rule names the lifecycle events it applies to, so one rule set can rewrite the
 outbound INVITE one way and the final response another. A rule may also carry a `when`
-expression over session variables — `${customerTier} == premium` — using the same
-grammar as iRouter's conditional routing; a malformed expression never fires the rule.
+expression over session variables, such as `${customerTier} == premium`, using the same
+grammar as iRouter's conditional routing. The editor refuses to save an expression
+that does not parse; one in a file edited by hand never fires, and is logged once.
+`leg` and `sdp` narrow a rule to one side of the call or to the offer or answer.
+
+A rule is all or nothing: if one operation fails, the message goes out as it was. A rule
+can also refuse the call (`reject`, on the initial INVITE) or turn one failure status
+into another (`status` and `reasonPhrase` on a 3xx-6xx response). The `receive` event
+belongs to an application's own `crud` section; this service's rules run on the
+messages it sends.
 
 ## Configuration
 
@@ -35,11 +43,15 @@ dialed numbers to the `ruleSet` variable, and example rule sets for each operati
 family — plain header/body `create`/`read`/`update`/`delete`, plus `xml*` (XPath),
 `json*` (JSONPath), and `sdp*` operations. A call the pipeline maps to no rule set
 falls back to `defaultRuleSet`; with no default it passes through untransformed.
+`variables` hold values every call starts with. A cluster or server file changes one
+variable, connector or rule by naming it and inherits the rest; the
+[v3.crud](../../libs/framework/src/main/java/org/vorpal/blade/framework/v3/crud/package-info.java)
+javadoc has the merge rules.
 
 Author and preview rules interactively in the
 [CRUD Editor](../../admin/crud-editor/README.md), which replays a sample message through a
-rule set and shows the transformed result before you commit. Publish through the
-[Configurator](../../admin/configurator/README.md).
+rule set and shows the transformed result before you save. It edits the domain, cluster
+and server files, runs saved tests on Save, and publishes to the running service.
 
 ## Related modules
 

@@ -44,7 +44,7 @@ class CrudHookTest {
 		Rule rule = new Rule();
 		rule.setId(id);
 		rule.setMethod("INVITE");
-		rule.setMessageType("request");
+		rule.setMessageType(Rule.MessageType.request);
 		rule.getOperations().add(op);
 		return rule;
 	}
@@ -53,7 +53,7 @@ class CrudHookTest {
 		RuleSet ruleSet = new RuleSet();
 		ruleSet.setId("rules");
 		for (Rule rule : rules) {
-			ruleSet.getRules().add(rule);
+			ruleSet.add(rule);
 		}
 		Crud crud = new Crud();
 		crud.getRuleSets().put("rules", ruleSet);

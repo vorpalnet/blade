@@ -52,10 +52,10 @@ public class UasServlet extends TesterServlet {
 		Rule rule = new Rule();
 		rule.setId("strip-to-sdp");
 		rule.setMethod("INVITE");
-		rule.setMessageType("request");
+		rule.setMessageType(Rule.MessageType.request);
 		rule.setEvent("callStarted");
 		rule.getOperations().add(new KeepOnlyPartOperation("application/sdp"));
-		scenario.getRules().add(rule);
+		scenario.getRules().put(rule.getId(), rule);
 
 		return scenario;
 	}

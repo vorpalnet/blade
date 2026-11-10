@@ -61,9 +61,9 @@ or strip MIME parts, rewrite SDP/XML/JSON. The classic SIPREC strip is one
 ```jsonc
 "strip-siprec-b2bua": {
   "role": "b2bua",
-  "rules": [ { "id": "strip", "method": "INVITE", "messageType": "request",
-               "event": "callStarted",
-               "operations": [ { "type": "keepPart", "contentType": "application/sdp" } ] } ]
+  "rules": { "strip": { "method": "INVITE", "messageType": "request",
+                        "event": "callStarted",
+                        "operations": [ { "type": "keepPart", "contentType": "application/sdp" } ] } }
 }
 ```
 

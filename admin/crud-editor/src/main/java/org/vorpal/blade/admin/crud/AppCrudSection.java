@@ -51,10 +51,34 @@ final class AppCrudSection {
 		return apps;
 	}
 
-	/// The [Crud] class's own schema: `properties.pipeline` and `$defs.Rule`,
-	/// the two places the page's form resolver reads, sit where they sit in
-	/// `crud.jschema`. Generated from the framework on this server rather than
-	/// cut out of the app's `.jschema`, which spells the same classes.
+	/// The `crud` section's schema as `app` itself spells it, cut from its
+	/// `_schemas/<app>.jschema` (written by the app at startup): the app's
+	/// `Crud` definition with the file's `$defs` beside it, so
+	/// `properties.pipeline` and `$defs.Rule` sit where the page's form
+	/// resolver reads them. An app on an older framework is offered only the
+	/// fields it can load, in the shapes it reads (a list of rules, say), and
+	/// the editor saves in those shapes. Without the file, the schema of the
+	/// [Crud] class on this server.
+	static JsonNode schema(Path schemaDir, String app) {
+		try {
+			Path file = schemaDir.resolve(app + ".jschema");
+			if (Files.isRegularFile(file)) {
+				JsonNode doc = MAPPER.readTree(file.toFile());
+				JsonNode crud = doc.path("$defs").path("Crud");
+				if (crud.isObject()) {
+					ObjectNode out = ((ObjectNode) crud).deepCopy();
+					out.set("$defs", doc.get("$defs"));
+					out.put("x-schema-source", file.getFileName().toString());
+					return out;
+				}
+			}
+		} catch (IOException unreadable) {
+			// A schema being rewritten by a starting node: use this server's.
+		}
+		return schema();
+	}
+
+	/// The [Crud] class's own schema, from the framework on this server.
 	static JsonNode schema() {
 		try {
 			return SettingsManager.generateSchemaNode(Crud.class, MAPPER);
@@ -69,6 +93,9 @@ final class AppCrudSection {
 	static void splice(ObjectNode doc, ObjectNode section) {
 		boolean empty = section.path("ruleSets").size() == 0
 				&& section.path("pipeline").size() == 0
+				&& section.path("variables").size() == 0
+				// `"defaultRuleSet": null` switches an inherited default off: kept.
+				&& !(section.has("defaultRuleSet") && section.get("defaultRuleSet").isNull())
 				&& section.path("defaultRuleSet").asText("").isEmpty();
 		if (empty) {
 			doc.remove(NAME);

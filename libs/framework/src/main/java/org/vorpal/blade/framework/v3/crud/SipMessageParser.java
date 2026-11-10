@@ -77,6 +77,13 @@ public class SipMessageParser implements Serializable {
 
 		applyHeaders(msg, folded);
 		applyBody(msg, body);
+		// A To tag means the dialog exists: the request is not initial, so a
+		// rule that only an initial request may run (`reject`) fails here as
+		// it would on the wire.
+		if (msg instanceof DetachedRequest) {
+			String to = msg.getHeader("To");
+			((DetachedRequest) msg).setInitial(to == null || !to.matches("(?i).*;\\s*tag\\s*=.*"));
+		}
 		return msg;
 	}
 
@@ -144,13 +151,18 @@ public class SipMessageParser implements Serializable {
 		if (to == null) to = "<sip:anonymous@unknown>";
 
 		DetachedRequest req = new DetachedRequest(method, from, to);
-		req.setApplicationSession(new DetachedApplicationSession("preview"));
+		DetachedApplicationSession appSession = new DetachedApplicationSession("preview");
+		req.setApplicationSession(appSession);
+		// The response takes its session from the request; without one the
+		// `leg` filter cannot tell which side the response is on.
+		req.setSession(new DetachedSipSession(appSession));
 		return new DetachedResponse(req, status, reason);
 	}
 
 	private static void applyHeaders(SipServletMessage msg, String[] foldedLines) {
-		// LinkedHashSet to dedup repeated names (we keep the last value
-		// because setHeader overwrites) while preserving first-seen order.
+		// Every occurrence is kept: the first replaces whatever the
+		// constructor set (To, From), the rest are added, so a rule on the
+		// second P-Asserted-Identity sees one. `order` keeps first-seen order.
 		LinkedHashSet<String> order = new LinkedHashSet<>();
 		// Skip the start line; everything else `Name: value`.
 		for (int i = 1; i < foldedLines.length; i++) {
@@ -160,8 +172,11 @@ public class SipMessageParser implements Serializable {
 			if (colon <= 0) continue; // malformed → drop
 			String name = line.substring(0, colon).trim();
 			String value = line.substring(colon + 1).trim();
-			msg.setHeader(name, value);
-			order.add(name);
+			if (order.add(name)) {
+				msg.setHeader(name, value);
+			} else {
+				msg.addHeader(name, value);
+			}
 		}
 		msg.setAttribute(ATTR_HEADER_ORDER, new ArrayList<>(order));
 	}

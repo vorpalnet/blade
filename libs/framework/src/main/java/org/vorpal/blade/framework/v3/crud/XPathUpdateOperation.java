@@ -6,7 +6,6 @@ import javax.servlet.sip.SipServletMessage;
 
 import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
-import org.vorpal.blade.framework.v3.configuration.Context;
 import org.w3c.dom.Document;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -30,22 +29,34 @@ public class XPathUpdateOperation implements Operation {
 	}
 
 	@Override
-	public void process(SipServletMessage msg) {
-		try {
-			String xml = MessageHelper.getAttributeValue(msg, "body", contentType);
-			if (xml == null || xml.isEmpty()) return;
+	public void check() throws Exception {
+		Placeholders.checkXPath(xpath);
+	}
 
-			Document doc = XmlHelper.parse(xml);
-			Map<String, String> vars = MessageHelper.getSessionVariables(msg.getApplicationSession());
-			String resolved = Context.substitute(value, vars);
+	@Override
+	public void process(SipServletMessage msg) throws Exception {
+		String xml = MessageHelper.getAttributeValue(msg, "body", contentType);
+		if (xml == null || xml.isEmpty()) return;
 
-			if (XmlHelper.setNodeValue(doc, xpath, resolved)) {
-				MessageHelper.setAttributeValue(msg, "body", XmlHelper.serialize(doc), contentType);
-				SettingsManager.getSipLogger().finer(msg,
-						"XPathUpdateOperation - updated " + xpath + "=" + resolved);
-			}
-		} catch (Exception e) {
-			SettingsManager.getSipLogger().logStackTrace(msg, e);
+		Document doc = Placeholders.parseXml(msg, "XPathUpdateOperation", xml);
+		if (doc == null) return;
+		Map<String, String> vars = MessageHelper.getSessionVariables(msg.getApplicationSession());
+		// No value clears the node's text, as it always has.
+		String resolved = (value == null) ? "" : Placeholders.value(value, vars);
+		if (resolved == null) {
+			Placeholders.skipped(msg, "XPathUpdateOperation", "the value", value, vars);
+			return;
+		}
+
+		String path = Placeholders.xpath(xpath, msg);
+		if (path == null) {
+			Placeholders.skipped(msg, "XPathUpdateOperation", "the XPath", xpath, null);
+			return;
+		}
+		if (XmlHelper.setNodeValue(doc, path, resolved)) {
+			MessageHelper.setAttributeValue(msg, "body", XmlHelper.serialize(xml, doc), contentType);
+			SettingsManager.getSipLogger().finer(msg,
+					"XPathUpdateOperation - updated " + xpath + "=" + resolved);
 		}
 	}
 

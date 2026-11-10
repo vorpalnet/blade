@@ -27,24 +27,31 @@ public class XPathReadOperation implements Operation {
 	}
 
 	@Override
-	public void process(SipServletMessage msg) {
-		try {
-			String xml = MessageHelper.getAttributeValue(msg, "body", contentType);
-			if (xml == null || xml.isEmpty()) return;
+	public void check() throws Exception {
+		Placeholders.checkEach(expressions, Placeholders::checkXPath);
+	}
 
-			Document doc = XmlHelper.parse(xml);
-			SipApplicationSession appSession = msg.getApplicationSession();
+	@Override
+	public void process(SipServletMessage msg) throws Exception {
+		String xml = MessageHelper.getAttributeValue(msg, "body", contentType);
+		if (xml == null || xml.isEmpty()) return;
 
-			for (Map.Entry<String, String> entry : expressions.entrySet()) {
-				String value = XmlHelper.evaluateString(doc, entry.getValue());
-				if (value != null && !value.isEmpty()) {
-					MessageHelper.putVariable(appSession, entry.getKey(), value);
-					SettingsManager.getSipLogger().finer(msg,
-							"XPathReadOperation - saved " + entry.getKey() + "=" + value);
-				}
+		Document doc = Placeholders.parseXml(msg, "XPathReadOperation", xml);
+		if (doc == null) return;
+		SipApplicationSession appSession = msg.getApplicationSession();
+
+		for (Map.Entry<String, String> entry : expressions.entrySet()) {
+			String path = Placeholders.xpath(entry.getValue(), msg);
+			if (path == null) {
+				Placeholders.skipped(msg, "XPathReadOperation", entry.getKey() + "'s XPath", entry.getValue(), null);
+				continue;
 			}
-		} catch (Exception e) {
-			SettingsManager.getSipLogger().logStackTrace(msg, e);
+			String value = XmlHelper.evaluateString(doc, path);
+			if (value != null && !value.isEmpty()) {
+				MessageHelper.putVariable(appSession, entry.getKey(), value);
+				SettingsManager.getSipLogger().finer(msg,
+						"XPathReadOperation - saved " + entry.getKey() + "=" + value);
+			}
 		}
 	}
 

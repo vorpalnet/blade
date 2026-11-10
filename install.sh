@@ -62,6 +62,7 @@
 #   ./install.sh <name> backup      snapshot profile + domain config to a tgz
 #   ./install.sh <name> wsl         Windows: set up WSL2 (systemd, mirrored network, firewall)
 #   ./install.sh <name> overload    wire OCCAS overload protection to the options service's verdict
+#   ./install.sh <name> ai          write the AI assistant settings (blade-ai.json) into the domain
 #   flags: -y/--yes (assume yes)  -n/--dry-run  --no-backup  --purge
 #   ./install.sh -v | --version     print the BLADE version
 #   ./install.sh -h
@@ -706,6 +707,12 @@ load_profile() {
     DB_DIALECT="$(d jdbc.analytics.dialect mysql)"
     DB_URL="$(d jdbc.analytics.url "")"
     DB_USER="$(d jdbc.analytics.user blade)"
+    # The AI assistant (blade-ai.json, written by do_ai); the API key is an ENC()
+    # secret, read where it's used.
+    AI_ENABLED="$(d ai.enabled false)"
+    AI_MODEL="$(d ai.model claude-opus-5-5)"
+    AI_BASEURL="$(d ai.baseurl "")"
+    AI_MASK="$(d ai.masknumbers true)"
     # hosts → arrays. machine.N = name:addr:port:type; pub/fqdn in host.N.*
     H_NAME=(); H_ADDR=(); H_PORT=(); H_TYPE=(); H_PUB=(); H_FQDN=(); H_ROLE=()
     local i=1 m nm na np nt
@@ -1044,6 +1051,43 @@ EOF
     local dbp=""
     ask_secret dbp "  database password (Enter = keep current)"
     [ -z "$dbp" ] || { write_secret "$WLS_SECRET" jdbc.analytics.password "$dbp" && ok "saved jdbc.analytics.password to the config (600)"; }
+    return 0
+}
+
+# ----- AI assistant (blade-ai.json) -------------------------------------------
+phase_ai() {
+    log ""; log "${C_BOLD}AI assistant (Claude)${C_RESET}"
+    help <<'EOF'
+The CRUD editor's "Describe a rule" and the Configurator's "Use AI" draft with
+Claude. One Anthropic API key serves both, kept in the domain's blade-ai.json
+and encrypted with the domain's own key. Only the AdminServer calls out
+(HTTPS to api.anthropic.com, or your gateway); engines never do. A draft is a
+proposal the operator still saves, through the same checks as a hand edit.
+Off by default: with it off, no AI button shows and nothing leaves the box.
+The 'ai' row writes the file; it takes effect on the next draft, no restart.
+EOF
+    if yesno "turn the AI assistant on?" "$([ "$AI_ENABLED" = true ] && echo Y || echo N)"; then
+        AI_ENABLED=true
+    else
+        [ "${PAGE_ABORT:-0}" = 1 ] && return 0
+        AI_ENABLED=false
+        log "  ${C_DIM}off. A key already saved is kept for when it is turned back on.${C_RESET}"
+        return 0
+    fi
+    local key=""
+    ask_secret key "  Anthropic API key (Enter = keep current)"
+    if [ -n "$key" ]; then
+        write_secret "$WLS_SECRET" ai.apikey "$key" && ok "saved ai.apikey to the config (600)"
+    elif [ -z "$(read_prop "$WLS_SECRET" ai.apikey)" ]; then
+        log "  ${C_DIM}no key in the profile: the file keeps whatever key it already has (set in the Configurator).${C_RESET}"
+    fi
+    ask AI_MODEL   "  model" "${AI_MODEL:-claude-opus-5-5}"
+    ask AI_BASEURL "  API base URL (blank = the Anthropic API; set for a gateway)" "$AI_BASEURL"
+    if yesno "mask phone numbers in sample messages sent to the model?" "$([ "$AI_MASK" = false ] && echo N || echo Y)"; then
+        AI_MASK=true
+    else
+        AI_MASK=false
+    fi
     return 0
 }
 
@@ -1433,6 +1477,13 @@ save_profile() {
         echo "jdbc.analytics.dialect=${DB_DIALECT}"
         echo "jdbc.analytics.url=${DB_URL}"
         echo "jdbc.analytics.user=${DB_USER}"
+        echo "# The AI assistant: ./install.sh <env> ai writes these into the domain's"
+        echo "# blade-ai.json, the API key (ai.apikey, an ENC() secret) encrypted by the"
+        echo "# domain's own crypto service. The Configurator edits the same file."
+        echo "ai.enabled=${AI_ENABLED}"
+        echo "ai.model=${AI_MODEL}"
+        echo "ai.baseurl=${AI_BASEURL}"
+        echo "ai.masknumbers=${AI_MASK}"
     } >> "$DEPLOY_CONF"
     # Restore the secrets captured before the rewrite (ENC()-wrapped, mode 600).
     [ -n "$_secrets" ] && printf '%s\n' "$_secrets" >> "$BLADE_CONF"
@@ -1573,11 +1624,18 @@ build_menu_rows() {
     if [ -n "$DB_URL" ]; then p_db=1; dbsum="${DB_DIALECT} · ${DB_URL}"; else p_db=-; dbsum="not configured — events hold on the topic"; fi
     _row phase  db  "Analytics database (jdbc/BladeAnalytics)" "$dbsum" "$p_db"
     _row action dbc "Create the analytics data source" "$([ "$a_dbc" = 1 ] && echo 'jdbc/BladeAnalytics')" "$a_dbc"
-    _row head ""      "STEP 7 · Deploy settings (build profile, SSH, admin URL)" "" "-"
+    local a_ai=0; grep -qsE '"enabled" *: *true' "${DOMAINS_DIR}/${DOMAIN}/config/custom/vorpal/blade-ai.json" && a_ai=1
+    local p_ai aisum
+    if [ "$AI_ENABLED" = true ]; then p_ai=1; aisum="on · ${AI_MODEL}${AI_BASEURL:+ via ${AI_BASEURL}} · key $([ -n "$(read_prop "$WLS_SECRET" ai.apikey)" ] && echo set || echo 'not in profile')"
+    else p_ai=-; aisum="off"; fi
+    _row head ""      "STEP 7 · AI assistant (optional; the AdminServer calls Claude)" "" "-"
+    _row phase  ai  "AI assistant settings + Anthropic API key" "$aisum" "$p_ai"
+    _row action aiw "Write blade-ai.json into the domain"      "$([ "$a_ai" = 1 ] && echo 'on in the domain')" "$a_ai"
+    _row head ""      "STEP 8 · Deploy settings (build profile, SSH, admin URL)" "" "-"
     _row phase runtime "SSH user, admin URL" "${ADMINURL}" "$p_run"
     # App deployment lives in deploy.sh (it reads THIS profile). install.sh stands
     # up the server; it no longer deploys apps.
-    _row head ""      "STEP 8 · Deploy apps → run:  ./deploy.sh ${NAME:-<env>} --all" "" "-"
+    _row head ""      "STEP 9 · Deploy apps → run:  ./deploy.sh ${NAME:-<env>} --all" "" "-"
     # UNINSTALL · listed top-to-bottom in safe teardown order (reverse of STEP 1).
     # The checked set runs in menu order, so ticking any subset tears down safely.
     # Each ✓ means "still present / removable"; each row confirms before deleting.
@@ -1627,6 +1685,8 @@ dispatch_row() {
         jms) do_jms               || true ;;
         db)  phase_db; _save ;;
         dbc) do_dbc               || true ;;
+        ai)  phase_ai; _save ;;
+        aiw) do_ai                || true ;;
         f) do_open_firewall || true ;;
         ngx) do_install_nginx || true ;;
         x) stop_admin  "$MWHOME" "$DOMAIN" "$ADMIN_USER" || true ;;
@@ -5160,6 +5220,104 @@ PYDS
     return 1
 }
 
+# Write the profile's AI settings into <domain>/config/custom/vorpal/blade-ai.json
+# (v3.ai.AiConfig reads it on every draft). Merges into an existing file, so a
+# field set only in the Configurator survives, and a file key is replaced only
+# when the profile holds one. The key is encrypted offline with the domain's
+# SerializedSystemIni, the same {AES} form the Configurator writes; the AdminServer
+# need not be running. The plaintext key reaches WLST in a mode-600 file in the
+# staged workdir (sudo drops the environment), which the script deletes on read.
+do_ai() {
+    local cfgdir="${DOMAINS_DIR}/${DOMAIN}/config/custom/vorpal"
+    local target="${cfgdir}/blade-ai.json" domhome="${DOMAINS_DIR}/${DOMAIN}"
+    local key; key="$(read_prop "$WLS_SECRET" ai.apikey)"
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] write ${target}: enabled=${AI_ENABLED} model=${AI_MODEL} baseUrl=${AI_BASEURL:-—} maskNumbers=${AI_MASK} apiKey=$([ -n "$key" ] && echo 'from profile, encrypted' || echo 'unchanged')${C_RESET}"
+        return 0
+    fi
+    as_install_user test -d "${domhome}/config" || { warn "no domain at ${domhome}: create it first."; next_step c "create the cluster domain"; return 1; }
+    [ "$AI_ENABLED" = true ] && [ -z "$key" ] && ! as_install_user grep -qs '"apiKey"' "$target" \
+        && warn "the assistant is on but has no API key yet: set it on the 'AI' page or in the Configurator."
+    local mw="${MWHOME:-$(read_prop "$OCCAS_CONF" oracle.home)}" jh; jh="$(read_prop "$OCCAS_CONF" java.home)"
+    local work; work="$(mktemp -d /tmp/blade-ai.XXXXXX)" || { warn "mktemp failed"; return 1; }
+    ( umask 077; {
+        printf 'domain=%s\n'  "$domhome"
+        printf 'target=%s\n'  "$target"
+        printf 'enabled=%s\n' "$AI_ENABLED"
+        printf 'model=%s\n'   "$AI_MODEL"
+        printf 'baseurl=%s\n' "$AI_BASEURL"
+        printf 'mask=%s\n'    "$AI_MASK"
+        printf 'apikey=%s\n'  "$key"
+    } > "${work}/ai.in" )
+    cat > "${work}/aiwrite.py" <<'PYAI'
+# -*- coding: utf-8 -*-
+import os, json
+from weblogic.security.internal import SerializedSystemIni
+from weblogic.security.internal.encryption import ClearOrEncryptedService
+
+def main():
+    inp = {}
+    f = open('ai.in')
+    for line in f:
+        line = line.rstrip('\n')
+        if '=' in line:
+            k, v = line.split('=', 1)
+            inp[k] = v
+    f.close()
+    os.remove('ai.in')
+    target = inp['target']
+    doc = {}
+    if os.path.isfile(target):
+        try:
+            f = open(target)
+            doc = json.load(f)
+            f.close()
+        except Exception, e:
+            print('AI_FAIL %s is not valid JSON, left alone: %s' % (target, e))
+            return
+    doc['enabled'] = (inp['enabled'] == 'true')
+    doc['maskNumbers'] = (inp['mask'] != 'false')
+    if inp['model']:
+        doc['model'] = inp['model']
+    if inp['baseurl']:
+        doc['baseUrl'] = inp['baseurl']
+    elif 'baseUrl' in doc:
+        del doc['baseUrl']
+    if inp['apikey']:
+        svc = ClearOrEncryptedService(SerializedSystemIni.getEncryptionService(inp['domain']))
+        doc['apiKey'] = unicode(svc.encrypt(inp['apikey']))
+    d = os.path.dirname(target)
+    if not os.path.isdir(d):
+        os.makedirs(d)
+    f = open(target, 'w')
+    # Explicit separators: Jython's json leaves a space before each newline otherwise.
+    f.write(json.dumps(doc, indent=2, sort_keys=True, separators=(',', ': ')) + '\n')
+    f.close()
+    if doc.get('apiKey'):
+        key = 'key set'
+    else:
+        key = 'no key'
+    print('AI_OK %s (enabled=%s, %s)' % (target, str(doc['enabled']).lower(), key))
+
+main()
+PYAI
+    chmod 600 "${work}/aiwrite.py"
+    info "Writing the AI assistant settings to ${target} ..."
+    local out
+    out="$(iu_wlst_run "$work" aiwrite.py "$mw" "$jh" 2>&1 | grep -E 'AI_(OK|FAIL) ' || true)"
+    as_install_user rm -rf "$work" 2>/dev/null || rm -rf "$work"
+    case "$out" in
+        'AI_OK '*)
+            # Group-readable, owner-writable, like the other secret-bearing configs.
+            as_install_user chmod 640 "$target" 2>/dev/null || true
+            ok "${out#AI_OK }"
+            log "  ${C_DIM}Live on the next draft. Edit it later here or in the Configurator (blade-ai).${C_RESET}"
+            return 0 ;;
+        'AI_FAIL '*) warn "${out#AI_FAIL }"; return 1 ;;
+        *) warn "writing blade-ai.json produced no result (is WLST at ${mw}?)."; return 1 ;;
+    esac
+}
+
 get_admin_pw() {
     local v="${BLADE_WLS_PASSWORD:-}"
     [ -z "$v" ] && [ -f "$WLS_SECRET" ] && v="$(read_prop "$WLS_SECRET" admin.password)"
@@ -6864,8 +7022,9 @@ else
         datasource) _need_profile; load_profile; do_dbc; exit $? ;;
         wsl)        [ -f "$OCCAS_CONF" ] && load_profile; do_wsl; exit $? ;;
         overload)   _need_profile; load_profile; do_overload; exit $? ;;
+        ai)         _need_profile; load_profile; do_ai; exit $? ;;
         ""|menu|dashboard) : ;;
-        *) die "unknown command '${JUMP}' — try: wizard, preflight, install, uninstall, status, backup, configure, provision, jms, datasource, wsl, overload" ;;
+        *) die "unknown command '${JUMP}' — try: wizard, preflight, install, uninstall, status, backup, configure, provision, jms, datasource, wsl, overload, ai" ;;
     esac
     dashboard
 fi

@@ -76,6 +76,34 @@ public class XmlHelper implements Serializable {
 		return builder.parse(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)));
 	}
 
+	/// Serializes `doc` after an edit, keeping the original body's XML
+	/// declaration, and the whitespace after it, exactly as it arrived; a body
+	/// that had none gets none. The far end parsed the original, so it should
+	/// get the same prologue back.
+	///
+	/// Line breaks follow the original too. Parsing turns every CRLF into LF
+	/// (XML 1.0 section 2.11), so a CRLF document would otherwise come back
+	/// as LF inside and CRLF only where the MIME part's framing adds it. No
+	/// SIP or MIME rule requires either for an `application/*+xml` part; this
+	/// keeps the part consistent with what the sender wrote.
+	public static String serialize(String original, Document doc) throws Exception {
+		String body = serialize(doc);
+		if (original == null) return body;
+		if (original.contains("\r\n")) body = body.replace("\n", "\r\n");
+		int start = 0;
+		while (start < original.length() && Character.isWhitespace(original.charAt(start))) start++;
+		if (!original.startsWith("<?xml", start)) return body;
+		int end = original.indexOf("?>", start);
+		if (end < 0) return body;
+		end += 2;
+		while (end < original.length() && Character.isWhitespace(original.charAt(end))) end++;
+		// The body is written as UTF-8 text now, so a declared encoding must
+		// say so, or a receiver decodes the bytes in the old charset.
+		String declaration = original.substring(0, end)
+				.replaceFirst("(encoding\\s*=\\s*)([\"'])[^\"']*\\2", "$1$2UTF-8$2");
+		return declaration + body;
+	}
+
 	/**
 	 * Serializes a DOM Document back to an XML string.
 	 * Omits the XML declaration to keep SIP body clean.
@@ -143,9 +171,9 @@ public class XmlHelper implements Serializable {
 		}
 	}
 
-	/**
-	 * Removes all nodes matching the XPath expression from the document.
-	 */
+	/// Removes all nodes matching the XPath expression from the document. An
+	/// element's indentation (the whitespace-only text just before it) goes
+	/// with it, so a pretty-printed document is not left with blank lines.
 	public static boolean removeNodes(Document doc, String xpathExpr) throws Exception {
 		NodeList nodes = evaluateNodeList(doc, xpathExpr);
 		if (nodes.getLength() == 0) {
@@ -157,6 +185,11 @@ public class XmlHelper implements Serializable {
 				((Element) ((org.w3c.dom.Attr) node).getOwnerElement())
 						.removeAttributeNode((org.w3c.dom.Attr) node);
 			} else if (node.getParentNode() != null) {
+				Node before = node.getPreviousSibling();
+				if (before != null && before.getNodeType() == Node.TEXT_NODE
+						&& before.getNodeValue().trim().isEmpty()) {
+					node.getParentNode().removeChild(before);
+				}
 				node.getParentNode().removeChild(node);
 			}
 		}

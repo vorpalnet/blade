@@ -1,5 +1,7 @@
 package org.vorpal.blade.applications.console.config;
 
+import org.vorpal.blade.framework.v3.ai.AiSettings;
+
 import java.io.Serializable;
 
 import org.vorpal.blade.framework.v2.config.Configuration;
@@ -40,7 +42,7 @@ public class ConfiguratorSettings extends Configuration implements Serializable 
 		this.autoPublish = autoPublish;
 	}
 
-	@JsonPropertyDescription("The AI config assistant: describe a configuration in plain language and Claude drafts it against the app's JSON Schema, as a proposal for review. Disabled by default.")
+	@JsonPropertyDescription("The AI config assistant: describe a configuration in plain language and Claude drafts it against the app's JSON Schema, as a proposal for review. Disabled by default. The domain's shared blade-ai settings, when they exist, are used instead, by every editor.")
 	public AiSettings getAi() {
 		return ai;
 	}

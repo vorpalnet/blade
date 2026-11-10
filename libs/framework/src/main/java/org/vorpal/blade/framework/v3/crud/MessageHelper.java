@@ -3,6 +3,9 @@ package org.vorpal.blade.framework.v3.crud;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
+import java.util.ListIterator;
+import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
 
 import javax.servlet.sip.SipApplicationSession;
@@ -25,6 +28,116 @@ public class MessageHelper implements Serializable {
 	/// overwrite an attribute the hosting application keeps for itself: CRUD
 	/// runs inside any v3 application now, not only the CRUD service.
 	public static final String VARIABLE_PREFIX = "crud.";
+
+	/// Message attribute holding a response's new status, set by a rule that
+	/// writes `status`; [CrudHook#restatus] sends a response with it instead.
+	public static final String PENDING_STATUS = "crudPending.status";
+
+	/// Message attribute holding a response's new reason phrase.
+	public static final String PENDING_REASON = "crudPending.reasonPhrase";
+
+	/// Message attribute holding a [RejectOperation]'s refusal of a request.
+	public static final String PENDING_REJECT = "crudPending.reject";
+
+	static final String[] PENDING_ATTRIBUTES = { PENDING_STATUS, PENDING_REASON, PENDING_REJECT };
+
+	/// The CRUD variables in the session, by bare name.
+	static Map<String, String> ownVariables(SipApplicationSession appSession) {
+		Map<String, String> own = new HashMap<>();
+		if (appSession == null) return own;
+		for (String name : appSession.getAttributeNameSet()) {
+			Object value = appSession.getAttribute(name);
+			if (name.startsWith(VARIABLE_PREFIX) && value instanceof String) {
+				own.put(name.substring(VARIABLE_PREFIX.length()), (String) value);
+			}
+		}
+		return own;
+	}
+
+	/// True for a real SIP header, as opposed to `body`, `requestURI`,
+	/// `status` and the other pseudo-attributes, and the `To`, `From` and
+	/// `Contact` addresses, which are written through their own paths.
+	/// `body` for `body` or `content` in any case, the attribute otherwise:
+	/// the message body is named either way.
+	static String canonical(String attribute) {
+		if (attribute == null) return null;
+		// Pseudo-attributes and the three addresses in any case, so `Status`
+		// rewrites the status (as Save's check reads it) rather than adding a
+		// `Status:` header, and `TO` reaches the same code as `To`. Header
+		// names are case-insensitive in SIP.
+		switch (attribute.toLowerCase(java.util.Locale.ROOT)) {
+		case "body":
+		case "content":
+			return "body";
+		case "requesturi":
+			return "requestURI";
+		case "status":
+			return "status";
+		case "reasonphrase":
+			return "reasonPhrase";
+		case "originip":
+			return "originIP";
+		case "peerip":
+			return "peerIP";
+		case "transport":
+			return "transport";
+		case "issecure":
+			return "isSecure";
+		case "to":
+			return "To";
+		case "from":
+			return "From";
+		case "contact":
+			return "Contact";
+		default:
+			return attribute;
+		}
+	}
+
+	static boolean isPlainHeader(String attribute) {
+		if (attribute == null) return false;
+		switch (canonical(attribute)) {
+		case "body":
+		case "content":
+		case "requestURI":
+		case "status":
+		case "reasonPhrase":
+		case "originIP":
+		case "peerIP":
+		case "transport":
+		case "isSecure":
+			return false;
+		default:
+			switch (attribute.toLowerCase()) {
+			case "to":
+			case "from":
+			case "contact":
+				return false;
+			default:
+				return true;
+			}
+		}
+	}
+
+	/// Every occurrence of header `name`, in order. A header may appear more
+	/// than once (`P-Asserted-Identity` with a `sip:` and a `tel:` identity,
+	/// `Diversion`, `History-Info`), and the container may also fold several
+	/// values into one line; both forms come back here as separate values.
+	static List<String> getHeaderValues(SipServletMessage msg, String name) {
+		List<String> values = new ArrayList<>();
+		for (ListIterator<String> it = msg.getHeaders(name); it != null && it.hasNext();) {
+			values.add(it.next());
+		}
+		return values;
+	}
+
+	/// Replaces every occurrence of header `name` with `values`, in order.
+	static void setHeaderValues(SipServletMessage msg, String name, List<String> values) {
+		msg.removeHeader(name);
+		for (String value : values) {
+			msg.addHeader(name, value);
+		}
+	}
 
 	private MessageHelper() {
 	}
@@ -70,8 +183,9 @@ public class MessageHelper implements Serializable {
 		// One canonical spelling per pseudo-attribute (lowerCamelCase,
 		// acronyms uppercase) — matches v3 Selector.readSource. Any other
 		// name is a real SIP header.
-		switch (attribute) {
+		switch (canonical(attribute)) {
 		case "body":
+		case "content":
 			return getBodyContent(msg, contentType);
 
 		case "requestURI":
@@ -82,13 +196,16 @@ public class MessageHelper implements Serializable {
 
 		case "status":
 			if (msg instanceof SipServletResponse) {
-				return Integer.toString(((SipServletResponse) msg).getStatus());
+				Object pending = msg.getAttribute(PENDING_STATUS);
+				return (pending != null) ? pending.toString()
+						: Integer.toString(((SipServletResponse) msg).getStatus());
 			}
 			return null;
 
 		case "reasonPhrase":
 			if (msg instanceof SipServletResponse) {
-				return ((SipServletResponse) msg).getReasonPhrase();
+				Object pending = msg.getAttribute(PENDING_REASON);
+				return (pending != null) ? pending.toString() : ((SipServletResponse) msg).getReasonPhrase();
 			}
 			return null;
 
@@ -155,7 +272,9 @@ public class MessageHelper implements Serializable {
 		return value;
 	}
 
-	private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
+	/// Fails on text after a JSON value, so `true,"admin":true` is not JSON.
+	private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper()
+			.enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
 	/**
 	 * Writes a value to a SIP message attribute (header, body, Request-URI).
@@ -168,8 +287,9 @@ public class MessageHelper implements Serializable {
 			return;
 		}
 
-		switch (attribute) {
+		switch (canonical(attribute)) {
 		case "body":
+		case "content":
 			setBodyContent(msg, value, contentType);
 			break;
 
@@ -190,8 +310,32 @@ public class MessageHelper implements Serializable {
 		case "to":
 		case "From":
 		case "from":
-			setAddress(msg, attribute, value);
+			setAddress(msg, canonical(attribute), value);
 			break;
+
+		case "status":
+			setStatus(msg, value);
+			break;
+
+		case "reasonPhrase":
+			if (!(msg instanceof SipServletResponse)) {
+				throw new IllegalArgumentException("reasonPhrase is a response's; this is a request");
+			}
+			// As for status: a provisional or 2xx is sent as built, since a
+			// copy would lose its dialog state (Contact, RSeq).
+			if (((SipServletResponse) msg).getStatus() < 300) {
+				throw new IllegalArgumentException("reasonPhrase can change only on a failure response (300-699), not "
+						+ ((SipServletResponse) msg).getStatus());
+			}
+			msg.setAttribute(PENDING_REASON, value);
+			break;
+
+		case "originIP":
+		case "peerIP":
+		case "transport":
+		case "isSecure":
+			// Facts about how the message travels, not text in it.
+			throw new IllegalArgumentException(attribute + " is read-only");
 
 		case "contact":
 		case "Contact":
@@ -206,6 +350,41 @@ public class MessageHelper implements Serializable {
 		default:
 			msg.setHeader(attribute, value);
 			break;
+		}
+	}
+
+	/// Sets a response's new status. The container cannot change a response's
+	/// status once made, so this records it and [CrudHook#restatus] sends a
+	/// copy with the new one. Only a failure becomes another failure (300 to
+	/// 699, except that a 4xx-6xx cannot become a 3xx, which needs a Contact
+	/// the copy cannot get): turning a 200 into a 486 would refuse a call whose
+	/// other leg is already answered, and a provisional or a 2xx carries
+	/// dialog state a copy would lose.
+	private static void setStatus(SipServletMessage msg, String value) {
+		if (!(msg instanceof SipServletResponse)) {
+			throw new IllegalArgumentException("status is a response's; this is a request");
+		}
+		int now = ((SipServletResponse) msg).getStatus();
+		int to;
+		try {
+			to = Integer.parseInt(value.trim());
+		} catch (NumberFormatException e) {
+			throw new IllegalArgumentException("status " + value + " is not a number");
+		}
+		if (now < 300 || now > 699 || to < 300 || to > 699) {
+			throw new IllegalArgumentException("status " + now + " -> " + to
+					+ ": only a failure (300-699) can become another failure");
+		}
+		if (to < 400 && now >= 400) {
+			// A redirect needs a Contact, which a 4xx-6xx carries none of and a
+			// rule cannot add to it.
+			throw new IllegalArgumentException("status " + now + " -> " + to
+					+ ": a 4xx-6xx cannot become a redirect, which needs a Contact it does not carry");
+		}
+		if (to == now) {
+			msg.removeAttribute(PENDING_STATUS);
+		} else {
+			msg.setAttribute(PENDING_STATUS, to);
 		}
 	}
 
@@ -295,8 +474,9 @@ public class MessageHelper implements Serializable {
 			return;
 		}
 
-		switch (attribute) {
+		switch (canonical(attribute)) {
 		case "body":
+		case "content":
 			String wantedCt = (contentType != null && !contentType.trim().isEmpty()) ? contentType : null;
 			boolean multipart = msg.getContentType() != null
 					&& msg.getContentType().toLowerCase().startsWith("multipart/");
@@ -318,15 +498,32 @@ public class MessageHelper implements Serializable {
 		}
 	}
 
+	/// Application-session attribute holding the configuration variables a
+	/// preview runs beneath, in place of the published ones
+	/// ([CrudHook#fileVariables]). A Map, never a String, so it is never
+	/// read as a variable itself.
+	public static final String DEFAULTS = "crud#defaults";
+
 	/// The variables `${name}` resolves against: every String attribute on the
 	/// application session, with CRUD's own variables (stored under
 	/// [#VARIABLE_PREFIX]) laid over them by their bare name. Unprefixed
 	/// attributes stay visible on purpose: the tester writes `${scenario}` and
 	/// `${index}` itself, and a rule may read an attribute its application set.
 	public static Map<String, String> getSessionVariables(SipApplicationSession appSession) {
-		Map<String, String> vars = new HashMap<>();
 		if (appSession == null) {
-			return vars;
+			return new HashMap<>(CrudHook.fileVariables());
+		}
+		// The configuration's variables first, so the call's own win. A
+		// preview names its draft's variables on the session ([#DEFAULTS]);
+		// a real call reads the published ones.
+		Object preset = appSession.getAttribute(DEFAULTS);
+		Map<String, String> vars = new HashMap<>();
+		if (preset instanceof Map) {
+			for (Map.Entry<?, ?> e : ((Map<?, ?>) preset).entrySet()) {
+				if (e.getKey() instanceof String && e.getValue() instanceof String) vars.put((String) e.getKey(), (String) e.getValue());
+			}
+		} else {
+			vars.putAll(CrudHook.fileVariables());
 		}
 		Map<String, String> own = new HashMap<>();
 		for (String name : appSession.getAttributeNameSet()) {

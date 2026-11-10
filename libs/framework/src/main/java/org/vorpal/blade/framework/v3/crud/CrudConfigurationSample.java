@@ -49,8 +49,8 @@ public class CrudConfigurationSample extends CrudSettings {
 		byDialedNumber.setKeyExpression("${dialedNumber}");
 		ruleSelection.addTable(byDialedNumber);
 
-		this.getPipeline().add(sip);
-		this.getPipeline().add(ruleSelection);
+		this.addConnector(sip);
+		this.addConnector(ruleSelection);
 
 		RuleSet create = exampleCreate();
 		RuleSet read = exampleRead();
@@ -88,7 +88,7 @@ public class CrudConfigurationSample extends CrudSettings {
 		attach.setValue("<recording><session id=\"abc-123\" tenant=\"acme\"/></recording>");
 		r.getOperations().add(attach);
 
-		rs.getRules().add(r);
+		rs.add(r);
 		return rs;
 	}
 
@@ -122,7 +122,7 @@ public class CrudConfigurationSample extends CrudSettings {
 		sdp.getExpressions().put("mediaPort", "$.media[0].port");
 		r.getOperations().add(sdp);
 
-		rs.getRules().add(r);
+		rs.add(r);
 		return rs;
 	}
 
@@ -158,7 +158,7 @@ public class CrudConfigurationSample extends CrudSettings {
 		sdp.setValue("10.99.0.1");
 		r.getOperations().add(sdp);
 
-		rs.getRules().add(r);
+		rs.add(r);
 		return rs;
 	}
 
@@ -189,7 +189,7 @@ public class CrudConfigurationSample extends CrudSettings {
 		sdp.setJsonPath("$.media[0].attributes[?(@.name=='sendrecv')]");
 		r.getOperations().add(sdp);
 
-		rs.getRules().add(r);
+		rs.add(r);
 		return rs;
 	}
 }

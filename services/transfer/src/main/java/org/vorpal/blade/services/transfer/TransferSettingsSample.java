@@ -123,22 +123,22 @@ public class TransferSettingsSample extends TransferSettings {
 		capture.setId("capture-target");
 		capture.setDescription("Save the user part of the outgoing INVITE's Request-URI as ${target}");
 		capture.setMethod("INVITE");
-		capture.setMessageType("request");
+		capture.setMessageType(Rule.MessageType.request);
 		capture.getOperations().add(new ReadOperation("requestURI", "^sips?:(?<target>[^@;>]+)"));
 
 		Rule rewrite = new Rule();
 		rewrite.setId("rewrite-to");
 		rewrite.setDescription("For a 1916 target, replace the To header");
 		rewrite.setMethod("INVITE");
-		rewrite.setMessageType("request");
+		rewrite.setMessageType(Rule.MessageType.request);
 		rewrite.setWhen("${target} matches '1916.*'");
 		rewrite.getOperations().add(new UpdateOperation("To", ".*", "<sip:${target}@transfer.example.com>"));
 
 		RuleSet ruleSet = new RuleSet();
 		ruleSet.setId("transfer-target");
 		ruleSet.setDescription("Rewrite To on transfers to 1916 numbers");
-		ruleSet.getRules().add(capture);
-		ruleSet.getRules().add(rewrite);
+		ruleSet.add(capture);
+		ruleSet.add(rewrite);
 
 		Crud crud = new Crud();
 		crud.getRuleSets().put(ruleSet.getId(), ruleSet);

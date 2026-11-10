@@ -128,7 +128,7 @@ public class HealthServlet extends HttpServlet {
 		// failed or not yet started has no ServerRuntime, so the list above
 		// never names it, and a domain of five with two stopped would read
 		// "3 / 3". A dynamic cluster's servers are counted to its current size.
-		Map<String, String> clusterOf = clusterOf(dr, config);
+		Map<String, String> clusterOf = org.vorpal.blade.framework.v3.configuration.ClusterMembership.of(dr);
 		for (Map.Entry<String, String> down : notRunning(dr, up).entrySet()) {
 			if (!first) out.write(',');
 			first = false;
@@ -183,35 +183,6 @@ public class HealthServlet extends HttpServlet {
 			}
 		} catch (Exception e) {
 			logger.log(Level.FINE, "server lifecycle read failed", e);
-		}
-		return out;
-	}
-
-	/// Server name to cluster name, for static servers and each dynamic
-	/// cluster's calculated servers.
-	private static Map<String, String> clusterOf(MBeanServer dr, ObjectName config) {
-		Map<String, String> out = new HashMap<>();
-		if (config == null) {
-			return out;
-		}
-		try {
-			for (ObjectName s : (ObjectName[]) dr.getAttribute(config, "Servers")) {
-				ObjectName c = obj(dr, s, "Cluster");
-				if (c != null) {
-					out.put(str(dr, s, "Name"), str(dr, c, "Name"));
-				}
-			}
-			for (ObjectName c : (ObjectName[]) dr.getAttribute(config, "Clusters")) {
-				ObjectName dyn = obj(dr, c, "DynamicServers");
-				Object names = dyn == null ? null : get(dr, dyn, "DynamicServerNames");
-				if (names instanceof String[]) {
-					for (String n : (String[]) names) {
-						out.put(n, str(dr, c, "Name"));
-					}
-				}
-			}
-		} catch (Exception e) {
-			logger.log(Level.FINE, "cluster membership read failed", e);
 		}
 		return out;
 	}

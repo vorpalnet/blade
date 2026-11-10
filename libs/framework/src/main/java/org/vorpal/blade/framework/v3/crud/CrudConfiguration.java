@@ -42,7 +42,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// adds its round-trip to INVITE latency, so prefer message-derived
 /// selection.
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
-@JsonPropertyOrder({ "logging", "session", "pipeline", "defaultRuleSet", "ruleSets" })
+@JsonPropertyOrder({ "logging", "session", "variables", "pipeline", "defaultRuleSet", "ruleSets" })
 public class CrudConfiguration extends Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
 
@@ -51,17 +51,44 @@ public class CrudConfiguration extends Configuration implements Serializable {
 	/// pipeline selection reads the same variable.
 	public static final String RULESET_VARIABLE = "ruleSet";
 
-	private List<Connector> pipeline = new LinkedList<>();
+	private Map<String, String> variables = new LinkedHashMap<>();
+	private Map<String, Connector> pipeline = new LinkedHashMap<>();
 	private String defaultRuleSet;
 	private Map<String, RuleSet> ruleSets = new LinkedHashMap<>();
 
-	@JsonPropertyDescription("Ordered pipeline of enrichment connectors; must write the `ruleSet` context variable to select a rule set")
-	public List<Connector> getPipeline() {
+	@JsonPropertyDescription("Named values every call starts with, read as `${name}` by the pipeline, `when` and operations. A cluster or server file sets its own by naming them.")
+	public Map<String, String> getVariables() {
+		return variables;
+	}
+
+	/// A `null` value removes the variable: what a cluster or server file
+	/// writes to unset one it inherits.
+	public void setVariables(Map<String, String> variables) {
+		this.variables = new LinkedHashMap<>();
+		if (variables != null) variables.forEach((k, v) -> { if (v != null) this.variables.put(k, v); });
+	}
+
+	@JsonPropertyDescription("Enrichment connectors by id, run in order; must write the `ruleSet` context variable to select a rule set")
+	@com.fasterxml.jackson.databind.annotation.JsonSerialize(using = Pipeline.Writer.class)
+	public Map<String, Connector> getPipeline() {
 		return pipeline;
 	}
 
-	public void setPipeline(List<Connector> pipeline) {
-		this.pipeline = (pipeline != null) ? pipeline : new LinkedList<>();
+	@com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = Pipeline.Reader.class)
+	public void setPipeline(Map<String, Connector> pipeline) {
+		this.pipeline = Pipeline.keyed(pipeline);
+	}
+
+	/// Adds each connector under its id, after those already here.
+	public CrudConfiguration addConnector(Connector... connectors) {
+		for (Connector c : connectors) pipeline.put(c.getId(), c);
+		return this;
+	}
+
+	/// True when there is a pipeline to run on a call's initial request.
+	/// `variables` need no run: they are read when used.
+	public boolean enriches() {
+		return !pipeline.isEmpty();
 	}
 
 	@JsonPropertyDescription("Rule set applied when the pipeline writes no `ruleSet` variable. Null means unmatched calls pass through untransformed.")
@@ -79,7 +106,11 @@ public class CrudConfiguration extends Configuration implements Serializable {
 	}
 
 	public void setRuleSets(Map<String, RuleSet> ruleSets) {
-		this.ruleSets = ruleSets;
+		this.ruleSets = (ruleSets != null) ? ruleSets : new LinkedHashMap<>();
+		// A rule set's id is its key, as a rule's is ([RuleSet#setRules]).
+		for (Map.Entry<String, RuleSet> e : this.ruleSets.entrySet()) {
+			if (e.getValue() != null) e.getValue().setId(e.getKey());
+		}
 	}
 
 	/// Runs the pipeline against `request` via [Pipelines#enrich] (inline,
@@ -94,7 +125,7 @@ public class CrudConfiguration extends Configuration implements Serializable {
 	/// makes pipeline-extracted values (`${dialedNumber}`)
 	/// usable inside `create`/`update` templates and `when` clauses.
 	public Context enrich(SipServletRequest request) {
-		return Crud.enrich(pipeline, request);
+		return Crud.enrich(pipeline, variables, request);
 	}
 
 	/// Looks up the rule set the enriched `ctx` selected via the

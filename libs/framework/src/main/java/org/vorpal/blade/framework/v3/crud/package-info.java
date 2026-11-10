@@ -25,27 +25,29 @@
 /// The standard BLADE selectors / translation maps / routing plan pick a
 /// [RuleSet] for each call (the matched
 /// [org.vorpal.blade.framework.v2.config.Translation] must carry a
-/// `ruleSet` attribute naming an entry in `ruleSets`). Each rule set
-/// holds an ordered list of [Rule]s; each rule holds an ordered list of
-/// [Operation]s.
+/// `ruleSet` attribute naming an entry in `ruleSets`). A configuration
+/// holds `variables` every call starts with, the `pipeline` of connectors,
+/// and `ruleSets`; each rule set holds [Rule]s keyed by id, run in the order
+/// written; each rule holds an ordered list of [Operation]s.
 ///
 /// ```json
 /// {
+///   "variables": { "carrierHost": "sbc1.example.net" },
 ///   "ruleSets": {
 ///     "header-scrub": {
-///       "id": "header-scrub",
-///       "rules": [{
-///         "id": "scrub-and-stamp",
-///         "method": "INVITE",
-///         "event": "callStarted",
-///         "operations": [
-///           { "type": "read",   "attribute": "From",
-///             "pattern": "sip:(?<callerUser>[^@]+)@(?<callerHost>[^;>]+)" },
-///           { "type": "create", "attribute": "X-Caller-Info",
-///             "value": "${callerUser}@${callerHost}" },
-///           { "type": "delete", "attribute": "P-Private-Data" }
-///         ]
-///       }]
+///       "rules": {
+///         "scrub-and-stamp": {
+///           "method": "INVITE",
+///           "event": "callStarted",
+///           "operations": [
+///             { "type": "read",   "attribute": "From",
+///               "pattern": "sip:(?<callerUser>[^@]+)@(?<callerHost>[^;>]+)" },
+///             { "type": "create", "attribute": "X-Caller-Info",
+///               "value": "${callerUser}@${callerHost}" },
+///             { "type": "delete", "attribute": "P-Private-Data" }
+///           ]
+///         }
+///       }
 ///     }
 ///   }
 /// }
@@ -55,19 +57,47 @@
 /// must precede any `create`/`update` that consumes the variable it
 /// produces.
 ///
+/// ## Domain, cluster and server files
+///
+/// A server runs its domain file, its cluster's file and its own file merged
+/// in that order: objects merge key by key, and a list is appended to the
+/// list below it. Variables, connectors ([Pipeline]) and rules ([RuleSet])
+/// are keyed by name for that reason: a cluster or server file changes one
+/// by naming it and inherits the rest, and a new name runs after the
+/// inherited ones. A rule's fields replace the inherited ones and its
+/// operations are added after them. `"enabled": false` switches a rule off,
+/// and `null` removes a rule, connector or variable outright: how a lower
+/// file drops one it inherits. The earlier list forms
+/// (`"rules": [{ "id": … }]`, `"pipeline": [ … ]`) still load, and a list
+/// in one file merges with the keyed form in another by id
+/// ([org.vorpal.blade.framework.v3.configuration.ConfigFiles#merge]); the
+/// editor saves the keyed form when the application's schema has it.
+///
 ///
 /// ## Rule filters
 ///
-/// All four filters are optional; a `null` filter is a wildcard. They
-/// combine via AND — every non-null filter must pass for the rule to
-/// fire.
+/// Every filter is optional; a `null` filter is a wildcard. They combine
+/// with AND: every non-null filter must pass for the rule to fire.
 ///
 /// | Filter        | Default | Syntax                                                                   |
 /// |---------------|---------|--------------------------------------------------------------------------|
 /// | `method`      | any     | SIP method, comma-OR, `!` to negate                                      |
 /// | `messageType` | both    | `request` or `response`                                                  |
 /// | `event`       | any     | B2BUA lifecycle event, comma-OR, `!` to negate                           |
+/// | `leg`         | both    | `caller` or `callee`: the side of the B2BUA the message is on            |
+/// | `sdp`         | any     | `offer` or `answer`: the message carries that half of an SDP exchange    |
 /// | `statusRange` | any     | response status: exact, range, `Nxx` shorthand, comma-OR, `!` to negate  |
+/// | `when`        | always  | boolean expression over variables                                        |
+///
+/// [Rule] describes how `leg` and `sdp` decide.
+///
+/// ### All or nothing
+///
+/// If an operation throws, the rule is undone ([MessageSnapshot]): headers,
+/// body, Request-URI, `To`, `From`, `Contact` parameters, variables, and any
+/// pending status or refusal go back to what they were, and the next rule
+/// runs as usual. An operation that finds nothing to do returns quietly and
+/// is not a failure.
 ///
 /// ### `method` and `event` syntax
 ///
@@ -110,8 +140,11 @@
 /// `callDeclined`, `callAbandoned`, `requestEvent`, `responseEvent`.
 ///
 /// See `CrudServlet` for which lifecycle methods fire each event. Inside an
-/// application's own `crud` section every rule sees `send` instead, so a rule
-/// there leaves `event` unset.
+/// application's own `crud` section a rule sees `send` on every message the
+/// application sends ([CrudHook#apply]), and runs then when it leaves `event`
+/// unset. It sees `receive` on every message the application receives, before
+/// the application handles it ([CrudHook#receive]), and runs then only when
+/// its `event` names `receive`.
 ///
 ///
 /// ## Operation reference
@@ -121,14 +154,27 @@
 ///
 /// ### Regex (headers, Request-URI, status, reason, body text)
 ///
-/// - `read` — `attribute`, `pattern`. Named regex groups become session
-///   attributes.
-/// - `create` — `attribute`, `value`, optional `contentType`. With
-///   `attribute=body` and a `contentType`, attaches a MIME part instead
-///   of replacing the body.
-/// - `update` — `attribute`, `pattern`, `replacement`. Find-and-replace.
-/// - `delete` — `attribute`. Removes the header (or clears the body, or
-///   removes one MIME part if `contentType` is set).
+/// - `read`: `attribute`, `pattern`. Named regex groups become session
+///   variables. On a header that appears more than once, the first
+///   occurrence the pattern matches.
+/// - `create`: `attribute`, `value`, optional `contentType`. On a header it
+///   adds an occurrence, never overwrites. With `attribute=body` and a
+///   `contentType`, attaches a MIME part instead of replacing the body.
+/// - `update`: `attribute`, `pattern`, `replacement`, `everyMatch`.
+///   Find-and-replace; no match, no change. Each occurrence of a repeated
+///   header is updated on its own.
+/// - `delete`: `attribute`, optional `pattern`. Removes the header (only the
+///   occurrences `pattern` matches, if given), or clears the body, or
+///   removes one MIME part if `contentType` is set.
+/// - `reject`: `status`, `reasonPhrase`. Refuses an initial INVITE: the
+///   caller is answered with `status` and the INVITE is not sent
+///   ([RejectOperation]). With no caller to answer (an originated call, a
+///   caller who has cancelled), the INVITE is still not sent: the send
+///   throws.
+///
+/// Writing `status` or `reasonPhrase` on a response sends a copy with the
+/// new values ([CrudHook#restatus]); only a failure can become another
+/// failure. `originIP`, `peerIP`, `transport` and `isSecure` are read-only.
 ///
 /// **Pseudo-headers** (use these as `attribute`):
 ///
@@ -170,6 +216,14 @@
 ///
 /// ## Variables and substitution
 ///
+/// The configuration's `variables` sit beneath every call's own: a
+/// `${name}` the call has not set resolves to the file's value
+/// ([CrudHook#fileVariables]), for calls the application receives and
+/// originates alike, and a connector or read operation that sets the name
+/// overrides it for that call. Nothing is copied into the session for them.
+/// Put what differs between servers there, so a server file sets one value
+/// instead of changing rules.
+///
 /// Read operations save extracted values to the
 /// [javax.servlet.sip.SipApplicationSession] as attributes named
 /// `crud.<name>` ([MessageHelper#VARIABLE_PREFIX]), so a variable never
@@ -180,7 +234,7 @@
 /// visible on the 200 OK), and are replicated for cluster failover.
 ///
 /// Substitution is provided by
-/// [org.vorpal.blade.framework.v3.configuration.Context#substitute]
+/// [org.vorpal.blade.framework.v3.configuration.Context#substituteStrict]
 /// and supports:
 ///
 /// | Form                  | Resolves to                                                       |
@@ -189,11 +243,18 @@
 /// | `${now}`              | Current Unix epoch milliseconds                                   |
 /// | `${now:FORMAT}`       | Current time via `DateTimeFormatter` pattern, UTC                 |
 /// | `${uuid}`             | Random UUID v4                                                    |
-/// | `${HOSTNAME}`         | Falls back to environment variable                                |
-/// | `${user.home}`        | Falls back to JVM system property                                 |
+/// | `${env:CRUD_NAME}`    | Environment variable `CRUD_NAME` (only names starting `CRUD_`)    |
+/// | `${sys:crud.name}`    | JVM system property `crud.name` (only names starting `crud.`)     |
 ///
-/// Resolution is **iterative** — a resolved value containing `${...}` is
-/// re-resolved up to 10 passes. Unresolved placeholders are left literal.
+/// A plain name never falls back to the environment: CRUD output goes on
+/// the wire, and a misspelt `${HOME}` must not carry the server's home
+/// directory to a carrier. Each placeholder is replaced once; text a value
+/// brings with it is not scanned again. A placeholder with no value skips
+/// the operation, so `${name}` never goes out as text.
+///
+/// Patterns, JsonPaths and XPaths take placeholders too, inserted as data:
+/// quoted in a regex, escaped in a single-quoted JsonPath string, a whole
+/// string literal in an XPath ([Placeholders]).
 ///
 /// ### Stale values
 ///

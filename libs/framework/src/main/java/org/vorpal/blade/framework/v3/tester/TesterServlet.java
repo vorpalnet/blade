@@ -144,7 +144,7 @@ public abstract class TesterServlet extends B2buaServlet {
 
 		// 2. Enrichment pipeline: a `scenario` context variable, or a bare
 		// `ruleSet` variable acting as an unnamed b2bua scenario.
-		if (scenario == null && config != null && !config.getPipeline().isEmpty()) {
+		if (scenario == null && config != null && config.enriches()) {
 			Context ctx = config.enrich(request);
 			String scenarioVar = ctx.get("scenario");
 			if (scenarioVar != null) {

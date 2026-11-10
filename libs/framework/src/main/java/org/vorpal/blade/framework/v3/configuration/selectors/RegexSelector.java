@@ -128,12 +128,13 @@ public class RegexSelector extends Selector implements Serializable {
 		// Expression template sees both kinds — ${0}, ${1}, ${user}, ${host}
 		// all work. Session snapshot is folded in so templates can also
 		// reference attributes set by upstream selectors/connectors. Reserved
-		// meta-variables like ${now} are handled by Context.substitute.
+		// meta-variables like ${now} are handled by Context.substituteLike.
 		String value;
 		if (expression != null) {
 			Map<String, String> vars = new HashMap<>(ctx.snapshot());
 			vars.putAll(groups);
-			value = Context.substitute(expression, vars);
+			// A CRUD context resolves strictly, so no secret reaches the wire.
+			value = ctx.substituteLike(expression, vars);
 		} else {
 			value = raw;
 		}
