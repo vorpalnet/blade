@@ -115,6 +115,28 @@ public class AiConfigServiceTest {
 	}
 
 	@Test
+	public void aChatAnswerIsAReplyAndAConfigOrAReplyAlone() throws Exception {
+		JsonNode change = mapper.readTree("{\"reply\":\"Added a queue.\",\"config\":{\"queues\":[]}}");
+		assertEquals("Added a queue.", AiConfigService.replyOf(change));
+		assertTrue(AiConfigService.configOf(change).has("queues"));
+		JsonNode question = mapper.readTree("{\"reply\":\"It holds 10 calls.\",\"config\":null}");
+		assertEquals(null, AiConfigService.configOf(question));
+		// An answer in the older form, the document alone, is the config.
+		JsonNode bare = mapper.readTree("{\"queues\":[]}");
+		assertEquals(null, AiConfigService.replyOf(bare));
+		assertTrue(AiConfigService.configOf(bare).has("queues"));
+	}
+
+	@Test
+	public void theConversationKeepsTheLastTurnsInOrder() {
+		String c = AiConfigService.conversation("[{\"role\":\"user\",\"text\":\"add a queue\"},"
+				+ "{\"role\":\"assistant\",\"text\":\"Added support.\"}]");
+		assertEquals("Operator: add a queue\nYou: Added support.\n", c);
+		assertEquals("", AiConfigService.conversation(null));
+		assertTrue(AiConfigService.buildPrompt("{}", "{}", c, "make it 20").contains("Operator: add a queue"));
+	}
+
+	@Test
 	public void plaintextKeyStripsCleartextPrefixOnly() {
 		assertEquals("sk-abc", AiConfigService.plaintextKey("{CLEARTEXT}sk-abc"));
 		assertEquals("sk-abc", AiConfigService.plaintextKey("sk-abc"));

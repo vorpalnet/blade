@@ -774,7 +774,7 @@ body.inspector-open .inspector-panel {
 }
 .array-item.dragging {
     opacity: 0.5;
-    outline: 2px dashed var(--border-strong);
+    outline: 2px solid var(--border-strong);
 }
 
 /* Duplicate-item button — sits beside the delete button in the header. */
@@ -851,7 +851,7 @@ body.inspector-open .inspector-panel {
     font-style: italic;
     font-size: 12px;
     background: var(--bg-surface-alt);
-    border: 1px dashed var(--border-subtle);
+    border: 1px solid var(--border-subtle);
     border-radius: 4px;
     margin-top: 2px;
 }
@@ -1856,7 +1856,7 @@ body.autopublish-on .btn-publish {
     padding: 6px 10px;
     margin-bottom: 8px;
     background: var(--bg-surface-alt);
-    border: 1px dashed var(--border-strong);
+    border: 1px solid var(--border-strong);
     border-radius: 4px;
     transition: all 0.2s;
 }
@@ -2031,3 +2031,35 @@ body.vorpal-glass .container {
     border-radius: var(--vorpal-radius-lg);
     box-shadow: var(--vorpal-shadow-lg);
 }
+
+
+/* ---- The CRUD editor's look (2026-11) ---- */
+/* Folded sections say what they hold; the words, not a coloured
+   "has data" pill, carry it. */
+.collapsible-summary {
+    font-weight: 400; color: var(--text-secondary); font-size: 12px;
+    font-family: "JetBrains Mono", Menlo, monospace;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1;
+}
+.collapsible-header:not(.collapsed) .collapsible-summary { display: none; }
+.collapsible-title { min-width: 0; flex: 1; }
+.collapsible-badge.has-data { display: none; }
+/* One filled button, Save; the rest are outlined. */
+.form-toolbar .btn-secondary, .json-controls .btn-secondary, .form-toolbar .btn-publish, .json-controls .btn-publish {
+    background: transparent; color: var(--text-primary, inherit);
+    border: 1px solid var(--border-strong);
+}
+.form-toolbar .btn-secondary:hover, .json-controls .btn-secondary:hover,
+.form-toolbar .btn-publish:hover, .json-controls .btn-publish:hover {
+    background: transparent; border-color: var(--btn-primary); color: var(--btn-primary);
+}
+/* An unset optional field: a quiet "+ name" line, not a box. */
+.add-property-placeholder { background: transparent; border: 1px solid transparent; padding: 3px 8px; }
+.add-property-placeholder:hover { border-color: var(--border-subtle); }
+/* Add and remove: quiet outlined glyphs, as in the CRUD editor; the
+   glyph and the tooltip say which, the hover colour only supplements. */
+.add-property-btn { background: transparent; color: var(--btn-primary); border: 1px solid var(--border-strong); }
+.add-property-btn:hover { background: transparent; border-color: var(--btn-primary); transform: none; }
+.delete-property-btn { background: transparent; color: var(--text-secondary); border: 1px solid var(--border-strong); }
+.delete-property-btn:hover { background: transparent; color: #cf222e; border-color: #cf222e; transform: none; }
+.delete-property-icon { font-weight: 400; }

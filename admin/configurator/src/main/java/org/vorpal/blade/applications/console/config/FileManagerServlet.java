@@ -287,6 +287,8 @@ public class FileManagerServlet {
 				String aiApp = jsonNode.get("appName").asText();
 				String aiInstruction = jsonNode.get("instruction").asText();
 				String aiBaseline = jsonNode.has("config") ? jsonNode.get("config").asText() : null;
+				// The chat's earlier turns, so a follow-up reads the last answer.
+				String aiHistory = jsonNode.has("history") ? jsonNode.get("history").toString() : null;
 				// A generate call can run for a minute; answer from a worker
 				// thread so this WebSocket keeps servicing pings meanwhile.
 				new Thread(() -> {
@@ -297,7 +299,7 @@ public class FileManagerServlet {
 							sendMessageToSessionAsync(session, createMessage("ai_error", "Schema not found: " + aiApp));
 							return;
 						}
-						String result = AiConfigService.generate(ai, schemaJson, aiBaseline, aiInstruction);
+						String result = AiConfigService.generate(ai, schemaJson, aiBaseline, aiInstruction, aiHistory);
 						sendMessageToSessionAsync(session, createMessage("ai_result", result));
 					} catch (Exception e) {
 						logger.log(Level.WARNING, "AI generate failed for " + aiApp, e);

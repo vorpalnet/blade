@@ -47,15 +47,19 @@ public class AiConfigService {
 	static final String REDACTED = "{REDACTED}";
 
 	private static final String SYSTEM_PROMPT = "" //
-			+ "You write configuration files for BLADE, a SIP servlet framework. "
-			+ "You are given an application's JSON Schema, its current configuration, and an operator's instruction. "
-			+ "Return the complete new configuration as a single JSON document.\n" //
-			+ "Rules:\n" //
-			+ "- Output ONLY the JSON document. No markdown fences, no commentary.\n"
-			+ "- The document must conform to the JSON Schema. Use the schema's property descriptions to choose sensible values.\n"
-			+ "- Change only what the instruction requires; preserve every other field of the current configuration.\n"
-			+ "- Never alter, remove, or invent a value equal to \"" + REDACTED + "\" — copy it through unchanged.\n"
-			+ "- If the instruction cannot be expressed in this schema, return the current configuration unchanged.";
+			+ "You are a chat beside the BLADE Configurator, the editor for a SIP servlet framework's configuration files. "
+			+ "You are given an application's JSON Schema, its current configuration, the conversation so far, and the "
+			+ "operator's message. They may ask for a change, or ask a question about the configuration.\n" //
+			+ "Answer with one JSON object and nothing else: {\"reply\": \"...\", \"config\": {...} or null}.\n" //
+			+ "- reply: for a change, one or two plain sentences saying what you changed; for a question, the answer in a "
+			+ "few plain sentences. Write for an engineer: short, no headings.\n"
+			+ "- config: for a change, the complete new configuration; for a question, or a request this schema cannot "
+			+ "express, null (and say why in reply).\n"
+			+ "Rules for config:\n" //
+			+ "- It must conform to the JSON Schema. Use the schema's property descriptions to choose sensible values.\n"
+			+ "- Change only what the message requires; preserve every other field of the current configuration.\n"
+			+ "- Never alter, remove, or invent a value equal to \"" + REDACTED + "\"; copy it through unchanged.\n"
+			+ "- The current configuration already holds anything you proposed earlier that the operator kept.";
 
 	/// The AI settings to use: the domain's shared `blade-ai.json`, which
 	/// every admin editor reads ([AiConfig]), when it exists; else the
@@ -69,18 +73,26 @@ public class AiConfigService {
 		return (settings != null && settings.getAi() != null) ? settings.getAi() : new AiSettings();
 	}
 
-	/// Runs the full generate flow. Returns a JSON string:
-	/// `{"config": <object>, "valid": true|false, "errors": [ ... ]}`.
-	/// Throws on missing key, refusal, unreachable API, or unparseable output.
+	/// [#generate(AiSettings, String, String, String, String)] with no conversation.
 	public static String generate(AiSettings ai, String schemaJson, String currentJson, String instruction)
 			throws Exception {
+		return generate(ai, schemaJson, currentJson, instruction, null);
+	}
+
+	/// Answers one message of the Configurator's chat. `historyJson` is the
+	/// earlier turns, `[{role: user|assistant, text}]`, or null. Returns a
+	/// JSON string `{"reply": "...", "config": <object> | null, "valid":
+	/// true|false, "errors": [ ... ]}`: `config` null for a question.
+	/// Throws on missing key, refusal, unreachable API, or unparseable output.
+	public static String generate(AiSettings ai, String schemaJson, String currentJson, String instruction,
+			String historyJson) throws Exception {
 
 		if (ai == null || !ai.isEnabled()) {
-			throw new IllegalStateException("The AI config assistant is disabled. Enable it in the Configurator's own settings.");
+			throw new IllegalStateException("The AI assistant is off; turn it on in blade-ai.");
 		}
 		String apiKey = plaintextKey(ai.getApiKey());
 		if (apiKey == null || apiKey.isBlank()) {
-			throw new IllegalStateException("No API key configured. Set ai.apiKey in the Configurator's own settings.");
+			throw new IllegalStateException("No API key; set apiKey in blade-ai.");
 		}
 
 		JsonNode schemaNode = mapper.readTree(schemaJson);
@@ -89,25 +101,41 @@ public class AiConfigService {
 				: mapper.readTree(currentJson);
 
 		JsonNode redacted = redactSecrets(currentNode.deepCopy(), schemaNode);
-		String userPrompt = buildPrompt(schemaJson, mapper.writeValueAsString(redacted), instruction);
+		String userPrompt = buildPrompt(schemaJson, mapper.writeValueAsString(redacted), conversation(historyJson), instruction);
 
 		String text = callClaude(ai, apiKey, userPrompt);
-		JsonNode proposed = extractJson(text);
+		JsonNode answer = extractJson(text);
+		String reply = replyOf(answer);
+		JsonNode proposed = configOf(answer);
+		if (proposed == null) {
+			ObjectNode result = mapper.createObjectNode();
+			result.put("reply", reply != null ? reply : "");
+			result.putNull("config");
+			result.put("valid", true);
+			result.putArray("errors");
+			return mapper.writeValueAsString(result);
+		}
 		List<String> errors = validate(schemaNode, proposed);
 
 		if (!errors.isEmpty()) {
 			logger.info("AI draft failed validation (" + errors.size() + " errors), retrying once");
 			String repairPrompt = userPrompt + "\n\nYour previous draft was:\n" + mapper.writeValueAsString(proposed)
 					+ "\n\nIt failed schema validation with these errors:\n- " + String.join("\n- ", errors)
-					+ "\n\nReturn the corrected complete JSON document only.";
+					+ "\n\nAnswer again, the same way, with the config corrected.";
 			text = callClaude(ai, apiKey, repairPrompt);
-			proposed = extractJson(text);
+			answer = extractJson(text);
+			JsonNode repaired = configOf(answer);
+			if (repaired != null) {
+				proposed = repaired;
+				if (replyOf(answer) != null) reply = replyOf(answer);
+			}
 			errors = validate(schemaNode, proposed);
 		}
 
 		restoreRedacted(currentNode, proposed);
 
 		ObjectNode result = mapper.createObjectNode();
+		result.put("reply", reply != null ? reply : "");
 		result.set("config", proposed);
 		result.put("valid", errors.isEmpty());
 		ArrayNode errs = result.putArray("errors");
@@ -159,9 +187,46 @@ public class AiConfigService {
 	// Pure helpers (unit-testable, no container, no network)
 
 	static String buildPrompt(String schemaJson, String redactedConfigJson, String instruction) {
+		return buildPrompt(schemaJson, redactedConfigJson, "", instruction);
+	}
+
+	static String buildPrompt(String schemaJson, String redactedConfigJson, String conversation, String instruction) {
 		return "JSON Schema:\n" + schemaJson //
 				+ "\n\nCurrent configuration:\n" + redactedConfigJson //
-				+ "\n\nInstruction:\n" + instruction;
+				+ (conversation.isEmpty() ? "" : "\n\nThe conversation so far:\n" + conversation)
+				+ "\n\nOperator:\n" + instruction;
+	}
+
+	/// The last dozen earlier turns, one per line; enough for a follow-up.
+	static String conversation(String historyJson) {
+		if (historyJson == null || historyJson.isBlank()) return "";
+		try {
+			JsonNode turns = mapper.readTree(historyJson);
+			if (!turns.isArray()) return "";
+			StringBuilder b = new StringBuilder();
+			for (int i = Math.max(0, turns.size() - 12); i < turns.size(); i++) {
+				JsonNode t = turns.get(i);
+				String text = t.path("text").asText("").trim();
+				if (text.isEmpty()) continue;
+				b.append("assistant".equals(t.path("role").asText()) ? "You: " : "Operator: ").append(text).append("\n");
+			}
+			return b.toString();
+		} catch (Exception e) {
+			return "";
+		}
+	}
+
+	/// The answer's reply, or null. A bare document (no `reply`/`config`
+	/// keys) is an older-style answer: the configuration itself.
+	static String replyOf(JsonNode answer) {
+		return (answer != null && answer.has("reply") && answer.get("reply").isTextual()) ? answer.get("reply").asText() : null;
+	}
+
+	static JsonNode configOf(JsonNode answer) {
+		if (answer == null) return null;
+		if (!answer.has("reply") && !answer.has("config")) return answer;
+		JsonNode c = answer.get("config");
+		return (c != null && c.isObject()) ? c : null;
 	}
 
 	/// Strips a `{CLEARTEXT}` prefix if present. Encrypted values are already

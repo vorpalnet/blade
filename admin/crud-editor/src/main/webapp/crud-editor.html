@@ -2,10 +2,11 @@
 <html lang="en">
 <head>
 	<meta charset="utf-8">
-	<title>CRUD rule preview</title>
+	<title>CRUD rules</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
 	<script src="/blade/portal/brand/theme.js"></script>
 	<link rel="stylesheet" href="/blade/portal/lib/blade-editor.css">
+	<link rel="stylesheet" href="/blade/portal/lib/blade-chat.css">
 	<style>
 		:root {
 			/* Dark shell, light document: the page chrome (topbar) and the
@@ -208,13 +209,6 @@
 		.rule-hits { font-size: 11px; color: var(--muted); margin-left: 8px; margin-right: auto; cursor: help; }
 		.run-state.behind { font-weight: 600; }
 		.rule-card.proposed { border-left: 4px double var(--brand); }
-		.ai-panel { margin: 4px 0 14px; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
-		.ai-panel summary { cursor: pointer; font-weight: 600; font-size: 13px; }
-		.ai-panel textarea { width: 100%; min-height: 64px; margin: 8px 0; font: inherit; box-sizing: border-box; }
-		.ai-panel .ai-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 12px; }
-		.ai-panel ol { font-size: 12px; color: var(--muted); margin: 8px 0 0; padding-left: 20px; }
-		.ai-panel .ai-done { font-size: 13px; margin: 10px 0 0; }
-		.ai-panel details summary { font-weight: 400; font-size: 12px; margin-top: 6px; }
 		.inherit-note { font-size: 12px; color: var(--muted); margin: 0 0 8px; cursor: help; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 		.inherit-pick { font-size: 12px; padding: 2px 6px; width: auto; cursor: pointer; }
 		/* A rule switched off: the word "off" in its title and on its toggle, and faded. */
@@ -403,6 +397,53 @@
 			margin-bottom: 12px;
 		}
 		.op-list { margin: 4px 0 8px 18px; }
+		.subtitle a.handoff { font-size: 12px; color: var(--muted); margin-left: 6px; }
+		.live-toggle { display: flex; align-items: center; gap: 6px; margin: 0; text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--text); }
+		.live-toggle input { width: 15px; height: 15px; }
+
+		/* Field labels read as words ("Message type"), not property names
+		   in capitals; humanizeLabels writes the words. */
+		.editor-shell .field label { text-transform: none; letter-spacing: 0; font-size: 12px; }
+
+		/* A rule folds to one line: its id, what it matches, what it does.
+		   The arrow and the summary say which state it is in. */
+		.rule-card > .card-head { cursor: pointer; }
+		.rule-card > .card-head .fold { flex: 0 0 auto; color: var(--muted); font-size: 11px; width: 12px; }
+		.rule-card > .card-head .card-title { flex: 0 1 auto; }
+		.rule-card > .card-head .rule-sum {
+			flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+			font: 12px "JetBrains Mono", Menlo, monospace; color: var(--muted);
+		}
+		.rule-card > .card-head .rule-tags { font-size: 12px; color: var(--muted); white-space: nowrap; }
+		.rule-card.collapsed > .card-head { border-bottom: none; }
+		.rule-card.collapsed > .card-body { display: none; }
+		input.card-title-input {
+			flex: 0 1 220px; min-width: 80px; padding: 2px 6px;
+			font: 600 12px "JetBrains Mono", Menlo, monospace; color: var(--accent);
+		}
+		/* An empty field stays out of the way until asked for. */
+		.rule-card .field.unset { display: none; }
+		button.more-fields {
+			background: none; border: none; padding: 0; margin: 0 0 8px;
+			color: var(--accent); font-size: 12px; font-weight: 400; cursor: pointer;
+		}
+		.rs-tools { display: flex; gap: 8px; justify-content: flex-end; margin: 0 0 8px; }
+		.rs-tools button { font-size: 11px; padding: 3px 10px; background: var(--panel); color: var(--text); border: 1px solid var(--border); font-weight: 400; }
+
+		/* Wide screens: the preview beside the rules, held in view. */
+		@media (min-width: 1500px) {
+			/* Clear of the fixed file picker on the left. */
+			.crud-content { max-width: 2100px; padding-left: 210px; }
+			.workbench { display: grid; grid-template-columns: minmax(0, 1fr) minmax(480px, 36%); gap: 20px; align-items: start; }
+			.wb-preview {
+				position: sticky; top: calc(var(--vorpal-topbar-height, 52px) + 12px);
+				max-height: calc(100vh - var(--vorpal-topbar-height, 52px) - 24px); overflow: auto;
+			}
+			.wb-preview .section-head { margin-top: 0; }
+			.wb-preview .grid { grid-template-columns: 1fr; }
+			.wb-preview textarea { min-height: 180px; }
+			.wb-preview .vars-grid { grid-template-columns: 140px 1fr 28px; }
+		}
 
 	</style>
 </head>
@@ -427,12 +468,19 @@
 		</div>
 	</header>
 
+
+
 	<main class="crud-content">
-	<h1>CRUD rule preview</h1>
-	<p class="subtitle" title="Save keeps the previous version; Publish tells the running application to reload. Rules for: the CRUD service, or any application with a crud section.">
+	<h1>CRUD rules</h1>
+	<p class="subtitle" title="Rules for: the CRUD service, or any application with a crud section.">
 		Editing <code id="targetFile">crud.json</code>
+		<a class="handoff" id="handoff" href="/blade/configurator/configurator.html?schema=crud"
+			title="Logging, session settings, and cluster/server overlays are edited in the Configurator">
+			· logging &amp; session settings are in the Configurator</a>
 	</p>
 
+	<div class="workbench">
+	<div class="wb-edit">
 	<details class="editor-shell" id="editorShell" open>
 		<summary>
 			<span>Rule sets</span>
@@ -447,21 +495,15 @@
 					<option value="">CRUD service (crud.json)</option>
 				</select>
 			</label>
-			<label style="display:flex;align-items:center;gap:6px;margin:0;text-transform:none;letter-spacing:0;font-size:12px;color:var(--text);">
-				<input type="checkbox" id="livePreview" checked style="width:15px;height:15px;">
-				re-run preview on change
-			</label>
 			<div class="spacer"></div>
 			<button id="helpBtn" class="secondary" type="button" title="What is all this?">? Help</button>
-			<button id="reloadEditor" class="secondary" type="button" title="Discard the draft and reload from disk">Reload</button>
+			<button id="showVersions" class="secondary" type="button" title="Earlier saves of this file; restore one">Versions</button>
 			<button id="showJson" class="secondary" type="button" title="Read-only view of the document Save would write">JSON</button>
-			<button id="showVersions" class="secondary" type="button">Versions</button>
-			<button id="saveConfig" type="button">Save</button>
-			<button id="publishConfig" type="button">Publish</button>
+			<button id="reloadEditor" class="secondary" type="button" title="Discard the draft and reload from disk">Reload</button>
+			<button id="publishConfig" class="secondary" type="button"
+				title="Not needed after a Save: a saved file reaches the running servers on its own. Publish makes them reload it now.">Publish</button>
+			<button id="saveConfig" type="button" title="Check the draft and write it. It goes live on the running servers.">Save</button>
 			<span id="runState" class="run-state" style="display:none;"></span>
-			<a class="handoff" id="handoff" href="/blade/configurator/configurator.html?schema=crud"
-				title="Logging, session settings, and cluster/server overlays are edited in the Configurator">
-				logging &amp; session → Configurator</a>
 		</div>
 
 		<div id="draftProblems" class="draft-problems" role="alert" style="display:none;">
@@ -510,7 +552,10 @@
 		</div>
 
 	</details>
+	</div>
 
+	<!-- Beside the rules on a wide screen, and in view while they scroll. -->
+	<aside class="wb-preview">
 	<div class="section-head on-glass">
 		<span class="step">4</span>
 		<span class="section-title" title="Runs the unsaved draft in-process on the AdminServer; nothing touches the wire.">Preview</span>
@@ -545,6 +590,9 @@
 				</label>
 			</div>
 			<button id="run">Run</button>
+			<label class="live-toggle">
+				<input type="checkbox" id="livePreview" checked> re-run on change
+			</label>
 			<span id="status" class="status"></span>
 		</div>
 
@@ -625,6 +673,8 @@
 			Engine log for this run (warnings and skipped operations)
 		</div>
 		<pre id="warnBody" style="border-color:var(--bad);"></pre>
+	</div>
+	</aside>
 	</div>
 
 	<dialog id="helpDialog" class="help-dialog">
@@ -834,6 +884,7 @@
 	</main>
 
 	<script src="/blade/portal/lib/blade-editor.js"></script>
+	<script src="/blade/portal/lib/blade-chat.js"></script>
 	<script>
 		// Shared machinery from the portal-hosted editor kit
 		// (/blade/portal/lib/blade-editor.js) — schema resolution, field
@@ -2127,9 +2178,6 @@ a=sendrecv
 			desc.classList.add('wide');
 			head.appendChild(desc);
 			detail.appendChild(head);
-			// First under the header: below the rules it scrolled out of sight.
-			const ai = aiPanel(rs);
-			if (ai) detail.appendChild(ai);
 
 			// Rules. In a cluster or server file, a rule set the domain file
 			// also has keeps the domain's rules: the loader appends these.
@@ -2165,6 +2213,20 @@ a=sendrecv
 				}
 				detail.appendChild(row);
 			}
+			if (rs.rules.length > 1) {
+				const tools = document.createElement('div');
+				tools.className = 'rs-tools';
+				const openAll = document.createElement('button');
+				openAll.type = 'button';
+				openAll.textContent = 'Open all';
+				openAll.addEventListener('click', () => { rs.rules.forEach(r => ed.openRules.add(r)); renderRuleSetDetail(); });
+				const foldAll = document.createElement('button');
+				foldAll.type = 'button';
+				foldAll.textContent = 'Fold all';
+				foldAll.addEventListener('click', () => { rs.rules.forEach(r => ed.openRules.delete(r)); renderRuleSetDetail(); });
+				tools.append(openAll, foldAll);
+				detail.appendChild(tools);
+			}
 			rs.rules.forEach((rule, idx) => detail.appendChild(ruleCard(rs, rule, idx)));
 
 			const addRule = document.createElement('button');
@@ -2172,7 +2234,9 @@ a=sendrecv
 			addRule.textContent = '+ add rule';
 			addRule.style.cssText = 'font-size:12px;padding:5px 12px;';
 			addRule.addEventListener('click', () => {
-				rs.rules.push({ id: uniqueRuleId(rs, 'rule'), operations: [] });
+				const added = { id: uniqueRuleId(rs, 'rule'), operations: [] };
+				rs.rules.push(added);
+				ed.openRules.add(added);
 				markDirty();
 				renderRuleSetDetail();
 			});
@@ -2182,11 +2246,8 @@ a=sendrecv
 		// ---- AI rule builder (RuleBuilderServlet) ----
 
 		ed.ai = null;      // GET …/ai: {enabled, reason, maskNumbers}
-		ed.aiText = '';    // what the operator typed, kept across renders
-		ed.aiTarget = '';  // '' for a new rule, else the id to change
-		ed.aiJob = null;   // {id, steps, error} while a draft runs or after it fails
-		ed.aiDone = null;  // {ruleId, summary, steps} of the last accepted draft
-		ed.aiClosed = false; // the operator folded the panel away
+		ed.openRules = new WeakSet();  // rule objects shown open; the rest fold to one line
+		ed.allFields = new WeakSet(); // rules showing their empty fields too
 
 		async function loadAi() {
 			try {
@@ -2194,125 +2255,84 @@ a=sendrecv
 			} catch (e) {
 				ed.ai = null;
 			}
-			if (ed.doc) renderRuleSetDetail();
+			chat.enable(ed.ai && ed.ai.enabled);
 		}
 
-		/// "Describe a rule": the operator's words go to the model with this
-		/// rule set and the preview's sample message; the rule it proposes
-		/// lands here as a draft edit, marked, for the operator to check and
-		/// save. Hidden while blade-ai is off.
-		function aiPanel(rs) {
-			if (!ed.ai || !ed.ai.enabled) return null;
-			const panel = document.createElement('details');
-			panel.className = 'ai-panel';
-			// The last draft, shown until it is saved or the file reloads (both
-			// clear ed.proposedRule). Not in the status line: the auto-preview
-			// that follows a draft writes there at once.
-			const done = (ed.aiDone && ed.aiDone.ruleId === ed.proposedRule) ? ed.aiDone : null;
-			// Open unless the operator closed it; a draft in hand opens it again.
-			panel.open = !ed.aiClosed || !!(ed.aiText || ed.aiJob || done);
-			panel.addEventListener('toggle', () => { ed.aiClosed = !panel.open; });
-			const sum = document.createElement('summary');
-			sum.textContent = 'Describe a rule · Claude drafts it';
-			sum.title = 'Claude drafts the rule and checks it with the preview and the saved tests before proposing it. '
-				+ 'It is sent this rule set, the preview\'s sample message and your words'
-				+ (ed.ai.maskNumbers ? ', with phone numbers masked' : '') + '; secrets are never sent. Nothing is saved until you Save.';
-			panel.appendChild(sum);
-			const text = document.createElement('textarea');
-			text.placeholder = 'e.g. On INVITEs to the recorder, remove the second audio m-line and remember it for the 200 OK';
-			text.value = ed.aiText;
-			text.addEventListener('input', () => { ed.aiText = text.value; });
-			panel.appendChild(text);
-			const row = document.createElement('div');
-			row.className = 'ai-row';
-			const target = document.createElement('select');
-			target.title = 'Draft a new rule, or change one of this set\'s';
-			target.innerHTML = '<option value="">new rule</option>'
-				+ (rs.rules || []).map(r => `<option value="${escapeHtml(r.id)}">change ${escapeHtml(r.id)}</option>`).join('');
-			target.value = (rs.rules || []).some(r => r.id === ed.aiTarget) ? ed.aiTarget : '';
-			target.addEventListener('change', () => { ed.aiTarget = target.value; });
-			row.appendChild(target);
-			const go = document.createElement('button');
-			go.type = 'button';
-			go.textContent = ed.aiJob && !ed.aiJob.error ? 'drafting…' : 'Draft';
-			go.disabled = !!(ed.aiJob && !ed.aiJob.error);
-			go.addEventListener('click', () => draftRule(rs));
-			row.appendChild(go);
-			if (!document.getElementById('input').value.trim()) {
-				const hint = document.createElement('span');
-				hint.textContent = 'No sample message in the preview: the model will write one.';
-				row.appendChild(hint);
-			}
-			panel.appendChild(row);
-			if (ed.aiJob) {
-				const steps = document.createElement('ol');
-				for (const st of ed.aiJob.steps || []) steps.appendChild(Object.assign(document.createElement('li'), { textContent: st }));
-				if (ed.aiJob.error) steps.appendChild(Object.assign(document.createElement('li'), { textContent: '✕ ' + ed.aiJob.error }));
-				panel.appendChild(steps);
-			}
-			if (done && !ed.aiJob) {
-				const note = document.createElement('p');
-				note.className = 'ai-done';
-				note.textContent = 'Drafted "' + done.ruleId + '": ' + (done.summary || '')
-					+ ' Check it in the preview, then Save to keep it.';
-				panel.appendChild(note);
-				if (done.steps.length) {
-					const how = document.createElement('details');
-					how.appendChild(Object.assign(document.createElement('summary'), { textContent: 'How it was checked (' + done.steps.length + ' steps)' }));
-					const steps = document.createElement('ol');
-					for (const st of done.steps) steps.appendChild(Object.assign(document.createElement('li'), { textContent: st }));
-					how.appendChild(steps);
-					panel.appendChild(how);
-				}
-			}
-			return panel;
-		}
+		// ---- The chat (RuleBuilderServlet, shown by the shared blade-chat.js) ----
+		// One conversation for the page. Each message is a new run that sees
+		// the draft as it is now and the last turns of the conversation, so a
+		// follow-up reads the rule the last answer drafted. A drafted rule
+		// lands as an unsaved edit, marked, open, for the operator to check
+		// and Save.
 
-		async function draftRule(rs) {
-			const status = document.getElementById('status');
-			if (!ed.aiText.trim()) { status.textContent = 'Say what the rule should do.'; status.className = 'status err'; return; }
+		const chat = BladeChat.create({
+			ask: 'Ask Claude about these rules…',
+			askTitle: 'Chat with Claude about this file\'s rules: it drafts rules and answers questions',
+			title: 'Claude · these rules',
+			intro: 'Ask for a rule, or ask about one. For example:<ul>'
+				+ '<li>Add X-Test: hello to INVITEs we send to the callee</li>'
+				+ '<li>Reject calls to 18005550100 with 603</li>'
+				+ '<li>What does the stamp rule do?</li></ul>'
+				+ 'It sees this file and the preview\'s sample message. Secrets are never sent. Nothing is saved until you Save.',
+			send: askClaude,
+		});
+
+		async function askClaude(text, history, onSteps) {
 			const body = {
-				app: APP || null, file: FILE, ruleSet: rs.id, ruleId: ed.aiTarget || null, instruction: ed.aiText,
+				app: APP || null, file: FILE, ruleSet: ed.current || null, instruction: text, history: history,
 				message: document.getElementById('input').value, lifecycleEvent: document.getElementById('event').value,
 				leg: document.getElementById('leg').value || null, requestSdp: document.getElementById('requestSdp').checked,
 				variables: getVarsMap(), draft: draftFields(),
 			};
-			ed.aiJob = { steps: ['sending'] };
-			renderRuleSetDetail();
-			try {
-				const r = await fetch(API_BASE + 'ai/draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-				const j = await r.json();
-				if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
-				ed.aiJob.id = j.job;
-				for (;;) {
-					await new Promise(res => setTimeout(res, 1500));
-					const p = await (await fetch(API_BASE + 'ai/jobs/' + encodeURIComponent(ed.aiJob.id), { cache: 'no-store' })).json();
-					ed.aiJob.steps = p.steps || [];
-					renderRuleSetDetail();
-					if (p.state === 'failed') throw new Error(p.error || 'the draft failed');
-					if (p.state === 'done') { acceptDraft(rs, p.result); return; }
-					if (p.error) throw new Error(p.error);
-				}
-			} catch (e) {
-				ed.aiJob = Object.assign(ed.aiJob || {}, { error: e.message });
-				status.textContent = 'No draft: ' + e.message;
-				status.className = 'status err';
-				renderRuleSetDetail();
-			}
+			const r = await fetch(API_BASE + 'ai/draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+			const j = await r.json();
+			if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+			let p;
+			do {
+				await new Promise(res => setTimeout(res, 1500));
+				p = await (await fetch(API_BASE + 'ai/jobs/' + encodeURIComponent(j.job), { cache: 'no-store' })).json();
+				onSteps(p.steps || []);
+				if (p.state === 'failed' || (p.error && p.state !== 'running')) throw new Error(p.error || 'no answer');
+			} while (p.state !== 'done');
+			const result = p.result, steps = p.steps || [];
+			if (!result.rule) return { text: result.reply, steps: steps };
+			acceptDraft(result);
+			const setId = result.ruleSet || ed.current;
+			return {
+				text: result.summary || ('Drafted ' + result.ruleId + '.'), steps: steps,
+				meta: 'Drafted ' + result.ruleId + ' in ' + setId + ' · not saved',
+				actions: [{ label: 'Show it', title: 'Open the rule and bring it into view', run: () => showRule(setId, result.ruleId) }],
+			};
 		}
 
-		/// The proposed rule into the rule set, as a draft edit: replaces the
-		/// rule it changes, or is added. Marked until the next load or Save.
-		function acceptDraft(rs, result) {
+		/// Opens the rule's card and brings it into view.
+		function showRule(setId, ruleId) {
+			const rs = ed.doc && ed.doc.ruleSets[setId];
+			if (!rs) return;
+			const rule = (rs.rules || []).find(r => r.id === ruleId);
+			if (!rule) return;
+			ed.current = setId;
+			ed.openRules.add(rule);
+			renderAll();
+			const card = [...document.querySelectorAll('.rule-card')]
+				.find(c => (c.querySelector('.card-title-input') || {}).value === ruleId);
+			if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+		}
+
+		/// The proposed rule into its rule set, open and marked, unsaved.
+		function acceptDraft(result) {
+			const setId = result.ruleSet || ed.current;
+			if (!ed.doc.ruleSets[setId]) ed.doc.ruleSets[setId] = { id: setId, rules: [] };
+			const rs = ed.doc.ruleSets[setId];
+			if (!rs.rules) rs.rules = [];
 			const rule = Object.assign({ id: result.ruleId }, result.rule);
 			const at = rs.rules.findIndex(r => r.id === result.ruleId);
 			if (at >= 0) rs.rules[at] = rule; else rs.rules.push(rule);
+			ed.openRules.add(rule);
 			ed.proposedRule = result.ruleId;
-			ed.aiDone = { ruleId: result.ruleId, summary: result.summary, steps: (ed.aiJob && ed.aiJob.steps) || [] };
-			ed.aiJob = null;
-			ed.aiText = '';
+			ed.current = setId;
 			markDirty();
-			renderRuleSetDetail();
+			renderAll();
 			scheduleAutoPreview();
 		}
 
@@ -2393,6 +2413,46 @@ a=sendrecv
 			markDirty(); renderRuleSetDetail();
 		}
 
+		/// "messageType" as "Message type": what a field label shows. The
+		/// property name stays on the field as `data-name`.
+		const LABEL_WORDS = { id: 'ID', sdp: 'SDP', url: 'URL', uri: 'URI', json: 'JSON', xml: 'XML', sip: 'SIP',
+			ldap: 'LDAP', jdbc: 'JDBC', http: 'HTTP', ttl: 'TTL', xpath: 'XPath', ms: 'ms' };
+		function humanLabel(name) {
+			const words = String(name).replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+				.split(/[\s_]+/).filter(Boolean).map(w => w.toLowerCase());
+			return words.map((w, i) => LABEL_WORDS[w] || (i ? w : w.charAt(0).toUpperCase() + w.slice(1))).join(' ');
+		}
+		function humanizeLabels(root) {
+			root.querySelectorAll('.field > label').forEach(l => {
+				const f = l.parentElement;
+				if (f.dataset.name) return;
+				f.dataset.name = l.textContent;
+				l.textContent = humanLabel(l.textContent);
+			});
+		}
+		// Every form in the editor, however it was built or rebuilt.
+		(function () {
+			const shell = document.getElementById('editorShell');
+			new MutationObserver(() => humanizeLabels(shell)).observe(shell, { childList: true, subtree: true });
+		})();
+
+		/// One line for a folded rule: what it matches, then what it does.
+		function ruleSummary(rule) {
+			const match = [];
+			match.push(rule.method || 'any method');
+			for (const k of ['messageType', 'event']) if (rule[k]) match.push(rule[k]);
+			if (rule.leg) match.push(rule.leg + ' leg');
+			if (rule.sdp) match.push('sdp ' + rule.sdp);
+			if (rule.statusRange) match.push('status ' + rule.statusRange);
+			if (rule.when) match.push('when ' + rule.when);
+			const ops = (rule.operations || []).map(op => {
+				const what = ['attribute', 'xpath', 'jsonPath', 'path', 'name', 'status']
+					.map(k => op[k]).find(v => v !== undefined && v !== null && v !== '');
+				return (op.type || '?') + (what !== undefined ? ' ' + String(what).slice(0, 40) : '');
+			});
+			return match.join(' ') + '  →  ' + (ops.length ? ops.join(' · ') : 'no operations');
+		}
+
 		function ruleCard(rs, rule, idx) {
 			const card = document.createElement('div');
 			card.className = 'rule-card';
@@ -2410,8 +2470,44 @@ a=sendrecv
 			if (off) card.classList.add('off');
 			const proposed = ed.proposedRule === rule.id;
 			if (proposed) card.classList.add('proposed');
-			head.appendChild(titleEl(rule.id + (inheritedIds.has(rule.id) ? ' · changes inherited' : '') + (off ? ' · off' : '')
-				+ (proposed ? ' · AI draft, check before saving' : '')));
+			// Folded unless opened; a draft from the assistant arrives open.
+			const open = ed.openRules.has(rule);
+			if (!open) card.classList.add('collapsed');
+			const fold = document.createElement('span');
+			fold.className = 'fold';
+			fold.textContent = open ? '▾' : '▸';
+			head.appendChild(fold);
+			// The id once: plain text folded, the rename box open.
+			if (open) {
+				const idIn = document.createElement('input');
+				idIn.className = 'card-title-input';
+				idIn.value = rule.id || '';
+				idIn.title = 'The rule\'s key. In a cluster or server file, an inherited id changes that rule.';
+				idIn.setAttribute('aria-label', 'Rule ID');
+				idIn.addEventListener('change', () => renameRule(rs, idx, idIn.value));
+				head.appendChild(idIn);
+			} else {
+				head.appendChild(titleEl(rule.id));
+			}
+			const tags = [inheritedIds.has(rule.id) ? 'changes inherited' : '', off ? 'off' : '',
+				proposed ? 'AI draft, check before saving' : ''].filter(Boolean);
+			if (tags.length) {
+				const t = document.createElement('span');
+				t.className = 'rule-tags';
+				t.textContent = '· ' + tags.join(' · ');
+				head.appendChild(t);
+			}
+			const sum = document.createElement('span');
+			sum.className = 'rule-sum';
+			const asRuns = below ? BladeEditor.mergeOver(below, rule) : rule;
+			sum.textContent = open ? '' : ruleSummary(asRuns);
+			sum.title = ruleSummary(asRuns);
+			head.appendChild(sum);
+			head.addEventListener('click', e => {
+				if (e.target.closest('button, input, select, a')) return;
+				if (ed.openRules.has(rule)) ed.openRules.delete(rule); else ed.openRules.add(rule);
+				renderRuleSetDetail();
+			});
 			// Messages this rule matched on the servers running it, since each
 			// deployed the application.
 			if (ed.hits) {
@@ -2438,6 +2534,7 @@ a=sendrecv
 				const copy = JSON.parse(JSON.stringify(base ? BladeEditor.mergeOver(base, rule) : rule));
 				copy.id = uniqueRuleId(rs, rule.id || 'rule');
 				rs.rules.splice(idx + 1, 0, copy);
+				ed.openRules.add(copy);
 				markDirty(); renderRuleSetDetail();
 			}));
 			head.appendChild(miniBtn('×', 'Remove rule', () => {
@@ -2454,15 +2551,14 @@ a=sendrecv
 			// The rule's own fields come from the Rule schema: every filter
 			// the engine knows, with its enum choices and description, and
 			// nothing the engine doesn't. Operations get their own cards below.
-			body.appendChild(blurFieldEl('id', rule.id, 'The rule\'s key. In a cluster or server file, an inherited id changes that rule.',
-				v => renameRule(rs, idx, v)));
 			const ruleFields = {};
 			for (const [name, prop] of Object.entries(ed.ruleProps || {})) {
 				if (name !== 'operations' && name !== 'enabled') ruleFields[name] = prop;
 			}
 			if (Object.keys(ruleFields).length) {
 				renderFieldsInto(ruleFields, rule, body);
-				decorateRuleFields(body, rule, head, idx, inheritedRules(rs.id).find(r => r.id === rule.id));
+				decorateRuleFields(body, rule, head, idx, below);
+				hideUnsetFields(body.lastElementChild, rule, below);
 			} else {
 				body.appendChild(rawJsonBound(rule));
 			}
@@ -2485,6 +2581,29 @@ a=sendrecv
 
 			card.appendChild(body);
 			return card;
+		}
+
+		/// Hides the rule's empty fields, ones this file leaves unset and
+		/// nothing below sets, behind one "+ description, when, …" link.
+		function hideUnsetFields(row, rule, below) {
+			if (!row || ed.allFields.has(rule)) return;
+			const empty = v => v === undefined || v === null || v === '' || v === false;
+			const hidden = [];
+			row.querySelectorAll(':scope > .field').forEach(f => {
+				const name = f.dataset.name || (f.querySelector('label') && f.querySelector('label').textContent);
+				if (empty(rule[name]) && !(below && !empty(below[name]))) {
+					f.classList.add('unset');
+					hidden.push(name);
+				}
+			});
+			if (!hidden.length) return;
+			const more = document.createElement('button');
+			more.type = 'button';
+			more.className = 'more-fields';
+			more.textContent = '+ ' + hidden.map(humanLabel).join(', ').toLowerCase();
+			more.title = 'Fields this rule leaves empty';
+			more.addEventListener('click', () => { ed.allFields.add(rule); renderRuleSetDetail(); });
+			row.after(more);
 		}
 
 		function opCard(rule, op, oi) {
@@ -2570,14 +2689,14 @@ a=sendrecv
 			};
 			body.querySelectorAll('.field').forEach(field => {
 				const label = field.querySelector('label');
+				const name = field.dataset.name || (label && label.textContent);
 				const select = field.querySelector('select');
 				if (inherited && label && select && select.options.length && !select.value
-						&& inherited[label.textContent] != null) {
-					select.options[0].textContent = '(inherited: ' + inherited[label.textContent] + ')';
+						&& inherited[name] != null) {
+					select.options[0].textContent = '(inherited: ' + inherited[name] + ')';
 				}
 				const input = field.querySelector('input');
 				if (!label || !input) return;
-				const name = label.textContent;
 				// Changing an inherited rule: an empty field keeps the
 				// inherited value, shown as the placeholder.
 				if (inherited && inherited[name] != null && typeof inherited[name] !== 'object') {

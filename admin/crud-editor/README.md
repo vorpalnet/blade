@@ -66,16 +66,17 @@ does.
 and refuses on a failure; a cluster or server file keeps its own. Back the `_tests`
 directory up with the rest of `config/custom/vorpal`; engines never read it.
 
-## Describe a rule
+## Ask Claude
 
-With the domain's AI assistant on, a rule set has a **Describe a rule** box: say what the rule
-should do, in plain words, and Claude drafts it. It runs each candidate on the preview's sample
-message and against the saved tests before proposing it. The proposal lands in the rule set as
-an ordinary unsaved edit, marked as an AI draft; Save it, with all of Save's checks, or discard
-it.
+With the domain's AI assistant on, the top bar has an **Ask Claude** box. It opens one
+conversation for the whole file: ask for a rule in plain words and Claude drafts it, or ask what
+a rule does. It runs each candidate on the preview's sample message and against the saved tests
+before proposing it. The proposal lands in its rule set as an ordinary unsaved edit, marked as an
+AI draft; Save it, with all of Save's checks, or discard it. A follow-up ("make it 486 instead")
+works on the rule the last answer drafted.
 
 It is off until `blade-ai` is turned on and given an Anthropic API key, in the Configurator or by
-`./install.sh <env> ai` (the same key serves the Configurator's own Use AI). A draft sends the rule set, the file's
+`./install.sh <env> ai` (the same key serves the Configurator's own Use AI). A message sends the rule sets, the pipeline, the file's
 variables, the sample message and your words to the model; secrets are never sent, and phone
 numbers are masked unless `maskNumbers` is turned off.
 

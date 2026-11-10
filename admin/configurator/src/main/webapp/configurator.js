@@ -80,7 +80,7 @@ function connectWebSocket() {
         lastPongTime = Date.now();
         startHeartbeat(); // Start sending pings
         sendWebSocketMessage('get_autopublish', {}); // sync the auto-publish toggle
-        sendWebSocketMessage('get_ai_status', {});   // show the Use AI button only when enabled
+        sendWebSocketMessage('get_ai_status', {});   // show the Ask Claude box only when enabled
     };
 
     websocket.onmessage = function(event) {
@@ -703,7 +703,8 @@ function resolveJsonPath(obj, path) {
 function readInputValue(input) {
     if (!input) return null;
     if (input.type === 'checkbox') return input.checked;
-    if (input.type === 'number') return input.value ? parseInt(input.value, 10) : null;
+    // Number(), not parseInt: a decimal (39.0438) must not come back as 39.
+    if (input.type === 'number') return input.value !== '' ? Number(input.value) : null;
     let v = input.value;
     if (v == null || v === '') return null;
     if (input.dataset && input.dataset.password === 'true') {
@@ -711,7 +712,9 @@ function readInputValue(input) {
         // encrypted (WebLogic 14.1 emits {AES256}); only bare cleartext gets wrapped.
         // Re-wrapping an already-encrypted value produced {CLEARTEXT}{AES256}..., which
         // decrypts to the ciphertext and breaks the credential.
-        if (!/^\{[A-Za-z0-9]+\}/.test(v)) {
+        // A ${variable} is a reference resolved at run time, not a secret:
+        // encrypting it would store the text "${apiKey}" in place of the key.
+        if (!/^\{[A-Za-z0-9]+\}/.test(v) && !/^\$\{[^}]+\}$/.test(v)) {
             v = '{CLEARTEXT}' + v;
         }
     }
@@ -1182,7 +1185,12 @@ function isIdentityReference(value, fieldSchema) {
 
     const variants = polymorphicVariants(resolved);
     if (variants) {
-        return variants.some(v => v.type === 'object' && v.properties && v.properties.id);
+        // Each variant may be a $ref (+ properties) wrapper: look at what it
+        // resolves to, or a plan's ["prefix-map", ...] renders as empty objects.
+        return variants.some(v => {
+            const r = v.$ref ? deref(v) : v;
+            return r && r.type === 'object' && r.properties && r.properties.id;
+        });
     }
 
     return resolved.type === 'object' && resolved.properties && resolved.properties.id;
@@ -1379,8 +1387,11 @@ function createFormElement(fieldSchema, path, value = null, isMapKey = false) {
             return checkbox;
 
         case 'integer':
+        case 'number':
             const numberInput = document.createElement('input');
             numberInput.type = 'number';
+            // A number field takes decimals (a site's latitude); an integer whole numbers.
+            if (fieldSchema.type === 'number') numberInput.step = 'any';
             numberInput.id = id;
             const numVal = value !== null && value !== undefined ? value : '';
             numberInput.value = numVal;
@@ -1396,7 +1407,9 @@ function createFormElement(fieldSchema, path, value = null, isMapKey = false) {
 
         case 'string':
             let textInput;
-            if (fieldSchema.format === 'textarea') {
+            // A value with line breaks (JVM arguments, one per line) keeps them:
+            // an <input> would silently join the lines.
+            if (fieldSchema.format === 'textarea' || (typeof value === 'string' && value.includes('\n'))) {
                 // Multi-line editor for long strings (regex, templates, body).
                 textInput = document.createElement('textarea');
                 textInput.rows = 3;
@@ -1459,7 +1472,25 @@ function createFormElement(fieldSchema, path, value = null, isMapKey = false) {
     }
 }
 
+/// [#createFormGroupElement] with the property it edits named on the
+/// element (`data-prop`, the last segment of `path`). getFormData finds a
+/// property's field by that name, never by the words its label shows,
+/// which are for people and may change.
 function createFormGroup(fieldSchema, title, description, path, value = null, isNested = false, originalSchema = null) {
+    const el = createFormGroupElement(fieldSchema, title, description, path, value, isNested, originalSchema);
+    const prop = (path == null) ? '' : String(path).split('.').pop();
+    if (el && prop && !/\]$/.test(prop)) {
+        el.dataset.prop = prop;
+        const SEL = '.collapsible-section, .form-group, .checkbox-group';
+        if (!el.matches(SEL)) {
+            const inner = el.querySelector(':scope > ' + SEL.split(', ').join(', :scope > '));
+            if (inner && !inner.dataset.prop) inner.dataset.prop = prop;
+        }
+    }
+    return el;
+}
+
+function createFormGroupElement(fieldSchema, title, description, path, value = null, isNested = false, originalSchema = null) {
     // Store original schema for delete functionality (before $ref resolution)
     const schemaForDelete = originalSchema || fieldSchema;
 
@@ -1570,7 +1601,7 @@ function createFormGroup(fieldSchema, title, description, path, value = null, is
             deleteBtn = document.createElement('button');
             deleteBtn.type = 'button';
             deleteBtn.className = 'delete-property-btn';
-            deleteBtn.innerHTML = '<span class="delete-property-icon">-</span>';
+            deleteBtn.innerHTML = '<span class="delete-property-icon">×</span>';
             deleteBtn.title = `Remove ${title}`;
             deleteBtn.onclick = (e) => {
                 e.stopPropagation();
@@ -1658,6 +1689,68 @@ function applyReadOnly(fieldSchema, content) {
     content.querySelectorAll('input, select, textarea, button').forEach(el => el.disabled = true);
 }
 
+/// What a field shows as its label: the schema's title, else the property
+/// name as words ("loggingLevel" as "Logging level"). Display only; the
+/// data keeps the name, and the filter still matches it through data-path.
+const LABEL_WORDS = { id: 'ID', sdp: 'SDP', url: 'URL', uri: 'URI', json: 'JSON', xml: 'XML', sip: 'SIP', ldap: 'LDAP',
+    jdbc: 'JDBC', http: 'HTTP', https: 'HTTPS', ttl: 'TTL', tls: 'TLS', ip: 'IP', jms: 'JMS', snmp: 'SNMP', rest: 'REST',
+    api: 'API', ms: 'ms' };
+function humanLabel(name) {
+    const words = String(name).replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+        .split(/[\s_]+/).filter(Boolean).map(w => w.toLowerCase());
+    return words.map((w, i) => LABEL_WORDS[w] || (i ? w : w.charAt(0).toUpperCase() + w.slice(1))).join(' ');
+}
+function fieldTitle(propSchema, prop) {
+    return propSchema.title || humanLabel(prop);
+}
+
+/// One line for a folded section: its own fields' values, then its
+/// sub-sections by name, so it reads without opening.
+function sectionSummary(content) {
+    const mine = content.closest('.collapsible-section');
+    const parts = [];
+    // A list or map says how many items it holds, by name.
+    const items = [...content.querySelectorAll('.array-item, .map-entry')].filter(it =>
+        it.closest('.collapsible-section') === mine && !it.parentElement.closest('.array-item, .map-entry'));
+    if (items.length) {
+        const names = items.map((it, i) => {
+            // The item's own key or id, not one from a list inside it.
+            const key = it.querySelector(':scope > .map-entry-header .map-key-input');
+            const ids = [...it.querySelectorAll('input[data-path$=".id"]')]
+                .sort((a, b) => a.dataset.path.length - b.dataset.path.length);
+            const fields = it.querySelectorAll('input:not([type=checkbox]):not([type=button]), select, textarea');
+            const type = it.querySelector(':scope > .array-item-header .array-item-type-label');
+            return (key && key.value) || (ids[0] && ids[0].value)
+                || (fields.length === 1 && fields[0].value)
+                || (type && type.textContent.trim()) || '#' + (i + 1);
+        });
+        parts.push(items.length + (items.length === 1 ? ' item: ' : ' items: ') + names.join(', '));
+    }
+    content.querySelectorAll('.form-group').forEach(g => {
+        if (g.closest('.collapsible-section') !== mine || g.querySelector('.collapsible-section')) return;
+        if (g.closest('.array-item, .map-entry') && items.some(it => it.contains(g))) return;
+        const label = g.querySelector('label');
+        const input = g.querySelector('input, select, textarea');
+        if (!label || !input) return;
+        const name = label.textContent.trim();
+        if (input.type === 'checkbox') { if (input.checked) parts.push(name.toLowerCase()); return; }
+        if (input.type === 'password') { if (input.value) parts.push(name + ' set'); return; }
+        const v = String(input.value || '').trim();
+        if (v) parts.push(name + ' ' + (v.length > 40 ? v.slice(0, 40) + '…' : v));
+    });
+    content.querySelectorAll('.collapsible-section').forEach(sub => {
+        if (sub.parentElement.closest('.collapsible-section') !== mine) return;
+        if (items.some(it => it.contains(sub))) return;
+        const t = sub.querySelector(':scope > .collapsible-header .collapsible-name');
+        if (t) parts.push(t.textContent.trim());
+    });
+    return parts.join(' · ');
+}
+function refreshSectionSummary(header, content) {
+    const sum = header.querySelector('.collapsible-summary');
+    if (sum) sum.textContent = header.classList.contains('collapsed') ? sectionSummary(content) : '';
+}
+
 function createCollapsibleSection(title, description, content, hasData = false, autoCollapse = false, deleteInfo = null, javaClass = null) {
     const section = document.createElement('div');
     section.className = 'collapsible-section';
@@ -1674,8 +1767,13 @@ function createCollapsibleSection(title, description, content, hasData = false, 
     titleContainer.appendChild(arrow);
 
     const titleText = document.createElement('span');
+    titleText.className = 'collapsible-name';
     titleText.textContent = title;
     titleContainer.appendChild(titleText);
+    // Folded, the section says what it holds.
+    const summary = document.createElement('span');
+    summary.className = 'collapsible-summary';
+    titleContainer.appendChild(summary);
 
     header.appendChild(titleContainer);
 
@@ -1707,7 +1805,7 @@ function createCollapsibleSection(title, description, content, hasData = false, 
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
         deleteBtn.className = 'delete-property-btn';
-        deleteBtn.innerHTML = '<span class="delete-property-icon">-</span>';
+        deleteBtn.innerHTML = '<span class="delete-property-icon">×</span>';
         deleteBtn.title = `Remove ${title}`;
         deleteBtn.onclick = (e) => {
             e.stopPropagation();
@@ -1740,11 +1838,14 @@ function createCollapsibleSection(title, description, content, hasData = false, 
 
     section.appendChild(header);
     section.appendChild(contentDiv);
+    // Once the section is in the page, its fields hold their values.
+    if (autoCollapse) setTimeout(() => refreshSectionSummary(header, contentDiv), 0);
 
     return section;
 }
 
 function toggleCollapse(header, content, arrow) {
+    try {
     const isCollapsed = header.classList.contains('collapsed');
 
     if (isCollapsed) {
@@ -1791,6 +1892,9 @@ function toggleCollapse(header, content, arrow) {
         setTimeout(() => {
             recalculateAllAncestorHeights(header.closest('.collapsible-section'));
         }, 350); // Wait for collapse animation
+    }
+    } finally {
+        refreshSectionSummary(header, content);
     }
 }
 
@@ -1970,9 +2074,20 @@ function generateDefaultValue(fieldSchema) {
     }
 }
 
+/// A placeholder drawn for a value the file states empty ({}, [], "") keeps
+/// that value on Save; one left by removing a field (×) has no mark and drops it.
+function markStatedEmpty(placeholder, value) {
+    if (isStatedEmpty(value)) {
+        placeholder.dataset.statedEmpty = 'true';
+        placeholder.title = 'Empty in the file, and saved that way';
+    }
+}
+
 function createAddPropertyPlaceholder(fieldSchema, title, description, path, container, isNested = false) {
     const placeholder = document.createElement('div');
     placeholder.className = `add-property-placeholder${isNested ? ' nested' : ''}`;
+    const prop = (path == null) ? '' : String(path).split('.').pop();
+    if (prop && !/\]$/.test(prop)) placeholder.dataset.prop = prop;
 
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
@@ -2091,7 +2206,7 @@ function createPolymorphicObjectGroup(fieldSchema, title, description, path, val
             const propSchema = vs.properties[prop];
             const propPath = path ? `${path}.${prop}` : prop;
             const propValue = variantValue && variantValue[prop] !== undefined ? variantValue[prop] : null;
-            const propTitle = propSchema.title || prop;
+            const propTitle = fieldTitle(propSchema, prop);
             const propDescription = propSchema.description;
             // Required-flag injection (suppresses the [-] button), same as createObjectGroup.renderPropInto.
             const childSchema = requiredSet.has(prop)
@@ -2099,6 +2214,7 @@ function createPolymorphicObjectGroup(fieldSchema, title, description, path, val
                 : propSchema;
             if (!hasValue(propValue)) {
                 const placeholder = createAddPropertyPlaceholder(childSchema, propTitle, propDescription, propPath, content, true);
+                markStatedEmpty(placeholder, propValue);
                 content.appendChild(placeholder);
             } else {
                 const propGroup = createFormGroup(childSchema, propTitle, propDescription, propPath, propValue, true, propSchema);
@@ -2116,7 +2232,9 @@ function createPolymorphicObjectGroup(fieldSchema, title, description, path, val
     renderVariant(initialIdx, value);
 
     const hasData = hasValue(value);
-    const autoCollapse = !hasData || fieldSchema['x-collapsed'] === true;
+    // Folded to one line that says what it holds (sectionSummary); a click,
+    // or View > Expand All, opens it.
+    const autoCollapse = true;
     const deleteInfo = fieldSchema['x-required-here'] ? null : {
         schema: schemaForDelete || fieldSchema,
         title: title,
@@ -2136,7 +2254,9 @@ function createObjectGroup(fieldSchema, title, description, path, value = null, 
     content.className = 'object-content';
 
     const hasData = hasValue(value);
-    const autoCollapse = !hasData || fieldSchema['x-collapsed'] === true;
+    // Folded to one line that says what it holds (sectionSummary); a click,
+    // or View > Expand All, opens it.
+    const autoCollapse = true;
 
     if (fieldSchema.properties) {
         const requiredSet = new Set(Array.isArray(fieldSchema.required) ? fieldSchema.required : []);
@@ -2171,7 +2291,7 @@ function createObjectGroup(fieldSchema, title, description, path, value = null, 
             if (!propSchema) return;
             const propPath = path ? `${path}.${prop}` : prop;
             const propValue = value && value[prop] !== undefined ? value[prop] : null;
-            const propTitle = propSchema.title || prop;
+            const propTitle = fieldTitle(propSchema, prop);
             let propDescription = propSchema.description;
             if (!propDescription && prop === 'type' && propSchema.enum && propSchema.enum.length === 1) {
                 propDescription = 'Map type: ' + propSchema.enum[0];
@@ -2187,6 +2307,7 @@ function createObjectGroup(fieldSchema, title, description, path, value = null, 
             const wideTarget = groupIndex == null;
             if (!hasValue(propValue)) {
                 const placeholder = createAddPropertyPlaceholder(childSchema, propTitle, propDescription, propPath, target, true);
+                markStatedEmpty(placeholder, propValue);
                 if (wideTarget) placeholder.dataset.wide = 'true';
                 target.appendChild(placeholder);
             } else {
@@ -2306,7 +2427,9 @@ function createOpaqueObjectGroup(fieldSchema, title, description, path, value = 
     const content = document.createElement('div');
 
     const hasData = hasValue(value);
-    const autoCollapse = !hasData || fieldSchema['x-collapsed'] === true;
+    // Folded to one line that says what it holds (sectionSummary); a click,
+    // or View > Expand All, opens it.
+    const autoCollapse = true;
 
     const textarea = document.createElement('textarea');
     textarea.className = 'opaque-object-input';
@@ -2381,7 +2504,9 @@ function createMapGroup(fieldSchema, title, description, path, value = null, isN
     const content = document.createElement('div');
 
     const hasData = hasValue(value);
-    const autoCollapse = !hasData || fieldSchema['x-collapsed'] === true;
+    // Folded to one line that says what it holds (sectionSummary); a click,
+    // or View > Expand All, opens it.
+    const autoCollapse = true;
 
     const header = document.createElement('div');
     header.className = 'array-header';
@@ -2451,7 +2576,9 @@ function createArrayGroup(fieldSchema, title, description, path, value = null, i
     content.className = 'form-group array';
 
     const hasData = Array.isArray(value) && value.length > 0;
-    const autoCollapse = !hasData || fieldSchema['x-collapsed'] === true;
+    // Folded to one line that says what it holds (sectionSummary); a click,
+    // or View > Expand All, opens it.
+    const autoCollapse = true;
 
     const header = document.createElement('div');
     header.className = 'array-header';
@@ -2624,7 +2751,7 @@ function addExtraRow(wrapper, valueTypeSchema, basePath, key, value) {
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
     removeBtn.className = 'delete-property-btn';
-    removeBtn.innerHTML = '<span class="delete-property-icon">-</span>';
+    removeBtn.innerHTML = '<span class="delete-property-icon">×</span>';
     removeBtn.title = 'Remove extra';
     removeBtn.onclick = () => {
         row.remove();
@@ -2679,7 +2806,7 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null, p
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
     removeBtn.className = 'delete-property-btn';
-    removeBtn.innerHTML = '<span class="delete-property-icon">-</span>';
+    removeBtn.innerHTML = '<span class="delete-property-icon">×</span>';
     removeBtn.title = 'Remove entry';
     removeBtn.onclick = () => {
         entry.remove();
@@ -2717,7 +2844,7 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null, p
             const propSchema = valueSchema.properties[prop];
             const propPath = valuePath ? `${valuePath}.${prop}` : prop;
             const propValue = value && value[prop] !== undefined ? value[prop] : null;
-            const propTitle = propSchema.title || prop;
+            const propTitle = fieldTitle(propSchema, prop);
             const propDescription = propSchema.description;
             // Required-flag injection (suppresses the [-] button), same as createObjectGroup.renderPropInto.
             const childSchema = requiredSet.has(prop)
@@ -2726,6 +2853,7 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null, p
 
             if (!hasValue(propValue)) {
                 const placeholder = createAddPropertyPlaceholder(childSchema, propTitle, propDescription, propPath, entryContent, true);
+                markStatedEmpty(placeholder, propValue);
                 entryContent.appendChild(placeholder);
             } else {
                 const propGroup = createFormGroup(childSchema, propTitle, propDescription, propPath, propValue, true, propSchema);
@@ -2748,7 +2876,9 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null, p
             }
             renderInlineExtras(entryContent, valueSchema.additionalProperties, valuePath, extras);
         }
-    } else if (valueSchema.type === 'array') {
+    } else if (valueSchema.type === 'array' || valueSchema.type === 'object') {
+        // A list, or a map / opaque object (a Translation is a map of strings):
+        // a whole group. A plain input would show "[object Object]" and save it.
         const valueGroup = createFormGroup(valueSchema, null, null, valuePath, value, true);
         entryContent.appendChild(valueGroup);
     } else {
@@ -2836,7 +2966,7 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.className = 'delete-property-btn';
-        removeBtn.innerHTML = '<span class="delete-property-icon">-</span>';
+        removeBtn.innerHTML = '<span class="delete-property-icon">×</span>';
         removeBtn.title = 'Remove item';
         removeBtn.onclick = (e) => {
             e.stopPropagation();
@@ -2880,7 +3010,7 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
     removeBtn.className = 'delete-property-btn';
-    removeBtn.innerHTML = '<span class="delete-property-icon">-</span>';
+    removeBtn.innerHTML = '<span class="delete-property-icon">×</span>';
     removeBtn.title = 'Remove item';
     removeBtn.onclick = (e) => {
         e.stopPropagation();
@@ -3021,7 +3151,7 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
             const propSchema = itemSchema.properties[prop];
             const propPath = itemPath ? `${itemPath}.${prop}` : prop;
             const propValue = value && value[prop] !== undefined ? value[prop] : null;
-            const propTitle = propSchema.title || prop;
+            const propTitle = fieldTitle(propSchema, prop);
             const propDescription = propSchema.description;
             // Required-flag injection (suppresses the [-] button), same as createObjectGroup.renderPropInto.
             const childSchema = requiredSet.has(prop)
@@ -3030,6 +3160,7 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
 
             if (!hasValue(propValue)) {
                 const placeholder = createAddPropertyPlaceholder(childSchema, propTitle, propDescription, propPath, body, true);
+                markStatedEmpty(placeholder, propValue);
                 body.appendChild(placeholder);
             } else {
                 const propGroup = createFormGroup(childSchema, propTitle, propDescription, propPath, propValue, true, propSchema);
@@ -3118,6 +3249,39 @@ function generateForm() {
     generateFormWithData(initialData);
 }
 
+/// The element that holds a value's own list, map or type field: the first
+/// match under `root` with no list item or map entry between them, so a list
+/// nested in one of this value's items is never taken for this value's own.
+const VALUE_BOUNDARY = '.array-item, .map-entry';
+function ownValueElement(root, selector) {
+    const mine = root.closest(VALUE_BOUNDARY);
+    return [...root.querySelectorAll(selector)].find(e => e.parentElement.closest(VALUE_BOUNDARY) === mine) || null;
+}
+/// The fields and sections an object owns: under `searchContainer`, with no
+/// other section, list item or map entry between them.
+const FIELD_OWNER = '.collapsible-section, .array-item, .map-entry';
+function ownFields(searchContainer, selector) {
+    const mine = searchContainer.closest(FIELD_OWNER);
+    return [...searchContainer.querySelectorAll(selector)].filter(e => e.parentElement.closest(FIELD_OWNER) === mine);
+}
+/// The value a file states on purpose although it is empty: {}, [] or "".
+/// An `analytics.events` entry is `{}` (the event, with its defaults); a
+/// field left out means something else, so the form keeps what was there.
+function isStatedEmpty(v) {
+    return v === '' || (Array.isArray(v) && v.length === 0)
+        || (v !== null && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0);
+}
+function isEmptyResult(v) {
+    return v === null || v === undefined || v === '' || (typeof v === 'object' && Object.keys(v).length === 0);
+}
+/// A typed-in number stays a number, whatever kind of input showed it.
+function coerceToSchema(v, s) {
+    if (typeof v !== 'string' || !s) return v;
+    const t = s.$ref ? (deref(s) || {}).type : s.type;
+    if ((t === 'integer' || t === 'number') && v.trim() !== '' && !isNaN(Number(v))) return Number(v);
+    return v;
+}
+
 function getFormData() {
     const form = document.getElementById('dynamicForm');
 
@@ -3155,7 +3319,14 @@ function getFormData() {
                     return null;
                 }
             }
-            const typeInput = container.querySelector(':scope > input[type="hidden"][data-path$=".type"], :scope > [style*="display: none"] > input[data-path$=".type"], :scope > div > input[type="hidden"][data-path$=".type"]');
+            // This value's own type field: under it with no list item or map
+            // entry between, and the shortest path (a nested object's type is
+            // longer). A connector in a keyed pipeline sits a level deeper than
+            // fixed positions reached, so it read as the first variant (sip).
+            const typeInputs = [...container.querySelectorAll('input[data-path$=".type"], select[data-path$=".type"]')]
+                .filter(i => i.parentElement.closest(VALUE_BOUNDARY) === container.closest(VALUE_BOUNDARY))
+                .sort((a, b) => a.dataset.path.length - b.dataset.path.length);
+            const typeInput = typeInputs[0] || null;
             const typeVal = typeInput ? typeInput.value : null;
             schemaNode = resolveOneOf(schemaNode, typeVal ? { type: typeVal } : null);
             if (schemaNode && schemaNode.$ref) {
@@ -3197,7 +3368,7 @@ function getFormData() {
             if (schemaNode.additionalProperties && !schemaNode.properties) {
                 // This is a map - find map container
                 // Note: map-container might be inside a wrapper div due to createCollapsibleSection structure
-                const mapContainer = container.querySelector(':scope > .map-container, :scope > div > .map-container, :scope > .collapsible-section > .collapsible-content > .map-container');
+                const mapContainer = ownValueElement(container, '.map-container');
                 if (!mapContainer) return null;
 
                 const result = {};
@@ -3208,14 +3379,25 @@ function getFormData() {
                     const key = keyInput ? keyInput.value.trim() : '';
                     if (key) {
                         const childSource = (sourceData && typeof sourceData === 'object') ? sourceData[key] : null;
-                        const valueData = extractData(entry, schemaNode.additionalProperties, `${debugPath}.${key}`, childSource);
-                        if (valueData !== null && (typeof valueData !== 'object' || Object.keys(valueData).length > 0)) {
+                        const valueData = coerceToSchema(
+                            extractData(entry, schemaNode.additionalProperties, `${debugPath}.${key}`, childSource),
+                            schemaNode.additionalProperties);
+                        if (!isEmptyResult(valueData)) {
                             result[key] = valueData;
+                        } else if (childSource !== null && childSource !== undefined && isStatedEmpty(childSource)) {
+                            // The entry is there, empty on purpose ("callRiskAssessed": {}).
+                            result[key] = JSON.parse(JSON.stringify(childSource));
+                        } else {
+                            // An entry the operator added and left empty is still an entry.
+                            const vs = schemaNode.additionalProperties.$ref ? deref(schemaNode.additionalProperties) : schemaNode.additionalProperties;
+                            if (vs && vs.type === 'object') result[key] = {};
+                            else if (vs && vs.type === 'array') result[key] = [];
                         }
                     }
                 });
 
-                return Object.keys(result).length > 0 ? result : null;
+                if (Object.keys(result).length > 0) return result;
+                return isStatedEmpty(sourceData) ? {} : null;
             } else if (schemaNode.properties) {
                 // Regular object with defined properties
                 const result = {};
@@ -3232,7 +3414,7 @@ function getFormData() {
                 // tail of the property iteration order.
                 mergedKeyOrder(schemaNode.properties, sourceData).forEach(propName => {
                     let propSchema = schemaNode.properties[propName];
-                    const propTitle = propSchema.title || propName;
+                    const propTitle = fieldTitle(propSchema, propName);
 
                     if (propSchema.const !== undefined) {
                         result[propName] = propSchema.const;
@@ -3265,13 +3447,9 @@ function getFormData() {
                         // Complex types (objects, arrays) - look for collapsible section
                         // Note: sections might be inside a wrapper div due to createObjectGroup structure
                         let targetContainer = null;
-                        const sections = searchContainer.querySelectorAll(
-                            ':scope > .collapsible-section, ' +
-                            ':scope > div > .collapsible-section, ' +
-                            ':scope > .form-layout-group > .collapsible-section, ' +
-                            ':scope > div > .form-layout-group > .collapsible-section, ' +
-                            ':scope > .form-section > .form-section-body > .collapsible-section, ' +
-                            ':scope > .form-section > .form-section-body > .form-layout-group > .collapsible-section');
+                        // Every section this object owns, however the layout
+                        // (groups, columns, @FormSection) nests it.
+                        const sections = ownFields(searchContainer, '.collapsible-section');
                         sections.forEach(section => {
                             const header = section.querySelector('.collapsible-header .collapsible-title > span:not(.collapsible-arrow)');
                             if (!header) return;
@@ -3279,7 +3457,8 @@ function getFormData() {
                             // Match either the schema-driven title or the bare
                             // property name (some sections render with the
                             // propName when no title is set in the schema).
-                            if (headerText === propTitle || headerText === propName) {
+                            if (section.dataset.prop ? section.dataset.prop === propName
+                                    : (headerText === propTitle || headerText === propName)) {
                                 targetContainer = section.querySelector('.collapsible-content');
                             }
                         });
@@ -3287,8 +3466,10 @@ function getFormData() {
                         if (targetContainer) {
                             const childSource = (sourceData && typeof sourceData === 'object') ? sourceData[propName] : null;
                             const propData = extractData(targetContainer, propSchema, `${debugPath}.${propName}`, childSource);
-                            if (propData !== null && (typeof propData !== 'object' || Object.keys(propData).length > 0 || Array.isArray(propData))) {
+                            if (!isEmptyResult(propData)) {
                                 result[propName] = propData;
+                            } else if (childSource !== null && childSource !== undefined && isStatedEmpty(childSource)) {
+                                result[propName] = JSON.parse(JSON.stringify(childSource));
                             }
                         }
                     } else {
@@ -3298,15 +3479,9 @@ function getFormData() {
                         // div before createCollapsibleSection wraps that in .collapsible-content.
                         // The `:scope > div >` variants reach through that wrapper; without
                         // them, primitives inside x-form-groups silently round-trip to nothing.
-                        const formGroups = searchContainer.querySelectorAll(
-                            ':scope > .form-group, :scope > .checkbox-group, ' +
-                            ':scope > div > .form-group, :scope > div > .checkbox-group, ' +
-                            ':scope > .form-layout-group > .form-group, :scope > .form-layout-group > .checkbox-group, ' +
-                            ':scope > div > .form-layout-group > .form-group, :scope > div > .form-layout-group > .checkbox-group, ' +
-                            ':scope > .form-section > .form-section-body > .form-group, ' +
-                            ':scope > .form-section > .form-section-body > .checkbox-group, ' +
-                            ':scope > .form-section > .form-section-body > .form-layout-group > .form-group, ' +
-                            ':scope > .form-section > .form-section-body > .form-layout-group > .checkbox-group');
+                        // Every field this object owns, however the layout
+                        // (groups, columns, @FormSection) nests it.
+                        const formGroups = ownFields(searchContainer, '.form-group, .checkbox-group');
                         let foundInput = null;
 
                         formGroups.forEach(group => {
@@ -3314,20 +3489,41 @@ function getFormData() {
                             // Check if label text matches (label might contain help icon, so check first text node or textContent)
                             if (label) {
                                 let labelText = label.childNodes[0]?.textContent?.trim() || label.textContent?.trim();
-                                if (labelText === propTitle) {
+                                if (group.dataset.prop ? group.dataset.prop === propName : labelText === propTitle) {
                                     foundInput = group.querySelector('input, select, textarea');
                                 }
                             }
                         });
 
                         if (foundInput) {
-                            const value = readInputValue(foundInput);
+                            const value = coerceToSchema(readInputValue(foundInput), propSchema);
+                            const src = (sourceData && typeof sourceData === 'object') ? sourceData[propName] : undefined;
                             if (value !== null && value !== '') {
                                 result[propName] = value;
+                            } else if (src === '') {
+                                result[propName] = '';   // stated empty, kept
                             }
                         }
                     }
                 });
+
+                // Values the file states empty, drawn as placeholders: kept.
+                if (sourceData && typeof sourceData === 'object') {
+                    ownFields(searchContainer, '.add-property-placeholder[data-stated-empty="true"]').forEach(ph => {
+                        const k = ph.dataset.prop;
+                        if (k && !(k in result) && isStatedEmpty(sourceData[k])) result[k] = JSON.parse(JSON.stringify(sourceData[k]));
+                    });
+                }
+
+                // Keys the file has and the schema does not list (a schema
+                // older than the app): kept as they were. The form never drew
+                // them, so nothing here can have changed them.
+                if (sourceData && typeof sourceData === 'object' && !Array.isArray(sourceData)
+                        && !(schemaNode.additionalProperties && typeof schemaNode.additionalProperties === 'object')) {
+                    Object.keys(sourceData).forEach(k => {
+                        if (!(k in schemaNode.properties) && !(k in result)) result[k] = JSON.parse(JSON.stringify(sourceData[k]));
+                    });
+                }
 
                 // Hybrid object: collect inline extras (Jackson @JsonAnySetter)
                 // rendered by renderInlineExtras. They live at the same JSON
@@ -3349,12 +3545,13 @@ function getFormData() {
                     }
                 }
 
-                return Object.keys(result).length > 0 ? result : null;
+                if (Object.keys(result).length > 0) return result;
+                return isStatedEmpty(sourceData) ? {} : null;
             }
         } else if (schemaNode.type === 'array') {
             // Find array container
             // Note: array-container might be inside wrapper divs due to createCollapsibleSection/createArrayGroup structure
-            const arrayContainer = container.querySelector(':scope > .array-container, :scope > div > .array-container, :scope > .form-group.array > .array-container, :scope > div > .form-group.array > .array-container');
+            const arrayContainer = ownValueElement(container, '.array-container');
             if (!arrayContainer) return null;
 
             const result = [];
@@ -3406,24 +3603,23 @@ function getFormData() {
                     // paths, the polymorphic discriminator is never found
                     // and resolveOneOf defaults to the first variant,
                     // silently converting every item's type.
-                    const typeInput = item.querySelector(
-                        ':scope > input[data-path$=".type"], ' +
-                        ':scope > [style*="display: none"] > input[data-path$=".type"], ' +
-                        ':scope > div > input[data-path$=".type"], ' +
-                        ':scope > .array-item-body > input[data-path$=".type"], ' +
-                        ':scope > .array-item-body > [style*="display: none"] > input[data-path$=".type"], ' +
-                        ':scope > .array-item-body > div > input[data-path$=".type"]');
+                    const typeInput = [...item.querySelectorAll('input[data-path$=".type"], select[data-path$=".type"]')]
+                        .filter(i => i.parentElement.closest(VALUE_BOUNDARY) === item)
+                        .sort((a, b) => a.dataset.path.length - b.dataset.path.length)[0];
                     const typeVal = typeInput ? typeInput.value : null;
                     itemSchemaNode = resolveOneOf(itemSchemaNode, typeVal ? { type: typeVal } : null);
                 }
                 const itemSource = Array.isArray(sourceData) ? sourceData[idx] : null;
-                const itemData = extractData(item, itemSchemaNode, `${debugPath}[${idx}]`, itemSource);
+                const itemData = coerceToSchema(extractData(item, itemSchemaNode, `${debugPath}[${idx}]`, itemSource), itemSchemaNode);
                 if (itemData !== null) {
                     result.push(itemData);
+                } else if (itemSource !== null && itemSource !== undefined && isStatedEmpty(itemSource)) {
+                    result.push(JSON.parse(JSON.stringify(itemSource)));
                 }
             });
 
-            return result.length > 0 ? result : null;
+            if (result.length > 0) return result;
+            return Array.isArray(sourceData) && sourceData.length === 0 ? [] : null;
         } else {
             // Primitive type - find the input
             const input = container.querySelector('input:not(.map-key-input), select, textarea');
@@ -3442,7 +3638,7 @@ function getFormData() {
     if (schema && schema.properties) {
         mergedKeyOrder(schema.properties, currentData).forEach(propName => {
             let propSchema = schema.properties[propName];
-            const propTitle = propSchema.title || propName;
+            const propTitle = fieldTitle(propSchema, propName);
 
             // const-only top-level property — emit straight from the schema.
             if (propSchema.const !== undefined) {
@@ -3485,7 +3681,8 @@ function getFormData() {
                     if (!header) return;
                     const headerText = (header.textContent || '').trim();
                     // Match either the schema-driven title or the bare propName.
-                    if (headerText === propTitle || headerText === propName) {
+                    if (section.dataset.prop ? section.dataset.prop === propName
+                            : (headerText === propTitle || headerText === propName)) {
                         targetSection = section;
                     }
                 });
@@ -3495,33 +3692,53 @@ function getFormData() {
                     if (content) {
                         const childSource = (currentData && typeof currentData === 'object') ? currentData[propName] : null;
                         const propData = extractData(content, propSchema, propName, childSource);
-                        if (propData !== null && (typeof propData !== 'object' || Object.keys(propData).length > 0 || Array.isArray(propData))) {
+                        if (!isEmptyResult(propData)) {
                             result[propName] = propData;
+                        } else if (childSource !== null && childSource !== undefined && isStatedEmpty(childSource)) {
+                            result[propName] = JSON.parse(JSON.stringify(childSource));
                         }
                     }
                 }
             } else {
-                // Primitive types - look for form-group with matching label
-                const formGroups = form.querySelectorAll(':scope > .form-group');
+                // Primitive types - the top-level field named for this property
+                const formGroups = ownFields(form, '.form-group, .checkbox-group');
                 let foundInput = null;
 
                 formGroups.forEach(group => {
                     const label = group.querySelector('label');
                     if (label) {
                         let labelText = label.childNodes[0]?.textContent?.trim() || label.textContent?.trim();
-                        if (labelText === propTitle) {
+                        if (group.dataset.prop ? group.dataset.prop === propName : labelText === propTitle) {
                             foundInput = group.querySelector('input, select, textarea');
                         }
                     }
                 });
 
                 if (foundInput) {
-                    const value = readInputValue(foundInput);
+                    const value = coerceToSchema(readInputValue(foundInput), propSchema);
                     if (value !== null && value !== '') {
                         result[propName] = value;
+                    } else if (currentData && currentData[propName] === '') {
+                        result[propName] = '';   // stated empty, kept
                     }
                 }
             }
+        });
+    }
+
+    // Top-level values the file states empty, drawn as placeholders: kept.
+    if (currentData && typeof currentData === 'object') {
+        ownFields(form, '.add-property-placeholder[data-stated-empty="true"]').forEach(ph => {
+            const k = ph.dataset.prop;
+            if (k && !(k in result) && isStatedEmpty(currentData[k])) result[k] = JSON.parse(JSON.stringify(currentData[k]));
+        });
+    }
+
+    // Top-level keys the schema does not list (a schema older than the app):
+    // kept as the file had them; the form never drew them.
+    if (schema && schema.properties && currentData && typeof currentData === 'object') {
+        Object.keys(currentData).forEach(k => {
+            if (!(k in schema.properties) && !(k in result)) result[k] = JSON.parse(JSON.stringify(currentData[k]));
         });
     }
 
@@ -4280,57 +4497,31 @@ let regexTestBoundPatternInput = null;
 // generateFormWithData + setDirty) so the diff view shows AI changes vs. the
 // server copy, and Save/Publish stay the operator's explicit steps.
 
+// The "Ask Claude" chat (shared blade-chat.js): one conversation for the
+// loaded configuration. A change loads into the form as an unsaved
+// proposal; a question gets an answer and changes nothing.
+const aiChat = (typeof BladeChat !== 'undefined') ? BladeChat.create({
+    ask: 'Ask Claude about this configuration…',
+    askTitle: 'Chat with Claude about the loaded configuration: it drafts changes and answers questions',
+    title: 'Claude · this configuration',
+    intro: 'Ask for a change, or ask about a setting. For example:<ul>'
+        + '<li>Set the logging level to FINE</li>'
+        + '<li>What does session expiration do?</li>'
+        + '<li>Turn on the keep-alive with a 60-second interval</li></ul>'
+        + 'It sees this app\'s schema and the configuration as it is in the editor. Secrets are never sent. '
+        + 'A change loads into the form for you to check; nothing is saved until you Save.',
+    send: askClaude,
+}) : null;
+let aiPending = null;   // {resolve, reject, app} while a message is out
+
 function handleAiStatus(content) {
-    const btn = document.getElementById('btn-ai');
-    if (btn) btn.style.display = (content === 'true') ? '' : 'none';
+    if (aiChat) aiChat.enable(content === 'true');
 }
 
-function openAiAssist() {
-    if (!currentSchemaName) {
-        showSyncStatus('Please select a schema first', 'warning');
-        return;
-    }
-    const modal = document.getElementById('aiModal');
-    const statusEl = document.getElementById('ai-status');
-    if (!modal) return;
-    if (statusEl) statusEl.innerHTML = '';
-    modal.style.display = 'flex';
-    const instructionEl = document.getElementById('ai-instruction');
-    if (instructionEl) instructionEl.focus();
-}
-
-function closeAiAssist() {
-    const modal = document.getElementById('aiModal');
-    if (modal) modal.style.display = 'none';
-    setAiBusy(false);
-}
-
-function setAiBusy(busy) {
-    const btn = document.getElementById('ai-generate-btn');
-    if (btn) {
-        btn.disabled = busy;
-        btn.textContent = busy ? 'Generating…' : 'Generate';
-    }
-}
-
-function aiStatusMessage(text, isError) {
-    const statusEl = document.getElementById('ai-status');
-    if (statusEl) {
-        statusEl.textContent = text;
-        statusEl.style.color = isError ? 'var(--btn-danger, #c0392b)' : '';
-    }
-}
-
-function runAiGenerate() {
-    const instructionEl = document.getElementById('ai-instruction');
-    const instruction = instructionEl ? instructionEl.value.trim() : '';
-    if (!instruction) {
-        aiStatusMessage('Describe the configuration you want first.', true);
-        return;
-    }
-
+function askClaude(text, history, onSteps) {
+    if (!currentSchemaName) return Promise.reject(new Error('Pick a target and a schema first.'));
     // Baseline = whatever the operator is looking at right now (same source
-    // selection as saveData): unsaved edits are part of the instruction's context.
+    // selection as saveData): unsaved edits are part of the message's context.
     let data;
     const activeTab = document.querySelector('.tab-content.active').id;
     if (activeTab === 'form-tab') {
@@ -4339,48 +4530,56 @@ function runAiGenerate() {
         try {
             data = JSON.parse(jsonEditor.getValue());
         } catch (e) {
-            aiStatusMessage('The JSON tab contains invalid JSON — fix it or switch to the form tab.', true);
-            return;
+            return Promise.reject(new Error('The JSON tab holds invalid JSON: fix it, or switch to the form.'));
         }
     }
-
-    setAiBusy(true);
-    aiStatusMessage('Asking Claude — this can take a minute for large schemas…', false);
-    sendWebSocketMessage('ai_generate', {
-        appName: currentSchemaName,
-        instruction: instruction,
-        config: JSON.stringify(data)
+    onSteps(['asking Claude: a large schema can take a minute']);
+    return new Promise((resolve, reject) => {
+        aiPending = { resolve, reject, app: currentSchemaName };
+        sendWebSocketMessage('ai_generate', {
+            appName: currentSchemaName,
+            instruction: text,
+            config: JSON.stringify(data),
+            history: history
+        });
     });
 }
 
 function handleAiResult(raw) {
-    setAiBusy(false);
+    const pending = aiPending;
+    aiPending = null;
+    if (!pending) return;
     let result;
     try { result = JSON.parse(raw); }
     catch (e) {
-        aiStatusMessage('The server returned an unreadable result: ' + e.message, true);
+        pending.reject(new Error('The server returned an unreadable result: ' + e.message));
         return;
     }
-
-    currentData = result.config || {};
+    if (!result.config) {
+        pending.resolve({ text: result.reply || '(no answer)' });
+        return;
+    }
+    if (pending.app !== currentSchemaName) {
+        pending.resolve({ text: (result.reply || '') + '\n\nNot loaded: the editor now shows another schema.' });
+        return;
+    }
+    currentData = result.config;
     generateFormWithData(currentData);
     if (jsonEditor) jsonEditor.setValue(JSON.stringify(currentData, null, 2), -1);
     setDirty();
-    closeAiAssist();
-
-    if (result.valid) {
-        showSyncStatus('AI proposal loaded — review the diff, then Save', 'success');
-    } else {
-        const count = (result.errors || []).length;
-        showSyncStatus('AI proposal loaded with ' + count + ' validation error' + (count === 1 ? '' : 's')
-            + ' — review carefully before saving', 'warning');
-    }
-    showDiff();
+    const count = (result.errors || []).length;
+    pending.resolve({
+        text: result.reply || 'Loaded a proposal.',
+        meta: result.valid ? 'Loaded into the form · not saved'
+            : 'Loaded with ' + count + ' validation error' + (count === 1 ? '' : 's') + ' · check before saving',
+        actions: [{ label: 'Show changes', title: 'What this changes against the file on disk', run: showDiff }],
+    });
 }
 
 function handleAiError(message) {
-    setAiBusy(false);
-    aiStatusMessage(message || 'AI generate failed.', true);
+    const pending = aiPending;
+    aiPending = null;
+    if (pending) pending.reject(new Error(message || 'No answer.'));
 }
 
 function openRegexTest(patternInput) {
@@ -4612,6 +4811,12 @@ function filterForm(query) {
     });
 }
 
+function refreshAllSummaries() {
+    document.querySelectorAll('.collapsible-header').forEach(h => {
+        if (h.nextElementSibling) refreshSectionSummary(h, h.nextElementSibling);
+    });
+}
+
 function expandAll() {
     // Expand collapsible sections
     document.querySelectorAll('.collapsible-header.collapsed').forEach(header => {
@@ -4631,6 +4836,7 @@ function expandAll() {
         if (arrow) arrow.classList.remove('collapsed');
         content.style.maxHeight = 'none';
     });
+    refreshAllSummaries();
 }
 
 function collapseAll() {
@@ -4653,6 +4859,7 @@ function collapseAll() {
         if (arrow) arrow.classList.add('collapsed');
         content.style.maxHeight = '0px';
     });
+    refreshAllSummaries();
 }
 
 function collapseEmpty() {
@@ -4671,6 +4878,7 @@ function collapseEmpty() {
             }
         }
     });
+    refreshAllSummaries();
 }
 
 // ========================================
@@ -5219,7 +5427,7 @@ function generateFormWithData(data) {
         Object.keys(schema.properties).forEach(prop => {
             const propSchema = schema.properties[prop];
             const propValue = data[prop];
-            const propTitle = propSchema.title || prop;
+            const propTitle = fieldTitle(propSchema, prop);
             const propDescription = propSchema.description;
             // Same required-flag injection as createObjectGroup.renderPropInto:
             // shallow clone so the shared schema object isn't mutated.
@@ -5230,6 +5438,7 @@ function generateFormWithData(data) {
             // If property has no value, show a placeholder with '+' icon
             if (!hasValue(propValue)) {
                 const placeholder = createAddPropertyPlaceholder(childSchema, propTitle, propDescription, prop, form, false);
+                markStatedEmpty(placeholder, propValue);
                 form.appendChild(placeholder);
             } else {
                 const group = createFormGroup(childSchema, propTitle, propDescription, prop, propValue, false, propSchema);
@@ -5410,3 +5619,52 @@ document.addEventListener('click', function(event) {
         closeVersionHistory();
     }
 });
+
+/// The Form tab's round-trip check: loads every schema's file (and, with
+/// `{ samples: true }`, its sample), reads the form back with getFormData()
+/// and compares it with what was loaded. A Save from the Form tab writes
+/// exactly that read-back, so any difference is a value Save would change
+/// without the operator touching it. Run from the browser console:
+///
+/// ```js
+/// await configuratorRoundTripCheck()                  // {schema: 'same' | [differences]}
+/// await configuratorRoundTripCheck({ samples: true })
+/// ```
+///
+/// Read-only: it loads files into the editor and saves nothing. It leaves
+/// the last schema loaded.
+async function configuratorRoundTripCheck(opts = {}) {
+    const canon = v => Array.isArray(v) ? v.map(canon)
+        : (v && typeof v === 'object') ? Object.keys(v).sort().reduce((o, k) => (o[k] = canon(v[k]), o), {}) : v;
+    const diffs = (a, b, p = '') => {
+        if (JSON.stringify(canon(a)) === JSON.stringify(canon(b))) return [];
+        if (a && b && typeof a === 'object' && typeof b === 'object' && Array.isArray(a) === Array.isArray(b)) {
+            const keys = Array.isArray(a) ? [...Array(Math.max(a.length, b.length)).keys()]
+                : [...new Set([...Object.keys(a), ...Object.keys(b)])];
+            return keys.flatMap(k => diffs(a[k], b[k], p + (Array.isArray(a) ? `[${k}]` : `.${k}`)));
+        }
+        // null and absent are the same to Jackson.
+        if ((a === null || a === undefined) && (b === null || b === undefined)) return [];
+        return [`${p}: loaded ${JSON.stringify(a)} · read back ${JSON.stringify(b)}`];
+    };
+    const wait = async (test, tries) => { for (let i = 0; i < tries && !test(); i++) await new Promise(r => setTimeout(r, 250)); };
+    const names = [...document.getElementById('schema-select').options].map(o => o.value).filter(Boolean);
+    const results = {};
+    for (const name of names) {
+        clearDirty();
+        currentData = null;
+        loadSchema(name);
+        await wait(() => currentSchemaName === name && currentData, 40);
+        if (opts.samples) {
+            const file = currentData;
+            currentData = null;
+            loadSample();
+            await wait(() => currentData && currentData !== file, 24);
+        }
+        await new Promise(r => setTimeout(r, 400));
+        const d = currentData ? diffs(JSON.parse(JSON.stringify(currentData)), getFormData()) : ['did not load'];
+        results[name] = d.length ? d : 'same';
+    }
+    clearDirty();
+    return results;
+}

@@ -98,7 +98,7 @@ Everything below is how the installer delivers those five properties.
   is built and kept current by `./upgrade.sh` ([UPGRADING.md](UPGRADING.md)).
   Headless: `./install.sh <env> jms` and `./install.sh <env> datasource`.
 - **AI assistant (optional):** STEP 7 turns on drafting with Claude in the CRUD
-  editor ("Describe a rule") and the Configurator ("Use AI"). It takes an
+  editor ("Ask Claude") and the Configurator ("Use AI"). It takes an
   Anthropic API key and writes the domain's `blade-ai.json`. Headless:
   `./install.sh <env> ai`.
 

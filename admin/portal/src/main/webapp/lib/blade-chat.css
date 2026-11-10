@@ -1,0 +1,69 @@
+/* The "Ask Claude" chat every BLADE editor shares (blade-chat.js): a
+   purple-ringed box in the top bar, and the conversation it opens below
+   the top-right corner. Brand tokens only, so it follows the light and
+   dark themes on any page. */
+
+.ai-ask {
+	display: flex; align-items: center; gap: 8px; min-width: 260px;
+	background: var(--vorpal-surface); color: var(--vorpal-slate-600);
+	border: 2px solid var(--vorpal-purple); border-radius: 999px;
+	padding: 5px 14px; margin: 0;
+	font: 400 13px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+	cursor: text; box-shadow: 0 0 0 3px var(--vorpal-purple-100);
+}
+.ai-ask[hidden] { display: none; }
+.ai-ask:hover { filter: none; color: var(--vorpal-ink-900); }
+.ai-ask .ai-spark { color: var(--vorpal-purple); font-weight: 700; }
+/* Working or answered: the words say so; the ring thickens for an answer. */
+.ai-ask.busy .ai-ask-text, .ai-ask.unread .ai-ask-text { color: var(--vorpal-ink-900); font-weight: 600; }
+.ai-ask.unread { border-width: 3px; }
+
+.ai-chat {
+	position: fixed; z-index: 1000; right: 16px; top: calc(var(--vorpal-topbar-height, 64px) + 8px);
+	width: 420px; height: min(560px, calc(100vh - var(--vorpal-topbar-height, 64px) - 24px));
+	display: flex; flex-direction: column;
+	background: var(--vorpal-surface); color: var(--vorpal-ink-900);
+	border: 2px solid var(--vorpal-purple); border-radius: 10px;
+	box-shadow: 0 12px 40px rgba(20, 10, 30, 0.28);
+	font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+.ai-chat[hidden] { display: none; }
+.ai-chat.max { width: min(880px, calc(100vw - 32px)); height: calc(100vh - var(--vorpal-topbar-height, 64px) - 24px); }
+.ai-chat button {
+	background: var(--vorpal-surface); color: var(--vorpal-slate-600);
+	border: 1px solid var(--vorpal-divider); border-radius: 4px;
+	font: 400 12px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+	padding: 2px 8px; cursor: pointer;
+}
+.ai-chat button:hover { border-color: var(--vorpal-purple); color: var(--vorpal-purple); filter: none; }
+.ai-chat .ai-send {
+	background: var(--vorpal-purple); color: #fff; border: none; font-weight: 600; font-size: 13px; padding: 8px 16px;
+}
+.ai-chat .ai-send:hover { color: #fff; filter: brightness(1.1); }
+.ai-chat .ai-send:disabled { opacity: 0.55; cursor: not-allowed; }
+.ai-chat-head { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--vorpal-divider); }
+.ai-chat-title { flex: 1; font-weight: 600; }
+.ai-chat-title .ai-spark { color: var(--vorpal-purple); }
+.ai-log { flex: 1; overflow: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; }
+.ai-empty { color: var(--vorpal-slate-600); }
+.ai-empty ul { margin: 6px 0 8px 18px; padding: 0; }
+.ai-msg { max-width: 92%; padding: 8px 10px; border-radius: 8px; overflow-wrap: anywhere; }
+.ai-msg.user { align-self: flex-end; background: var(--vorpal-purple-100); white-space: pre-wrap; }
+.ai-msg.bot { align-self: flex-start; background: var(--vorpal-slate-100); border: 1px solid var(--vorpal-divider); }
+/* A failure: the ✕ and the heavier border say so, not the colour alone. */
+.ai-msg.err { border: 2px solid #cf222e; }
+.ai-msg p { margin: 0 0 6px; }
+.ai-msg p:last-child { margin-bottom: 0; }
+.ai-msg ul { margin: 0 0 6px 18px; padding: 0; }
+.ai-msg code { font: 12px "JetBrains Mono", Menlo, monospace; }
+.ai-msg ol { margin: 6px 0 0; padding-left: 18px; font-size: 12px; color: var(--vorpal-slate-600); }
+.ai-msg details summary { cursor: pointer; font-size: 12px; color: var(--vorpal-slate-600); margin-top: 6px; }
+.ai-msg .ai-meta { margin-top: 6px; font-size: 12px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ai-chat-foot { display: flex; gap: 8px; align-items: flex-end; padding: 10px; border-top: 1px solid var(--vorpal-divider); }
+.ai-chat-foot textarea {
+	flex: 1; min-height: 44px; max-height: 160px; resize: vertical; box-sizing: border-box;
+	background: var(--vorpal-surface); color: var(--vorpal-ink-900);
+	border: 1px solid var(--vorpal-divider); border-radius: 4px; padding: 6px 8px;
+	font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+.ai-chat-foot textarea:focus { outline: none; border-color: var(--vorpal-purple); }

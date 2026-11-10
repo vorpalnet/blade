@@ -97,6 +97,17 @@ class RuleBuilderAgentTest {
 	}
 
 	@Test
+	void aProposalMayNameAnotherRuleSet() throws Exception {
+		// One conversation for the page: the model may put a rule in any set.
+		RuleBuilderAgent a = agent("{'draftRuleSets':{'lab':{'rules':{}},'night':{'rules':{}}}}");
+		a.call("propose", json("{'ruleSet':'night','ruleId':'tag','rule':{'method':'INVITE','operations':[{'type':'create',"
+				+ "'attribute':'X-Night','value':'1'}]},'summary':'Tags night calls.'}"));
+		RuleBuilderAgent.Result r = proposal(a);
+		assertEquals("night", r.ruleSet);
+		assertEquals("tag", r.ruleId);
+	}
+
+	@Test
 	void secretsInTheDraftAreRedacted() throws Exception {
 		JsonNode d = json("{'draftPipeline':{'rest':{'type':'rest','password':'{AES}abc','url':'http://x'}}}");
 		RuleBuilderAgent.redact(d);

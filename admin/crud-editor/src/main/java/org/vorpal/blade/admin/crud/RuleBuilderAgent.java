@@ -68,14 +68,20 @@ final class RuleBuilderAgent {
 	static final int MAX_TURNS = 10;
 
 	/// What the page sends: its draft (PreviewServlet's fields), the rule set
-	/// and the sample message from the preview inputs, the operator's words,
-	/// and, to change a rule, its id.
+	/// on screen and the sample message from the preview inputs, the
+	/// operator's words, and the conversation so far. The page is one
+	/// conversation; each message is a new run that sees the draft as it is
+	/// now, so a follow-up ("make it 486") reads the rule the last one drafted.
 	static final class Request {
 		public String app;
 		public String file;
+		/// The rule set on screen: where a new rule goes unless the model names another.
 		public String ruleSet;
+		/// Optional: a rule to change.
 		public String ruleId;
 		public String instruction;
+		/// Earlier turns, oldest first: `{role: user|assistant, text}`.
+		public List<Turn> history;
 		public String message;
 		public String lifecycleEvent;
 		public String leg;
@@ -84,9 +90,18 @@ final class RuleBuilderAgent {
 		public JsonNode draft;
 	}
 
-	/// What the page gets back.
+	/// One earlier turn of the conversation.
+	static final class Turn {
+		public String role;
+		public String text;
+	}
+
+	/// What the page gets back: a proposed rule, or, for a question or a
+	/// request no rule can meet, only a `reply`.
 	static final class Result {
+		public String ruleSet;
 		public String ruleId;
+		public String reply;
 		public JsonNode rule;
 		public String summary;
 		public List<String> steps = new ArrayList<>();
@@ -121,14 +136,13 @@ final class RuleBuilderAgent {
 	// ------------------------------------------------------------------
 	// The loop
 
-	/// Drafts the rule. Throws when the model cannot be reached, refuses, or
-	/// finishes without an accepted proposal.
+	/// Drafts the rule, or answers in words. Throws when the model cannot be
+	/// reached, refuses, or runs out of turns.
 	Result run() throws Exception {
 		String unavailable = settings.unavailable();
 		if (unavailable != null) throw new IllegalStateException(unavailable);
-		if (request.ruleSet == null || request.ruleSet.isEmpty()) throw new IllegalArgumentException("no rule set chosen");
 		if (request.instruction == null || request.instruction.trim().isEmpty()) {
-			throw new IllegalArgumentException("say what the rule should do");
+			throw new IllegalArgumentException("say what you want");
 		}
 		AnthropicOkHttpClient.Builder builder = AnthropicOkHttpClient.builder().apiKey(settings.plainKey());
 		boolean gateway = settings.getBaseUrl() != null && !settings.getBaseUrl().trim().isEmpty();
@@ -187,14 +201,19 @@ final class RuleBuilderAgent {
 					return proposal;
 				}
 				if (results.isEmpty()) {
+					// An answer in words: a question, or a request no rule can meet.
 					StringBuilder text = new StringBuilder();
 					response.content().forEach(b -> b.text().ifPresent(t -> text.append(t.text())));
-					throw new IllegalStateException("the model stopped without proposing a rule"
-							+ (text.length() > 0 ? ": " + unmasked(text.toString()) : ""));
+					Result r = new Result();
+					r.reply = unmasked(text.toString().trim());
+					r.inputTokens = in;
+					r.outputTokens = out;
+					r.cacheReadTokens = cached;
+					return r;
 				}
 				messages.add(MessageParam.builder().role(MessageParam.Role.USER).contentOfBlockParams(results).build());
 			}
-			throw new IllegalStateException("no rule after " + MAX_TURNS + " turns; try a narrower description");
+			throw new IllegalStateException("no answer after " + MAX_TURNS + " turns; try a narrower request");
 		} finally {
 			try {
 				client.close();
@@ -224,7 +243,8 @@ final class RuleBuilderAgent {
 	private String preview(JsonNode input) throws Exception {
 		String id = ruleId(input);
 		progress.accept("previewing rule \"" + id + "\"");
-		CrudConfiguration config = configWith(id, input.get("rule"));
+		String set = ruleSetOf(input);
+		CrudConfiguration config = configWith(set, id, input.get("rule"));
 		String msg = text(input, "message", message);
 		if (msg == null || msg.isEmpty()) throw new IllegalArgumentException("no sample message: pass one in `message`");
 		ObjectNode out = MAPPER.createObjectNode();
@@ -232,8 +252,8 @@ final class RuleBuilderAgent {
 		CapturingLogger.begin();
 		List<String> warnings;
 		try {
-			Map<String, String> vars = pipelineVariables(id, input, msg, out);
-			r = PreviewEngine.preview(config, request.ruleSet, msg, text(input, "event", request.lifecycleEvent),
+			Map<String, String> vars = pipelineVariables(set, id, input, msg, out);
+			r = PreviewEngine.preview(config, set, msg, text(input, "event", request.lifecycleEvent),
 					vars, text(input, "leg", request.leg), request.requestSdp);
 		} finally {
 			warnings = CapturingLogger.end();
@@ -266,13 +286,13 @@ final class RuleBuilderAgent {
 	/// ones skipped are named in `pipelineSkipped`, so the model can supply
 	/// their variables. A response runs no pipeline; it reads what the call's
 	/// request left.
-	private Map<String, String> pipelineVariables(String id, JsonNode input, String msg, ObjectNode out) throws Exception {
+	private Map<String, String> pipelineVariables(String set, String id, JsonNode input, String msg, ObjectNode out) throws Exception {
 		// The operator's values, masked like the message they meet.
 		Map<String, String> given = new java.util.LinkedHashMap<>();
 		if (request.variables != null) request.variables.forEach((k, v) -> given.put(k, masked(v)));
 		Map<String, String> vars = new java.util.LinkedHashMap<>();
 		if (!msg.trim().startsWith("SIP/")) {
-			CrudConfiguration pipe = configWith(id, input.get("rule"));
+			CrudConfiguration pipe = configWith(set, id, input.get("rule"));
 			if (pipe.getPipeline() != null && !pipe.getPipeline().isEmpty()) {
 				Map<String, Connector> local = new java.util.LinkedHashMap<>();
 				ArrayNode skipped = MAPPER.createArrayNode();
@@ -304,7 +324,7 @@ final class RuleBuilderAgent {
 	private String runTests(JsonNode input) throws Exception {
 		String id = ruleId(input);
 		progress.accept("running the saved tests with \"" + id + "\"");
-		List<String> failures = testFailures(id, input.get("rule"));
+		List<String> failures = testFailures(ruleSetOf(input), id, input.get("rule"));
 		ObjectNode out = MAPPER.createObjectNode();
 		out.put("passed", failures.isEmpty());
 		out.set("failures", MAPPER.valueToTree(failures));
@@ -313,14 +333,16 @@ final class RuleBuilderAgent {
 
 	private String propose(JsonNode input) throws Exception {
 		String id = ruleId(input);
+		String set = ruleSetOf(input);
 		progress.accept("checking the proposal \"" + id + "\"");
-		CrudConfiguration config = configWith(id, input.get("rule"));
+		CrudConfiguration config = configWith(set, id, input.get("rule"));
 		List<String> issues = new ArrayList<>(Crud.problems(config.getRuleSets(), config.getDefaultRuleSet()));
-		issues.addAll(testFailures(id, input.get("rule")));
+		issues.addAll(testFailures(set, id, input.get("rule")));
 		if (!issues.isEmpty()) {
 			throw new IllegalArgumentException("not accepted, fix these first: " + String.join("; ", issues));
 		}
 		Result r = new Result();
+		r.ruleSet = set;
 		r.ruleId = unmasked(id);
 		r.rule = MAPPER.readTree(unmasked(MAPPER.writeValueAsString(input.get("rule"))));
 		r.summary = unmasked(text(input, "summary", ""));
@@ -330,8 +352,8 @@ final class RuleBuilderAgent {
 
 	/// The saved tests' failures with rule `id` in place, numbers masked.
 	/// The tests hold real numbers, so the rule runs unmasked.
-	private List<String> testFailures(String id, JsonNode rule) throws Exception {
-		JsonNode real = MAPPER.readTree(unmasked(MAPPER.writeValueAsString(placed(id, rule))));
+	private List<String> testFailures(String set, String id, JsonNode rule) throws Exception {
+		JsonNode real = MAPPER.readTree(unmasked(MAPPER.writeValueAsString(placed(set, id, rule))));
 		CrudConfiguration config = configOf(real);
 		List<String> out = new ArrayList<>();
 		for (String f : CrudTests.failures(config, CrudTests.load(request.app != null ? request.app : "crud"),
@@ -341,13 +363,13 @@ final class RuleBuilderAgent {
 		return out;
 	}
 
-	/// The draft with `rule` as rule `id` of the chosen rule set.
-	private ObjectNode placed(String id, JsonNode rule) {
+	/// The draft with `rule` as rule `id` of rule set `setId`.
+	private ObjectNode placed(String setId, String id, JsonNode rule) {
 		if (rule == null || !rule.isObject()) throw new IllegalArgumentException("`rule` must be a JSON object");
 		ObjectNode d = draft.deepCopy();
 		ObjectNode sets = d.with("draftRuleSets");
-		JsonNode existing = sets.get(request.ruleSet);
-		ObjectNode set = (existing != null && existing.isObject()) ? (ObjectNode) existing : sets.putObject(request.ruleSet);
+		JsonNode existing = sets.get(setId);
+		ObjectNode set = (existing != null && existing.isObject()) ? (ObjectNode) existing : sets.putObject(setId);
 		JsonNode rules = set.get("rules");
 		if (rules == null || !rules.isObject()) {
 			ObjectNode keyed = MAPPER.createObjectNode();
@@ -368,8 +390,15 @@ final class RuleBuilderAgent {
 		return d;
 	}
 
-	private CrudConfiguration configWith(String id, JsonNode rule) throws Exception {
-		return configOf(placed(id, rule));
+	private CrudConfiguration configWith(String set, String id, JsonNode rule) throws Exception {
+		return configOf(placed(set, id, rule));
+	}
+
+	/// The rule set a tool call names, else the one on screen.
+	private String ruleSetOf(JsonNode input) {
+		String set = text(input, "ruleSet", request.ruleSet);
+		if (set == null || set.trim().isEmpty()) throw new IllegalArgumentException("`ruleSet` is required: no rule set is on screen");
+		return set.trim();
 	}
 
 	private static CrudConfiguration configOf(JsonNode draft) throws Exception {
@@ -402,10 +431,12 @@ final class RuleBuilderAgent {
 				"description", "The rule, in the JSON form of one entry of a rule set's `rules` map (no `id`): filters and `operations`.");
 		Map<String, Object> ruleId = Map.of("type", "string",
 				"description", "The rule's id: a short name, letters and dashes, not digits only. To change an existing rule, its id.");
+		Map<String, Object> ruleSet = Map.of("type", "string",
+				"description", "Optional: the rule set the rule belongs to. Default: the one on the operator's screen.");
 		out.add(tool("preview", "Run a candidate rule on a SIP message, as the engines would, and see the message after it, "
 				+ "the rules that fired or were undone, any refusal, the variables, and the problems Save would report. "
 				+ "Use it to check every candidate before proposing.",
-				Map.of("ruleId", ruleId, "rule", rule,
+				Map.of("ruleId", ruleId, "rule", rule, "ruleSet", ruleSet,
 						"message", Map.of("type", "string", "description", "Optional: a SIP message to run on instead of the operator's sample."),
 						"event", Map.of("type", "string", "enum", List.of("send", "receive"), "description", "Optional: `send` (the default) or `receive`."),
 						"leg", Map.of("type", "string", "enum", List.of("caller", "callee"), "description", "Optional: the leg the message is on."),
@@ -416,10 +447,10 @@ final class RuleBuilderAgent {
 				List.of("ruleId", "rule")));
 		out.add(tool("run_tests", "Run the operator's saved tests with the candidate rule in place. Saved tests guard Save: "
 				+ "a proposal that breaks one is refused.",
-				Map.of("ruleId", ruleId, "rule", rule), List.of("ruleId", "rule")));
+				Map.of("ruleId", ruleId, "rule", rule, "ruleSet", ruleSet), List.of("ruleId", "rule")));
 		out.add(tool("propose", "Hand the finished rule to the operator. Refused, with the reasons, while the rule set has a "
 				+ "problem or a saved test fails; fix and propose again.",
-				Map.of("ruleId", ruleId, "rule", rule,
+				Map.of("ruleId", ruleId, "rule", rule, "ruleSet", ruleSet,
 						"summary", Map.of("type", "string", "description", "One or two plain sentences: what the rule does and on which messages.")),
 				List.of("ruleId", "rule", "summary")));
 		return out;
@@ -438,8 +469,11 @@ final class RuleBuilderAgent {
 	private String systemPrompt() throws IOException {
 		return "You write CRUD rules for BLADE, a SIP servlet framework on Oracle OCCAS. A CRUD rule changes SIP messages "
 				+ "an application sends or receives: it creates, reads, updates or deletes headers, the Request-URI, the status, "
-				+ "and parts of SDP, XML and JSON bodies, and it can refuse a call. The operator describes what they want; you "
-				+ "draft one rule, check it with the tools, and propose it. The operator reviews and saves it themselves.\n\n"
+				+ "and parts of SDP, XML and JSON bodies, and it can refuse a call. You are a chat beside the operator's editor. "
+				+ "When they ask for a change, you draft one rule, check it with the tools, and propose it; they review and save it "
+				+ "themselves. When they ask a question (what a rule does, why a message came out as it did), answer it in a few "
+				+ "plain sentences without proposing anything. Each message of theirs is a new run that sees the file as it is "
+				+ "now, including anything you proposed earlier that they kept.\n\n"
 				+ "How to work:\n"
 				+ "- Run every candidate with `preview` on the sample message and read the message after it. Check that it does "
 				+ "what was asked and nothing else, and that the problems list is empty.\n"
@@ -449,6 +483,9 @@ final class RuleBuilderAgent {
 				+ "- If a saved test fails, decide whether the rule is wrong or the request really changes that behaviour; say "
 				+ "which in the summary, but a proposal is refused while a test fails.\n"
 				+ "- If the request cannot be expressed as a CRUD rule, say so in plain text instead of proposing.\n"
+				+ "- A new rule goes in the rule set on screen unless the request points elsewhere; name another with `ruleSet`. "
+				+ "To change a rule, propose it under its own id and rule set.\n"
+				+ "- Write replies and summaries for an engineer: short, plain, no headings.\n"
 				+ "- Phone numbers in the material may be stand-ins (555...); treat them as the real numbers, "
 				+ "written in full wherever the rule needs one. They come back real only when whole, so never put "
 				+ "a number or part of one in a rule id; name a rule for what it does.\n"
@@ -459,17 +496,33 @@ final class RuleBuilderAgent {
 
 	private String firstMessage() throws IOException {
 		StringBuilder b = new StringBuilder();
-		b.append("Request: ").append(masked(request.instruction.trim())).append("\n\n");
+		if (request.history != null && !request.history.isEmpty()) {
+			b.append("The conversation so far:\n");
+			// The last few turns are enough to follow a "make it 486 instead".
+			List<Turn> recent = request.history.subList(Math.max(0, request.history.size() - 12), request.history.size());
+			for (Turn t : recent) {
+				if (t == null || t.text == null || t.text.trim().isEmpty()) continue;
+				b.append("assistant".equals(t.role) ? "You: " : "Operator: ").append(masked(t.text.trim())).append("\n");
+			}
+			b.append("\n");
+		}
+		b.append("Operator: ").append(masked(request.instruction.trim())).append("\n\n");
 		b.append("Application: ").append(request.app != null ? request.app : "the CRUD service")
 				.append(". File: ").append(request.file != null ? request.file : "domain").append(".\n");
-		b.append("Rule set: ").append(request.ruleSet).append(".\n");
+		b.append("Rule set on screen: ").append(request.ruleSet).append(".\n");
 		if (request.ruleId != null && !request.ruleId.isEmpty()) {
 			b.append("Change the existing rule \"").append(request.ruleId).append("\" (propose it under the same id).\n");
-		} else {
-			b.append("Add a new rule; give it a short id no rule in the set has.\n");
 		}
-		JsonNode set = draft.path("draftRuleSets").path(request.ruleSet);
-		b.append("\nThe rule set now:\n").append(set.isMissingNode() ? "(empty)" : MAPPER.writeValueAsString(set)).append("\n");
+		JsonNode sets = draft.path("draftRuleSets");
+		b.append("\nThe rule sets now:\n").append(sets.isMissingNode() ? "(none)" : MAPPER.writeValueAsString(sets)).append("\n");
+		JsonNode pipeline = draft.path("draftPipeline");
+		if (!pipeline.isMissingNode() && pipeline.size() > 0) {
+			b.append("\nThe pipeline (it runs before the rules and sets variables; one of its values may pick the rule set):\n")
+					.append(MAPPER.writeValueAsString(pipeline)).append("\n");
+		}
+		if (draft.hasNonNull("draftDefaultRuleSet")) {
+			b.append("Default rule set: ").append(draft.get("draftDefaultRuleSet").asText()).append(".\n");
+		}
 		JsonNode vars = draft.path("draftVariables");
 		if (vars.size() > 0) b.append("\nThe file's variables: ").append(MAPPER.writeValueAsString(vars)).append("\n");
 		if (request.variables != null && !request.variables.isEmpty()) {
