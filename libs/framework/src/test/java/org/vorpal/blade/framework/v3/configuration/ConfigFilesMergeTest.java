@@ -96,4 +96,38 @@ class ConfigFilesMergeTest {
 			}
 		}
 	}
+
+	@Test
+	void aBrokenClusterFileSkipsOnlyTheOverlaysOverIt() throws Exception {
+		java.nio.file.Path base = ConfigFiles.BASE;
+		java.nio.file.Path domainFile = base.resolve("orphantest2.json");
+		java.nio.file.Path c1 = base.resolve("_clusters/c1/orphantest2.json");
+		java.nio.file.Path c2 = base.resolve("_clusters/c2/orphantest2.json");
+		java.nio.file.Path s1 = base.resolve("_servers/s1/orphantest2.json");
+		java.util.List<java.nio.file.Path> files = Arrays.asList(s1, c2, c1, domainFile);
+		try {
+			for (java.nio.file.Path f : files) java.nio.file.Files.createDirectories(f.getParent());
+			java.nio.file.Files.write(domainFile, json("{'crud':{'ruleSets':{'main':{'rules':{'r1':{'method':'INVITE'}}}}}}").toString().getBytes());
+			java.nio.file.Files.write(c1, "{ not json".getBytes());
+			java.nio.file.Files.write(s1, "{}".getBytes());
+			java.nio.file.Files.write(c2, json("{'crud':{'ruleSets':{'main':{'rules':{'r1':{'operations':[]}}}}}}").toString().getBytes());
+			java.util.Map<String, String> membership = new java.util.HashMap<>();
+			membership.put("s1", "c1");
+			java.util.List<String> p = ConfigFiles.orphans("orphantest2", "domain",
+					json("{'crud':{'ruleSets':{'renamed':{'rules':{'r1':{'method':'INVITE'}}}}}}"), "crud", membership, MAPPER);
+			assertEquals(1, p.size(), p.toString());
+			org.junit.jupiter.api.Assertions.assertTrue(p.get(0).contains("c2"), p.get(0));
+		} finally {
+			for (java.nio.file.Path f : files) {
+				java.nio.file.Files.deleteIfExists(f);
+				for (java.nio.file.Path d = f.getParent(); d != null && !d.equals(base.getParent()); d = d.getParent()) {
+					try {
+						java.nio.file.Files.deleteIfExists(d);
+					} catch (java.nio.file.DirectoryNotEmptyException kept) {
+						break;
+					}
+				}
+			}
+		}
+	}
 }

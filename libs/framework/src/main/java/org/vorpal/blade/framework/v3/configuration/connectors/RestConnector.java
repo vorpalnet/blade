@@ -129,7 +129,7 @@ public class RestConnector extends Connector implements Serializable {
 	@JsonIgnore
 	private transient HttpClient httpClient;
 	@JsonIgnore
-	private transient String cachedTemplate;
+	private transient volatile TemplateCache.Derived<String> cachedTemplate;   // without its comment lines
 
 	@JsonIgnore
 	private transient CircuitBreaker breaker = new CircuitBreaker();
@@ -323,27 +323,25 @@ public class RestConnector extends Connector implements Serializable {
 			java.util.regex.Pattern.compile("(?m)^[ \\t]*#.*(?:\\r?\\n)?");
 
 	private TemplateResult loadAndResolveTemplate(String filename, Context ctx) throws IOException {
-		if (cachedTemplate == null) {
-			Path p = Paths.get(TEMPLATES_DIR, filename);
-			if (!Files.exists(p)) {
-				// First-run bootstrap from the WAR (see class Javadoc).
-				materializeBundledTemplate(filename, p);
-				if (!Files.exists(p)) {
-					throw new IOException("Template not found on disk and not bundled in WAR: " + p);
-				}
-			}
-			cachedTemplate = COMMENT_LINE.matcher(Files.readString(p)).replaceAll("");
+		// Read again when the file changes (a pushed template); bootstrapped
+		// from the WAR when the disk has none (see class Javadoc).
+		String raw = templateText(TEMPLATES_DIR, filename);
+		TemplateCache.Derived<String> made = cachedTemplate;
+		if (made == null || made.raw != raw) {
+			made = new TemplateCache.Derived<>(raw, COMMENT_LINE.matcher(raw).replaceAll(""));
+			cachedTemplate = made;
 		}
+		String template = made.value;
 
 		// Split the template before resolving anything, so a value from the call
 		// holding a line break can neither move the header/body boundary nor
 		// add a header line of its own.
 		TemplateResult result = new TemplateResult();
-		int blank = findBlankLine(cachedTemplate);
-		String bodyTemplate = ((blank >= 0) ? cachedTemplate.substring(blank) : cachedTemplate).trim();
+		int blank = findBlankLine(template);
+		String bodyTemplate = ((blank >= 0) ? template.substring(blank) : template).trim();
 
 		if (blank >= 0) {
-			for (String line : cachedTemplate.substring(0, blank).split("\\r?\\n")) {
+			for (String line : template.substring(0, blank).split("\\r?\\n")) {
 				line = line.trim();
 				if (line.isEmpty()) continue;
 				int colon = line.indexOf(':');

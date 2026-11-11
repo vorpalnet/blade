@@ -56,19 +56,28 @@
 		const right = document.querySelector('.vorpal-topbar-right');
 		if (right) right.insertBefore(ask, right.firstChild); else document.body.appendChild(ask);
 
+		// The log is rebuilt on every step, so it is not the live region: a
+		// screen reader would hear the whole conversation again. `heard` says
+		// only what is new (a reply, an error, the work starting).
 		const log = el('div', { className: 'ai-log' });
-		log.setAttribute('aria-live', 'polite');
+		const heard = el('div', { className: 'ai-sr-only' });
+		heard.setAttribute('aria-live', 'polite');
+		let heardCount = 0;
 		const input = el('textarea', { rows: 2, spellcheck: true,
 			placeholder: opts.placeholder || 'Ask a question or ask for a change. Enter sends; Shift+Enter starts a new line.' });
 		const send = el('button', { type: 'button', className: 'ai-send', textContent: 'Send' });
 		const clear = el('button', { type: 'button', textContent: 'New', title: 'Start a new conversation' });
+		input.setAttribute('aria-label', 'Message to ' + (opts.title || 'Claude'));
 		const max = el('button', { type: 'button', textContent: '□', title: 'Make the chat larger' });
+		max.setAttribute('aria-label', 'Make the chat larger');
 		const fold = el('button', { type: 'button', textContent: '–', title: 'Fold the chat away (Esc)' });
+		fold.setAttribute('aria-label', 'Fold the chat away');
 		const panel = el('section', { className: 'ai-chat', hidden: true }, [
 			el('div', { className: 'ai-chat-head' }, [
 				el('span', { className: 'ai-chat-title' }, [el('span', { className: 'ai-spark', textContent: '✦ ' }), opts.title || 'Claude']),
 				clear, max, fold]),
 			log,
+			heard,
 			el('div', { className: 'ai-chat-foot' }, [input, send]),
 		]);
 		panel.setAttribute('role', 'dialog');
@@ -120,6 +129,13 @@
 				]));
 			}
 			log.scrollTop = log.scrollHeight;
+			if (state.messages.length > heardCount) {
+				const last = state.messages[state.messages.length - 1];
+				if (last.role !== 'user') heard.textContent = (last.error ? 'Error: ' : '') + (last.text || '') + (last.meta ? '. ' + last.meta : '');
+				heardCount = state.messages.length;
+			} else if (state.messages.length < heardCount) {
+				heardCount = state.messages.length;   // a new conversation
+			}
 			send.disabled = !!state.job;
 			send.textContent = state.job ? 'Working…' : 'Send';
 		}
@@ -140,10 +156,14 @@
 		async function submit() {
 			const text = input.value.trim();
 			if (!text || state.job) return;
-			const history = state.messages.filter(m => !m.error).map(m => ({ role: m.role, text: m.text }));
+			// A failed turn is left out whole: the question it failed on was
+			// never answered, and sent again it reads as if it had been.
+			const history = state.messages.filter((m, i, all) => !m.error && !(m.role === 'user' && all[i + 1] && all[i + 1].error))
+				.map(m => ({ role: m.role, text: m.text }));
 			state.messages.push({ role: 'user', text: text });
 			input.value = '';
 			state.job = { steps: ['sending'] };
+			const job = state.job;
 			render();
 			let answer;
 			try {
@@ -156,6 +176,7 @@
 			} catch (e) {
 				answer = { role: 'assistant', text: '', error: (e && e.message) || String(e) };
 			}
+			if (!state.job || state.job !== job) return;   // reset while it was out
 			state.job = null;
 			state.messages.push(answer);
 			if (panel.hidden) state.unread = true;
@@ -175,12 +196,17 @@
 		input.addEventListener('keydown', e => {
 			if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); submit(); }
 		});
-		panel.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); close(); } });
+		// Esc folds the chat, and only that: the page's own Esc (clearing a
+		// filter, say) does not also run.
+		panel.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } });
 
 		return {
 			enable(on) { state.enabled = !!on; if (!on) panel.hidden = true; renderAsk(); },
 			open: open,
 			close: close,
+			/// A new conversation (the page moved to something else). An answer
+			/// still being written is let go; it is not shown when it comes.
+			reset() { state.messages = []; state.job = null; state.unread = false; render(); },
 			busy: () => !!state.job,
 			messages: () => state.messages,
 		};

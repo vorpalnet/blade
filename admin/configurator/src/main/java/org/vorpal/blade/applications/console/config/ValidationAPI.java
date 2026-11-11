@@ -8,7 +8,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Scanner;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.logging.Level;
@@ -83,7 +82,7 @@ public class ValidationAPI {
 			return Response.ok(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(response)).build();
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "Validation failed", e);
-			return Response.serverError().entity("{\"error\":\"" + e.getMessage() + "\"}").build();
+			return Response.serverError().entity(errorJson(e.getMessage())).build();
 		}
 	}
 
@@ -92,6 +91,7 @@ public class ValidationAPI {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(summary = "Validate a specific app's configs against its schema")
 	public Response validateOne(@PathParam("app") String app) {
+		if (!appName(app)) return badApp(app);
 		try {
 			List<Map<String, Object>> appResults = validateApp(app);
 			boolean allValid = appResults.stream().allMatch(r -> Boolean.TRUE.equals(r.get("valid")));
@@ -102,7 +102,7 @@ public class ValidationAPI {
 			return Response.ok(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(response)).build();
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "Validation failed for " + app, e);
-			return Response.serverError().entity("{\"error\":\"" + e.getMessage() + "\"}").build();
+			return Response.serverError().entity(errorJson(e.getMessage())).build();
 		}
 	}
 
@@ -142,14 +142,18 @@ public class ValidationAPI {
 				deployResults.add(deployApp(app));
 			}
 
+			// Deployed only where every server took it: a client reading the
+			// top-level flag must not see success over a failed server.
+			boolean ok = deployResults.stream().allMatch(r -> Boolean.TRUE.equals(r.get("deployed")));
 			Map<String, Object> response = new LinkedHashMap<>();
-			response.put("deployed", true);
+			response.put("deployed", ok);
 			response.put("validation", validationResults);
 			response.put("deploy", deployResults);
-			return Response.ok(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(response)).build();
+			return Response.status(ok ? Response.Status.OK : Response.Status.BAD_GATEWAY)
+					.entity(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(response)).build();
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "Deploy failed", e);
-			return Response.serverError().entity("{\"error\":\"" + e.getMessage() + "\"}").build();
+			return Response.serverError().entity(errorJson(e.getMessage())).build();
 		}
 	}
 
@@ -158,6 +162,7 @@ public class ValidationAPI {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(summary = "Validate one app's configs, propagate via JMX, and reload")
 	public Response deployOne(@PathParam("app") String app) {
+		if (!appName(app)) return badApp(app);
 		try {
 			// Validate first
 			List<Map<String, Object>> appResults = validateApp(app);
@@ -174,14 +179,16 @@ public class ValidationAPI {
 
 			Map<String, Object> deployResult = deployApp(app);
 
+			boolean ok = Boolean.TRUE.equals(deployResult.get("deployed"));
 			Map<String, Object> response = new LinkedHashMap<>();
-			response.put("deployed", true);
+			response.put("deployed", ok);
 			response.put("validation", appResults);
 			response.put("deploy", deployResult);
-			return Response.ok(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(response)).build();
+			return Response.status(ok ? Response.Status.OK : Response.Status.BAD_GATEWAY)
+					.entity(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(response)).build();
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "Deploy failed for " + app, e);
-			return Response.serverError().entity("{\"error\":\"" + e.getMessage() + "\"}").build();
+			return Response.serverError().entity(errorJson(e.getMessage())).build();
 		}
 	}
 
@@ -216,8 +223,11 @@ public class ValidationAPI {
 		}
 
 		JsonNode schemaNode = mapper.readTree(schemaPath.toFile());
-		JsonSchemaFactory factory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V4);
+		JsonSchemaFactory factory = AiConfigService.factoryFor(schemaNode);
 		JsonSchema schema = factory.getSchema(schemaNode);
+		// A cluster or server file holds only what differs from the domain
+		// file: checked without `required`, or a one-field overlay fails.
+		JsonSchema overlaySchema = factory.getSchema(AiConfigService.withoutRequired(schemaNode));
 
 		// Domain config
 		Path domainConfig = Paths.get(CONFIG_BASE + app + ".json");
@@ -233,7 +243,7 @@ public class ValidationAPI {
 					Path clusterConfig = clusterDir.resolve(app + ".json");
 					if (Files.exists(clusterConfig)) {
 						String clusterName = clusterDir.getFileName().toString();
-						results.add(validateFile(app, "cluster/" + clusterName, clusterConfig, schema));
+						results.add(validateFile(app, "cluster/" + clusterName, clusterConfig, overlaySchema));
 					}
 				});
 			}
@@ -247,7 +257,7 @@ public class ValidationAPI {
 					Path serverConfig = serverDir.resolve(app + ".json");
 					if (Files.exists(serverConfig)) {
 						String serverName = serverDir.getFileName().toString();
-						results.add(validateFile(app, "server/" + serverName, serverConfig, schema));
+						results.add(validateFile(app, "server/" + serverName, serverConfig, overlaySchema));
 					}
 				});
 			}
@@ -301,18 +311,36 @@ public class ValidationAPI {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(summary = "Push config to cluster apps via JMX and reload")
 	public Response publishOne(@PathParam("app") String app) {
+		if (!appName(app)) return badApp(app);
 		try {
 			Map<String, Object> result = publishApp(app);
 			boolean published = Boolean.TRUE.equals(result.get("published"));
 			if (!published) {
-				return Response.status(Response.Status.NOT_FOUND)
+				// Servers failed: a gateway's failure, not a missing resource.
+				return Response.status(Response.Status.BAD_GATEWAY)
 						.entity(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(result)).build();
 			}
 			return Response.ok(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(result)).build();
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "Publish failed for " + app, e);
-			return Response.serverError().entity("{\"error\":\"" + e.getMessage() + "\"}").build();
+			return Response.serverError().entity(errorJson(e.getMessage())).build();
 		}
+	}
+
+	/// An application name: it goes into file paths and an MBean pattern, so
+	/// "..", "/" or "*" (every app on every server) are refused.
+	/// An error body, its message escaped (quotes in a message made it invalid JSON).
+	private static String errorJson(String message) {
+		return mapper.createObjectNode().put("error", String.valueOf(message)).toString();
+	}
+
+	static boolean appName(String app) {
+		return app != null && app.matches("[A-Za-z0-9][A-Za-z0-9._-]*") && !app.contains("..");
+	}
+
+	private static Response badApp(String app) {
+		return Response.status(Response.Status.BAD_REQUEST)
+				.entity("{\"error\":\"not an application name\"}").type(MediaType.APPLICATION_JSON).build();
 	}
 
 	private Map<String, Object> publishApp(String app) {
@@ -329,7 +357,182 @@ public class ValidationAPI {
 	/// from the result key. For each Configuration MBean of `app`: push the
 	/// domain / cluster / server config files (skipped on shared filesystems
 	/// where timestamps already match), then reload.
-	private Map<String, Object> pushAndReload(String app, String resultKey) {
+	/// One push per app at a time. An engine writes a pushed file through one
+	/// shared writer (openForWrite, write per line, close): two pushes of one
+	/// app at once interleave and truncate it. Publish and the auto-publish
+	/// watcher both take this lock.
+	private static final java.util.concurrent.ConcurrentHashMap<String, Object> PUSH_LOCKS = new java.util.concurrent.ConcurrentHashMap<>();
+
+	static Object pushLock(String app) {
+		return PUSH_LOCKS.computeIfAbsent(app, k -> new Object());
+	}
+
+	/// Applications saved (or restored) while auto-publish was off and not
+	/// published since, by any page or this API: shown on every page, and
+	/// published when auto-publish is switched on.
+	static final java.util.Set<String> UNPUBLISHED = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+	/// Where [#UNPUBLISHED] is kept across restarts: this server's own data
+	/// folder (the list is the admin's, not a configuration to push).
+	private static Path pendingFile() {
+		String server = System.getProperty("weblogic.Name");
+		return Paths.get("servers", server == null || server.isEmpty() ? "AdminServer" : server, "data", "blade-configurator",
+				"unpublished.json");
+	}
+
+	/// Apps pending for an overlay (failed or deleted): only a Publish, which
+	/// pushes every file of the app, clears them. Those read back at start
+	/// count as such (what put them there is not kept).
+	private static final java.util.Set<String> OVERLAY_HELD = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+	static {
+		loadPending();
+	}
+
+	/// Reads [#UNPUBLISHED] back from [#pendingFile] (at start; a test reads it again).
+	static void loadPending() {
+		try {
+			Path f = pendingFile();
+			if (Files.isRegularFile(f)) {
+				for (com.fasterxml.jackson.databind.JsonNode app : new com.fasterxml.jackson.databind.ObjectMapper().readTree(f.toFile())) {
+					if (app.isTextual()) {
+						UNPUBLISHED.add(app.asText());
+						OVERLAY_HELD.add(app.asText());   // what put it there is not kept: only a Publish clears it
+					}
+				}
+			}
+		} catch (Exception e) {
+			logger.log(Level.WARNING, "pending list not read; it starts empty", e);
+		}
+	}
+
+	private static synchronized void savePending() {
+		try {
+			Path f = pendingFile();
+			Files.createDirectories(f.getParent());
+			Path temp = Files.createTempFile(f.getParent(), ".unpublished", ".tmp");
+			Files.write(temp, new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsBytes(new java.util.TreeSet<>(UNPUBLISHED)));
+			Files.move(temp, f, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+		} catch (Exception e) {
+			logger.log(Level.WARNING, "pending list not saved", e);
+		}
+	}
+	/// Saves of each application, counted: a Publish clears an application
+	/// only if no save landed after it read the files.
+	private static final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicLong> SAVES = new java.util.concurrent.ConcurrentHashMap<>();
+	/// Told when [#UNPUBLISHED] changes (the Configurator's pages).
+	static volatile java.util.function.Consumer<String> onUnpublishedChange;
+	private static final Object UNPUBLISHED_LOCK = new Object();
+	/// Sends the list, in order, off the caller's thread: a page with a full
+	/// socket must not stall a push (the caller may hold pushLock).
+	private static final java.util.concurrent.ExecutorService BROADCASTS = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+		Thread t = new Thread(r, "configurator-pending-broadcast");
+		t.setDaemon(true);
+		return t;
+	});
+
+	/// A save (or restore) of `app`'s file; `pending`: auto-publish was off.
+	static void saved(String app, boolean pending) {
+		saved(app, pending, false);
+	}
+
+	/// As [#saved(String, boolean)]; `overlay`: the file is a cluster or
+	/// server one, which a later watcher push of the domain file does not carry.
+	static void saved(String app, boolean pending, boolean overlay) {
+		if (app == null) return;
+		SAVES.computeIfAbsent(app, k -> new java.util.concurrent.atomic.AtomicLong()).incrementAndGet();
+		if (pending && overlay) OVERLAY_HELD.add(app);
+		if (pending && UNPUBLISHED.add(app)) unpublishedChanged();
+	}
+
+	/// Undeploy: the broadcast thread and the page hook would otherwise keep
+	/// this classloader (and the servlet) alive, one more on every redeploy.
+	static void shutdown() {
+		onUnpublishedChange = null;
+		BROADCASTS.shutdownNow();
+	}
+
+	private static long saves(String app) {
+		return SAVES.computeIfAbsent(app, k -> new java.util.concurrent.atomic.AtomicLong()).get();
+	}
+
+	/// Saved, then told to every page: the snapshot is taken under one lock
+	/// and sent by one thread, so pages get the changes in the order they happened.
+	private static void unpublishedChanged() {
+		synchronized (UNPUBLISHED_LOCK) {
+			savePending();
+			java.util.function.Consumer<String> tell = onUnpublishedChange;
+			if (tell == null) return;
+			String snapshot;
+			try {
+				snapshot = mapper.writeValueAsString(new java.util.TreeSet<>(UNPUBLISHED));
+			} catch (Exception e) {
+				return;
+			}
+			BROADCASTS.execute(() -> tell.accept(snapshot));
+		}
+	}
+
+	/// The pending entry for templates: a push that failed on a server.
+	static final String TEMPLATES = "_templates";
+
+	/// Everything of `app` reached every server running it (a Publish, the
+	/// watcher's push of the domain file, a template push): no longer pending.
+	static void watcherPublished(String app) {
+		if (app != null && UNPUBLISHED.remove(app)) unpublishedChanged();
+	}
+
+	/// A change not pushed everywhere (failed on a server, or the watcher was
+	/// stopped mid-push): pending. Told every time, even if already listed: a
+	/// page may have cleared it on its own Save.
+	static void watcherMissed(String app) {
+		watcherMissed(app, false);
+	}
+
+	/// As [#watcherMissed(String)]; `overlay`: a cluster or server file failed
+	/// or was deleted, which a later push of the domain file does not repair.
+	static void watcherMissed(String app, boolean overlay) {
+		if (app == null) return;
+		if (overlay) OVERLAY_HELD.add(app);
+		UNPUBLISHED.add(app);
+		unpublishedChanged();
+	}
+
+
+	/// The watcher pushed `app`'s domain file to every server: no longer
+	/// pending, unless an overlay holds it.
+	static void domainPushed(String app) {
+		if (app != null && !OVERLAY_HELD.contains(app) && UNPUBLISHED.remove(app)) unpublishedChanged();
+	}
+
+	static Map<String, Object> pushAndReload(String app, String resultKey) {
+		synchronized (pushLock(app)) {
+			long savesBefore = saves(app);
+			PUBLISH_READS.set(new java.util.HashMap<>());
+			try {
+				Map<String, Object> result = pushAndReloadLocked(app, resultKey);
+				// Published: no longer pending, unless saved again after the
+				// files were read (the engines have the earlier content).
+				if (Boolean.TRUE.equals(result.get(resultKey))) {
+					if (saves(app) == savesBefore) {
+						OVERLAY_HELD.remove(app);   // every file of it was pushed
+						if (UNPUBLISHED.remove(app)) unpublishedChanged();
+					} else {
+						unpublishedChanged();   // saved meanwhile: still pending, and every page is told
+					}
+				} else {
+					// Failed: which file missed which server is not known here, so a
+					// later push of the domain file alone does not clear it.
+					OVERLAY_HELD.add(app);
+				}
+				return result;
+			} finally {
+				PUBLISH_READS.remove();
+			}
+		}
+	}
+
+	private static Map<String, Object> pushAndReloadLocked(String app, String resultKey) {
 		Map<String, Object> result = new LinkedHashMap<>();
 		result.put("app", app);
 		List<String> actions = new ArrayList<>();
@@ -341,15 +544,40 @@ public class ValidationAPI {
 			Map<ObjectName, SettingsMXBean> proxies = ConfigPublisher.configurationMBeans(mbeanServer, app);
 
 			if (proxies.isEmpty()) {
-				result.put(resultKey, false);
-				result.put("message", "No MBeans found for " + app);
+				// No server runs it (not deployed, or it reads its file itself, as
+				// blade-ai does): nothing to push, and the saved file is what it
+				// loads when it starts. Published, not failed forever.
+				result.put(resultKey, true);
+				result.put("message", "No server runs " + app + "; it reads the saved file when it starts");
 				return result;
 			}
 
+			// Templates first, so the reload's connectors find the new ones.
+			// Every template: which ones this app uses is not known here, and a
+			// server already holding a file is only asked for its checksum.
+			try {
+				TemplatePush.Summary templates = TemplatePush.pushAll(mbeanServer);
+				if (templates.line != null) actions.add("Templates: " + templates.line);
+				result.put("templates", templates.line);
+				result.put("templatesFailed", templates.failed);
+				// Pending or not on every Publish path (the REST routes too).
+				if (templates.failed) watcherMissed(TEMPLATES);
+				else watcherPublished(TEMPLATES);
+			} catch (Exception e) {
+				actions.add("Templates not pushed: " + e.getMessage());
+				result.put("templates", "not pushed: " + e.getMessage());
+				result.put("templatesFailed", true);
+				watcherMissed(TEMPLATES);
+			}
+
+			// Every server, each on its own: one that fails (a full disk, a file it
+			// may not write) must not leave the ones after it on the old config.
+			List<String> failed = new ArrayList<>();
 			for (Map.Entry<ObjectName, SettingsMXBean> entry : proxies.entrySet()) {
 				ObjectName name = entry.getKey();
 				SettingsMXBean settings = entry.getValue();
 				current = name.getKeyProperty("Location");
+				try {
 
 				// Push domain config
 				propagateConfig(settings, "domain", Paths.get(CONFIG_BASE + app + ".json"), actions);
@@ -374,11 +602,21 @@ public class ValidationAPI {
 				if (current != null) {
 					pushedTo.add(current);
 				}
+				} catch (Exception serverFailed) {
+					logger.log(Level.WARNING, "Publish of " + app + " failed on " + current, serverFailed);
+					failed.add((current == null ? String.valueOf(name) : current) + " (" + serverFailed.getMessage() + ")");
+				}
 			}
 
-			result.put(resultKey, true);
 			result.put("actions", actions);
-			ConfigEvents.published(app + ".json", app, "all", pushedTo, java.util.Collections.emptyList());
+			if (failed.isEmpty()) {
+				result.put(resultKey, true);
+			} else {
+				result.put(resultKey, false);
+				result.put("error", "failed on " + String.join(", ", failed)
+						+ (pushedTo.isEmpty() ? "" : "; published on " + String.join(", ", pushedTo)));
+			}
+			ConfigEvents.published(app + ".json", app, "all", pushedTo, failed);
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "Publish failed for " + app, e);
 			result.put(resultKey, false);
@@ -390,9 +628,74 @@ public class ValidationAPI {
 		return result;
 	}
 
-	private void propagateConfig(SettingsMXBean settings, String configType, Path configPath, List<String> actions)
+	/// Pushes `content` as the engine's `configType` file, then reads it back.
+	/// The engine's open and write catch their own failures and only log them
+	/// (a file it may not write, a full disk), so without the read-back a
+	/// Publish reported success while the engine kept, or truncated, its file.
+	/// The engine writes the lines without line breaks; the read-back is
+	/// compared the same way. Throws when the engine does not hold the content.
+	static void writeAndVerify(SettingsMXBean settings, String configType, String content) throws IOException {
+		List<String> lines = lines(content);
+		settings.openForWrite(configType);
+		try {
+			for (String line : lines) settings.write(line);
+		} finally {
+			settings.close();
+		}
+		StringBuilder back = new StringBuilder();
+		settings.openForRead(configType);
+		try {
+			for (String line; (line = settings.read()) != null;) back.append(line);
+		} finally {
+			settings.close();
+		}
+		// A lone \r (JSON whitespace) is written, but the engine's readLine
+		// breaks at it: compared without it.
+		String sent = String.join("", lines).replace("\r", "");
+		if (!sent.equals(back.toString().replace("\r", ""))) {
+			throw new IOException("the server did not take the pushed " + configType.toLowerCase(java.util.Locale.ROOT)
+					+ " file (it holds " + back.length() + " of " + sent.length() + " characters); see its log");
+		}
+	}
+
+	/// A file's lines for a push: split on \n alone (a \r before it dropped).
+	/// Scanner.nextLine also breaks at U+2028, U+2029 and U+0085, which JSON
+	/// allows raw inside a string: those characters vanished on every engine.
+	static List<String> lines(String content) {
+		List<String> out = new ArrayList<>();
+		for (String l : content.split("\n", -1)) out.add(l.endsWith("\r") ? l.substring(0, l.length() - 1) : l);
+		if (!out.isEmpty() && out.get(out.size() - 1).isEmpty()) out.remove(out.size() - 1);
+		return out;
+	}
+
+	/// Each file as read once at the start of a publish: every engine gets the
+	/// same content even if a save lands mid-publish (it is then published again).
+	private static final ThreadLocal<Map<Path, String>> PUBLISH_READS = new ThreadLocal<>();
+
+	private static void propagateConfig(SettingsMXBean settings, String configType, Path configPath, List<String> actions)
 			throws IOException {
 		if (!Files.exists(configPath)) {
+			// The domain file deleted here while an engine on its own disk still
+			// holds one: nothing to push in its place (an empty domain file is not
+			// "no file"), so the Publish fails there and the app stays pending.
+			if ("domain".equals(configType) && !Boolean.TRUE.equals(ConfigurationMonitor.explicitSharedFileSystem())
+					&& settings.getLastModified(configType) > 0) {
+				throw new IOException("its domain file is missing here, but the server still holds one");
+			}
+			// Deleted on the admin: an engine on its own disk still merges its
+			// copy. Emptied there ({} merges as nothing), so it runs as here.
+			if (!"domain".equals(configType) && !Boolean.TRUE.equals(ConfigurationMonitor.explicitSharedFileSystem())
+					&& settings.getLastModified(configType) > 0) {
+				writeAndVerify(settings, configType, "{}");
+				actions.add("Cleared " + configType + " config (deleted on the admin)");
+			}
+			return;
+		}
+		// Declared shared storage: the engines read this very file. Pushing it
+		// would have each one truncate and rewrite it in place (and on one
+		// line), the race the auto-publish watcher avoids by the same flag.
+		if (Boolean.TRUE.equals(ConfigurationMonitor.explicitSharedFileSystem())) {
+			actions.add("Skipped " + configType + " (shared filesystem declared)");
 			return;
 		}
 
@@ -400,14 +703,13 @@ public class ValidationAPI {
 		long remoteTimestamp = settings.getLastModified(configType);
 
 		if (localTimestamp != remoteTimestamp) {
-			settings.openForWrite(configType);
-			String content = new String(Files.readAllBytes(configPath));
-			Scanner scanner = new Scanner(content);
-			while (scanner.hasNextLine()) {
-				settings.write(scanner.nextLine());
+			Map<Path, String> reads = PUBLISH_READS.get();
+			String content = (reads != null) ? reads.get(configPath) : null;
+			if (content == null) {
+				content = new String(Files.readAllBytes(configPath), java.nio.charset.StandardCharsets.UTF_8);
+				if (reads != null) reads.put(configPath, content);
 			}
-			scanner.close();
-			settings.close();
+			writeAndVerify(settings, configType, content);
 			actions.add("Pushed " + configType + " config from " + configPath);
 		} else {
 			actions.add("Skipped " + configType + " (shared filesystem, timestamps match)");

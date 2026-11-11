@@ -77,8 +77,6 @@ public class LdapConnector extends Connector implements Serializable {
 	@JsonIgnore
 	private transient DirContext cachedContext;
 	@JsonIgnore
-	private transient String cachedTemplate;
-	@JsonIgnore
 	private transient CircuitBreaker breaker = new CircuitBreaker();
 
 	public LdapConnector() {
@@ -141,13 +139,8 @@ public class LdapConnector extends Connector implements Serializable {
 		// Template resolution is cheap — do it on the calling thread.
 		final SearchParams params;
 		try {
-			if (cachedTemplate == null) {
-				Path p = Paths.get(TEMPLATES_DIR, searchTemplate);
-				if (!Files.exists(p)) materializeBundledTemplate(searchTemplate, p);
-				if (!Files.exists(p)) throw new IOException("LDAP template not found on disk or in the WAR: " + p);
-				cachedTemplate = Files.readString(p);
-			}
-			params = parseTemplate(cachedTemplate, ctx);
+			// Read again when the file changes (a pushed template).
+			params = parseTemplate(templateText(TEMPLATES_DIR, searchTemplate), ctx);
 		} catch (Exception e) {
 			sipLogger.warning(sipReq, "LdapConnector[" + connectorId + "] template load failed: " + e.getMessage());
 			return CompletableFuture.completedFuture(null);

@@ -1,6 +1,8 @@
 package org.vorpal.blade.applications.console.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
@@ -37,5 +39,21 @@ class ConfigPathTest {
 		assertThrows(IOException.class, () -> FileManagerServlet.configPath("../x.json"));
 		assertThrows(IOException.class, () -> FileManagerServlet.configPath("/etc/x.json"));
 		assertThrows(IOException.class, () -> FileManagerServlet.configPath("./config/custom/vorpal/startWebLogic.sh"));
+		// Not an application's name: a wildcard in the watcher's MBean query.
+		assertThrows(IOException.class, () -> FileManagerServlet.configPath("./config/custom/vorpal/*.json"));
+		assertThrows(IOException.class, () -> FileManagerServlet.configPath("./config/custom/vorpal/_servers/e1/a?b.json"));
+		// A folder named so: "*" in the watcher's Location= query matches every server.
+		assertThrows(IOException.class, () -> FileManagerServlet.configPath("./config/custom/vorpal/_servers/*/app.json"));
+		assertThrows(IOException.class, () -> FileManagerServlet.configPath("./config/custom/vorpal/_clusters/c?/app.json"));
+	}
+
+	/// A restore writes only what the page can read back: one object, nothing after it.
+	@Test
+	void aRestoreIsOneWholeObject() throws IOException {
+		assertTrue(FileManagerServlet.wholeObject("{\"a\":1}\n"));
+		assertThrows(IOException.class, () -> FileManagerServlet.wholeObject("{\"a\":1}\n}"));
+		assertFalse(FileManagerServlet.wholeObject("{\"a\":1} {\"b\":2}"));
+		assertFalse(FileManagerServlet.wholeObject("[1]"));
+		assertFalse(FileManagerServlet.wholeObject(""));
 	}
 }

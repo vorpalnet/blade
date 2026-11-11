@@ -66,6 +66,9 @@ public class BasicAuthFilter implements ContainerRequestFilter {
 		}
 
 		try {
+			// A client keeping cookies arrives logged in from its last call, and
+			// login() then throws (a false "Invalid credentials").
+			if (request.getUserPrincipal() != null) request.logout();
 			request.login(user, password);
 		} catch (ServletException e) {
 			logger.log(Level.FINE, "Basic auth failed for user " + user, e);
@@ -73,6 +76,20 @@ public class BasicAuthFilter implements ContainerRequestFilter {
 			return;
 		}
 
+		// Reading (GET: validate) is open to every admin role; anything that
+		// changes the domain or spends its API key (POST: deploy, publish,
+		// ai/generate) needs Admin or Operator, as on the WebSocket.
+		String method = ctx.getMethod();
+		boolean reads = "GET".equals(method) || "HEAD".equals(method) || "OPTIONS".equals(method);
+		if (!reads) {
+			if (request.isUserInRole("Admin") || request.isUserInRole("Operator")) {
+				return;
+			}
+			ctx.abortWith(Response.status(Response.Status.FORBIDDEN)
+					.entity("{\"error\":\"" + method + " needs the Admin or Operator role\"}")
+					.type(MediaType.APPLICATION_JSON).build());
+			return;
+		}
 		for (String role : ADMIN_ROLES) {
 			if (request.isUserInRole(role)) {
 				return; // authenticated and authorized
@@ -80,7 +97,8 @@ public class BasicAuthFilter implements ContainerRequestFilter {
 		}
 
 		ctx.abortWith(Response.status(Response.Status.FORBIDDEN)
-				.entity("{\"error\":\"User '" + user + "' lacks a required admin role\"}")
+				.entity(new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode()
+						.put("error", "User '" + user + "' lacks a required admin role").toString())
 				.type(MediaType.APPLICATION_JSON).build());
 	}
 

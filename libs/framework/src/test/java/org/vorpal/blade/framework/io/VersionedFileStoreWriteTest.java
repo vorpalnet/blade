@@ -114,4 +114,47 @@ class VersionedFileStoreWriteTest {
 				"lexical order of the millis suffix must still read chronologically");
 		assertFalse(contents.contains("v6"), "the live content is not a version");
 	}
+
+	@Test
+	@DisplayName("a save keeps the file's mode: a temp file is 0600, the config was not")
+	void aSaveKeepsTheFilesMode() throws IOException {
+		Path file = dir.resolve("app.json");
+		Files.write(file, "{}".getBytes(StandardCharsets.UTF_8));
+		java.util.Set<java.nio.file.attribute.PosixFilePermission> mode;
+		try {
+			mode = java.nio.file.attribute.PosixFilePermissions.fromString("rw-r--r--");
+			Files.setPosixFilePermissions(file, mode);
+		} catch (UnsupportedOperationException notPosix) {
+			return;
+		}
+		new VersionedFileStore().write(file, "{\"a\":1}");
+		assertEquals(mode, Files.getPosixFilePermissions(file));
+	}
+
+	@Test
+	@DisplayName("a new file is as readable as its folder, not the temp file's 0600")
+	void aNewFileIsAsReadableAsItsFolder() throws IOException {
+		Path file = dir.resolve("new.json");
+		try {
+			Files.setPosixFilePermissions(dir, java.nio.file.attribute.PosixFilePermissions.fromString("rwxr-x---"));
+		} catch (UnsupportedOperationException notPosix) {
+			return;
+		}
+		new VersionedFileStore().write(file, "{}");
+		assertEquals(java.nio.file.attribute.PosixFilePermissions.fromString("rw-r-----"), Files.getPosixFilePermissions(file));
+	}
+
+	@Test
+	@DisplayName("pruning counts only the file's own backups, not a longer name's")
+	void pruningCountsOnlyItsOwnBackups() throws IOException {
+		VersionedFileStore store = new VersionedFileStore();
+		Path a = dir.resolve("q.sql"), b = dir.resolve("q.sql.txt");
+		store.write(b, "b0");
+		for (int i = 0; i < 25; i++) store.write(b, "b" + (i + 1));
+		store.write(a, "a0");
+		store.write(a, "a1");
+		try (Stream<Path> s = Files.list(dir.resolve(".versions"))) {
+			assertEquals(1, s.filter(p -> p.getFileName().toString().matches("q\\.sql\\.\\d+\\.version")).count(), "a's one backup survives b's");
+		}
+	}
 }

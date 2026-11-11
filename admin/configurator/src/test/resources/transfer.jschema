@@ -1,0 +1,2418 @@
+{
+  "$schema" : "https://json-schema.org/draft/2020-12/schema",
+  "$defs" : {
+    "AddressMap" : {
+      "type" : "object",
+      "additionalProperties" : {
+        "$ref" : "#/$defs/Translation-2"
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v2.config.AddressMap"
+    },
+    "Analytics" : {
+      "type" : "object",
+      "properties" : {
+        "enabled" : {
+          "type" : "boolean",
+          "description" : "Enable or disable analytics event collection",
+          "default" : false
+        },
+        "events" : {
+          "$ref" : "#/$defs/Map(String,EventSelector)",
+          "description" : "Map of analytics event definitions keyed by event name"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v2.analytics.Analytics"
+    },
+    "ApiKeyAuthentication-1" : {
+      "type" : "object",
+      "properties" : {
+        "header" : {
+          "type" : "string",
+          "description" : "HTTP header name, e.g. X-API-Key"
+        },
+        "value" : {
+          "type" : "string",
+          "description" : "Header value; supports ${var}",
+          "format" : "password"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.auth.ApiKeyAuthentication"
+    },
+    "ApiKeyAuthentication-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.auth.ApiKeyAuthentication",
+      "$ref" : "#/$defs/ApiKeyAuthentication-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "apikey"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "AttributeSelector-1" : {
+      "type" : "object",
+      "properties" : {
+        "id" : {
+          "type" : "string",
+          "description" : "Names the context variable this selector writes (${id}), and namespaces derived values such as regex groups (${id.group}). Optional, but a repeated id means whichever selector runs later overwrites the earlier value."
+        },
+        "attribute" : {
+          "type" : "string",
+          "description" : "What to extract: header name / JsonPath / XPath / SDP field / column / source attribute"
+        },
+        "allInstances" : {
+          "type" : "boolean",
+          "description" : "Read every instance of a repeating header (joined) so a condition tests any instance; default reads the first only"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.selectors.AttributeSelector",
+      "x-form-groups" : [ [ "id", "attribute" ] ]
+    },
+    "AttributeSelector-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.selectors.AttributeSelector",
+      "x-form-groups" : [ [ "id", "attribute" ] ],
+      "$ref" : "#/$defs/AttributeSelector-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "attribute"
+        }
+      }
+    },
+    "AttributeSelector-3" : {
+      "type" : "object",
+      "properties" : {
+        "id" : {
+          "type" : "string"
+        },
+        "description" : {
+          "type" : "string"
+        },
+        "attribute" : {
+          "type" : "string"
+        },
+        "pattern" : {
+          "type" : "string",
+          "description" : "Regular expression with named capturing groups for parsing the SIP attribute value"
+        },
+        "expression" : {
+          "type" : "string"
+        },
+        "dialog" : {
+          "$ref" : "#/$defs/DialogType"
+        },
+        "additionalExpressions" : {
+          "$ref" : "#/$defs/Map(String,String)"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v2.config.AttributeSelector"
+    },
+    "AwsSigV4Authentication-1" : {
+      "type" : "object",
+      "properties" : {
+        "accessKeyId" : {
+          "type" : "string",
+          "description" : "AWS access key identifier; supports ${var}"
+        },
+        "secretAccessKey" : {
+          "type" : "string",
+          "description" : "AWS secret access key; supports ${var}",
+          "format" : "password"
+        },
+        "region" : {
+          "type" : "string",
+          "description" : "AWS region, e.g. us-east-1; supports ${var}"
+        },
+        "service" : {
+          "type" : "string",
+          "description" : "AWS service name, e.g. execute-api, s3, lambda; supports ${var}"
+        },
+        "sessionToken" : {
+          "type" : "string",
+          "description" : "Optional STS session token (for temporary credentials); supports ${var}",
+          "format" : "password"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.auth.AwsSigV4Authentication"
+    },
+    "AwsSigV4Authentication-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.auth.AwsSigV4Authentication",
+      "$ref" : "#/$defs/AwsSigV4Authentication-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "aws-sigv4"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "BasicAuthentication-1" : {
+      "type" : "object",
+      "properties" : {
+        "username" : {
+          "type" : "string",
+          "description" : "Username; supports ${var}"
+        },
+        "password" : {
+          "type" : "string",
+          "description" : "Password; supports ${var}",
+          "format" : "password"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.auth.BasicAuthentication"
+    },
+    "BasicAuthentication-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.auth.BasicAuthentication",
+      "$ref" : "#/$defs/BasicAuthentication-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "basic"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "BearerAuthentication-1" : {
+      "type" : "object",
+      "properties" : {
+        "token" : {
+          "type" : "string",
+          "description" : "Bearer token for the Authorization header; supports ${var}",
+          "format" : "password"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.auth.BearerAuthentication"
+    },
+    "BearerAuthentication-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.auth.BearerAuthentication",
+      "$ref" : "#/$defs/BearerAuthentication-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "bearer"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "ConfigAddressMap-1" : {
+      "type" : "object",
+      "properties" : {
+        "description" : {
+          "type" : "string",
+          "description" : "Description of this translation map's purpose"
+        },
+        "id" : {
+          "type" : "string",
+          "description" : "Unique identifier for this translation map"
+        },
+        "map" : {
+          "$ref" : "#/$defs/AddressMap",
+          "description" : "IP address map for CIDR-based routing lookups"
+        },
+        "selectors" : {
+          "description" : "Selectors that extract lookup keys from SIP messages",
+          "type" : "array",
+          "items" : {
+            "$ref" : "#/$defs/Selector"
+          }
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v2.config.ConfigAddressMap"
+    },
+    "ConfigAddressMap-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v2.config.ConfigAddressMap",
+      "$ref" : "#/$defs/ConfigAddressMap-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "address"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "ConfigHashMap-1" : {
+      "type" : "object",
+      "properties" : {
+        "description" : {
+          "type" : "string",
+          "description" : "Description of this translation map's purpose"
+        },
+        "id" : {
+          "type" : "string",
+          "description" : "Unique identifier for this translation map"
+        },
+        "map" : {
+          "$ref" : "#/$defs/HashMap(String,Translation)",
+          "description" : "Hash map of translation entries keyed by lookup value"
+        },
+        "selectors" : {
+          "description" : "Selectors that extract lookup keys from SIP messages",
+          "type" : "array",
+          "items" : {
+            "$ref" : "#/$defs/Selector"
+          }
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v2.config.ConfigHashMap"
+    },
+    "ConfigHashMap-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v2.config.ConfigHashMap",
+      "$ref" : "#/$defs/ConfigHashMap-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "hash"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "ConfigLinkedHashMap-1" : {
+      "type" : "object",
+      "properties" : {
+        "description" : {
+          "type" : "string",
+          "description" : "Description of this translation map's purpose"
+        },
+        "id" : {
+          "type" : "string",
+          "description" : "Unique identifier for this translation map"
+        },
+        "map" : {
+          "$ref" : "#/$defs/LinkedHashMap(String,Translation)",
+          "description" : "Ordered map of translation entries keyed by lookup value"
+        },
+        "selectors" : {
+          "description" : "Selectors that extract lookup keys from SIP messages",
+          "type" : "array",
+          "items" : {
+            "$ref" : "#/$defs/Selector"
+          }
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v2.config.ConfigLinkedHashMap"
+    },
+    "ConfigLinkedHashMap-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v2.config.ConfigLinkedHashMap",
+      "$ref" : "#/$defs/ConfigLinkedHashMap-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "linked"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "ConfigPrefixMap-1" : {
+      "type" : "object",
+      "properties" : {
+        "description" : {
+          "type" : "string",
+          "description" : "Description of this translation map's purpose"
+        },
+        "id" : {
+          "type" : "string",
+          "description" : "Unique identifier for this translation map"
+        },
+        "map" : {
+          "$ref" : "#/$defs/HashMap(String,Translation)",
+          "description" : "Prefix-matching map of translation entries for longest-prefix lookups"
+        },
+        "selectors" : {
+          "description" : "Selectors that extract lookup keys from SIP messages",
+          "type" : "array",
+          "items" : {
+            "$ref" : "#/$defs/Selector"
+          }
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v2.config.ConfigPrefixMap"
+    },
+    "ConfigPrefixMap-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v2.config.ConfigPrefixMap",
+      "$ref" : "#/$defs/ConfigPrefixMap-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "prefix"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "ConfigTreeMap-1" : {
+      "type" : "object",
+      "properties" : {
+        "description" : {
+          "type" : "string",
+          "description" : "Description of this translation map's purpose"
+        },
+        "id" : {
+          "type" : "string",
+          "description" : "Unique identifier for this translation map"
+        },
+        "map" : {
+          "$ref" : "#/$defs/TreeMap(String,Translation)",
+          "description" : "Sorted map of translation entries keyed by lookup value"
+        },
+        "selectors" : {
+          "description" : "Selectors that extract lookup keys from SIP messages",
+          "type" : "array",
+          "items" : {
+            "$ref" : "#/$defs/Selector"
+          }
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v2.config.ConfigTreeMap"
+    },
+    "ConfigTreeMap-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v2.config.ConfigTreeMap",
+      "$ref" : "#/$defs/ConfigTreeMap-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "tree"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "Connector" : {
+      "anyOf" : [ {
+        "$ref" : "#/$defs/SipConnector-2"
+      }, {
+        "$ref" : "#/$defs/RestConnector-2"
+      }, {
+        "$ref" : "#/$defs/JdbcConnector-2"
+      }, {
+        "$ref" : "#/$defs/LdapConnector-2"
+      }, {
+        "$ref" : "#/$defs/TableConnector-2"
+      }, {
+        "$ref" : "#/$defs/RateConnector-2"
+      } ],
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.connectors.Connector"
+    },
+    "CreateOperation-1" : {
+      "type" : "object",
+      "properties" : {
+        "attribute" : {
+          "type" : "string",
+          "description" : "SIP attribute to create — header name, Request-URI, or body."
+        },
+        "contentType" : {
+          "type" : "string",
+          "description" : "Optional MIME content type when creating a specific part of a multipart body."
+        },
+        "value" : {
+          "type" : "string",
+          "description" : "Value to set. Supports ${variable} substitution, e.g. \"${user}@${host}\"",
+          "format" : "textarea",
+          "x-wide" : true
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.CreateOperation"
+    },
+    "CreateOperation-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.CreateOperation",
+      "$ref" : "#/$defs/CreateOperation-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "create"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "Crud" : {
+      "type" : "object",
+      "properties" : {
+        "variables" : {
+          "$ref" : "#/$defs/Map(String,String)",
+          "description" : "Named values every call starts with, read as `${name}` by the pipeline, `when` and operations. A cluster or server file sets its own by naming them."
+        },
+        "pipeline" : {
+          "$ref" : "#/$defs/Map(String,Connector)",
+          "description" : "Enrichment connectors by id, run in order once on the call's initial request; may write the `ruleSet` variable to select a rule set. Usually empty."
+        },
+        "defaultRuleSet" : {
+          "type" : "string",
+          "description" : "Rule set applied when the pipeline selects none. With no pipeline, the rule set every call gets."
+        },
+        "ruleSets" : {
+          "$ref" : "#/$defs/Map(String,RuleSet)",
+          "description" : "Named rule sets, keyed by id. Rules run on each message the application sends; filter them by method and `when`, not by event."
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.Crud"
+    },
+    "DeleteOperation-1" : {
+      "type" : "object",
+      "properties" : {
+        "attribute" : {
+          "type" : "string",
+          "description" : "SIP attribute to delete — header name, or `body` to clear the body."
+        },
+        "contentType" : {
+          "type" : "string",
+          "description" : "Optional MIME content type to remove just one part of a multipart body."
+        },
+        "pattern" : {
+          "type" : "string",
+          "description" : "Optional regex: remove only the occurrences of the header it matches. Empty removes every occurrence."
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.DeleteOperation"
+    },
+    "DeleteOperation-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.DeleteOperation",
+      "$ref" : "#/$defs/DeleteOperation-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "delete"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "DialogType" : {
+      "type" : "string",
+      "enum" : [ "origin", "destination" ],
+      "x-java-class" : "org.vorpal.blade.framework.v2.config.AttributeSelector$DialogType"
+    },
+    "EventBusSettings" : {
+      "type" : "object",
+      "properties" : {
+        "enabled" : {
+          "type" : "boolean",
+          "description" : "Whether this application publishes to the event bus, including the call lifecycle events the framework emits. Leave unset to publish only when the domain's JMS bus is provisioned and say nothing when it is not; true to require it (an unreachable bus is then an error); false to never publish."
+        },
+        "connectionFactoryJndi" : {
+          "type" : "string",
+          "description" : "JNDI name of the connection factory the bus publishes through. Defaults to the framework constant; set it only on a domain provisioned under different names."
+        },
+        "destinationJndi" : {
+          "type" : "string",
+          "description" : "JNDI name of the destination this application publishes to. Defaults to the framework constant."
+        },
+        "providerUrl" : {
+          "type" : "string",
+          "description" : "Where the bus's JNDI names are looked up, when not in this server's own tree: a provider URL on the engine cluster, e.g. t3://engine0.example:8001 (several comma-separated). Leave empty: an engine finds the bus in its own tree, and an application on the AdminServer finds the running engines that host it by itself. Set it only to override that."
+        },
+        "source" : {
+          "type" : "string",
+          "description" : "CloudEvents 'source' stamped on events this application publishes. Leave empty to derive it from the application name."
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.events.EventBusSettings"
+    },
+    "EventSelector" : {
+      "type" : "object",
+      "properties" : {
+        "attributes" : {
+          "description" : "Set of attribute selectors that extract data from SIP messages for this event",
+          "type" : "array",
+          "items" : {
+            "$ref" : "#/$defs/AttributeSelector-3"
+          }
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v2.analytics.EventSelector"
+    },
+    "HashMap(String,Translation)" : {
+      "type" : "object",
+      "additionalProperties" : {
+        "$ref" : "#/$defs/Translation-2"
+      }
+    },
+    "HmacAuthentication-1" : {
+      "type" : "object",
+      "properties" : {
+        "algorithm" : {
+          "type" : "string",
+          "description" : "HMAC algorithm: sha1, sha256 (default), or sha512"
+        },
+        "secret" : {
+          "type" : "string",
+          "description" : "Shared secret; supports ${var}",
+          "format" : "password"
+        },
+        "header" : {
+          "type" : "string",
+          "description" : "Header name to stamp with the signature (e.g. X-Signature); supports ${var}"
+        },
+        "payloadTemplate" : {
+          "type" : "string",
+          "description" : "Template of what to sign; ${var} resolved first, then ${method}/${url}/${body} substituted. Default: ${body}"
+        },
+        "encoding" : {
+          "type" : "string",
+          "description" : "Output encoding: hex (default, lowercase) or base64"
+        },
+        "prefix" : {
+          "type" : "string",
+          "description" : "Optional prefix prepended to the encoded signature, e.g. \"sha256=\" for GitHub; supports ${var}"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.auth.HmacAuthentication"
+    },
+    "HmacAuthentication-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.auth.HmacAuthentication",
+      "$ref" : "#/$defs/HmacAuthentication-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "hmac"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "IdentitySelector-1" : {
+      "type" : "object",
+      "properties" : {
+        "id" : {
+          "type" : "string",
+          "description" : "Names the context variable this selector writes (${id}), and namespaces derived values such as regex groups (${id.group}). Optional, but a repeated id means whichever selector runs later overwrites the earlier value."
+        },
+        "attribute" : {
+          "type" : "string",
+          "description" : "What to extract: header name / JsonPath / XPath / SDP field / column / source attribute"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.selectors.IdentitySelector"
+    },
+    "IdentitySelector-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.selectors.IdentitySelector",
+      "$ref" : "#/$defs/IdentitySelector-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "identity"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "JdbcConnector-1" : {
+      "type" : "object",
+      "properties" : {
+        "id" : {
+          "type" : "string",
+          "description" : "Label for this connector in log and trap messages, e.g. RestConnector[screening]. Optional, and not required to be unique."
+        },
+        "description" : {
+          "type" : "string",
+          "description" : "Human-readable description of what this connector does",
+          "x-wide" : true
+        },
+        "dataSource" : {
+          "type" : "string",
+          "description" : "JNDI name of the WebLogic JDBC DataSource, e.g. jdbc/CustomerDS"
+        },
+        "queryTemplate" : {
+          "type" : "string",
+          "description" : "SQL template filename in _templates/ (supports ${var})"
+        },
+        "queryTimeoutSeconds" : {
+          "type" : "integer",
+          "description" : "Seconds a query may run before the driver cancels it and the call continues to its default route. Default 5; 0 waits forever."
+        },
+        "circuitBreakerCooldownSeconds" : {
+          "type" : "integer",
+          "description" : "Circuit breaker: after a failed query (datasource down, connection or SQL error), suppress further queries for N seconds and let routing fall to its default route. Prevents hammering a down database and stops every call from eating the connection timeout during an outage. 0 or empty disables it (default)."
+        },
+        "circuitBreakerTrap" : {
+          "type" : "boolean",
+          "description" : "When the circuit breaker opens or recovers, emit one SNMP trap on each edge (down, then up). Requires the WebLogic SNMP agent enabled with a trap destination (see the Tuning app). Default false."
+        },
+        "selectors" : {
+          "description" : "Selectors that parse this connector's payload and write to the session",
+          "type" : "array",
+          "items" : {
+            "anyOf" : [ {
+              "$ref" : "#/$defs/AttributeSelector-2"
+            }, {
+              "$ref" : "#/$defs/JsonSelector-2"
+            }, {
+              "$ref" : "#/$defs/XmlSelector-2"
+            }, {
+              "$ref" : "#/$defs/SdpSelector-2"
+            }, {
+              "$ref" : "#/$defs/RegexSelector-2"
+            }, {
+              "$ref" : "#/$defs/TableSelector-2"
+            }, {
+              "$ref" : "#/$defs/IdentitySelector-2"
+            } ]
+          }
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.connectors.JdbcConnector"
+    },
+    "JdbcConnector-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.connectors.JdbcConnector",
+      "$ref" : "#/$defs/JdbcConnector-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "jdbc"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "JsonPathCreateOperation-1" : {
+      "type" : "object",
+      "properties" : {
+        "contentType" : {
+          "type" : "string",
+          "description" : "Content type of the JSON MIME part to target, e.g. application/json. Null targets the entire body."
+        },
+        "key" : {
+          "type" : "string",
+          "description" : "Property key to add when the parent is an object. Leave null to append to an array parent."
+        },
+        "parentPath" : {
+          "type" : "string",
+          "description" : "JsonPath of the parent object or array, e.g. $.agent",
+          "x-wide" : true
+        },
+        "value" : {
+          "type" : "string",
+          "description" : "Value to add. Supports ${variable} substitution."
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.JsonPathCreateOperation"
+    },
+    "JsonPathCreateOperation-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.JsonPathCreateOperation",
+      "$ref" : "#/$defs/JsonPathCreateOperation-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "jsonCreate"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "JsonPathDeleteOperation-1" : {
+      "type" : "object",
+      "properties" : {
+        "contentType" : {
+          "type" : "string",
+          "description" : "Optional MIME content type, e.g. application/json. Null targets the entire body."
+        },
+        "jsonPath" : {
+          "type" : "string",
+          "description" : "JsonPath of the node to delete, e.g. $.agent.privateData",
+          "x-wide" : true
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.JsonPathDeleteOperation"
+    },
+    "JsonPathDeleteOperation-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.JsonPathDeleteOperation",
+      "$ref" : "#/$defs/JsonPathDeleteOperation-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "jsonDelete"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "JsonPathReadOperation-1" : {
+      "type" : "object",
+      "properties" : {
+        "contentType" : {
+          "type" : "string",
+          "description" : "Optional MIME content type, e.g. application/json. Null reads the entire body."
+        },
+        "expressions" : {
+          "$ref" : "#/$defs/Map(String,String)",
+          "description" : "Map of variable name to JsonPath expression, e.g. {\"agentId\": \"$.agent.id\"}"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.JsonPathReadOperation"
+    },
+    "JsonPathReadOperation-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.JsonPathReadOperation",
+      "$ref" : "#/$defs/JsonPathReadOperation-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "jsonRead"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "JsonPathUpdateOperation-1" : {
+      "type" : "object",
+      "properties" : {
+        "contentType" : {
+          "type" : "string",
+          "description" : "Optional MIME content type, e.g. application/json. Null targets the entire body."
+        },
+        "jsonPath" : {
+          "type" : "string",
+          "description" : "JsonPath of the value to update, e.g. $.agent.name",
+          "x-wide" : true
+        },
+        "value" : {
+          "type" : "string",
+          "description" : "New value. Supports ${variable} substitution."
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.JsonPathUpdateOperation"
+    },
+    "JsonPathUpdateOperation-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.JsonPathUpdateOperation",
+      "$ref" : "#/$defs/JsonPathUpdateOperation-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "jsonUpdate"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "JsonSelector-1" : {
+      "type" : "object",
+      "properties" : {
+        "id" : {
+          "type" : "string",
+          "description" : "Names the context variable this selector writes (${id}), and namespaces derived values such as regex groups (${id.group}). Optional, but a repeated id means whichever selector runs later overwrites the earlier value."
+        },
+        "attribute" : {
+          "type" : "string",
+          "description" : "What to extract: header name / JsonPath / XPath / SDP field / column / source attribute"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.selectors.JsonSelector",
+      "x-form-groups" : [ [ "id", "attribute" ] ]
+    },
+    "JsonSelector-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.selectors.JsonSelector",
+      "x-form-groups" : [ [ "id", "attribute" ] ],
+      "$ref" : "#/$defs/JsonSelector-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "json"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "KeepAlive" : {
+      "type" : "string",
+      "enum" : [ "DISABLED", "REINVITE" ],
+      "x-java-class" : "org.vorpal.blade.framework.v2.config.KeepAliveParameters$KeepAlive"
+    },
+    "KeepAliveParameters" : {
+      "type" : "object",
+      "properties" : {
+        "minSE" : {
+          "type" : "integer",
+          "description" : "Sets Min-SE header, in seconds"
+        },
+        "sessionExpires" : {
+          "type" : "integer",
+          "description" : "Sets Session-Expires header, in seconds"
+        },
+        "style" : {
+          "$ref" : "#/$defs/KeepAlive",
+          "description" : "Sets keep alive style: DISABLED or REINVITE. REINVITE refreshes the call with one offerless re-INVITE, chained through both dialogs."
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v2.config.KeepAliveParameters"
+    },
+    "KeepOnlyPartOperation-1" : {
+      "type" : "object",
+      "properties" : {
+        "contentType" : {
+          "type" : "string",
+          "description" : "MIME content type of the part(s) to keep, e.g. application/sdp. All other parts are removed."
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.KeepOnlyPartOperation"
+    },
+    "KeepOnlyPartOperation-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.KeepOnlyPartOperation",
+      "$ref" : "#/$defs/KeepOnlyPartOperation-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "keepPart"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "LdapConnector-1" : {
+      "type" : "object",
+      "properties" : {
+        "id" : {
+          "type" : "string",
+          "description" : "Label for this connector in log and trap messages, e.g. RestConnector[screening]. Optional, and not required to be unique."
+        },
+        "description" : {
+          "type" : "string",
+          "description" : "Human-readable description of what this connector does",
+          "x-wide" : true
+        },
+        "ldapUrl" : {
+          "type" : "string",
+          "description" : "LDAP server URL, e.g. ldap://ad.corp.example.com:389"
+        },
+        "bindDn" : {
+          "type" : "string",
+          "description" : "Bind DN for the service account"
+        },
+        "bindPassword" : {
+          "type" : "string",
+          "description" : "Bind password",
+          "format" : "password"
+        },
+        "searchTemplate" : {
+          "type" : "string",
+          "description" : "Search template filename in _templates/"
+        },
+        "circuitBreakerCooldownSeconds" : {
+          "type" : "integer",
+          "description" : "Circuit breaker: after a failed search (directory down, bind or connection error), suppress further searches for N seconds and let routing fall to its default route. Prevents hammering a down directory and stops every call from eating the LDAP timeout during an outage. 0 or empty disables it (default)."
+        },
+        "circuitBreakerTrap" : {
+          "type" : "boolean",
+          "description" : "When the circuit breaker opens or recovers, emit one SNMP trap on each edge (down, then up). Requires the WebLogic SNMP agent enabled with a trap destination (see the Tuning app). Default false."
+        },
+        "selectors" : {
+          "description" : "Selectors that parse this connector's payload and write to the session",
+          "type" : "array",
+          "items" : {
+            "anyOf" : [ {
+              "$ref" : "#/$defs/AttributeSelector-2"
+            }, {
+              "$ref" : "#/$defs/JsonSelector-2"
+            }, {
+              "$ref" : "#/$defs/XmlSelector-2"
+            }, {
+              "$ref" : "#/$defs/SdpSelector-2"
+            }, {
+              "$ref" : "#/$defs/RegexSelector-2"
+            }, {
+              "$ref" : "#/$defs/TableSelector-2"
+            }, {
+              "$ref" : "#/$defs/IdentitySelector-2"
+            } ]
+          }
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.connectors.LdapConnector"
+    },
+    "LdapConnector-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.connectors.LdapConnector",
+      "$ref" : "#/$defs/LdapConnector-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "ldap"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "Leg" : {
+      "type" : "string",
+      "enum" : [ "caller", "callee" ],
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.Rule$Leg"
+    },
+    "LinkedHashMap(String,Translation)" : {
+      "type" : "object",
+      "additionalProperties" : {
+        "$ref" : "#/$defs/Translation-2"
+      }
+    },
+    "LogParameters" : {
+      "type" : "object",
+      "properties" : {
+        "directory" : {
+          "type" : "string",
+          "description" : "Location of log files. Supports environment and servlet context variables. Default: ./servers/${weblogic.Name}/logs/vorpal",
+          "default" : "./servers/${weblogic.Name}/logs/vorpal"
+        },
+        "fileName" : {
+          "type" : "string",
+          "description" : "Name of the log file. Supports environment and servlet context variables. Default: ${sip.application.name}.%g.log",
+          "default" : "${sip.application.name}.%g.log"
+        },
+        "loggingLevel" : {
+          "$ref" : "#/$defs/LoggingLevel",
+          "description" : "Logging level. Levels include: OFF, SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST, ALL. Default: INFO",
+          "default" : "INFO"
+        },
+        "sequenceDiagramLoggingLevel" : {
+          "$ref" : "#/$defs/LoggingLevel",
+          "description" : "Level at which sequence diagrams will be logged. Default: FINE",
+          "default" : "FINE"
+        },
+        "configurationLoggingLevel" : {
+          "$ref" : "#/$defs/LoggingLevel",
+          "description" : "Level at which configuration changes will be logged. Default: INFO",
+          "default" : "INFO"
+        },
+        "analyticsLoggingLevel" : {
+          "$ref" : "#/$defs/LoggingLevel",
+          "description" : "Level at which analytics (if enabled) will be logged. Default: INFO",
+          "default" : "INFO"
+        },
+        "snmpTrapLevel" : {
+          "$ref" : "#/$defs/LoggingLevel",
+          "description" : "Emit an SNMP trap for any log statement at or above this level (OFF disables). Requires the WebLogic SNMP agent to be enabled with a trap destination (see the Tuning app). Default: OFF",
+          "default" : "OFF"
+        },
+        "fileSize" : {
+          "type" : "string",
+          "description" : "Maximum file size written in human readable form. Default: 100MiB",
+          "default" : "100MiB"
+        },
+        "fileCount" : {
+          "type" : "integer",
+          "description" : "Maximum number of log files. Default: 25",
+          "default" : 25
+        },
+        "useParentLogging" : {
+          "type" : "boolean",
+          "description" : "Write to parent logger, i.e. the WebLogic engine log file. Default: false",
+          "default" : false
+        },
+        "appendFile" : {
+          "type" : "boolean",
+          "description" : "Continue to use the same log file after reboot. Default: true",
+          "default" : true
+        },
+        "colorsEnabled" : {
+          "type" : "boolean",
+          "description" : "Support ANSI colors in logging?",
+          "default" : false
+        }
+      },
+      "required" : [ "directory", "fileName", "loggingLevel", "sequenceDiagramLoggingLevel", "configurationLoggingLevel", "analyticsLoggingLevel", "snmpTrapLevel", "fileSize", "fileCount", "useParentLogging", "appendFile", "colorsEnabled" ],
+      "x-java-class" : "org.vorpal.blade.framework.v2.logging.LogParameters",
+      "x-form-groups" : [ [ "directory", "fileName" ], [ "loggingLevel", "sequenceDiagramLoggingLevel", "configurationLoggingLevel", "analyticsLoggingLevel", "snmpTrapLevel" ] ],
+      "x-form-columns" : [ {
+        "columns" : [ [ "fileSize", "fileCount" ], [ "useParentLogging", "appendFile", "colorsEnabled" ] ]
+      } ]
+    },
+    "LoggingLevel" : {
+      "type" : "string",
+      "enum" : [ "OFF", "SEVERE", "WARNING", "INFO", "CONFIG", "FINE", "FINER", "FINEST", "ALL" ],
+      "x-java-class" : "org.vorpal.blade.framework.v2.logging.LogParameters$LoggingLevel"
+    },
+    "Map(String,Connector)" : {
+      "type" : "object",
+      "additionalProperties" : {
+        "$ref" : "#/$defs/Connector"
+      }
+    },
+    "Map(String,EventSelector)" : {
+      "type" : "object",
+      "additionalProperties" : {
+        "$ref" : "#/$defs/EventSelector"
+      }
+    },
+    "Map(String,Object)" : {
+      "type" : "object"
+    },
+    "Map(String,Rule)" : {
+      "type" : "object",
+      "additionalProperties" : {
+        "$ref" : "#/$defs/Rule"
+      }
+    },
+    "Map(String,RuleSet)" : {
+      "type" : "object",
+      "additionalProperties" : {
+        "$ref" : "#/$defs/RuleSet"
+      }
+    },
+    "Map(String,String)" : {
+      "type" : "object",
+      "additionalProperties" : {
+        "type" : "string"
+      }
+    },
+    "Map(String,Translation)" : {
+      "type" : "object",
+      "additionalProperties" : {
+        "$ref" : "#/$defs/Translation-1"
+      }
+    },
+    "Map(String,Webhook)" : {
+      "type" : "object",
+      "additionalProperties" : {
+        "$ref" : "#/$defs/Webhook"
+      }
+    },
+    "MatchStrategy" : {
+      "type" : "string",
+      "enum" : [ "hash", "prefix", "range" ],
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.MatchStrategy"
+    },
+    "MessageType" : {
+      "type" : "string",
+      "enum" : [ "request", "response" ],
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.Rule$MessageType"
+    },
+    "OAuth2ClientCredentialsAuthentication-1" : {
+      "type" : "object",
+      "properties" : {
+        "tokenUrl" : {
+          "type" : "string",
+          "description" : "OAuth 2.0 token endpoint URL; supports ${var}"
+        },
+        "clientId" : {
+          "type" : "string",
+          "description" : "OAuth 2.0 client identifier; supports ${var}"
+        },
+        "clientSecret" : {
+          "type" : "string",
+          "description" : "OAuth 2.0 client secret; supports ${var}",
+          "format" : "password"
+        },
+        "scope" : {
+          "type" : "string",
+          "description" : "Optional space-separated scope list; supports ${var}"
+        },
+        "refreshSkewSeconds" : {
+          "type" : "integer",
+          "description" : "Seconds of clock skew to subtract from token expiry before refreshing; default 60"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.auth.OAuth2ClientCredentialsAuthentication"
+    },
+    "OAuth2ClientCredentialsAuthentication-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.auth.OAuth2ClientCredentialsAuthentication",
+      "$ref" : "#/$defs/OAuth2ClientCredentialsAuthentication-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "oauth2-client"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "OAuth2JwtBearerAuthentication-1" : {
+      "type" : "object",
+      "properties" : {
+        "tokenUrl" : {
+          "type" : "string",
+          "description" : "OAuth 2.0 token endpoint URL; supports ${var}"
+        },
+        "assertion" : {
+          "type" : "string",
+          "description" : "Serialized signed JWT assertion (compact form); supports ${var}",
+          "format" : "password"
+        },
+        "clientId" : {
+          "type" : "string",
+          "description" : "Optional OAuth 2.0 client identifier; supports ${var}"
+        },
+        "clientSecret" : {
+          "type" : "string",
+          "description" : "Optional OAuth 2.0 client secret; supports ${var}",
+          "format" : "password"
+        },
+        "scope" : {
+          "type" : "string",
+          "description" : "Optional space-separated scope list; supports ${var}"
+        },
+        "refreshSkewSeconds" : {
+          "type" : "integer",
+          "description" : "Seconds of clock skew to subtract from token expiry before refreshing; default 60"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.auth.OAuth2JwtBearerAuthentication"
+    },
+    "OAuth2JwtBearerAuthentication-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.auth.OAuth2JwtBearerAuthentication",
+      "$ref" : "#/$defs/OAuth2JwtBearerAuthentication-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "oauth2-jwt-bearer"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "OAuth2PasswordAuthentication-1" : {
+      "type" : "object",
+      "properties" : {
+        "tokenUrl" : {
+          "type" : "string",
+          "description" : "OAuth 2.0 token endpoint URL; supports ${var}"
+        },
+        "username" : {
+          "type" : "string",
+          "description" : "Resource owner username; supports ${var}"
+        },
+        "password" : {
+          "type" : "string",
+          "description" : "Resource owner password; supports ${var}",
+          "format" : "password"
+        },
+        "clientId" : {
+          "type" : "string",
+          "description" : "Optional OAuth 2.0 client identifier; supports ${var}"
+        },
+        "clientSecret" : {
+          "type" : "string",
+          "description" : "Optional OAuth 2.0 client secret; supports ${var}",
+          "format" : "password"
+        },
+        "scope" : {
+          "type" : "string",
+          "description" : "Optional space-separated scope list; supports ${var}"
+        },
+        "refreshSkewSeconds" : {
+          "type" : "integer",
+          "description" : "Seconds of clock skew to subtract from token expiry before refreshing; default 60"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.auth.OAuth2PasswordAuthentication"
+    },
+    "OAuth2PasswordAuthentication-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.auth.OAuth2PasswordAuthentication",
+      "$ref" : "#/$defs/OAuth2PasswordAuthentication-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "oauth2-password"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "OAuth2RefreshTokenAuthentication-1" : {
+      "type" : "object",
+      "properties" : {
+        "tokenUrl" : {
+          "type" : "string",
+          "description" : "OAuth 2.0 token endpoint URL; supports ${var}"
+        },
+        "refreshToken" : {
+          "type" : "string",
+          "description" : "Refresh token issued by an earlier authorization flow; supports ${var}",
+          "format" : "password"
+        },
+        "clientId" : {
+          "type" : "string",
+          "description" : "Optional OAuth 2.0 client identifier; supports ${var}"
+        },
+        "clientSecret" : {
+          "type" : "string",
+          "description" : "Optional OAuth 2.0 client secret; supports ${var}",
+          "format" : "password"
+        },
+        "scope" : {
+          "type" : "string",
+          "description" : "Optional space-separated scope list; supports ${var}"
+        },
+        "refreshSkewSeconds" : {
+          "type" : "integer",
+          "description" : "Seconds of clock skew to subtract from token expiry before refreshing; default 60"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.auth.OAuth2RefreshTokenAuthentication"
+    },
+    "OAuth2RefreshTokenAuthentication-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.auth.OAuth2RefreshTokenAuthentication",
+      "$ref" : "#/$defs/OAuth2RefreshTokenAuthentication-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "oauth2-refresh-token"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "OAuth2SamlBearerAuthentication-1" : {
+      "type" : "object",
+      "properties" : {
+        "tokenUrl" : {
+          "type" : "string",
+          "description" : "OAuth 2.0 token endpoint URL; supports ${var}"
+        },
+        "assertion" : {
+          "type" : "string",
+          "description" : "Base64url-encoded SAML 2.0 assertion; supports ${var}",
+          "format" : "password"
+        },
+        "clientId" : {
+          "type" : "string",
+          "description" : "Optional OAuth 2.0 client identifier; supports ${var}"
+        },
+        "clientSecret" : {
+          "type" : "string",
+          "description" : "Optional OAuth 2.0 client secret; supports ${var}",
+          "format" : "password"
+        },
+        "scope" : {
+          "type" : "string",
+          "description" : "Optional space-separated scope list; supports ${var}"
+        },
+        "refreshSkewSeconds" : {
+          "type" : "integer",
+          "description" : "Seconds of clock skew to subtract from token expiry before refreshing; default 60"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.auth.OAuth2SamlBearerAuthentication"
+    },
+    "OAuth2SamlBearerAuthentication-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.auth.OAuth2SamlBearerAuthentication",
+      "$ref" : "#/$defs/OAuth2SamlBearerAuthentication-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "oauth2-saml-bearer"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "OciSignatureAuthentication-1" : {
+      "type" : "object",
+      "properties" : {
+        "tenancyOcid" : {
+          "type" : "string",
+          "description" : "Tenancy OCID. With the user OCID and fingerprint it forms the key identifier OCI matches the signature against."
+        },
+        "userOcid" : {
+          "type" : "string",
+          "description" : "OCID of the user the API signing key belongs to."
+        },
+        "fingerprint" : {
+          "type" : "string",
+          "description" : "Fingerprint of the API signing key, as shown in the OCI console."
+        },
+        "privateKey" : {
+          "type" : "string",
+          "description" : "API signing key, PEM PKCS#8 (-----BEGIN PRIVATE KEY-----). Store it encrypted: SettingsManager decrypts {AES} values on load.",
+          "format" : "password"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.auth.OciSignatureAuthentication"
+    },
+    "OciSignatureAuthentication-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.auth.OciSignatureAuthentication",
+      "$ref" : "#/$defs/OciSignatureAuthentication-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "oci-signature"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "RateConnector-1" : {
+      "type" : "object",
+      "properties" : {
+        "id" : {
+          "type" : "string",
+          "description" : "Label for this connector in log and trap messages, e.g. RestConnector[screening]. Optional, and not required to be unique."
+        },
+        "description" : {
+          "type" : "string",
+          "description" : "Human-readable description of what this connector does",
+          "x-wide" : true
+        },
+        "keyExpression" : {
+          "type" : "string",
+          "description" : "${var} template naming what to count, e.g. ${ani}"
+        },
+        "variable" : {
+          "type" : "string",
+          "description" : "Context variable that receives the count, this call included. Default callRate"
+        },
+        "windowSeconds" : {
+          "type" : "integer",
+          "description" : "Length of the sliding window in seconds. Default 60"
+        },
+        "maxKeys" : {
+          "type" : "integer",
+          "description" : "Most keys tracked on one node; a new key beyond this is not counted. Default 100000"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.connectors.RateConnector"
+    },
+    "RateConnector-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.connectors.RateConnector",
+      "$ref" : "#/$defs/RateConnector-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "rate"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "ReadOperation-1" : {
+      "type" : "object",
+      "properties" : {
+        "attribute" : {
+          "type" : "string",
+          "description" : "SIP attribute to read from: a header name, Request-URI, status, reason, originIP, peerIP, transport, isSecure, or body."
+        },
+        "contentType" : {
+          "type" : "string",
+          "description" : "Optional MIME content type when targeting one part of a multipart body, e.g. application/sdp"
+        },
+        "pattern" : {
+          "type" : "string",
+          "description" : "Regular expression with named groups, e.g. sip:(?<user>[^@]+)@(?<host>[^;>]+). ${name} inserts a session variable, matched literally.",
+          "x-wide" : true,
+          "x-regex-test" : true
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.ReadOperation"
+    },
+    "ReadOperation-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.ReadOperation",
+      "$ref" : "#/$defs/ReadOperation-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "read"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "RegexSelector-1" : {
+      "type" : "object",
+      "properties" : {
+        "id" : {
+          "type" : "string",
+          "description" : "Names the context variable this selector writes (${id}), and namespaces derived values such as regex groups (${id.group}). Optional, but a repeated id means whichever selector runs later overwrites the earlier value."
+        },
+        "attribute" : {
+          "type" : "string",
+          "description" : "What to extract: header name / JsonPath / XPath / SDP field / column / source attribute"
+        },
+        "pattern" : {
+          "type" : "string",
+          "description" : "Regex with named capturing groups, e.g. sips?:(?<user>[^@]+)@(?<host>[^;>]+)",
+          "x-regex-test" : true
+        },
+        "expression" : {
+          "type" : "string",
+          "description" : "Optional replacement template, e.g. ${user}@${host}"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.selectors.RegexSelector",
+      "x-form-groups" : [ [ "id", "attribute", "pattern", "expression" ] ]
+    },
+    "RegexSelector-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.selectors.RegexSelector",
+      "x-form-groups" : [ [ "id", "attribute", "pattern", "expression" ] ],
+      "$ref" : "#/$defs/RegexSelector-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "regex"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "RejectOperation-1" : {
+      "type" : "object",
+      "properties" : {
+        "status" : {
+          "type" : "integer",
+          "description" : "The failure to answer with, 400-699."
+        },
+        "reasonPhrase" : {
+          "type" : "string",
+          "description" : "Optional reason phrase; empty uses the standard one."
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.RejectOperation"
+    },
+    "RejectOperation-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.RejectOperation",
+      "$ref" : "#/$defs/RejectOperation-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "reject"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "RestConnector-1" : {
+      "type" : "object",
+      "properties" : {
+        "id" : {
+          "type" : "string",
+          "description" : "Label for this connector in log and trap messages, e.g. RestConnector[screening]. Optional, and not required to be unique."
+        },
+        "description" : {
+          "type" : "string",
+          "description" : "Human-readable description of what this connector does",
+          "x-wide" : true
+        },
+        "url" : {
+          "type" : "string",
+          "description" : "URL template; supports ${var}",
+          "x-wide" : true
+        },
+        "method" : {
+          "type" : "string",
+          "description" : "HTTP method: GET or POST (default GET)"
+        },
+        "authentication" : {
+          "anyOf" : [ {
+            "$ref" : "#/$defs/BasicAuthentication-2",
+            "description" : "Authentication scheme; pick a type (basic / bearer / apikey / oauth2-password / oauth2-client / oauth2-refresh-token / oauth2-jwt-bearer / oauth2-saml-bearer)"
+          }, {
+            "$ref" : "#/$defs/BearerAuthentication-2",
+            "description" : "Authentication scheme; pick a type (basic / bearer / apikey / oauth2-password / oauth2-client / oauth2-refresh-token / oauth2-jwt-bearer / oauth2-saml-bearer)"
+          }, {
+            "$ref" : "#/$defs/ApiKeyAuthentication-2",
+            "description" : "Authentication scheme; pick a type (basic / bearer / apikey / oauth2-password / oauth2-client / oauth2-refresh-token / oauth2-jwt-bearer / oauth2-saml-bearer)"
+          }, {
+            "$ref" : "#/$defs/OAuth2PasswordAuthentication-2",
+            "description" : "Authentication scheme; pick a type (basic / bearer / apikey / oauth2-password / oauth2-client / oauth2-refresh-token / oauth2-jwt-bearer / oauth2-saml-bearer)"
+          }, {
+            "$ref" : "#/$defs/OAuth2ClientCredentialsAuthentication-2",
+            "description" : "Authentication scheme; pick a type (basic / bearer / apikey / oauth2-password / oauth2-client / oauth2-refresh-token / oauth2-jwt-bearer / oauth2-saml-bearer)"
+          }, {
+            "$ref" : "#/$defs/OAuth2RefreshTokenAuthentication-2",
+            "description" : "Authentication scheme; pick a type (basic / bearer / apikey / oauth2-password / oauth2-client / oauth2-refresh-token / oauth2-jwt-bearer / oauth2-saml-bearer)"
+          }, {
+            "$ref" : "#/$defs/OAuth2JwtBearerAuthentication-2",
+            "description" : "Authentication scheme; pick a type (basic / bearer / apikey / oauth2-password / oauth2-client / oauth2-refresh-token / oauth2-jwt-bearer / oauth2-saml-bearer)"
+          }, {
+            "$ref" : "#/$defs/OAuth2SamlBearerAuthentication-2",
+            "description" : "Authentication scheme; pick a type (basic / bearer / apikey / oauth2-password / oauth2-client / oauth2-refresh-token / oauth2-jwt-bearer / oauth2-saml-bearer)"
+          }, {
+            "$ref" : "#/$defs/HmacAuthentication-2",
+            "description" : "Authentication scheme; pick a type (basic / bearer / apikey / oauth2-password / oauth2-client / oauth2-refresh-token / oauth2-jwt-bearer / oauth2-saml-bearer)"
+          }, {
+            "$ref" : "#/$defs/AwsSigV4Authentication-2",
+            "description" : "Authentication scheme; pick a type (basic / bearer / apikey / oauth2-password / oauth2-client / oauth2-refresh-token / oauth2-jwt-bearer / oauth2-saml-bearer)"
+          }, {
+            "$ref" : "#/$defs/OciSignatureAuthentication-2",
+            "description" : "Authentication scheme; pick a type (basic / bearer / apikey / oauth2-password / oauth2-client / oauth2-refresh-token / oauth2-jwt-bearer / oauth2-saml-bearer)"
+          } ]
+        },
+        "tls" : {
+          "$ref" : "#/$defs/TlsClientConfig",
+          "description" : "Optional TLS overrides for this endpoint: a private truststore and/or a client certificate for mutual TLS. Leave unset to use the JVM default truststore (the normal case)."
+        },
+        "timeoutSeconds" : {
+          "type" : "integer",
+          "description" : "Request timeout in seconds (default 5)"
+        },
+        "circuitBreakerCooldownSeconds" : {
+          "type" : "integer",
+          "description" : "Circuit breaker: after a failed call (transport error, timeout, or non-2xx), suppress further calls to this endpoint for N seconds and let routing fall to its default route. Prevents hammering a down endpoint and stops every call from eating the request timeout during an outage. 0 or empty disables it (default)."
+        },
+        "circuitBreakerTrap" : {
+          "type" : "boolean",
+          "description" : "When the circuit breaker opens or recovers, emit one SNMP trap on each edge (down, then up). Requires the WebLogic SNMP agent enabled with a trap destination (see the Tuning app). Default false."
+        },
+        "bodyTemplate" : {
+          "type" : "string",
+          "description" : "Filename in _templates/ — HTTP-message format (headers + blank line + body). If the file is missing on disk, the WAR's bundled copy at classpath:_templates/<filename> is auto-materialized on first use; never overwrites an existing file.",
+          "x-wide" : true
+        },
+        "selectors" : {
+          "description" : "Selectors that parse this connector's payload and write to the session",
+          "type" : "array",
+          "items" : {
+            "anyOf" : [ {
+              "$ref" : "#/$defs/AttributeSelector-2"
+            }, {
+              "$ref" : "#/$defs/JsonSelector-2"
+            }, {
+              "$ref" : "#/$defs/XmlSelector-2"
+            }, {
+              "$ref" : "#/$defs/SdpSelector-2"
+            }, {
+              "$ref" : "#/$defs/RegexSelector-2"
+            }, {
+              "$ref" : "#/$defs/TableSelector-2"
+            }, {
+              "$ref" : "#/$defs/IdentitySelector-2"
+            } ]
+          }
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.connectors.RestConnector",
+      "x-form-groups" : [ [ "id", "method", "timeoutSeconds" ], [ "circuitBreakerCooldownSeconds", "circuitBreakerTrap" ] ]
+    },
+    "RestConnector-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.connectors.RestConnector",
+      "x-form-groups" : [ [ "id", "method", "timeoutSeconds" ], [ "circuitBreakerCooldownSeconds", "circuitBreakerTrap" ] ],
+      "$ref" : "#/$defs/RestConnector-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "rest"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "Rule" : {
+      "type" : "object",
+      "properties" : {
+        "description" : {
+          "type" : "string",
+          "description" : "What this rule is for, in a sentence. Shown in the editor; no effect on calls.",
+          "x-wide" : true
+        },
+        "enabled" : {
+          "type" : "boolean",
+          "description" : "False switches the rule off. A cluster or server file uses it to turn off a rule it inherits. Default true."
+        },
+        "method" : {
+          "type" : "string",
+          "description" : "SIP method filter. Single (INVITE), comma-OR (INVITE,REGISTER), or `!` to negate (!BYE). Null matches any method."
+        },
+        "messageType" : {
+          "$ref" : "#/$defs/MessageType",
+          "description" : "Message type filter: request or response. Null matches both."
+        },
+        "event" : {
+          "type" : "string",
+          "description" : "Lifecycle event filter. Same syntax as method: callStarted, callAnswered,callConnected, !callCompleted. Null matches all."
+        },
+        "leg" : {
+          "$ref" : "#/$defs/Leg",
+          "description" : "Only messages on this leg: caller or callee. Empty matches both."
+        },
+        "sdp" : {
+          "$ref" : "#/$defs/SdpRole",
+          "description" : "Only messages carrying an SDP offer, or an SDP answer (RFC 3264). Empty matches any message."
+        },
+        "statusRange" : {
+          "type" : "string",
+          "description" : "Status code filter for responses, e.g. 200, 200-299, 4xx, !5xx. Implicitly restricts to responses. Null matches any status."
+        },
+        "when" : {
+          "type" : "string",
+          "description" : "Boolean expression over session variables gating this rule, e.g. ${customerTier} == premium. Comparisons (== != < <= > >=), matches/contains/insubnet, and && || ! combinators. Null matches always; a malformed expression never matches.",
+          "x-wide" : true
+        },
+        "resetVariables" : {
+          "type" : "boolean",
+          "description" : "Clear this rule's read variables from the session before running. Default false."
+        },
+        "operations" : {
+          "description" : "Ordered list of operations: read / create / update / delete and the xml/json/sdp variants.",
+          "type" : "array",
+          "items" : {
+            "anyOf" : [ {
+              "$ref" : "#/$defs/ReadOperation-2"
+            }, {
+              "$ref" : "#/$defs/CreateOperation-2"
+            }, {
+              "$ref" : "#/$defs/UpdateOperation-2"
+            }, {
+              "$ref" : "#/$defs/DeleteOperation-2"
+            }, {
+              "$ref" : "#/$defs/XPathReadOperation-2"
+            }, {
+              "$ref" : "#/$defs/XPathCreateOperation-2"
+            }, {
+              "$ref" : "#/$defs/XPathUpdateOperation-2"
+            }, {
+              "$ref" : "#/$defs/XPathDeleteOperation-2"
+            }, {
+              "$ref" : "#/$defs/JsonPathReadOperation-2"
+            }, {
+              "$ref" : "#/$defs/JsonPathCreateOperation-2"
+            }, {
+              "$ref" : "#/$defs/JsonPathUpdateOperation-2"
+            }, {
+              "$ref" : "#/$defs/JsonPathDeleteOperation-2"
+            }, {
+              "$ref" : "#/$defs/KeepOnlyPartOperation-2"
+            }, {
+              "$ref" : "#/$defs/SdpReadOperation-2"
+            }, {
+              "$ref" : "#/$defs/SdpCreateOperation-2"
+            }, {
+              "$ref" : "#/$defs/SdpUpdateOperation-2"
+            }, {
+              "$ref" : "#/$defs/SdpDeleteOperation-2"
+            }, {
+              "$ref" : "#/$defs/RejectOperation-2"
+            } ]
+          }
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.Rule"
+    },
+    "RuleSet" : {
+      "type" : "object",
+      "properties" : {
+        "description" : {
+          "type" : "string",
+          "description" : "Human-readable description shown in the configurator."
+        },
+        "rules" : {
+          "$ref" : "#/$defs/Map(String,Rule)",
+          "description" : "Rules by id, run in the order written. A cluster or server file changes a rule by naming it; a new id runs after the inherited ones."
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.RuleSet"
+    },
+    "SdpCreateOperation-1" : {
+      "type" : "object",
+      "properties" : {
+        "contentType" : {
+          "type" : "string",
+          "description" : "Optional MIME content type, e.g. application/sdp. Null targets the entire body."
+        },
+        "key" : {
+          "type" : "string",
+          "description" : "Property key when parent is an object. Leave null to append to an array parent."
+        },
+        "parentPath" : {
+          "type" : "string",
+          "description" : "JsonPath of the parent object or array in the SDP-as-JSON.",
+          "x-wide" : true
+        },
+        "value" : {
+          "type" : "string",
+          "description" : "Value to add. Supports ${variable} substitution."
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.SdpCreateOperation"
+    },
+    "SdpCreateOperation-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.SdpCreateOperation",
+      "$ref" : "#/$defs/SdpCreateOperation-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "sdpCreate"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "SdpDeleteOperation-1" : {
+      "type" : "object",
+      "properties" : {
+        "contentType" : {
+          "type" : "string",
+          "description" : "Optional MIME content type, e.g. application/sdp. Null targets the entire body."
+        },
+        "jsonPath" : {
+          "type" : "string",
+          "description" : "JsonPath against the SDP-as-JSON selecting the node to delete.",
+          "x-wide" : true
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.SdpDeleteOperation"
+    },
+    "SdpDeleteOperation-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.SdpDeleteOperation",
+      "$ref" : "#/$defs/SdpDeleteOperation-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "sdpDelete"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "SdpReadOperation-1" : {
+      "type" : "object",
+      "properties" : {
+        "contentType" : {
+          "type" : "string",
+          "description" : "Optional MIME content type, e.g. application/sdp. Null reads the entire body."
+        },
+        "expressions" : {
+          "$ref" : "#/$defs/Map(String,String)",
+          "description" : "Map of variable name to JsonPath against the SDP-as-JSON, e.g. {\"port\": \"$.media[0].port\"}"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.SdpReadOperation"
+    },
+    "SdpReadOperation-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.SdpReadOperation",
+      "$ref" : "#/$defs/SdpReadOperation-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "sdpRead"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "SdpRole" : {
+      "type" : "string",
+      "enum" : [ "offer", "answer" ],
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.Rule$SdpRole"
+    },
+    "SdpSelector-1" : {
+      "type" : "object",
+      "properties" : {
+        "id" : {
+          "type" : "string",
+          "description" : "Names the context variable this selector writes (${id}), and namespaces derived values such as regex groups (${id.group}). Optional, but a repeated id means whichever selector runs later overwrites the earlier value."
+        },
+        "attribute" : {
+          "type" : "string",
+          "description" : "What to extract: header name / JsonPath / XPath / SDP field / column / source attribute"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.selectors.SdpSelector",
+      "x-form-groups" : [ [ "id", "attribute" ] ]
+    },
+    "SdpSelector-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.selectors.SdpSelector",
+      "x-form-groups" : [ [ "id", "attribute" ] ],
+      "$ref" : "#/$defs/SdpSelector-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "sdp"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "SdpUpdateOperation-1" : {
+      "type" : "object",
+      "properties" : {
+        "contentType" : {
+          "type" : "string",
+          "description" : "Optional MIME content type, e.g. application/sdp. Null targets the entire body."
+        },
+        "jsonPath" : {
+          "type" : "string",
+          "description" : "JsonPath against the SDP-as-JSON, e.g. $.connection.address or $.media[0].port",
+          "x-wide" : true
+        },
+        "value" : {
+          "type" : "string",
+          "description" : "New value. Supports ${variable} substitution."
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.SdpUpdateOperation"
+    },
+    "SdpUpdateOperation-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.SdpUpdateOperation",
+      "$ref" : "#/$defs/SdpUpdateOperation-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "sdpUpdate"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "Selector" : {
+      "type" : "object",
+      "properties" : {
+        "id" : {
+          "type" : "string",
+          "description" : "Unique identifier for this selector"
+        },
+        "description" : {
+          "type" : "string",
+          "description" : "Description of this selector's purpose"
+        },
+        "attribute" : {
+          "type" : "string",
+          "description" : "SIP message attribute to extract, e.g. From, To, Request-URI"
+        },
+        "pattern" : {
+          "type" : "string",
+          "description" : "Regular expression with named capturing groups for parsing the SIP attribute value"
+        },
+        "expression" : {
+          "type" : "string",
+          "description" : "Regular expression replacement pattern, e.g. ${user}, applied to extracted groups"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v2.config.Selector"
+    },
+    "SessionParameters" : {
+      "type" : "object",
+      "properties" : {
+        "expiration" : {
+          "type" : "integer",
+          "description" : "Set Application Session expiration in minutes."
+        },
+        "expirationProbe" : {
+          "type" : "boolean",
+          "description" : "Last-chance keep-alive probe when the Application Session expires: re-INVITE both dialogs and keep the session alive only if both endpoints answer. A call an external element is still holding up survives a bookkeeping timeout; a dead call still expires. Default true."
+        },
+        "indexVorpalSessionID" : {
+          "type" : "boolean",
+          "description" : "Automatically index the session using Vorpal Session? Default is false."
+        },
+        "keepAlive" : {
+          "$ref" : "#/$defs/KeepAliveParameters",
+          "description" : "Set Keep-Alive parameters."
+        },
+        "maxSessionMinutes" : {
+          "type" : "integer",
+          "description" : "Hard ceiling in minutes on total session age for the expiration probe: past this age the probe stops and the session is allowed to expire, so a responsive-but-dead endpoint cannot pin a session open forever. Default 720 (12 hours)."
+        },
+        "passthru" : {
+          "type" : "boolean",
+          "description" : "Proxy drop-out: when true, a forwarding callflow (initial INVITE in, initial INVITE out) proxies the caller's INVITE without Record-Route instead of starting a new dialog, so the ACK and all in-dialog traffic flow directly between the endpoints. Off by default. Only set on apps that PURELY forward — a callflow that needs to stay in the dialog (hold, transfer, recording) must NOT enable this, since it drops out and cannot re-enter. Applies only to the initial INVITE; in-dialog sends are untouched."
+        },
+        "sessionSelectors" : {
+          "description" : "List of selectors for creating session (SipApplicationSession) lookup keys.",
+          "type" : "array",
+          "items" : {
+            "$ref" : "#/$defs/AttributeSelector-3"
+          }
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v2.config.SessionParameters"
+    },
+    "SipConnector-1" : {
+      "type" : "object",
+      "properties" : {
+        "id" : {
+          "type" : "string",
+          "description" : "Label for this connector in log and trap messages, e.g. RestConnector[screening]. Optional, and not required to be unique."
+        },
+        "description" : {
+          "type" : "string",
+          "description" : "Human-readable description of what this connector does",
+          "x-wide" : true
+        },
+        "selectors" : {
+          "description" : "Selectors that parse this connector's payload and write to the session",
+          "type" : "array",
+          "items" : {
+            "anyOf" : [ {
+              "$ref" : "#/$defs/AttributeSelector-2"
+            }, {
+              "$ref" : "#/$defs/JsonSelector-2"
+            }, {
+              "$ref" : "#/$defs/XmlSelector-2"
+            }, {
+              "$ref" : "#/$defs/SdpSelector-2"
+            }, {
+              "$ref" : "#/$defs/RegexSelector-2"
+            }, {
+              "$ref" : "#/$defs/TableSelector-2"
+            }, {
+              "$ref" : "#/$defs/IdentitySelector-2"
+            } ]
+          }
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.connectors.SipConnector"
+    },
+    "SipConnector-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.connectors.SipConnector",
+      "$ref" : "#/$defs/SipConnector-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "sip"
+        }
+      }
+    },
+    "TableConnector-1" : {
+      "type" : "object",
+      "properties" : {
+        "id" : {
+          "type" : "string",
+          "description" : "Label for this connector in log and trap messages, e.g. RestConnector[screening]. Optional, and not required to be unique."
+        },
+        "description" : {
+          "type" : "string",
+          "description" : "Human-readable description of what this connector does",
+          "x-wide" : true
+        },
+        "tables" : {
+          "description" : "Ordered list of translation tables; first lookup to match wins and its extras spread into the Context",
+          "type" : "array",
+          "items" : {
+            "$ref" : "#/$defs/TranslationTable"
+          }
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.connectors.TableConnector"
+    },
+    "TableConnector-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.connectors.TableConnector",
+      "$ref" : "#/$defs/TableConnector-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "table"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "TableSelector-1" : {
+      "type" : "object",
+      "properties" : {
+        "id" : {
+          "type" : "string",
+          "description" : "Names the context variable this selector writes (${id}), and namespaces derived values such as regex groups (${id.group}). Optional, but a repeated id means whichever selector runs later overwrites the earlier value."
+        },
+        "table" : {
+          "$ref" : "#/$defs/TranslationTable",
+          "description" : "Translation table: keyExpression (a ${} template over extracted values) plus key→Translation rows; the matched Translation's extras spread into the context"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.selectors.TableSelector"
+    },
+    "TableSelector-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.selectors.TableSelector",
+      "$ref" : "#/$defs/TableSelector-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "table"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "TlsClientConfig" : {
+      "type" : "object",
+      "properties" : {
+        "keyStore" : {
+          "type" : "string",
+          "description" : "Path to a keystore holding this server's client certificate and private key, presented when the endpoint requires mutual TLS. Leave blank for ordinary server-auth TLS."
+        },
+        "keyStorePassword" : {
+          "type" : "string",
+          "description" : "Password for the client keystore (also used for its private-key entries).",
+          "format" : "password"
+        },
+        "keyStoreType" : {
+          "type" : "string",
+          "description" : "Client keystore type: PKCS12 (default) or JKS."
+        },
+        "trustStore" : {
+          "type" : "string",
+          "description" : "Path to a keystore of trusted CA certificates for verifying the remote server. Leave blank to use the JVM default truststore (the normal case — load the customer CA JVM-wide instead)."
+        },
+        "trustStorePassword" : {
+          "type" : "string",
+          "description" : "Password for the truststore.",
+          "format" : "password"
+        },
+        "trustStoreType" : {
+          "type" : "string",
+          "description" : "Truststore type: PKCS12 (default) or JKS."
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.security.TlsClientConfig"
+    },
+    "TransferStyle" : {
+      "type" : "string",
+      "enum" : [ "blind", "attended", "conference", "refer" ],
+      "x-java-class" : "org.vorpal.blade.framework.v2.transfer.TransferSettings$TransferStyle"
+    },
+    "Translation-1" : {
+      "type" : "object",
+      "additionalProperties" : {
+        "type" : "string"
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.translations.Translation"
+    },
+    "Translation-2" : {
+      "type" : "object",
+      "properties" : {
+        "attributes" : {
+          "$ref" : "#/$defs/Map(String,Object)"
+        },
+        "description" : {
+          "type" : "string"
+        },
+        "id" : {
+          "type" : "string"
+        },
+        "list" : {
+          "type" : "array",
+          "items" : {
+            "anyOf" : [ {
+              "$ref" : "#/$defs/ConfigAddressMap-2"
+            }, {
+              "$ref" : "#/$defs/ConfigPrefixMap-2"
+            }, {
+              "$ref" : "#/$defs/ConfigHashMap-2"
+            }, {
+              "$ref" : "#/$defs/ConfigLinkedHashMap-2"
+            }, {
+              "$ref" : "#/$defs/ConfigTreeMap-2"
+            } ]
+          }
+        },
+        "requestUri" : {
+          "type" : "string"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v2.config.Translation"
+    },
+    "TranslationTable" : {
+      "type" : "object",
+      "properties" : {
+        "match" : {
+          "$ref" : "#/$defs/MatchStrategy",
+          "description" : "Lookup strategy: hash (exact match, default), prefix (longest-prefix match), or range (integer-interval match on keys like \"8-17\")"
+        },
+        "keyExpression" : {
+          "type" : "string",
+          "description" : "${var} template producing the lookup key, e.g. ${originIP}"
+        },
+        "translations" : {
+          "$ref" : "#/$defs/Map(String,Translation)",
+          "description" : "Map of lookup key to matched Translation"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.translations.TranslationTable",
+      "x-form-groups" : [ [ "match", "keyExpression" ] ]
+    },
+    "TreeMap(String,Translation)" : {
+      "type" : "object",
+      "additionalProperties" : {
+        "$ref" : "#/$defs/Translation-2"
+      }
+    },
+    "UpdateOperation-1" : {
+      "type" : "object",
+      "properties" : {
+        "attribute" : {
+          "type" : "string",
+          "description" : "SIP attribute to update — header name, Request-URI, or body."
+        },
+        "contentType" : {
+          "type" : "string",
+          "description" : "Optional MIME content type when targeting one part of a multipart body."
+        },
+        "pattern" : {
+          "type" : "string",
+          "description" : "Regex with optional named groups; matches against the current attribute value. ${name} inserts a session variable, matched literally.",
+          "x-wide" : true,
+          "x-regex-test" : true
+        },
+        "replacement" : {
+          "type" : "string",
+          "description" : "Replacement template; supports ${name} from session variables and from this op's named groups.",
+          "x-wide" : true
+        },
+        "everyMatch" : {
+          "type" : "boolean",
+          "description" : "Replace every match in place, keeping the text around it. Off: the replacement becomes the whole new value."
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.UpdateOperation"
+    },
+    "UpdateOperation-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.UpdateOperation",
+      "$ref" : "#/$defs/UpdateOperation-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "update"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "Webhook" : {
+      "type" : "object",
+      "properties" : {
+        "url" : {
+          "type" : "string",
+          "description" : "The URL each event is POSTed to, as JSON"
+        },
+        "headers" : {
+          "$ref" : "#/$defs/Map(String,String)",
+          "description" : "Headers sent with every POST, such as Authorization"
+        },
+        "events" : {
+          "description" : "The events to send, such as transferCompleted; empty sends all of them",
+          "type" : "array",
+          "items" : {
+            "type" : "string"
+          }
+        },
+        "timeoutMillis" : {
+          "type" : "integer",
+          "description" : "Connect and read timeout in milliseconds; default 2000"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.transfer.Webhook"
+    },
+    "XPathCreateOperation-1" : {
+      "type" : "object",
+      "properties" : {
+        "attributeName" : {
+          "type" : "string",
+          "description" : "Name of the attribute to add to the parent element. Mutually exclusive with elementName."
+        },
+        "contentType" : {
+          "type" : "string",
+          "description" : "Optional MIME content type, e.g. application/xml. Null targets the entire body."
+        },
+        "elementName" : {
+          "type" : "string",
+          "description" : "Name of the child element to create. Mutually exclusive with attributeName."
+        },
+        "parentXpath" : {
+          "type" : "string",
+          "description" : "XPath of the parent under which the new element or attribute is placed.",
+          "x-wide" : true
+        },
+        "value" : {
+          "type" : "string",
+          "description" : "Value for the new element or attribute. Supports ${variable} substitution."
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.XPathCreateOperation"
+    },
+    "XPathCreateOperation-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.XPathCreateOperation",
+      "$ref" : "#/$defs/XPathCreateOperation-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "xmlCreate"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "XPathDeleteOperation-1" : {
+      "type" : "object",
+      "properties" : {
+        "contentType" : {
+          "type" : "string",
+          "description" : "Optional MIME content type, e.g. application/xml. Null targets the entire body."
+        },
+        "xpath" : {
+          "type" : "string",
+          "description" : "XPath selecting nodes to remove, e.g. //extension[@name='private']",
+          "x-wide" : true
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.XPathDeleteOperation"
+    },
+    "XPathDeleteOperation-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.XPathDeleteOperation",
+      "$ref" : "#/$defs/XPathDeleteOperation-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "xmlDelete"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "XPathReadOperation-1" : {
+      "type" : "object",
+      "properties" : {
+        "contentType" : {
+          "type" : "string",
+          "description" : "Optional MIME content type, e.g. application/xml. Null reads the entire body."
+        },
+        "expressions" : {
+          "$ref" : "#/$defs/Map(String,String)",
+          "description" : "Map of variable name to XPath expression, e.g. {\"sessionId\": \"//recording/@session-id\"}"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.XPathReadOperation"
+    },
+    "XPathReadOperation-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.XPathReadOperation",
+      "$ref" : "#/$defs/XPathReadOperation-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "xmlRead"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "XPathUpdateOperation-1" : {
+      "type" : "object",
+      "properties" : {
+        "contentType" : {
+          "type" : "string",
+          "description" : "Optional MIME content type, e.g. application/xml. Null targets the entire body."
+        },
+        "value" : {
+          "type" : "string",
+          "description" : "New value. Supports ${variable} substitution."
+        },
+        "xpath" : {
+          "type" : "string",
+          "description" : "XPath of the node whose value should be updated, e.g. //participant/nameID",
+          "x-wide" : true
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.XPathUpdateOperation"
+    },
+    "XPathUpdateOperation-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.crud.XPathUpdateOperation",
+      "$ref" : "#/$defs/XPathUpdateOperation-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "xmlUpdate"
+        }
+      },
+      "required" : [ "type" ]
+    },
+    "XmlSelector-1" : {
+      "type" : "object",
+      "properties" : {
+        "id" : {
+          "type" : "string",
+          "description" : "Names the context variable this selector writes (${id}), and namespaces derived values such as regex groups (${id.group}). Optional, but a repeated id means whichever selector runs later overwrites the earlier value."
+        },
+        "attribute" : {
+          "type" : "string",
+          "description" : "What to extract: header name / JsonPath / XPath / SDP field / column / source attribute"
+        },
+        "namespaces" : {
+          "$ref" : "#/$defs/Map(String,String)",
+          "description" : "Optional namespace prefix → URI map for XPath resolution"
+        }
+      },
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.selectors.XmlSelector",
+      "x-form-groups" : [ [ "id", "attribute" ] ]
+    },
+    "XmlSelector-2" : {
+      "x-java-class" : "org.vorpal.blade.framework.v3.configuration.selectors.XmlSelector",
+      "x-form-groups" : [ [ "id", "attribute" ] ],
+      "$ref" : "#/$defs/XmlSelector-1",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "const" : "xml"
+        }
+      },
+      "required" : [ "type" ]
+    }
+  },
+  "type" : "object",
+  "properties" : {
+    "version" : {
+      "type" : "integer",
+      "description" : "Config schema version (framework-managed)",
+      "x-readonly" : true
+    },
+    "notes" : {
+      "type" : "string",
+      "description" : "Free-form notes about this configuration",
+      "format" : "textarea",
+      "x-wide" : true
+    },
+    "logging" : {
+      "$ref" : "#/$defs/LogParameters",
+      "description" : "Logging parameters"
+    },
+    "session" : {
+      "$ref" : "#/$defs/SessionParameters",
+      "description" : "Session parameters"
+    },
+    "analytics" : {
+      "$ref" : "#/$defs/Analytics",
+      "description" : "Analytics parameters"
+    },
+    "events" : {
+      "$ref" : "#/$defs/EventBusSettings",
+      "description" : "Event bus parameters — whether this application publishes CloudEvents, and to which destination"
+    },
+    "allow" : {
+      "type" : "string",
+      "description" : "Comma-separated list of allowed SIP methods for transfer operations"
+    },
+    "allowCallerRefer" : {
+      "type" : "boolean",
+      "description" : "Allow a REFER from the caller's leg to start a transfer. Default false: only the callee (contact-center) leg may transfer, since a caller-side REFER can name any destination.",
+      "default" : false
+    },
+    "crud" : {
+      "$ref" : "#/$defs/Crud",
+      "description" : "CRUD rules run on every message the transfer service sends, such as the INVITE to a transfer target"
+    },
+    "defaultRoute" : {
+      "$ref" : "#/$defs/Translation-2",
+      "description" : "Default route used when no translation map matches"
+    },
+    "defaultTransferStyle" : {
+      "$ref" : "#/$defs/TransferStyle",
+      "description" : "Default transfer method: blind, attended, conference, or refer",
+      "default" : "attended"
+    },
+    "defaultWebhook" : {
+      "type" : "string",
+      "description" : "The webhook that gets the events of every transfer no REST request named one for, such as a REFER's; none when unset"
+    },
+    "maps" : {
+      "description" : "Translation maps used for routing lookups and address resolution",
+      "type" : "array",
+      "items" : {
+        "anyOf" : [ {
+          "$ref" : "#/$defs/ConfigAddressMap-2"
+        }, {
+          "$ref" : "#/$defs/ConfigPrefixMap-2"
+        }, {
+          "$ref" : "#/$defs/ConfigHashMap-2"
+        }, {
+          "$ref" : "#/$defs/ConfigLinkedHashMap-2"
+        }, {
+          "$ref" : "#/$defs/ConfigTreeMap-2"
+        } ]
+      }
+    },
+    "plan" : {
+      "description" : "Ordered routing plan that defines the sequence of translation map lookups",
+      "type" : "array",
+      "items" : {
+        "anyOf" : [ {
+          "$ref" : "#/$defs/ConfigAddressMap-2"
+        }, {
+          "$ref" : "#/$defs/ConfigPrefixMap-2"
+        }, {
+          "$ref" : "#/$defs/ConfigHashMap-2"
+        }, {
+          "$ref" : "#/$defs/ConfigLinkedHashMap-2"
+        }, {
+          "$ref" : "#/$defs/ConfigTreeMap-2"
+        } ]
+      }
+    },
+    "preserveInviteHeaders" : {
+      "description" : "List of SIP header names to preserve when forwarding INVITE requests during transfer",
+      "type" : "array",
+      "items" : {
+        "type" : "string"
+      }
+    },
+    "preserveReferHeaders" : {
+      "description" : "List of SIP header names to preserve when forwarding REFER requests during transfer",
+      "type" : "array",
+      "items" : {
+        "type" : "string"
+      }
+    },
+    "selectors" : {
+      "description" : "List of selectors that extract values from SIP messages for routing lookups",
+      "type" : "array",
+      "items" : {
+        "$ref" : "#/$defs/Selector"
+      }
+    },
+    "transferAllRequests" : {
+      "type" : "boolean",
+      "description" : "When true, all requests are eligible for transfer, not just INVITE",
+      "default" : false
+    },
+    "webhooks" : {
+      "$ref" : "#/$defs/Map(String,Webhook)",
+      "description" : "Web services transfer events are POSTed to, by name. A REST request picks one with notification.style 'callback' and notification.callbackName"
+    }
+  },
+  "x-java-class" : "org.vorpal.blade.framework.v3.transfer.TransferSettings",
+  "title" : "Transfer",
+  "x-tagline" : "Attended & Blind Call Transfer",
+  "description" : "Implements SIP call transfer (RFC 3515 REFER) for both attended (consultative) and blind transfers, managing the REFER/NOTIFY signaling and transfer state through completion or failure."
+}

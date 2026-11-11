@@ -72,6 +72,14 @@ public final class CredentialEncryption {
 	private CredentialEncryption() {
 	}
 
+	/// Whether the domain's encryption service is there. Without it encrypt()
+	/// hands back the plaintext; a caller that must not store a secret in the
+	/// clear checks this first.
+	public static boolean isAvailable() {
+		init();
+		return available;
+	}
+
 	/// Returns true if the value has the `{CLEARTEXT}` prefix,
 	/// indicating it should be encrypted on next save.
 	public static boolean isCleartext(String value) {

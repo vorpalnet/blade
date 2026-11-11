@@ -94,6 +94,24 @@ public final class VersionedFileStore {
 		Path temp = Files.createTempFile(dir, file.getFileName().toString(), ".tmp");
 		try {
 			Files.write(temp, content.getBytes(StandardCharsets.UTF_8));
+			// A temp file is owner-only (0600); the move would hand that to a
+			// file that was readable by its group. Keep the file's own mode.
+			try {
+				if (Files.exists(file)) {
+					Files.setPosixFilePermissions(temp, Files.getPosixFilePermissions(file));
+				} else {
+					// A new file: readable as its folder is (group, others), as a
+					// plain write under a usual umask would have made it.
+					java.util.Set<java.nio.file.attribute.PosixFilePermission> dirMode = Files.getPosixFilePermissions(dir);
+					java.util.Set<java.nio.file.attribute.PosixFilePermission> mode = java.util.EnumSet.of(
+							java.nio.file.attribute.PosixFilePermission.OWNER_READ, java.nio.file.attribute.PosixFilePermission.OWNER_WRITE);
+					if (dirMode.contains(java.nio.file.attribute.PosixFilePermission.GROUP_READ)) mode.add(java.nio.file.attribute.PosixFilePermission.GROUP_READ);
+					if (dirMode.contains(java.nio.file.attribute.PosixFilePermission.OTHERS_READ)) mode.add(java.nio.file.attribute.PosixFilePermission.OTHERS_READ);
+					Files.setPosixFilePermissions(temp, mode);
+				}
+			} catch (UnsupportedOperationException | IOException notPosix) {
+				// Not a POSIX filesystem: nothing to keep.
+			}
 			try {
 				Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING,
 						StandardCopyOption.ATOMIC_MOVE);
@@ -187,9 +205,13 @@ public final class VersionedFileStore {
 		}
 	}
 
+	/// This file's own backup: `<name>.<millis>.version`. A prefix match alone
+	/// also took `q.sql.txt.<millis>.version` for `q.sql`, pruning its history early.
 	private static boolean isVersionOf(Path p, String prefix) {
 		String name = p.getFileName().toString();
-		return name.startsWith(prefix) && name.endsWith(VERSION_SUFFIX);
+		if (!name.startsWith(prefix) || !name.endsWith(VERSION_SUFFIX)) return false;
+		String middle = name.substring(prefix.length(), name.length() - VERSION_SUFFIX.length());
+		return !middle.isEmpty() && middle.chars().allMatch(Character::isDigit);
 	}
 
 	private static Long parseTimestamp(Path p, String prefix) {

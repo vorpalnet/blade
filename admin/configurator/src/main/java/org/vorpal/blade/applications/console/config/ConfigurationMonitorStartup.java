@@ -33,6 +33,12 @@ public class ConfigurationMonitorStartup implements ServletContextListener {
 		return (manager != null) ? manager.getCurrent() : null;
 	}
 
+	/// Whether the auto-publish watcher is running.
+	static boolean watching() {
+		ConfiguratorSettingsManager manager = current;
+		return manager != null && manager.watching();
+	}
+
 	@Override
 	public void contextInitialized(ServletContextEvent sce) {
 		try {
@@ -46,6 +52,7 @@ public class ConfigurationMonitorStartup implements ServletContextListener {
 	@Override
 	public void contextDestroyed(ServletContextEvent sce) {
 		current = null;
+		ValidationAPI.shutdown();
 		if (settingsManager != null) {
 			try {
 				settingsManager.shutdown();

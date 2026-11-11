@@ -20,7 +20,6 @@ import java.nio.file.WatchService;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Scanner;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -56,7 +55,7 @@ public class ConfigurationMonitor extends Thread {
 	/// where a shared file briefly looks local and the engine then writes back
 	/// over the file the admin just wrote (re-triggering this watch). Returns
 	/// null when undeclared.
-	private static Boolean explicitSharedFileSystem() {
+	static Boolean explicitSharedFileSystem() {
 		String v = System.getProperty("blade.shared.filesystem");
 		if (v == null || v.isEmpty()) {
 			v = System.getenv("BLADE_SHARED_FILESYSTEM");
@@ -117,6 +116,8 @@ public class ConfigurationMonitor extends Thread {
 		// origDir = dir;
 
 		this.watcher = FileSystems.getDefault().newWatchService();
+		this.watchedDir = dir;
+		this.startedAt = System.currentTimeMillis();
 		this.keys = new HashMap<WatchKey, Path>();
 		this.recursive = recursive;
 
@@ -130,7 +131,13 @@ public class ConfigurationMonitor extends Thread {
 		this.trace = true;
 	}
 
-	/// Stop the watch loop and release the WatchService.
+	private Path watchedDir;
+	private long startedAt;
+
+	/// Stop the watch loop and release the WatchService. A change still queued
+	/// (or never reached) is not pushed now: every configuration file changed
+	/// since the watcher started, at a version it never handled, is listed
+	/// pending (ValidationAPI), so a Publish or the next switch-on sends it.
 	public void shutdown() {
 		this.interrupt();
 		if (watcher != null) {
@@ -138,6 +145,56 @@ public class ConfigurationMonitor extends Thread {
 				watcher.close();
 			} catch (IOException e) {
 				// best effort
+			}
+		}
+		// Let a push in progress finish or fail on its own; not when the watcher
+		// itself is stopping it (its own push of blade-configurator.json reloads it).
+		if (Thread.currentThread() != this) {
+			try {
+				this.join(5000);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		}
+		listMissed();
+	}
+
+	void listMissed() {
+		if (watchedDir == null) return;
+		java.util.Set<Path> handled = new java.util.HashSet<>();
+		java.util.Map<Path, String> versions = new java.util.HashMap<>();
+		pushed.forEach((file, version) -> {
+			Path key = file.toAbsolutePath().normalize();
+			handled.add(key);
+			versions.put(key, version);
+		});
+		java.util.List<Path> files = new java.util.ArrayList<>();
+		try (java.util.stream.Stream<Path> top = Files.list(watchedDir)) {
+			top.filter(p -> p.toString().endsWith(".json")).forEach(files::add);
+		} catch (IOException e) {
+			return;
+		}
+		for (String scope : new String[] { "_clusters", "_servers" }) {
+			Path dir = watchedDir.resolve(scope);
+			if (!Files.isDirectory(dir)) continue;
+			try (java.util.stream.Stream<Path> all = Files.walk(dir, 2)) {
+				all.filter(p -> p.toString().endsWith(".json") && p.getParent().getParent().equals(dir)).forEach(files::add);
+			} catch (IOException e) {
+				// best effort
+			}
+		}
+		for (Path f : files) {
+			try {
+				String name = f.getFileName().toString();
+				String app = name.substring(0, name.length() - ".json".length());
+				if ("blade-configurator".equals(app) || !ValidationAPI.appName(app)) continue;   // its own switch; not an app
+				// To the second: a filesystem with whole-second times rounds a
+				// file written in the watcher's first second below its start.
+				if (Files.getLastModifiedTime(f).toMillis() < startedAt / 1000 * 1000) continue;
+				Path key = f.toAbsolutePath().normalize();
+				if (!FileManagerServlet.fileVersion(f).equals(versions.get(key))) ValidationAPI.watcherMissed(app);
+			} catch (IOException e) {
+				// gone meanwhile
 			}
 		}
 	}
@@ -200,7 +257,7 @@ public class ConfigurationMonitor extends Thread {
 //
 //						String json = null;
 //						try {
-//							json = new String(Files.readAllBytes(child));
+//							json = new String(Files.readAllBytes(child), java.nio.charset.StandardCharsets.UTF_8);
 //						} catch (IOException e) {
 //							e.printStackTrace();
 //						}
@@ -251,12 +308,16 @@ public class ConfigurationMonitor extends Thread {
 						Path child;
 
 						for (WatchEvent<?> event : key.pollEvents()) {
+							if (Thread.currentThread().isInterrupted()) break;   // stopping: shutdown lists the rest
 							try {
 
 								Kind<?> kind = event.kind();
 
-								// TBD - provide example of how OVERFLOW event is handled
+								// Events were lost: what changed is not known, so every
+								// file not pushed as it now is goes pending.
 								if (kind == OVERFLOW) {
+									if (inTemplates(dir)) ValidationAPI.watcherMissed(ValidationAPI.TEMPLATES);
+									else listMissed();
 									continue;
 								}
 
@@ -274,41 +335,54 @@ public class ConfigurationMonitor extends Thread {
 									try {
 										if (Files.isDirectory(child, NOFOLLOW_LINKS)) {
 											registerAll(child);
+											// What was already written into it before it was
+											// watched (a new server folder copied in at once).
+											try (java.util.stream.Stream<Path> inside = Files.walk(child)) {
+												for (Path f : (Iterable<Path>) inside.filter(Files::isRegularFile)::iterator) {
+													if (!considerFile(f)) break;
+												}
+											}
 										}
 									} catch (IOException x) {
 										x.printStackTrace();
 									}
 								}
 
-//							if ((kind == ENTRY_CREATE || kind == ENTRY_MODIFY)
-//									&& false == Files.isDirectory(child, NOFOLLOW_LINKS)) {
 								// A new file counts as much as a changed one: a config
 								// created for an application that ran on its sample is
 								// the first one it has ever had.
 								if ((kind == ENTRY_MODIFY || kind == ENTRY_CREATE) //
 										&& false == Files.isDirectory(child, NOFOLLOW_LINKS)) {
+									if (!considerFile(child)) continue;
+								}
 
-									Thread.sleep(1000); // let the writer finish before reading
-
-									String filename = child.getFileName().toString();
-
-									if (filename.endsWith(".json") && firstSightOf(child)) {
-
-										String json = null;
-										try {
-											json = new String(Files.readAllBytes(child));
-										} catch (IOException e) {
-											System.out.println("ConfigurationMonitor unable to read "
-													+ child.getFileName().toAbsolutePath());
-
-											e.printStackTrace();
-										}
-
-										updateManagedMBeans(child, json);
-
-									} // if filename
-
-								} // if kind
+								// A deleted configuration stays on engines with their own
+								// disk until a Publish clears it there: pending.
+								// Back already (an editor that renames the original aside,
+								// then writes it): the CREATE pushes it.
+								if (kind == ENTRY_DELETE && Files.exists(child)) continue;
+								// A cluster or server folder deleted, renamed or moved: its
+								// overlays stay on those servers until a Publish writes them
+								// empty there. Which apps it held is gone with it: every
+								// app with a domain file is pending.
+								if (kind == ENTRY_DELETE && isPlaceRoot(dir)) {
+									try (java.util.stream.Stream<Path> top = Files.list(watchedDir)) {
+										top.map(p -> p.getFileName().toString()).filter(n -> n.endsWith(".json"))
+												.map(n -> n.substring(0, n.length() - ".json".length()))
+												.filter(a -> ValidationAPI.appName(a) && !"blade-configurator".equals(a))
+												.forEach(a -> ValidationAPI.watcherMissed(a, true));
+									}
+									continue;
+								}
+								if (kind == ENTRY_DELETE && child.getFileName().toString().endsWith(".json")
+										&& isConfigPlace(child)) {
+									String gone = child.getFileName().toString();
+									String app = gone.substring(0, gone.length() - ".json".length());
+									if (ValidationAPI.appName(app) && !"blade-configurator".equals(app)) {
+										ValidationAPI.watcherMissed(app, !child.toAbsolutePath().normalize().getParent()
+												.equals(watchedDir.toAbsolutePath().normalize()));
+									}
+								}
 							} catch (Exception forEx) {
 								System.out.println("ConfigurationMonitor For Loop ERROR: " + forEx.getMessage());
 							}
@@ -347,23 +421,120 @@ public class ConfigurationMonitor extends Thread {
 
 	}
 
-	/// Modification times already pushed, by file. One save arrives as two
-	/// events (the truncate and the write, or a create and a modify), and each
-	/// used to push the file to every server and reload it, twice.
-	private final java.util.Map<Path, Long> pushed = new java.util.concurrent.ConcurrentHashMap<>();
+	/// Versions already pushed, by file. One save arrives as two events (the
+	/// truncate and the write, or a create and a modify), and each used to push
+	/// the file to every server and reload it, twice. The version includes a
+	/// checksum: on a filesystem with whole-second times two saves in one
+	/// second share a modification time, and the second was never pushed.
+	private final java.util.Map<Path, String> pushed = new java.util.concurrent.ConcurrentHashMap<>();
 
-	/// True the first time a file is seen at its current modification time.
-	private boolean firstSightOf(Path file) {
+	/// True the first time a file is seen with its current content.
+	boolean firstSightOf(Path file) {
+		String version = FileManagerServlet.fileVersion(file);
+		if ("none".equals(version) || "unknown".equals(version)) return false;
+		return !version.equals(pushed.put(file, version));
+	}
+
+	/// Pushes a changed template to every server; never throws (the watch
+	/// thread must keep running).
+	private void pushTemplate(Path file) {
+		// Both by real path: the watcher's file comes from the working
+		// directory (physical), the base from DOMAIN_HOME (maybe a link).
+		String path = real(TemplatePush.base()).relativize(real(file)).toString().replace('\\', '/');
 		try {
-			long modified = Files.getLastModifiedTime(file).toMillis();
-			Long previous = pushed.put(file, modified);
-			return previous == null || previous.longValue() != modified;
-		} catch (IOException gone) {
-			return false;
+			MBeanServer mbs = (MBeanServer) new InitialContext().lookup("java:comp/env/jmx/domainRuntime");
+			TemplatePush.Result r = TemplatePush.push(mbs, path);
+			System.out.println("ConfigurationMonitor template " + path + ": " + r.summary());
+			if (!r.failed.isEmpty()) ValidationAPI.watcherMissed(ValidationAPI.TEMPLATES);   // Publish retries every template
+		} catch (Exception e) {
+			System.out.println("ConfigurationMonitor template " + path + " not pushed: " + e.getMessage());
+			ValidationAPI.watcherMissed(ValidationAPI.TEMPLATES);
 		}
 	}
 
+	/// A domain, cluster or server configuration file's place: the watched
+	/// folder itself, or a folder in its `_clusters` or `_servers`.
+	private boolean isConfigPlace(Path p) {
+		if (watchedDir == null) return false;
+		Path root = watchedDir.toAbsolutePath().normalize();
+		Path folder = p.toAbsolutePath().normalize().getParent();
+		return folder.equals(root) || (folder.getParent() != null
+				&& (folder.getParent().equals(root.resolve("_clusters")) || folder.getParent().equals(root.resolve("_servers"))));
+	}
+
+	/// `_clusters` or `_servers` itself: its entries are cluster or server folders.
+	private boolean isPlaceRoot(Path d) {
+		if (watchedDir == null) return false;
+		Path root = watchedDir.toAbsolutePath().normalize();
+		Path f = d.toAbsolutePath().normalize();
+		return f.equals(root.resolve("_clusters")) || f.equals(root.resolve("_servers"));
+	}
+
+	/// Under `_templates/`, compared by real path (DOMAIN_HOME may be spelled
+	/// through a link while the watcher runs on the resolved one).
+	private static boolean inTemplates(Path p) {
+		return real(p).startsWith(real(TemplatePush.base()));
+	}
+
+	private static Path real(Path p) {
+		try {
+			return p.toRealPath();
+		} catch (IOException gone) {
+			Path parent = p.toAbsolutePath().normalize().getParent();
+			try {
+				return parent == null ? p.toAbsolutePath().normalize() : parent.toRealPath().resolve(p.getFileName());
+			} catch (IOException e) {
+				return p.toAbsolutePath().normalize();
+			}
+		}
+	}
+
+	/// One changed (or new) file: a template pushed to every server; a
+	/// configuration pushed once its writer has finished. A name that is not an
+	/// application's ("*", "?") is skipped: in the MBean query it would be a
+	/// wildcard matching every application. False when stopped while waiting.
+	private boolean considerFile(Path child) {
+		String filename = child.getFileName().toString();
+		if (inTemplates(child)) {
+			if (TemplatePush.isTemplate(child) && firstSightOf(child)) pushTemplate(child);
+			return true;
+		}
+		if (!filename.endsWith(".json")) return true;   // temp files, .versions backups
+		String app = filename.substring(0, filename.length() - ".json".length());
+		if (!ValidationAPI.appName(app) || !isConfigPlace(child)) return true;   // before the second's wait
+		if (!firstSightOf(child)) return true;
+		try {
+			Thread.sleep(1000); // let the writer finish before reading
+		} catch (InterruptedException stopped) {
+			// Auto-publish switched off while this waited: the change is not
+			// pushed, so it is pending, not silently live (not the Configurator's
+			// own file: its write is what stopped the watcher). The rest is left
+			// to shutdown's listing.
+			if (!"blade-configurator".equals(app)) ValidationAPI.watcherMissed(app);
+			Thread.currentThread().interrupt();
+			return false;
+		}
+		String json = null;
+		try {
+			json = new String(Files.readAllBytes(child), java.nio.charset.StandardCharsets.UTF_8);
+		} catch (IOException e) {
+			System.out.println("ConfigurationMonitor unable to read " + child.toAbsolutePath());
+			return true;
+		}
+		updateManagedMBeans(child, json);
+		return true;
+	}
+
 	public void updateManagedMBeans(Path path, String json) {
+		String file = path.getFileName().toString();
+		String app = file.contains(".json") ? file.substring(0, file.indexOf(".json")) : file;
+		// One push per app at a time, shared with Publish (ValidationAPI.pushLock).
+		synchronized (ValidationAPI.pushLock(app)) {
+			updateManagedMBeansLocked(path, json);
+		}
+	}
+
+	private void updateManagedMBeansLocked(Path path, String json) {
 		System.out.println("Begin... ConfigurationMonitor.updateManagedMBeans path=" + path);
 
 		boolean isSharedFileSystem = true;
@@ -371,11 +542,15 @@ public class ConfigurationMonitor extends Thread {
 		String filename = path.getFileName().toString();
 		String appName = filename.substring(0, filename.indexOf(".json"));
 		String parent = path.getParent().toFile().getName();
-		String grandparent = path.getParent().getParent().toFile().getName();
 
-		boolean domain = parent.equals("vorpal");
-		boolean cluster = grandparent.equals("_clusters");
-		boolean server = grandparent.equals("_servers");
+		// By place, not by folder name: a server or cluster called "vorpal"
+		// would otherwise read as the domain file, and its overlay be pushed as
+		// every engine's domain file.
+		Path root = (watchedDir != null ? watchedDir : path.getParent()).toAbsolutePath().normalize();
+		Path folder = path.toAbsolutePath().normalize().getParent();
+		boolean domain = folder.equals(root);
+		boolean cluster = !domain && folder.getParent() != null && folder.getParent().equals(root.resolve("_clusters"));
+		boolean server = !domain && folder.getParent() != null && folder.getParent().equals(root.resolve("_servers"));
 
 		System.out.println("ConfigurationMonitor.updateManagedMBeans domain=" + domain + ", cluster=" + cluster
 				+ ", server=" + server);
@@ -454,27 +629,11 @@ public class ConfigurationMonitor extends Thread {
 								+ (declared != null ? " (declared)" : ""));
 
 						if (false == isSharedFileSystem) {
-							System.out.println("ConfigurationMonitor.updateManagedMBeans openForWrite...");
-
-							if (domain) {
-								settings.openForWrite("DOMAIN");
-							} else if (cluster) {
-								settings.openForWrite("CLUSTER");
-							} else if (server) {
-								settings.openForWrite("SERVER");
-							}
-
-							String line;
-							int count = 0;
-							Scanner scanner = new Scanner(json);
-							while (scanner.hasNextLine()) {
-								line = scanner.nextLine();
-								settings.write(line);
-								count++;
-							}
-							System.out.println("ConfigurationMonitor.updateManagedMBeans lines written: " + count);
-							scanner.close();
-							settings.close();
+							// Written, then read back (ValidationAPI.writeAndVerify): an engine
+							// that could not write its file fails here, before its reload.
+							String type = domain ? "DOMAIN" : cluster ? "CLUSTER" : "SERVER";
+							ValidationAPI.writeAndVerify(settings, type, json);
+							System.out.println("ConfigurationMonitor.updateManagedMBeans pushed and verified " + type);
 						}
 
 						System.out.println("ConfigurationMonitor.updateManagedMBeans invoking reload()");
@@ -488,6 +647,14 @@ public class ConfigurationMonitor extends Thread {
 					}
 				}
 
+				// On every server: no longer pending. Failed somewhere: pending,
+				// so every page offers Publish for it.
+				// Only a domain file reaches every server running the app: a cluster
+				// or server file pushed fine says nothing of an earlier failure
+				// elsewhere.
+				if (!failed.isEmpty()) ValidationAPI.watcherMissed(appName, !domain);
+				else if (domain) ValidationAPI.domainPushed(appName);
+
 				// Every change seen, whoever made it: an editor, a restore, or a
 				// hand edit on this server that no editor could have recorded.
 				String relative = domain ? filename : (cluster ? "_clusters/" : "_servers/") + parent + "/" + filename;
@@ -498,8 +665,10 @@ public class ConfigurationMonitor extends Thread {
 				System.out.println(e.getMessage());
 				System.out.println(
 						"Please verify that the BLADE console application is running in the AdminServer and not in a managed engine tier node.");
+				ValidationAPI.watcherMissed(appName, !domain);   // reached no engine: pending, not silently live
 			} catch (Exception e) {
 				e.printStackTrace();
+				ValidationAPI.watcherMissed(appName, !domain);
 			} finally {
 				if (ctx != null) {
 					try {

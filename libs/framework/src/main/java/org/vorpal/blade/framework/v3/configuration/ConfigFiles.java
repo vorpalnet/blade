@@ -258,18 +258,34 @@ public final class ConfigFiles {
 			Map<String, String> membership, ObjectMapper mapper) throws IOException {
 		List<String> out = new ArrayList<>();
 		String replaced = isDomain(draftId) ? DOMAIN : draftId;
-		for (Entry overlay : above(app, draftId, membership)) {
+		overlays: for (Entry overlay : above(app, draftId, membership)) {
 			List<JsonNode> before = new ArrayList<>();
 			List<JsonNode> after = new ArrayList<>();
 			for (Entry e : chain(app, overlay.id, membership)) {
 				if (e.id.equals(overlay.id)) continue;
-				JsonNode file = read(e, mapper);
+				JsonNode file;
+				try {
+					file = read(e, mapper);
+				} catch (IOException unparseable) {
+					// The file this draft replaces may be the broken one the
+					// draft fixes: it had no rule sets anyone could rely on.
+					// Another file below this overlay that does not parse: this
+					// overlay cannot be judged (the editor's merged check names
+					// that file), yet the other overlays still can.
+					if (!e.id.equals(replaced)) continue overlays;
+					file = mapper.createObjectNode();
+				}
 				before.add(file);
 				after.add(e.id.equals(replaced) ? draft : file);
 			}
 			JsonNode was = ruleSetsOf(merge(before, mapper), section);
 			JsonNode will = ruleSetsOf(merge(after, mapper), section);
-			JsonNode over = ruleSetsOf(read(overlay, mapper), section);
+			JsonNode over;
+			try {
+				over = ruleSetsOf(read(overlay, mapper), section);
+			} catch (IOException unparseable) {
+				continue;   // a file over the draft that does not parse: the editor's merged check names it
+			}
 			if (over == null || !over.isObject()) continue;
 			over.fields().forEachRemaining(rs -> {
 				if (!rs.getValue().isObject()) return;

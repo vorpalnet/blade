@@ -1,5 +1,6 @@
 package org.vorpal.blade.framework.v3.configuration.connectors;
 
+import java.nio.file.Paths;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.file.Files;
@@ -132,6 +133,20 @@ public abstract class Connector implements Serializable {
 				}
 			}
 		}
+	}
+
+	/// The text of template `filename` in `dir` as it is on disk now
+	/// ([TemplateCache]: read again once the Configurator pushes a new one),
+	/// copied there from the WAR first when the disk has none.
+	protected String templateText(String dir, String filename) throws IOException {
+		Path p = Paths.get(dir, filename);
+		String text = TemplateCache.read(p);
+		if (text == null) {
+			materializeBundledTemplate(filename, p);
+			text = TemplateCache.read(p);
+		}
+		if (text == null) throw new IOException("template not found on disk or in the WAR: " + p);
+		return text;
 	}
 
 	/// Copy the WAR-bundled template at

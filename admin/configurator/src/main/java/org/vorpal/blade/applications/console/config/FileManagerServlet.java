@@ -75,6 +75,7 @@ public class FileManagerServlet {
 	// WebSocket Event Handlers
 	@OnOpen
 	public void onOpen(Session session) {
+		ValidationAPI.onUnpublishedChange = this::broadcastUnpublished;   // sessions are shared: any endpoint can tell them all
 
 		// jwm - should be in init(), but it's not firing;
 		if (domainName == null) {
@@ -82,6 +83,11 @@ public class FileManagerServlet {
 			domainName = server.getDefaultDomain();
 		}
 
+		Principal user = session.getUserPrincipal();
+		String hkey = (user != null) ? handshakeKey(user.getName(), session.getQueryString()) : null;
+		Access handshake = (hkey != null) ? HANDSHAKES.remove(hkey) : null;
+		if (hkey != null) HANDSHAKE_TIMES.remove(hkey);
+		session.getUserProperties().put(ACCESS_KEY, (handshake != null) ? handshake : new Access(false, false));
 		Access access = access(session);
 		if (!access.sameOrigin) {
 			close(session, "cross-site WebSocket refused");
@@ -92,16 +98,21 @@ public class FileManagerServlet {
 
 	@OnMessage
 	public void onMessage(String message, Session session) {
+		String action = null;
+		String requestFile = null;   // the file a failed save was for
+		String requestSeq = null;    // the page's load a failed load was for
 		try {
 			JsonNode jsonNode = objectMapper.readTree(message);
-			String action = jsonNode.get("action").asText();
+			action = jsonNode.get("action").asText();
+			requestFile = jsonNode.path("file").asText(null);
+			requestSeq = jsonNode.path("seq").asText(null);
 
 			switch (action) {
 			case "load_schema":
 				String schemaApp = jsonNode.get("appName").asText();
 				String schemaContent = loadSchemaFromFilesystem(schemaApp);
 				if (schemaContent == null || schemaContent.trim().isEmpty()) {
-					sendMessageToSession(session, createMessage("error", "Schema not found: " + schemaApp));
+					sendMessageToSession(session, loadError(requestSeq, "Schema not found: " + schemaApp));
 				} else {
 					sendMessageToSession(session, createMessage("schema_loaded", schemaContent));
 				}
@@ -109,15 +120,21 @@ public class FileManagerServlet {
 
 			case "load_json":
 				String jsonFile = jsonNode.get("file").asText();
+				// The version first, then the content: a save landing between the
+				// two then shows as a conflict, never as a silent overwrite.
+				String loadedVersion = versionJson(jsonFile);
 				String jsonContent = loadConfigFile(jsonFile);
 				sendMessageToSession(session, createMessage("json_loaded", jsonContent));
+				// The version the page now edits, sent back with its Save so a
+				// file someone else saved since is not silently overwritten.
+				sendMessageToSession(session, createMessage("file_version", loadedVersion));
 				break;
 
 			case "load_sample":
 				String sampleApp = jsonNode.get("appName").asText();
 				String sampleContent = loadSampleFromFilesystem(sampleApp);
 				if (sampleContent == null || sampleContent.trim().isEmpty()) {
-					sendMessageToSession(session, createMessage("error", "Sample not found: " + sampleApp));
+					sendMessageToSession(session, loadError(requestSeq, "Sample not found: " + sampleApp));
 				} else {
 					sendMessageToSession(session, createMessage("sample_loaded", sampleContent));
 				}
@@ -147,12 +164,16 @@ public class FileManagerServlet {
 
 			case "load_text_file":
 				String textFileName = jsonNode.get("fileName").asText();
+				// The version first, then the content, as load_json: a save between
+				// the two shows as a conflict, never as a silent overwrite.
+				String textLoadedVersion = fileVersion(resolveTextFilePath(textFileName));
 				String textContent = loadTextFile(textFileName);
 				if (textContent == null) {
 					sendMessageToSession(session, createMessage("error", "File not found: " + textFileName));
 				} else {
 					com.fasterxml.jackson.databind.node.ObjectNode payload = objectMapper.createObjectNode();
 					payload.put("fileName", textFileName);
+					payload.put("version", textLoadedVersion);
 					payload.put("content", textContent);
 					sendMessageToSession(session, createMessage("text_file_loaded",
 							objectMapper.writeValueAsString(payload)));
@@ -163,18 +184,87 @@ public class FileManagerServlet {
 				requireWriter(session);
 				String saveName = jsonNode.get("fileName").asText();
 				String saveText = jsonNode.get("content").asText();
-				saveTextFile(saveName, saveText);
+				// The same version check as a config save: a template another
+				// operator saved since is not silently overwritten.
+				Path textPath = resolveTextFilePath(saveName);
+				String textBase = jsonNode.path("baseVersion").asText(null);
+				boolean textConflict;
+				String textAfter;
+				synchronized (SAVE_LOCKS.computeIfAbsent(String.valueOf(textPath), k -> new Object())) {
+					textConflict = textPath != null && textBase != null && !jsonNode.path("force").asBoolean(false)
+							&& !textBase.equals(fileVersion(textPath));
+					if (!textConflict) saveTextFile(saveName, saveText);
+					textAfter = fileVersion(textPath);
+				}
+				if (textConflict) {
+					sendMessageToSession(session, createMessage("text_save_conflict", saveName));
+					break;
+				}
 				saved(session, "_templates/" + saveName, "saved");
-				sendMessageToSession(session, createMessage("text_file_saved", saveName));
+				com.fasterxml.jackson.databind.node.ObjectNode textSaved = objectMapper.createObjectNode();
+				textSaved.put("fileName", saveName);
+				textSaved.put("version", textAfter);
+				// Pushed to every server now with auto-publish on, else by Publish.
+				boolean pushNow = getAutoPublish();
+				textSaved.put("autoPublish", pushNow);
+				sendMessageToSession(session, createMessage("text_file_saved", objectMapper.writeValueAsString(textSaved)));
+				if (pushNow) pushTemplate(session, saveName);
+				else ValidationAPI.watcherMissed(ValidationAPI.TEMPLATES);   // pending on every page until a Publish
 				break;
 
 			case "save_json":
 				requireWriter(session);
 				String saveFile = jsonNode.get("file").asText();
 				String saveContent = jsonNode.get("content").asText();
-				saveConfigFile(saveFile, saveContent);
+				// One JSON object and nothing after it, as a restore requires: "",
+				// "[]", "null" or "{} {}" would be written as is, and go live.
+				if (!wholeObject(saveContent)) throw new IOException("a configuration is one JSON object { … }");
+				// Saved over a version the page never saw: refuse, and say so.
+				// The check and the write hold the file's lock, so two operators
+				// saving at once cannot both pass the check.
+				String baseVersion = jsonNode.path("baseVersion").asText(null);
+				// A clone names no version: it must not replace a file already
+				// at the destination unless the operator chose to.
+				if (jsonNode.path("clone").asBoolean(false)) baseVersion = "none";
+				boolean conflict;
+				java.util.List<String> refused;   // what loading it would fail on
+				String afterVersion;   // read under the lock: the version this save made
+				// Auto-publish as it was before the write: switched on between the
+				// write and the record, the new watcher never saw this file.
+				boolean autoBefore = autoPublishKnownOn();
+				// The app's lock, then the file's: the id check reads the app's other
+				// files, which a save of one of them must not change meanwhile.
+				synchronized (appLock(saveFile)) {
+					synchronized (saveLock(saveFile)) {
+						conflict = baseVersion != null && !jsonNode.path("force").asBoolean(false)
+								&& !baseVersion.equals(fileVersion(configPath(saveFile)));
+						refused = conflict ? java.util.Collections.emptyList() : identityProblems(saveFile, saveContent);
+						if (!conflict && refused.isEmpty()) saveConfigFile(saveFile, saveContent, jsonNode.path("sourceText").asText(null),
+									jsonNode.path("sourceFile").asText(null), jsonNode.path("editorText").asText(null));
+						afterVersion = versionJson(saveFile);
+					}
+				}
+				if (!refused.isEmpty()) {
+					com.fasterxml.jackson.databind.node.ObjectNode why = objectMapper.createObjectNode();
+					why.put("file", saveFile);
+					why.set("problems", objectMapper.valueToTree(refused));
+					sendMessageToSession(session, createMessage("save_refused", objectMapper.writeValueAsString(why)));
+					break;
+				}
+				if (conflict) {
+					sendMessageToSession(session, createMessage("save_conflict", afterVersion));
+					break;
+				}
 				saved(session, saveFile, "saved");
-				sendMessageToSession(session, createMessage("save_success", "File saved successfully"));
+				// Saved with auto-publish off: not live until published, which
+				// any page, now or later, must be able to see and do.
+				ValidationAPI.saved(appOfConfig(saveFile), !autoBefore || !autoPublishKnownOn(), isOverlay(saveFile));
+				// Names the file written: a clone writes another target's file,
+				// and the page must not take that for a save of its own.
+				sendMessageToSession(session, createMessage("save_success", afterVersion));
+				// The Configurator's own settings, at any level: their merged
+				// auto-publish state put into effect, and every page told it.
+				if (SELF_APP.equals(appOfConfig(saveFile))) ownSettingsWritten();
 				break;
 
 			case "list_versions":
@@ -187,16 +277,63 @@ public class FileManagerServlet {
 				requireWriter(session);
 				String restoreFile = jsonNode.get("file").asText();
 				String versionTimestamp = jsonNode.get("timestamp").asText();
-				String restoredContent = restoreVersion(restoreFile, versionTimestamp);
+				String restoredContent = null;
+				String restoredVersion = null;
+				String notRestored = null;   // sent after the locks: a slow page must not hold them
+				boolean autoBeforeRestore = autoPublishKnownOn();
+				synchronized (appLock(restoreFile)) {
+					synchronized (saveLock(restoreFile)) {   // a restore is a write like a save
+						// Checked without a BOM (a hand-edited file kept one), as a load reads it.
+						String restoreText = stripBom(getVersionContent(restoreFile, versionTimestamp));
+						// A version that does not parse (a broken file later fixed in
+						// the JSON tab) would go live and fail every server's reload.
+						java.util.List<String> restoreRefused = java.util.Collections.emptyList();
+						try {
+							if (!wholeObject(restoreText)) throw new IOException("empty, not an object, or text after it");
+						} catch (IOException unparseable) {
+							notRestored = "Not restored: that version is not valid JSON ("
+									+ String.valueOf(unparseable.getMessage()).split("\n")[0] + ")";
+						}
+						if (notRestored == null) {
+							try {
+								restoreRefused = identityProblems(restoreFile, restoreText);
+							} catch (IOException uncheckable) {
+								// Not the version's fault (cluster membership unreadable, say).
+								notRestored = "Not restored: it could not be checked ("
+										+ String.valueOf(uncheckable.getMessage()).split("\n")[0] + ")";
+							}
+						}
+						if (notRestored == null && !restoreRefused.isEmpty()) {
+							notRestored = "Not restored: " + restoreRefused.get(0)
+									+ (restoreRefused.size() > 1 ? " (and " + (restoreRefused.size() - 1) + " more)" : "");
+						}
+						if (notRestored == null) {
+							restoredContent = restoreVersion(restoreFile, versionTimestamp);
+							restoredVersion = versionJson(restoreFile);
+						}
+					}
+				}
+				if (notRestored != null) {
+					sendMessageToSession(session, createMessage("error", notRestored));
+					break;
+				}
 				saved(session, restoreFile, "restored");
+				ValidationAPI.saved(appOfConfig(restoreFile), !autoBeforeRestore || !autoPublishKnownOn(), isOverlay(restoreFile));   // a restore is a save
 				sendMessageToSession(session, createMessage("version_restored", restoredContent));
+				// The Configurator's own settings restored: as after a Save of them.
+				if (SELF_APP.equals(appOfConfig(restoreFile))) ownSettingsWritten();
+				// The file changed on disk: the page's next Save is over this version.
+				sendMessageToSession(session, createMessage("file_version", restoredVersion));
 				break;
 
 			case "get_version_content":
 				String previewFile = jsonNode.get("file").asText();
 				String previewTimestamp = jsonNode.get("timestamp").asText();
-				String previewContent = getVersionContent(previewFile, previewTimestamp);
-				sendMessageToSession(session, createMessage("version_content", previewContent));
+				java.util.Map<String, String> preview = new java.util.LinkedHashMap<>();
+				preview.put("file", previewFile);   // the page may have moved to another file since
+				preview.put("timestamp", previewTimestamp);
+				preview.put("content", getVersionContent(previewFile, previewTimestamp));
+				sendMessageToSession(session, createMessage("version_content", objectMapper.writeValueAsString(preview)));
 				break;
 
 			case "list_text_versions": {
@@ -207,7 +344,7 @@ public class FileManagerServlet {
 					sendMessageToSession(session, createMessage("error", "Invalid path"));
 				} else {
 					sendMessageToSession(session,
-							createMessage("text_version_list", listVersions(tvPath.toString())));
+							createMessage("text_version_list", listVersionsAt(tvPath)));
 				}
 				break;
 			}
@@ -219,10 +356,17 @@ public class FileManagerServlet {
 				if (rvPath == null) {
 					sendMessageToSession(session, createMessage("error", "Invalid path"));
 				} else {
-					String rvContent = restoreVersion(rvPath.toString(), jsonNode.get("timestamp").asText());
+					// The path is already confined to _templates/; configPath()
+					// would refuse it for not being a .json file.
+					String rvContent;
+					synchronized (SAVE_LOCKS.computeIfAbsent(String.valueOf(rvPath), k -> new Object())) {   // a restore is a write, as save_text_file
+						rvContent = store.restore(rvPath, Long.parseLong(jsonNode.get("timestamp").asText()));
+					}
 					saved(session, "_templates/" + restoreName, "restored");
 					sendMessageToSession(session,
 							createMessage("text_version_restored", textVersionPayload(restoreName, rvContent)));
+					if (getAutoPublish()) pushTemplate(session, restoreName);   // a restore is a save
+					else ValidationAPI.watcherMissed(ValidationAPI.TEMPLATES);
 				}
 				break;
 			}
@@ -233,7 +377,7 @@ public class FileManagerServlet {
 				if (tvcPath == null) {
 					sendMessageToSession(session, createMessage("error", "Invalid path"));
 				} else {
-					String tvcContent = getVersionContent(tvcPath.toString(), jsonNode.get("timestamp").asText());
+					String tvcContent = store.readVersion(tvcPath, Long.parseLong(jsonNode.get("timestamp").asText()));
 					sendMessageToSession(session,
 							createMessage("text_version_content", textVersionPayload(tvcName, tvcContent)));
 				}
@@ -247,8 +391,53 @@ public class FileManagerServlet {
 			case "reload":
 				requireWriter(session);
 				String reloadApp = jsonNode.get("appName").asText();
-				reloadViaMBean(reloadApp);
-				sendMessageToSession(session, createMessage("reload_success", "Configuration reloaded for " + reloadApp));
+				// An application name: "*" would publish every app on every server.
+				if (!ValidationAPI.appName(reloadApp)) {
+					sendMessageToSession(session, createMessage("publish_error", "Publish failed for " + reloadApp + ": not an application name"));
+					break;
+				}
+				// Publish = push the saved files to every server, then reload:
+				// a reload alone rereads each engine's own copy, which on a
+				// layout where engines do not share the admin's disk is the old one.
+				// A worker thread: pushing line by line to every engine can outlast
+				// the page's ping timeout, which would drop this socket.
+				new Thread(() -> {
+					java.util.Map<String, Object> published = ValidationAPI.pushAndReload(reloadApp, "published");
+					if (!Boolean.TRUE.equals(published.get("published"))) {
+						Object why = published.containsKey("error") ? published.get("error") : published.get("message");
+						sendMessageToSessionAsync(session, createMessage("publish_error", "Publish failed for " + reloadApp + ": " + why));
+						return;
+					}
+					sendMessageToSessionAsync(session, createMessage("reload_success", "Configuration published for " + reloadApp));
+					// Publish pushed every template too: say how that went, as
+					// the `_templates` entry (pending while any server failed).
+					if (published.containsKey("templatesFailed")) {   // none when no server runs the app
+						sendMessageToSessionAsync(session, templatesReply((String) published.get("templates"),
+								Boolean.TRUE.equals(published.get("templatesFailed"))));
+					}
+				}, "configurator-publish").start();
+				break;
+
+			case "publish_templates":
+				// Templates saved while auto-publish was off: every one, to every server.
+				requireWriter(session);
+				new Thread(() -> {
+					try {
+						TemplatePush.Summary done = TemplatePush.pushAll(org.vorpal.blade.framework.v2.config.ConfigPublisher.domainRuntimeMBeanServer());
+						sendMessageToSessionAsync(session, templatesReply(done.line, done.failed));
+					} catch (Exception e) {
+						logger.log(Level.WARNING, "template publish failed", e);
+						try {
+							sendMessageToSessionAsync(session, createMessage("publish_error", "Publish failed for _templates: " + e.getMessage()));
+						} catch (Exception ignored) {
+							// the page is gone
+						}
+					}
+				}, "configurator-template-publish").start();
+				break;
+
+			case "get_unpublished":
+				sendMessageToSession(session, createMessage("unpublished_list", objectMapper.writeValueAsString(ValidationAPI.UNPUBLISHED)));
 				break;
 
 			case "get_autopublish":
@@ -259,7 +448,10 @@ public class FileManagerServlet {
 				requireWriter(session);
 				boolean enabled = jsonNode.get("enabled").asBoolean();
 				setAutoPublish(enabled);
-				sendMessageToSession(session, createMessage("autopublish_state", String.valueOf(enabled)));
+				// Every open page, with the state read back (the merged one that
+				// runs), not the one asked for: a failed reload shows as such.
+				Boolean nowOn = readAutoPublish();
+				broadcastMessage(createMessage("autopublish_state", String.valueOf(nowOn == null ? enabled : nowOn)));
 				break;
 
 			case "list_schemas":
@@ -284,11 +476,21 @@ public class FileManagerServlet {
 				break;
 
 			case "ai_generate": {
+				// Drafting spends the domain's API key: writers only, like Save.
+				// Answered as ai_error, so the page's chat stops waiting.
+				if (!access(session).writer) {
+					sendMessageToSession(session, createMessage("ai_error", "Asking Claude needs the Admin or Operator role."));
+					break;
+				}
 				String aiApp = jsonNode.get("appName").asText();
+				// Echoed in the answer, so the page pairs it with its question.
+				String aiRequest = jsonNode.path("requestId").asText("");
 				String aiInstruction = jsonNode.get("instruction").asText();
 				String aiBaseline = jsonNode.has("config") ? jsonNode.get("config").asText() : null;
 				// The chat's earlier turns, so a follow-up reads the last answer.
 				String aiHistory = jsonNode.has("history") ? jsonNode.get("history").toString() : null;
+				String aiTarget = jsonNode.path("targetDirectory").asText("");
+				boolean aiOverlay = aiTarget.contains("/_clusters/") || aiTarget.contains("/_servers/");
 				// A generate call can run for a minute; answer from a worker
 				// thread so this WebSocket keeps servicing pings meanwhile.
 				new Thread(() -> {
@@ -296,14 +498,18 @@ public class FileManagerServlet {
 						AiSettings ai = loadAiSettings();
 						String schemaJson = loadSchemaFromFilesystem(aiApp);
 						if (schemaJson == null || schemaJson.trim().isEmpty()) {
-							sendMessageToSessionAsync(session, createMessage("ai_error", "Schema not found: " + aiApp));
+							sendMessageToSessionAsync(session, createMessage("ai_error", aiError(aiRequest, "Schema not found: " + aiApp)));
 							return;
 						}
-						String result = AiConfigService.generate(ai, schemaJson, aiBaseline, aiInstruction, aiHistory);
-						sendMessageToSessionAsync(session, createMessage("ai_result", result));
-					} catch (Exception e) {
+						String result = AiConfigService.generate(ai, schemaJson, aiBaseline, aiInstruction, aiHistory, aiOverlay);
+						com.fasterxml.jackson.databind.node.ObjectNode tagged = (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(result);
+						tagged.put("requestId", aiRequest);
+						sendMessageToSessionAsync(session, createMessage("ai_result", objectMapper.writeValueAsString(tagged)));
+					} catch (Throwable e) {
+						// Throwable: an Error (a missing SDK class) would end this
+						// thread with no answer, and the page would wait for good.
 						logger.log(Level.WARNING, "AI generate failed for " + aiApp, e);
-						sendMessageToSessionAsync(session, createMessage("ai_error", e.getMessage()));
+						sendMessageToSessionAsync(session, createMessage("ai_error", aiError(aiRequest, e.getMessage())));
 					}
 				}, "configurator-ai-generate").start();
 				break;
@@ -315,7 +521,57 @@ public class FileManagerServlet {
 
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "Error processing WebSocket message", e);
-			sendMessageToSession(session, createMessage("error", "Error processing request: " + e.getMessage()));
+			String why = "publish_templates".equals(action) ? "Publish failed for _templates: " + e.getMessage()
+					: "Error processing request: " + e.getMessage();
+			if ("load_error".equals(errorType(action))) {
+				sendMessageToSession(session, loadError(requestSeq, why));
+				return;
+			}
+			if (("version_error".equals(errorType(action)) || "text_error".equals(errorType(action))) && requestFile != null) {
+				why += " (" + requestFile + ")";   // which file it was about
+			}
+			if ("save_json".equals(action)) {
+				// Which file: a clone and a save can both be out.
+				com.fasterxml.jackson.databind.node.ObjectNode failed = objectMapper.createObjectNode();
+				failed.put("file", requestFile);
+				failed.put("message", why);
+				why = failed.toString();
+			}
+			sendMessageToSession(session, createMessage(errorType(action), why));
+		}
+	}
+
+	/// The reply type of a failed request: the page waits on saves, loads and
+	/// publishes, and must know which one a failure answers. Anything else is
+	/// a plain `error`, which ends nothing the page is waiting on.
+	static String errorType(String action) {
+		if (action == null) return "error";
+		switch (action) {
+		case "save_json":
+			return "save_error";
+		case "save_text_file":
+			return "text_save_error";
+		case "set_autopublish":
+			return "autopublish_error";
+		case "load_schema":
+		case "load_json":
+		case "load_sample":
+		case "resolve_json_file":
+			return "load_error";
+		case "reload":
+		case "publish_templates":
+			return "publish_error";
+		case "restore_version":
+		case "get_version_content":
+		case "list_versions":
+			return "version_error";
+		case "load_text_file":
+		case "restore_text_version":
+		case "get_text_version_content":
+		case "list_text_versions":
+			return "text_error";
+		default:
+			return "error";
 		}
 	}
 
@@ -343,11 +599,122 @@ public class FileManagerServlet {
 		ConfigPublisher.reload(appName);
 	}
 
+	/// A failed load, naming the page's load it answers (`seq`): an error for a
+	/// load the operator has since replaced must not cancel the current one.
+	private String loadError(String seq, String why) {
+		com.fasterxml.jackson.databind.node.ObjectNode out = objectMapper.createObjectNode();
+		out.put("seq", seq);
+		out.put("message", why);
+		return createMessage("load_error", out.toString());
+	}
+
+	/// The page's answer for the `_templates` entry of a Publish: a failed
+	/// server keeps it pending (publish_error), else it is published.
+	private String templatesReply(String line, boolean failed) {
+		if (failed) ValidationAPI.watcherMissed(ValidationAPI.TEMPLATES);
+		else ValidationAPI.watcherPublished(ValidationAPI.TEMPLATES);
+		return failed ? createMessage("publish_error", "Publish failed for _templates: " + line)
+				: createMessage("reload_success", (line == null ? "Templates already current; " : "Templates " + line + "; ")
+						+ "Configuration published for _templates");
+	}
+
+	/// Every page learns the server's list of applications saved while
+	/// auto-publish was off (ValidationAPI.UNPUBLISHED) whenever it changes:
+	/// a page's own list is lost on a reload, and other pages never see it.
+	private void broadcastUnpublished(String snapshot) {
+		broadcastMessage(createMessage("unpublished_list", snapshot));
+	}
+
+	private static final Map<String, Object> APP_LOCKS = new ConcurrentHashMap<>();
+
+	/// One lock per application, taken before its file's: a save's id check
+	/// reads the application's other files (IdentityCheck).
+	private static Object appLock(String file) {
+		String app = appOfConfig(file);
+		return APP_LOCKS.computeIfAbsent(app == null ? file : app, k -> new Object());
+	}
+
+	/// The application a config file belongs to (its name without `.json`), or null.
+	private static String appOfConfig(String relativePath) {
+		String name = Paths.get(writtenPath(relativePath)).getFileName().toString();
+		return name.endsWith(".json") ? name.substring(0, name.length() - ".json".length()) : null;
+	}
+
+	/// The admin's `_templates/` folder.
+	static String templatesDir() {
+		return TEMPLATES_DIR;
+	}
+
+	/// Pushes template `name` to every server on a worker thread (JMX to each
+	/// engine) and tells the page how it went (`text_file_pushed`).
+	private void pushTemplate(Session session, String name) {
+		new Thread(() -> {
+			com.fasterxml.jackson.databind.node.ObjectNode out = objectMapper.createObjectNode();
+			out.put("fileName", name);
+			try {
+				TemplatePush.Result r = TemplatePush.push(
+						org.vorpal.blade.framework.v2.config.ConfigPublisher.domainRuntimeMBeanServer(), name);
+				out.put("summary", r.summary());
+				out.put("ok", r.failed.isEmpty() && r.noReceiver.isEmpty());
+				if (!r.failed.isEmpty()) ValidationAPI.watcherMissed(ValidationAPI.TEMPLATES);
+			} catch (Exception e) {
+				logger.log(Level.WARNING, "template push failed for " + name, e);
+				out.put("summary", "not pushed: " + e.getMessage());
+				ValidationAPI.watcherMissed(ValidationAPI.TEMPLATES);
+				out.put("ok", false);
+			}
+			try {
+				sendMessageToSessionAsync(session, createMessage("text_file_pushed", objectMapper.writeValueAsString(out)));
+			} catch (Exception e) {
+				logger.log(Level.FINE, "push result not sent", e);
+			}
+		}, "configurator-template-push").start();
+	}
+
+	/// This server's own overlays of the Configurator's settings: its server
+	/// file, and its cluster's when it is in one.
+	private static java.util.List<Path> ownOverlays() {
+		java.util.List<Path> out = new java.util.ArrayList<>();
+		String server = System.getProperty("weblogic.Name");
+		if (server == null || server.isEmpty()) return out;
+		out.add(Paths.get(CONFIG_BASE, "_servers", server, SELF_APP + ".json"));
+		try {
+			String cluster = org.vorpal.blade.framework.v3.configuration.ClusterMembership.read().get(server);
+			if (cluster != null) out.add(Paths.get(CONFIG_BASE, "_clusters", cluster, SELF_APP + ".json"));
+		} catch (Exception e) {
+			// membership unreadable: the server file only
+		}
+		return out;
+	}
+
+	/// Auto-publish on, as far as can be known: false when its state cannot be
+	/// read, so a save is listed pending rather than taken for live.
+	/// The flag alone is not enough: a watcher that failed to start, or
+	/// stopped, pushes nothing, and a save must then be pending.
+	private boolean autoPublishKnownOn() {
+		return Boolean.TRUE.equals(readAutoPublish()) && ConfigurationMonitorStartup.watching();
+	}
+
+	/// A cluster or server file, not the domain one.
+	private static boolean isOverlay(String file) {
+		try {
+			return !configPath(file).getParent().equals(Paths.get(CONFIG_BASE).toAbsolutePath().normalize());
+		} catch (IOException e) {
+			return false;
+		}
+	}
+
 	/// Read the live auto-publish state from the Configurator's own MBean.
 	/// Reads the merged in-memory config (which includes the shipped default
 	/// when no domain file exists yet), so the UI toggle reflects what the
 	/// running server is actually doing. Defaults to true if it can't be read.
 	private boolean getAutoPublish() {
+		Boolean on = readAutoPublish();
+		return on == null || on;
+	}
+
+	/// The auto-publish state, or null when it cannot be read.
+	private Boolean readAutoPublish() {
 		try {
 			SettingsMXBean cfg = getMBeanProxy(getMBeanServer(), SELF_APP);
 			if (cfg != null) {
@@ -359,10 +726,11 @@ public class FileManagerServlet {
 					}
 				}
 			}
+			return true;   // the shipped default
 		} catch (Exception e) {
 			logger.log(Level.WARNING, "could not read configurator auto-publish state", e);
+			return null;
 		}
-		return true;
 	}
 
 	/// Persist the auto-publish flag and republish so it takes effect live.
@@ -373,18 +741,93 @@ public class FileManagerServlet {
 	/// initialize() hook and starts or stops the watcher thread.
 	private void setAutoPublish(boolean enabled) throws Exception {
 		Path file = Paths.get(CONFIG_BASE + "/" + SELF_APP + ".json");
-		com.fasterxml.jackson.databind.node.ObjectNode node;
-		if (Files.exists(file)) {
-			JsonNode existing = objectMapper.readTree(Files.readAllBytes(file));
-			node = existing.isObject() ? (com.fasterxml.jackson.databind.node.ObjectNode) existing
-					: objectMapper.createObjectNode();
-		} else {
-			node = objectMapper.createObjectNode();
+		// Read and written under the file's lock: a form Save of this file
+		// between the two would otherwise be overwritten without a conflict.
+		synchronized (saveLock(file.toString())) {
+			com.fasterxml.jackson.databind.node.ObjectNode node;
+			if (Files.exists(file)) {
+				JsonNode existing = objectMapper.readTree(Files.readAllBytes(file));
+				node = existing.isObject() ? (com.fasterxml.jackson.databind.node.ObjectNode) existing
+						: objectMapper.createObjectNode();
+			} else {
+				node = objectMapper.createObjectNode();
+			}
+			node.put("autoPublish", enabled);
+			saveConfigFile(file.toString(), objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(node), null, null, null);
 		}
-		node.put("autoPublish", enabled);
-		String json = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(node);
-		saveConfigFile(file.toString(), json);
-		reloadViaMBean(SELF_APP);
+		// The state read is this server's merged one: an overlay of its own (its
+		// server or cluster file) setting autoPublish would outvote the switch.
+		for (Path overlay : ownOverlays()) {
+			synchronized (saveLock(overlay.toString())) {
+				if (!Files.isRegularFile(overlay)) continue;
+				JsonNode o = objectMapper.readTree(Files.readAllBytes(overlay));
+				if (o.isObject() && o.has("autoPublish")) {
+					((com.fasterxml.jackson.databind.node.ObjectNode) o).remove("autoPublish");
+					saveConfigFile(overlay.toString(), objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(o), null, null, null);
+					logger.info("auto-publish switch: removed autoPublish from " + overlay);
+				}
+			}
+		}
+		applyAutoPublish(enabled);
+	}
+
+	/// The Configurator's auto-publish state, just written to its file, put into
+	/// effect: reload its settings (which starts or stops the watcher), then,
+	/// when turned on, publish what was saved while it was off (by any page):
+	/// the configurations recorded unpublished, then every template. The watcher
+	/// first: a save landing after the list is read is then the watcher's.
+	/// Called for the switch, and for a Save or Restore of the file itself.
+	private void applyAutoPublish(boolean enabled) {
+		try {
+			reloadViaMBean(SELF_APP);
+		} catch (Exception e) {
+			// Not in effect: the file stays pending, and nothing is caught up.
+			logger.log(Level.WARNING, "auto-publish state not applied", e);
+			return;
+		}
+		ValidationAPI.watcherPublished(SELF_APP);   // its write is applied by this reload
+		if (enabled) catchUp();
+	}
+
+	/// A file of the Configurator's own settings was written (any level: an
+	/// overlay of this server can set autoPublish too). Its merged state, read
+	/// after a reload, is what runs: put into effect, and every page told it.
+	/// With auto-publish off nothing else would reload it (the watcher is
+	/// stopped); turned on, what was saved while it was off is published.
+	private void ownSettingsWritten() {
+		Boolean before = readAutoPublish();
+		try {
+			reloadViaMBean(SELF_APP);
+		} catch (Exception e) {
+			logger.log(Level.WARNING, "auto-publish state not applied", e);
+		}
+		Boolean after = readAutoPublish();
+		if (after == null) return;
+		ValidationAPI.watcherPublished(SELF_APP);   // the reload is its publish: it runs here only
+		if (after && !after.equals(before)) catchUp();
+		broadcastMessage(createMessage("autopublish_state", String.valueOf(after)));
+	}
+
+	/// Auto-publish just turned on: the configurations recorded unpublished,
+	/// then every template, published on a worker thread.
+	private void catchUp() {
+		new Thread(() -> {
+			for (String app : new java.util.TreeSet<>(ValidationAPI.UNPUBLISHED)) {
+				if (ValidationAPI.TEMPLATES.equals(app)) continue;   // pushed below
+				java.util.Map<String, Object> done = ValidationAPI.pushAndReload(app, "published");
+				if (!Boolean.TRUE.equals(done.get("published"))) {
+					logger.warning("auto-publish on: " + app + " not published: " + done.get("error") + " " + done.get("message"));
+				}
+			}
+			try {
+				TemplatePush.Summary done = TemplatePush.pushAll(org.vorpal.blade.framework.v2.config.ConfigPublisher.domainRuntimeMBeanServer());
+				if (done.line != null) logger.info("auto-publish on, templates: " + done.line);
+				if (done.failed) ValidationAPI.watcherMissed(ValidationAPI.TEMPLATES);
+				else ValidationAPI.watcherPublished(ValidationAPI.TEMPLATES);
+			} catch (Exception e) {
+				logger.log(Level.WARNING, "templates not pushed when auto-publish turned on", e);
+			}
+		}, "configurator-catchup").start();
 	}
 
 	private String listSchemasFromFilesystem() {
@@ -421,7 +864,7 @@ public class FileManagerServlet {
 		if (!Files.exists(schemaPath)) {
 			return null;
 		}
-		return new String(Files.readAllBytes(schemaPath));
+		return new String(Files.readAllBytes(schemaPath), java.nio.charset.StandardCharsets.UTF_8);
 	}
 
 	private String loadSampleFromFilesystem(String appName) throws IOException {
@@ -429,7 +872,7 @@ public class FileManagerServlet {
 		if (!Files.exists(samplePath)) {
 			return null;
 		}
-		return new String(Files.readAllBytes(samplePath));
+		return new String(Files.readAllBytes(samplePath), java.nio.charset.StandardCharsets.UTF_8);
 	}
 
 	/// List *.json starter templates under _templates/<schemaName>/. Returns
@@ -464,7 +907,7 @@ public class FileManagerServlet {
 		if (!Files.exists(templatePath)) {
 			return null;
 		}
-		return new String(Files.readAllBytes(templatePath));
+		return new String(Files.readAllBytes(templatePath), java.nio.charset.StandardCharsets.UTF_8);
 	}
 
 	/// Defensive: never allow "../" escape out of the templates directory.
@@ -495,6 +938,9 @@ public class FileManagerServlet {
 		try (java.util.stream.Stream<Path> walk = Files.walk(root)) {
 			walk.filter(Files::isRegularFile)
 				.filter(p -> {
+					for (Path part : root.relativize(p)) {
+						if (part.toString().startsWith(".")) return false;   // what Publish pushes
+					}
 					String n = p.getFileName().toString().toLowerCase();
 					int dot = n.lastIndexOf('.');
 					if (dot < 0) return false;
@@ -517,7 +963,16 @@ public class FileManagerServlet {
 	private String loadTextFile(String relPath) throws IOException {
 		Path p = resolveTextFilePath(relPath);
 		if (p == null || !Files.exists(p) || !Files.isRegularFile(p)) return null;
-		return new String(Files.readAllBytes(p));
+		// Refused, not opened with its bad bytes replaced: a Save would write
+		// the replacements, and the push would carry them to every server.
+		try {
+			return java.nio.charset.StandardCharsets.UTF_8.newDecoder()
+					.onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+					.onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+					.decode(java.nio.ByteBuffer.wrap(Files.readAllBytes(p))).toString();
+		} catch (java.nio.charset.CharacterCodingException e) {
+			throw new IOException(relPath + " is not UTF-8 text: edit it on the server, or convert it to UTF-8");
+		}
 	}
 
 	/// Write text content to a file under _templates/, taking a versioned
@@ -535,6 +990,8 @@ public class FileManagerServlet {
 		com.fasterxml.jackson.databind.node.ObjectNode payload = objectMapper.createObjectNode();
 		payload.put("fileName", fileName);
 		payload.put("content", content);
+		// The template's version on disk now (after a restore: the restored one).
+		payload.put("version", fileVersion(resolveTextFilePath(fileName)));
 		return objectMapper.writeValueAsString(payload);
 	}
 
@@ -543,7 +1000,12 @@ public class FileManagerServlet {
 	/// obviously-bad input.
 	private Path resolveTextFilePath(String relPath) {
 		if (relPath == null || relPath.trim().isEmpty()) return null;
-		if (relPath.contains("..")) return null;
+		for (Path part : Paths.get(relPath)) {
+			// "..", and any dot folder or file (.versions/ backups, .archive/):
+			// a segment, not "v1..2.sql". Publish skips those, so a Save must
+			// not push one either.
+			if (part.toString().startsWith(".")) return null;
+		}
 		Path root = Paths.get(TEMPLATES_DIR).toAbsolutePath().normalize();
 		Path candidate = root.resolve(relPath).toAbsolutePath().normalize();
 		if (!candidate.startsWith(root)) return null;
@@ -577,6 +1039,25 @@ public class FileManagerServlet {
 		if (!candidate.startsWith(root) || !(name.endsWith(".json") || name.endsWith(".json.SAMPLE"))) {
 			throw new IOException("not a configuration file: " + requested);
 		}
+		// Named for an application: "*.json" would be a wildcard in the
+		// watcher's MBean query, pushed as every application's file.
+		String app = name.substring(0, name.indexOf(".json"));
+		if (!ValidationAPI.appName(app)) throw new IOException("not an application's file: " + requested);
+		// The folders too: a cluster or server folder's name goes into the
+		// watcher's MBean query, where "*" would match every server.
+		for (Path part : root.relativize(candidate.getParent())) {
+			if (!part.toString().isEmpty() && !ValidationAPI.appName(part.toString()) && !part.toString().startsWith("_")) {
+				throw new IOException("not a cluster or server folder: " + requested);
+			}
+		}
+		// Only the places a configuration lives: the folder itself,
+		// _clusters/<name>/, _servers/<name>/, and _samples/ for samples.
+		Path where = root.relativize(candidate.getParent());
+		String first = where.getNameCount() > 0 ? where.getName(0).toString() : "";
+		boolean place = first.isEmpty()
+				|| (where.getNameCount() == 2 && ("_clusters".equals(first) || "_servers".equals(first)))
+				|| (where.getNameCount() == 1 && "_samples".equals(first));
+		if (!place) throw new IOException("not a configuration's place: " + requested);
 		return candidate;
 	}
 
@@ -586,37 +1067,350 @@ public class FileManagerServlet {
 			throw new IOException("File does not exist: " + relativePath);
 		}
 
-		return new String(Files.readAllBytes(filePath));
+		String text = new String(Files.readAllBytes(filePath), java.nio.charset.StandardCharsets.UTF_8);
+		// A byte-order mark: the engines' Jackson skips it, the page's
+		// JSON.parse does not (the file would open as broken). A Save writes none.
+		return text.startsWith("\uFEFF") ? text.substring(1) : text;
 	}
 
-	private void saveConfigFile(String relativePath, String content) throws IOException {
-		String realPath = relativePath;
-
-		// If path points to a sample file, convert to primary location
-		if (realPath.contains("/_samples/") && realPath.endsWith(".json.SAMPLE")) {
-			realPath = realPath.replace("/_samples/", "/").replace(".json.SAMPLE", ".json");
+	/// A file's version, as Save's conflict check compares it: modification
+	/// time, size and a checksum of the content ("none" for a file that does
+	/// not exist yet). Time and size alone repeat on
+	/// a filesystem with whole-second times (NFS) when two saves land in one
+	/// second with one length (a changed digit).
+	static String fileVersion(Path file) {
+		if (file == null) return "none";
+		try {
+			return Files.exists(file) ? Files.getLastModifiedTime(file).toMillis() + ":" + Files.size(file) + ":" + checksum(file) : "none";
+		} catch (IOException e) {
+			return "unknown";
 		}
+	}
+
+	/// CRC-32 of a file's bytes, in hex.
+	static String checksum(Path file) throws IOException {
+		java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+		crc.update(Files.readAllBytes(file));
+		return Long.toHexString(crc.getValue());
+	}
+
+	private String versionJson(String relativePath) throws IOException {
+		java.util.Map<String, Object> v = new java.util.LinkedHashMap<>();
+		v.put("file", relativePath);
+		v.put("version", fileVersion(configPath(relativePath)));
+		return objectMapper.writeValueAsString(v);
+	}
+
+	/// The file a save of `relativePath` writes: a sample saves as its app's file.
+	/// `text` parsed onto `sources`, when it is there and parses.
+	private static void addSource(java.util.List<JsonNode> sources, String text, ObjectMapper mapper) {
+		if (text == null || text.trim().isEmpty()) return;
+		try {
+			sources.add(mapper.readTree(text));
+		} catch (IOException unparseable) {
+			// a broken file is no source
+		}
+	}
+
+	private static String readIfThere(Path file) throws IOException {
+		return Files.isRegularFile(file) ? new String(Files.readAllBytes(file), java.nio.charset.StandardCharsets.UTF_8) : null;
+	}
+
+	private static String writtenPath(String relativePath) {
+		if (relativePath.contains("/_samples/") && relativePath.endsWith(".json.SAMPLE")) {
+			return relativePath.replace("/_samples/", "/").replace(".json.SAMPLE", ".json");
+		}
+		return relativePath;
+	}
+
+	/// What the application would fail to load with `content` written as
+	/// `relativePath` ([IdentityCheck]), merged as its loader merges it; empty
+	/// for a file that is no application's domain, cluster or server file.
+	private java.util.List<String> identityProblems(String relativePath, String content) throws IOException {
+		Path file = configPath(writtenPath(relativePath));
+		Path rel = Paths.get(CONFIG_BASE).toAbsolutePath().normalize().relativize(file);
+		String name = file.getFileName().toString();
+		if (!name.endsWith(".json")) return java.util.Collections.emptyList();
+		String app = name.substring(0, name.length() - ".json".length());
+		String id;
+		String place = null;   // the cluster or server the file is for
+		if (rel.getNameCount() == 1) {
+			id = org.vorpal.blade.framework.v3.configuration.ConfigFiles.DOMAIN;
+		} else if (rel.getNameCount() == 3 && "_clusters".equals(rel.getName(0).toString())) {
+			id = "cluster/" + rel.getName(1);
+			place = rel.getName(1).toString();
+		} else if (rel.getNameCount() == 3 && "_servers".equals(rel.getName(0).toString())) {
+			id = "server/" + rel.getName(1);
+			place = rel.getName(1).toString();
+		} else {
+			return java.util.Collections.emptyList();
+		}
+		java.util.List<String> out = new java.util.ArrayList<>();
+		if (place != null) {
+			// With no domain file the application runs on its sample; one
+			// overlay saved now becomes the whole configuration of those
+			// servers, the sample no longer under it.
+			if (!Files.exists(Paths.get(CONFIG_BASE, app + ".json"))) {
+				out.add("there is no Domain file for " + app + ": saved alone, this file would become the whole configuration of "
+						+ place + " (the sample stops applying). Save the Domain file first.");
+				return out;
+			}
+			// A folder left behind by a renamed server or cluster: no engine reads it.
+			java.util.Set<String> names = domainPlaces(id.startsWith("cluster/"));
+			boolean known = names == null || names.contains(place);
+			if (!known) {
+				out.add("this domain has no " + (id.startsWith("cluster/") ? "cluster" : "server") + " named " + place
+						+ ": no server would read this file");
+				return out;
+			}
+		}
+		// No schema (or one that does not parse): the schema leg is skipped,
+		// never the rest. Ids and the rule-set rename check need none.
+		String schemaJson = loadSchemaFromFilesystem(app);
+		JsonNode schema = null;
+		try {
+			schema = schemaJson == null ? null : objectMapper.readTree(schemaJson);
+		} catch (IOException unparseableSchema) {
+			logger.log(Level.WARNING, "schema of " + app + " does not parse; saved without the schema check", unparseableSchema);
+		}
+		JsonNode draft = objectMapper.readTree(content);
+		java.util.Map<String, String> membership = org.vorpal.blade.framework.v3.configuration.ClusterMembership.forSave(app);
+		// What this save breaks on the servers, less what the file on disk
+		// already breaks (SaveCheck).
+		// Null when the file does not parse (the broken file this save fixes),
+		// or there is no Domain file: then nothing counts as already there.
+		// A new cluster or server file starts from an empty one: merged over
+		// the files below, that is what its servers run today, so a problem
+		// of the Domain file is not this save's.
+		JsonNode before = place != null && !Files.exists(file) ? objectMapper.createObjectNode() : null;
+		try {
+			if (Files.exists(file)) before = objectMapper.readTree(stripBom(new String(Files.readAllBytes(file),
+					java.nio.charset.StandardCharsets.UTF_8)));
+			if (before != null && !before.isObject()) before = null;
+		} catch (IOException unparseable) {
+			before = null;
+		}
+		java.util.Set<String> clusters = domainPlaces(true), servers = domainPlaces(false);
+		java.util.function.Predicate<String> read = overlayId -> {   // a cluster or server some server reads
+			String n = overlayId.substring(overlayId.indexOf('/') + 1);
+			java.util.Set<String> names = overlayId.startsWith("cluster/") ? clusters : servers;
+			return names == null || names.contains(n);
+		};
+		out.addAll(SaveCheck.added(app, id, draft, before, membership, objectMapper, runChecks(schema), read));
+		return out;
+	}
+
+	/// The domain's cluster names (`clusters`) or server names (every server,
+	/// clustered or not, and each dynamic cluster's), or null when they
+	/// cannot be read (then nothing is judged stale).
+	private static java.util.Set<String> domainPlaces(boolean clusters) {
+		try {
+			javax.management.MBeanServer dr = org.vorpal.blade.framework.v3.configuration.ClusterMembership.domainRuntime();
+			javax.management.ObjectName config = (javax.management.ObjectName) dr.getAttribute(
+					new javax.management.ObjectName(org.vorpal.blade.framework.v3.configuration.ClusterMembership.DOMAIN_RUNTIME_SERVICE),
+					"DomainConfiguration");
+			java.util.Set<String> out = new java.util.HashSet<>();
+			if (!clusters) {
+				for (javax.management.ObjectName sv : (javax.management.ObjectName[]) dr.getAttribute(config, "Servers")) {
+					out.add(String.valueOf(dr.getAttribute(sv, "Name")));
+				}
+				out.addAll(org.vorpal.blade.framework.v3.configuration.ClusterMembership.of(dr).keySet());   // dynamic servers
+			} else {
+				for (javax.management.ObjectName c : (javax.management.ObjectName[]) dr.getAttribute(config, "Clusters")) {
+					out.add(String.valueOf(dr.getAttribute(c, "Name")));
+				}
+			}
+			return out;
+		} catch (Exception e) {
+			return null;
+		}
+	}
+
+	/// What a whole configuration must satisfy before it goes live: its
+	/// schema (required properties, types, the polymorphic type that the
+	/// loader needs) and, where the schema's classes take identity, unique
+	/// ids and references that resolve ([IdentityCheck]).
+	static org.vorpal.blade.framework.v3.configuration.DraftCheck.Check runChecks(JsonNode schema) {
+		com.networknt.schema.JsonSchema full = compiled(schema);
+		boolean ids = IdentityCheck.usesIdentity(schema);
+		return (doc, domainFile) -> {
+			java.util.List<String> p = new java.util.ArrayList<>();
+			if (full != null) {
+				for (com.networknt.schema.ValidationMessage m : full.validate(doc)) {
+					// The generated schemas never say "null", yet Jackson loads a
+					// null into any field (an overlay clearing a value): not a problem.
+					if (m.getMessage().contains(": null found,")) continue;
+					p.add(m.getMessage());
+				}
+			}
+			if (ids) p.addAll(IdentityCheck.problems(doc, schema));
+			return p;
+		};
+	}
+
+	/// A schema compiled once per content: a Save checks up to one document
+	/// per overlay, and compiling is the slow part.
+	private static final java.util.Map<String, com.networknt.schema.JsonSchema> COMPILED = new java.util.concurrent.ConcurrentHashMap<>();
+
+	private static com.networknt.schema.JsonSchema compiled(JsonNode schema) {
+		if (schema == null) return null;
+		try {
+			String key = schema.toString();
+			if (COMPILED.size() > 200) COMPILED.clear();
+			return COMPILED.computeIfAbsent(key, k -> AiConfigService.factoryFor(schema).getSchema(schema));
+		} catch (RuntimeException unusable) {
+			// A schema networknt cannot compile: saved without the schema check.
+			logger.log(Level.WARNING, "schema not usable for validation", unusable);
+			return null;
+		}
+	}
+
+	private static String stripBom(String text) {
+		return text.startsWith("\uFEFF") ? text.substring(1) : text;
+	}
+
+	/// Writes `content` as `relativePath`, repaired by [JsonRepair] against,
+	/// most trusted first: `sourceText` (the exact text the page's form came
+	/// from: the file as loaded, a sample, an import, a template), the form's
+	/// own file `sourceFile` (a clone's source), the destination as it is, and
+	/// `editorText` (the JSON tab's text: the page's own serialization, so
+	/// last; it matters only when nothing else parses).
+	private void saveConfigFile(String relativePath, String content, String sourceText, String sourceFile,
+			String editorText) throws IOException {
+		String realPath = writtenPath(relativePath);
 
 		Path filePath = configPath(realPath);
 
 		// Encrypt any {CLEARTEXT} credentials before writing to disk
+		com.fasterxml.jackson.databind.ObjectMapper encMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+		com.fasterxml.jackson.databind.JsonNode tree = encMapper.readTree(content);
+		// A secret typed in the JSON tab arrives bare: mark the app's password
+		// fields first, so it is encrypted like a form-typed one. Optional: a
+		// schema that cannot be read leaves only already-marked values to encrypt.
+		boolean marked = false;
 		try {
-			com.fasterxml.jackson.databind.ObjectMapper encMapper = new com.fasterxml.jackson.databind.ObjectMapper();
-			com.fasterxml.jackson.databind.JsonNode tree = encMapper.readTree(content);
-			if (org.vorpal.blade.framework.v2.config.CredentialEncryption.encryptTree(tree)) {
+			String fileName = filePath.getFileName().toString();
+			String schemaJson = loadSchemaFromFilesystem(fileName.substring(0, fileName.length() - ".json".length()));
+			if (schemaJson != null) {
+				JsonNode schemaRoot = encMapper.readTree(schemaJson);
+				AiConfigService.markPasswordsForEncryption(tree, schemaRoot, schemaRoot);
+				marked = !tree.equals(encMapper.readTree(content));
+			}
+		} catch (Exception e) {
+			logger.log(Level.WARNING, "password fields not marked for " + filePath.getFileName() + ": " + e.getMessage());
+		}
+		// What the browser's JavaScript did to the document in passing (key
+		// order, long integers): undone against the text the page's form came
+		// from, else the destination as it is ([JsonRepair]).
+		try {
+			java.util.List<JsonNode> sources = new java.util.ArrayList<>();
+			addSource(sources, sourceText, encMapper);
+			if (sourceFile != null && !sourceFile.isEmpty()) {
+				try {
+					Path form = configPath(writtenPath(sourceFile));
+					if (!form.equals(filePath)) addSource(sources, readIfThere(form), encMapper);
+				} catch (IOException outside) {
+					// not a config file: no source
+				}
+			}
+			addSource(sources, readIfThere(filePath), encMapper);
+			java.util.List<JsonNode> editor = new java.util.ArrayList<>();
+			addSource(editor, editorText, encMapper);
+			if (JsonRepair.repair(tree, sources, editor.isEmpty() ? null : editor.get(0))) {
+				marked = true;   // write the repaired tree
+			}
+		} catch (IOException e) {
+			logger.log(Level.FINE, "not repaired against the source of " + filePath.getFileName() + " (unreadable)", e);
+		}
+		// A secret encrypted by another domain (an import): this one cannot
+		// decrypt it, so on the engines the credential would be broken. One the
+		// file already holds is left alone (it is this file's own).
+		refuseForeignSecrets(tree, filePath, encMapper);
+		// Encryption itself is not optional: a secret is never written as
+		// {CLEARTEXT}. A failure refuses the save (the page sees the error).
+		{
+			if (hasCleartext(tree) && !org.vorpal.blade.framework.v2.config.CredentialEncryption.isAvailable()) {
+				throw new IOException("not saved: the domain's encryption service is not available to encrypt a secret");
+			}
+			// Where the secrets are before encryption, to check each after: the
+			// framework hands back plaintext when encryption itself fails.
+			java.util.List<String> secretPaths = new java.util.ArrayList<>();
+			cleartextPaths(tree, "", secretPaths);
+			boolean encrypted = org.vorpal.blade.framework.v2.config.CredentialEncryption.encryptTree(tree);
+			for (String at : secretPaths) {
+				String v = tree.at(at).asText("");
+				if (!v.matches("^\\{(AES|AES256|3DES)\\}.*")) {
+					throw new IOException("not saved: a secret could not be encrypted");
+				}
+			}
+			if (encrypted || marked) {
 				content = encMapper.writerWithDefaultPrettyPrinter().writeValueAsString(tree);
 				System.out.println("Encrypted {CLEARTEXT} credentials in " + filePath.getFileName());
 			}
-		} catch (Exception e) {
-			System.out.println("Warning: credential encryption skipped: " + e.getMessage());
+			if (hasCleartext(encMapper.readTree(content))) {
+				throw new IOException("not saved: a secret could not be encrypted");
+			}
 		}
 
 		// Backs up existing content into .versions/, creates parent dirs, writes.
 		store.write(filePath, content);
 	}
 
+	private static void refuseForeignSecrets(JsonNode tree, Path filePath, ObjectMapper mapper) throws IOException {
+		if (!org.vorpal.blade.framework.v2.config.CredentialEncryption.isAvailable()) return;
+		java.util.Set<String> known = new java.util.HashSet<>();
+		if (Files.isRegularFile(filePath)) {
+			try {
+				collectStrings(mapper.readTree(Files.readAllBytes(filePath)), known);
+			} catch (IOException unreadable) {
+				// nothing known
+			}
+		}
+		java.util.Set<String> mine = new java.util.HashSet<>();
+		collectStrings(tree, mine);
+		for (String v : mine) {
+			if (!v.matches("^\\{(AES|AES256|3DES)\\}.+") || known.contains(v)) continue;
+			if (v.equals(org.vorpal.blade.framework.v2.config.CredentialEncryption.decrypt(v))) {
+				throw new IOException("not saved: a secret is encrypted by another domain and cannot be read here; type it again");
+			}
+		}
+	}
+
+	private static void collectStrings(JsonNode n, java.util.Set<String> out) {
+		if (n == null) return;
+		if (n.isTextual()) out.add(n.asText());
+		else n.forEach(c -> collectStrings(c, out));
+	}
+
+	/// JSON Pointers of every string value marked {CLEARTEXT}.
+	static void cleartextPaths(JsonNode node, String at, java.util.List<String> out) {
+		if (node == null) return;
+		if (node.isTextual()) {
+			if (node.asText().startsWith("{CLEARTEXT}")) out.add(at);
+		} else if (node.isObject()) {
+			node.fieldNames().forEachRemaining(k -> cleartextPaths(node.get(k), at + "/" + k.replace("~", "~0").replace("/", "~1"), out));
+		} else if (node.isArray()) {
+			for (int i = 0; i < node.size(); i++) cleartextPaths(node.get(i), at + "/" + i, out);
+		}
+	}
+
+	/// Any string value still marked {CLEARTEXT}: a secret not yet encrypted.
+	static boolean hasCleartext(JsonNode node) {
+		if (node == null) return false;
+		if (node.isTextual()) return node.asText().startsWith("{CLEARTEXT}");
+		for (JsonNode child : node) {
+			if (hasCleartext(child)) return true;
+		}
+		return false;
+	}
+
 	private String listVersions(String relativePath) throws IOException {
-		Path filePath = configPath(relativePath);
+		return listVersionsAt(configPath(relativePath));
+	}
+
+	/// The versions of a file already resolved and confined: a config through
+	/// configPath, a template through resolveTextFilePath.
+	private String listVersionsAt(Path filePath) throws IOException {
 		java.util.List<java.util.Map<String, Object>> versionList = new java.util.ArrayList<>();
 
 		// listVersions returns newest-first; preserve the JSON shape the
@@ -633,15 +1427,33 @@ public class FileManagerServlet {
 	}
 
 	private String restoreVersion(String relativePath, String timestampStr) throws IOException {
-		return store.restore(configPath(relativePath), Long.parseLong(timestampStr));
+		String text = store.restore(configPath(relativePath), Long.parseLong(timestampStr));
+		return text != null && text.startsWith("\uFEFF") ? text.substring(1) : text;
 	}
 
 	private String getVersionContent(String relativePath, String timestampStr) throws IOException {
-		return store.readVersion(configPath(relativePath), Long.parseLong(timestampStr));
+		String text = store.readVersion(configPath(relativePath), Long.parseLong(timestampStr));
+		// A byte-order mark, as on load: the page's JSON.parse refuses one.
+		return text != null && text.startsWith("\uFEFF") ? text.substring(1) : text;
+	}
+
+	/// Whether `text` is one JSON object and nothing after it, as the page's
+	/// JSON.parse reads it. Jackson's readTree stops at the first value, so
+	/// `{..} {..}` or a stray `}` would pass it and then fail on the page.
+	static boolean wholeObject(String text) throws IOException {
+		if (text == null) return false;
+		try (com.fasterxml.jackson.core.JsonParser p = objectMapper.getFactory().createParser(text)) {
+			JsonNode tree = objectMapper.readTree(p);
+			return tree != null && tree.isObject() && p.nextToken() == null;
+		}
 	}
 
 	private String listTargetDirectories() throws IOException {
 		java.util.List<java.util.Map<String, Object>> targetList = new java.util.ArrayList<>();
+
+		// Which folders name a real cluster or server: one left behind by a
+		// rename is listed, marked, so its file can still be read.
+		java.util.Set<String> clusterNames = domainPlaces(true), serverNames = domainPlaces(false);
 
 		// Add domain directory
 		Path domainPath = Paths.get(CONFIG_BASE);
@@ -666,7 +1478,8 @@ public class FileManagerServlet {
 							clusterInfo.put("name", clusterName);
 							clusterInfo.put("path", CONFIG_BASE + "/_clusters/" + clusterName);
 							clusterInfo.put("type", "cluster");
-							clusterInfo.put("displayName", "Cluster: " + clusterName);
+							clusterInfo.put("displayName", "Cluster: " + clusterName
+									+ (clusterNames == null || clusterNames.contains(clusterName) ? "" : " (not in this domain)"));
 							targetList.add(clusterInfo);
 						});
 			}
@@ -684,7 +1497,8 @@ public class FileManagerServlet {
 							serverInfo.put("name", serverName);
 							serverInfo.put("path", CONFIG_BASE + "/_servers/" + serverName);
 							serverInfo.put("type", "server");
-							serverInfo.put("displayName", "Server: " + serverName);
+							serverInfo.put("displayName", "Server: " + serverName
+									+ (serverNames == null || serverNames.contains(serverName) ? "" : " (not in this domain)"));
 							targetList.add(serverInfo);
 						});
 			}
@@ -703,18 +1517,32 @@ public class FileManagerServlet {
 			result.put("jsonFile", targetDirectory + "/" + jsonFileName);
 			result.put("jsonFileType", "primary");
 			result.put("exists", true);
+			// Named, so the page can drop a reply to a load it has since replaced.
+			result.put("schemaName", schemaName);
+			result.put("targetDirectory", targetDirectory);
+			// The version of the file Save would write ("none" before it exists),
+			// so two operators creating one overlay do not race.
+			result.put("version", fileVersion(jsonPath));
 			return objectMapper.writeValueAsString(result);
 		}
 
 		// Only check for sample files if target is domain directory
 		if (targetDirectory.equals(CONFIG_BASE)) {
-			Path samplePath = Paths.get(SAMPLES_DIR + "/" + schemaName + ".json");
+			// Samples are <name>.json.SAMPLE (loadSampleFromFilesystem); a
+			// ".json" here never matched, so an app with no file opened empty.
+			Path samplePath = Paths.get(SAMPLES_DIR, sanitizeName(schemaName) + ".json.SAMPLE");
 			if (Files.exists(samplePath)) {
 				java.util.Map<String, Object> result = new java.util.HashMap<>();
 				result.put("appName", schemaName);
 				result.put("jsonFileType", "sample");
 				result.put("exists", true);
-				return objectMapper.writeValueAsString(result);
+				// Named, so the page can drop a reply to a load it has since replaced.
+			result.put("schemaName", schemaName);
+			result.put("targetDirectory", targetDirectory);
+			// The version of the file Save would write ("none" before it exists),
+			// so two operators creating one overlay do not race.
+			result.put("version", fileVersion(jsonPath));
+			return objectMapper.writeValueAsString(result);
 			}
 		}
 
@@ -723,25 +1551,34 @@ public class FileManagerServlet {
 		result.put("jsonFile", null);
 		result.put("jsonFileType", null);
 		result.put("exists", false);
-		return objectMapper.writeValueAsString(result);
+		// Named, so the page can drop a reply to a load it has since replaced.
+			result.put("schemaName", schemaName);
+			result.put("targetDirectory", targetDirectory);
+			// The version of the file Save would write ("none" before it exists),
+			// so two operators creating one overlay do not race.
+			result.put("version", fileVersion(jsonPath));
+			return objectMapper.writeValueAsString(result);
 	}
 
+	/// Every send to a session, one at a time: replies come from the socket's
+	/// own thread and from workers (publish, template push, the assistant), and
+	/// the WebSocket API lets a send fail while another is in progress, which
+	/// would lose the reply the page is waiting on.
 	private void sendMessageToSession(Session session, String message) {
-		try {
-			if (session.isOpen()) {
-				session.getBasicRemote().sendText(message);
+		synchronized (session) {
+			try {
+				if (session.isOpen()) {
+					session.getBasicRemote().sendText(message);
+				}
+			} catch (IOException | RuntimeException e) {
+				logger.log(Level.SEVERE, "Error sending message to session " + session.getId(), e);
 			}
-		} catch (IOException e) {
-			logger.log(Level.SEVERE, "Error sending message to session " + session.getId(), e);
 		}
 	}
 
-	/// Send from a worker thread. The async remote is safe to call while the
-	/// container thread may be writing ping replies on the basic remote.
+	/// Send from a worker thread: the same serialized send.
 	private void sendMessageToSessionAsync(Session session, String message) {
-		if (session.isOpen()) {
-			session.getAsyncRemote().sendText(message);
-		}
+		sendMessageToSession(session, message);
 	}
 
 	/// The AI settings: the domain's shared `blade-ai.json` when it exists
@@ -778,9 +1615,40 @@ public class FileManagerServlet {
 		}
 	}
 
-	/// Latest handshake per user. A user's roles are the same on every socket;
-	/// the origin flag is the page of their most recent handshake.
-	private static final Map<String, Access> ACCESS = new ConcurrentHashMap<>();
+	/// Handshake results waiting for their socket to open, keyed by user and
+	/// the socket URL's query: the page adds a random `k` to it. Keyed by user
+	/// alone, a cross-site socket could pick up the flag of the same user's
+	/// real tab; it cannot know that tab's `k`. onOpen moves the result onto
+	/// the session, so each socket keeps its own.
+	private static final Map<String, Access> HANDSHAKES = new ConcurrentHashMap<>();
+	/// An ai_error naming the request it answers.
+	private String aiError(String requestId, String message) {
+		try {
+			com.fasterxml.jackson.databind.node.ObjectNode e = objectMapper.createObjectNode();
+			e.put("requestId", requestId);
+			e.put("error", message);
+			return objectMapper.writeValueAsString(e);
+		} catch (Exception x) {
+			return message;
+		}
+	}
+
+	/// One save at a time per file, around the version check and the write.
+	private static final Map<String, Object> SAVE_LOCKS = new ConcurrentHashMap<>();
+
+	/// The lock for a config file, by its resolved path (one per file, whatever
+	/// the spelling of the request).
+	private static Object saveLock(String file) throws IOException {
+		return SAVE_LOCKS.computeIfAbsent(configPath(file).toString(), k -> new Object());
+	}
+	/// When each waiting handshake was made; one whose socket never opened is
+	/// dropped after a minute, so the map does not grow.
+	private static final Map<String, Long> HANDSHAKE_TIMES = new ConcurrentHashMap<>();
+	private static final String ACCESS_KEY = "blade.configurator.access";
+
+	private static String handshakeKey(String user, String query) {
+		return user + "|" + (query == null ? "" : query);
+	}
 
 	/// Records, at the handshake, whether the user may change configuration
 	/// (Admin or Operator; Deployer and Monitor read) and whether the page
@@ -799,7 +1667,15 @@ public class FileManagerServlet {
 			boolean sameOrigin = SameOriginFilter.allowed("GET", "websocket", header(request, "Origin"),
 					header(request, "Referer"), header(request, "Host"), header(request, "X-Forwarded-Host"),
 					CorsFilter.parseOrigins(System.getProperty(CorsFilter.ALLOWED_ORIGINS_PROPERTY)));
-			ACCESS.put(user.getName(), new Access(writer, sameOrigin));
+			long now = System.currentTimeMillis();
+			HANDSHAKE_TIMES.entrySet().removeIf(e -> {
+				if (now - e.getValue() <= 60_000L) return false;
+				HANDSHAKES.remove(e.getKey());
+				return true;
+			});
+			String key = handshakeKey(user.getName(), request.getQueryString());
+			HANDSHAKES.put(key, new Access(writer, sameOrigin));
+			HANDSHAKE_TIMES.put(key, now);
 		}
 
 		private static String header(HandshakeRequest request, String name) {
@@ -819,9 +1695,8 @@ public class FileManagerServlet {
 	}
 
 	private static Access access(Session session) {
-		Principal user = session.getUserPrincipal();
-		Access access = (user != null) ? ACCESS.get(user.getName()) : null;
-		return (access != null) ? access : new Access(false, false);
+		Object a = (session.getUserPrincipal() != null) ? session.getUserProperties().get(ACCESS_KEY) : null;
+		return (a instanceof Access) ? (Access) a : new Access(false, false);
 	}
 
 	private static void requireWriter(Session session) {

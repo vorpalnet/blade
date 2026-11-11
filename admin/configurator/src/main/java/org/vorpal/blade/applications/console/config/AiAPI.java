@@ -40,7 +40,6 @@ public class AiAPI {
 			System.getenv().getOrDefault("DOMAIN_HOME", "."));
 	private static final String CONFIG_BASE = DOMAIN_HOME + "/config/custom/vorpal/";
 	private static final String SCHEMAS_DIR = CONFIG_BASE + "_schemas/";
-	private static final String SELF_APP = "blade-configurator";
 
 	@POST
 	@javax.ws.rs.Path("generate/{app}")
@@ -67,14 +66,23 @@ public class AiAPI {
 
 			String result = AiConfigService.generate(loadAiSettings(), schemaJson, currentJson, instruction);
 			return Response.ok(result).build();
+		} catch (AiConfigService.Unanswered e) {
+			// 422: retrying the same request gets the same answer.
+			return Response.status(422).entity(errorJson(e.getMessage())).type(MediaType.APPLICATION_JSON).build();
 		} catch (IllegalStateException e) {
-			return Response.status(Response.Status.SERVICE_UNAVAILABLE)
-					.entity("{\"error\":\"" + e.getMessage().replace("\"", "'") + "\"}").build();
+			// The assistant is off or has no key: the service is unavailable.
+			return Response.status(Response.Status.SERVICE_UNAVAILABLE).entity(errorJson(e.getMessage()))
+					.type(MediaType.APPLICATION_JSON).build();
 		} catch (Exception e) {
 			logger.log(Level.SEVERE, "AI generate failed for " + app, e);
-			return Response.serverError().entity("{\"error\":\"" + String.valueOf(e.getMessage()).replace("\"", "'") + "\"}")
-					.build();
+			return Response.serverError().entity(errorJson(e.getMessage())).type(MediaType.APPLICATION_JSON).build();
 		}
+	}
+
+	/// An error body built by Jackson: a message with a newline, a backslash
+	/// or a quote (an SDK error carrying a response body) stays valid JSON.
+	private static String errorJson(String message) {
+		return new ObjectMapper().createObjectNode().put("error", String.valueOf(message)).toString();
 	}
 
 	/// The AI settings: the domain's shared `blade-ai.json` when it exists

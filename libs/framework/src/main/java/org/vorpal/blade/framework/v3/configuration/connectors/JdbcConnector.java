@@ -81,7 +81,7 @@ public class JdbcConnector extends Connector implements Serializable {
 	@JsonIgnore
 	private transient DataSource cachedDataSource;
 	@JsonIgnore
-	private transient PreparedQuery cachedQuery;
+	private transient volatile TemplateCache.Derived<PreparedQuery> cachedQuery;
 	@JsonIgnore
 	private transient CircuitBreaker breaker = new CircuitBreaker();
 
@@ -142,13 +142,14 @@ public class JdbcConnector extends Connector implements Serializable {
 		final PreparedQuery query;
 		final List<String> values;
 		try {
-			if (cachedQuery == null) {
-				Path p = Paths.get(TEMPLATES_DIR, queryTemplate);
-				if (!Files.exists(p)) materializeBundledTemplate(queryTemplate, p);
-				if (!Files.exists(p)) throw new IOException("SQL template not found on disk or in the WAR: " + p);
-				cachedQuery = PreparedQuery.compile(Files.readString(p));
+			// Compiled again when the file changes (a pushed template).
+			String sql = templateText(TEMPLATES_DIR, queryTemplate);
+			TemplateCache.Derived<PreparedQuery> made = cachedQuery;
+			if (made == null || made.raw != sql) {
+				made = new TemplateCache.Derived<>(sql, PreparedQuery.compile(sql));
+				cachedQuery = made;
 			}
-			query = cachedQuery;
+			query = made.value;
 			values = query.values(ctx);
 		} catch (Exception e) {
 			sipLogger.warning(sipReq, "JdbcConnector[" + connectorId + "] template load failed: " + e.getMessage());

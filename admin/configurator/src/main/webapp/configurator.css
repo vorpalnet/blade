@@ -25,8 +25,8 @@
     --btn-primary-hover: var(--vorpal-mark-hover);
     --btn-secondary: #6b7280;
     --btn-secondary-hover: #4b5563;
-    --btn-publish: #059669;
-    --btn-publish-hover: #047857;
+    --btn-publish: #047857;   /* white text 5.5:1 (#059669 was 3.8:1) */
+    --btn-publish-hover: #065f46;
     --btn-clone: #8b5cf6;
     --btn-clone-hover: #7c3aed;
     --btn-delete: #e879a0;
@@ -95,8 +95,8 @@
     color-scheme: dark;
     --btn-secondary: #64748b;
     --btn-secondary-hover: #94a3b8;
-    --btn-publish: #10b981;
-    --btn-publish-hover: #34d399;
+    --btn-publish: #047857;   /* white text 5.5:1 (#10b981 was 2.5:1) */
+    --btn-publish-hover: #065f46;
     --btn-clone: #8b5cf6;
     --btn-clone-hover: #a78bfa;
     --btn-delete: #f472b6;
@@ -111,7 +111,7 @@
     --status-warning-bg: #78350f;
     --status-warning-text: #fde68a;
 
-    --dirty-bg: #d97706;
+    --dirty-bg: #92400e;   /* #fef3c7 text 7.6:1 (#d97706 was 2.9:1) */
     --dirty-text: #fef3c7;
 
     --tooltip-bg: #0f172a;
@@ -564,7 +564,7 @@ body.view-mode #dynamicForm .array-header > button,
 body.view-mode #dynamicForm .extras-add-btn {
     display: none !important;
 }
-body.view-mode #btn-ai {
+body.view-mode .ai-ask {
     display: none !important;
 }
 
@@ -920,7 +920,7 @@ body.inspector-open .inspector-panel {
 
 .collapsible-content {
     padding: 10px 12px;
-    transition: max-height 0.3s ease-out, overflow 0s 0.3s;
+    transition: max-height 0.3s ease-out, overflow 0s 0.3s, visibility 0s;
     overflow: visible;
 }
 
@@ -928,7 +928,9 @@ body.inspector-open .inspector-panel {
     max-height: 0;
     padding: 0 12px;
     overflow: hidden;
-    transition: max-height 0.3s ease-out, overflow 0s;
+    visibility: hidden;   /* out of the Tab order too: no focus on a field nobody can see */
+    /* hidden once the fold has run, so the animation shows its content */
+    transition: max-height 0.3s ease-out, overflow 0s, visibility 0s 0.3s;
 }
 
 .collapsible-badge {
@@ -1185,7 +1187,8 @@ button.btn {
 }
 
 /* Auto-publish ON: saves go live on their own, so there is nothing to Publish. */
-body.autopublish-on .btn-publish {
+/* Shown again while something is pending (a catch-up that failed). */
+body.autopublish-on:not(.has-unpublished) .btn-publish {
     display: none;
 }
 
@@ -1276,13 +1279,13 @@ body.autopublish-on .btn-publish {
     flex-wrap: wrap;
     gap: 8px;
     align-items: flex-start;
-    transition: max-height 0.3s ease-out, overflow 0s 0.3s;
+    transition: max-height 0.3s ease-out, overflow 0s 0.3s, visibility 0s;
     overflow: visible;
 }
 .array-item-body.collapsed {
     max-height: 0;
     overflow: hidden;
-    transition: max-height 0.3s ease-out, overflow 0s;
+    transition: max-height 0.3s ease-out, overflow 0s, visibility 0s 0.3s;
 }
 
 /* Arrow leading the array-item-header, following .collapsible-arrow style. */
@@ -1401,7 +1404,7 @@ body.autopublish-on .btn-publish {
 
 .map-entry-content {
     padding: 0 0 0 12px;
-    transition: max-height 0.3s ease-out, overflow 0s 0.3s;
+    transition: max-height 0.3s ease-out, overflow 0s 0.3s, visibility 0s;
     overflow: visible;
 }
 
@@ -1409,7 +1412,7 @@ body.autopublish-on .btn-publish {
     max-height: 0 !important;
     padding: 0 0 0 12px;
     overflow: hidden;
-    transition: max-height 0.3s ease-out, overflow 0s;
+    transition: max-height 0.3s ease-out, overflow 0s, visibility 0s 0.3s;
 }
 
 .map-entry-header .map-key-input {
@@ -2063,3 +2066,27 @@ body.vorpal-glass .container {
 .delete-property-btn { background: transparent; color: var(--text-secondary); border: 1px solid var(--border-strong); }
 .delete-property-btn:hover { background: transparent; color: #cf222e; border-color: #cf222e; transform: none; }
 .delete-property-icon { font-weight: 400; }
+.version-preview { max-height: 40vh; overflow: auto; margin-top: 10px; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 4px; font: 12px "JetBrains Mono", Menlo, monospace; white-space: pre-wrap; }
+
+/* A multi-line secret (a textarea has no password type): shown as discs until the eye toggle. */
+textarea.secret-masked { -webkit-text-security: disc; text-security: disc; }
+
+/* Folded bodies are out of the Tab order as well as out of sight. */
+.array-item-body.collapsed,
+.map-entry-content.collapsed { visibility: hidden; }
+
+/* View Mode said in words, not only by dimmed fields. */
+.view-mode-indicator {
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    border: 1px solid var(--text-secondary);
+    color: var(--text-primary, inherit);
+}
+
+/* Keyboard focus on a section arrow is visible. */
+.collapsible-arrow:focus-visible { outline: 2px solid var(--text-primary, currentColor); outline-offset: 2px; border-radius: 2px; }
+
+/* The words beside an invalid field outside a labelled row. */
+.invalid-mark { font-size: 11px; font-weight: 600; margin-left: 6px; color: var(--status-error-text); }

@@ -37,6 +37,11 @@
     <listener>
         <listener-class>org.vorpal.blade.framework.v3.net.RemotesControl</listener-class>
     </listener>
+    <!-- Receives the _templates/ files the Configurator pushes (one per
+         server is used: a server's applications share the folder). -->
+    <listener>
+        <listener-class>org.vorpal.blade.framework.v3.configuration.templates.TemplatesControl</listener-class>
+    </listener>
 
     <!-- Cross-origin filter for REST endpoints. No-op until an operator sets
          -Dblade.cors.allowedOrigins=<origin>[,<origin>...]; then it grants

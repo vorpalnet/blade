@@ -41,6 +41,18 @@ import com.networknt.schema.ValidationMessage;
 /// admin/api's ApiHttp).
 public class AiConfigService {
 
+	/// The model answered, but with nothing usable (declined, truncated, no
+	/// JSON): the request, not the service, is the problem. Asked again as
+	/// is, it fails again.
+	static final class Unanswered extends IllegalStateException {
+		private static final long serialVersionUID = 1L;
+
+		Unanswered(String message) {
+			super(message);
+		}
+	}
+
+
 	private static final Logger logger = Logger.getLogger(AiConfigService.class.getName());
 	private static final ObjectMapper mapper = new ObjectMapper();
 
@@ -73,10 +85,35 @@ public class AiConfigService {
 		return (settings != null && settings.getAi() != null) ? settings.getAi() : new AiSettings();
 	}
 
-	/// [#generate(AiSettings, String, String, String, String)] with no conversation.
+	/// [#generate(AiSettings, String, String, String, String, boolean)] with no conversation, for a domain file.
 	public static String generate(AiSettings ai, String schemaJson, String currentJson, String instruction)
 			throws Exception {
-		return generate(ai, schemaJson, currentJson, instruction, null);
+		return generate(ai, schemaJson, currentJson, instruction, null, false);
+	}
+
+	/// For a domain file.
+	public static String generate(AiSettings ai, String schemaJson, String currentJson, String instruction,
+			String historyJson) throws Exception {
+		return generate(ai, schemaJson, currentJson, instruction, historyJson, false);
+	}
+
+	/// `schema` with no `required` lists: an overlay (a cluster or server
+	/// file) holds only what differs from the domain file, so a field the
+	/// whole document requires is rightly absent from it.
+	static JsonNode withoutRequired(JsonNode schema) {
+		JsonNode copy = schema.deepCopy();
+		stripRequired(copy);
+		return copy;
+	}
+
+	private static void stripRequired(JsonNode node) {
+		if (node.isObject()) {
+			ObjectNode obj = (ObjectNode) node;
+			if (obj.path("required").isArray()) obj.remove("required");
+			obj.elements().forEachRemaining(AiConfigService::stripRequired);
+		} else if (node.isArray()) {
+			node.elements().forEachRemaining(AiConfigService::stripRequired);
+		}
 	}
 
 	/// Answers one message of the Configurator's chat. `historyJson` is the
@@ -85,7 +122,7 @@ public class AiConfigService {
 	/// true|false, "errors": [ ... ]}`: `config` null for a question.
 	/// Throws on missing key, refusal, unreachable API, or unparseable output.
 	public static String generate(AiSettings ai, String schemaJson, String currentJson, String instruction,
-			String historyJson) throws Exception {
+			String historyJson, boolean overlay) throws Exception {
 
 		if (ai == null || !ai.isEnabled()) {
 			throw new IllegalStateException("The AI assistant is off; turn it on in blade-ai.");
@@ -102,6 +139,13 @@ public class AiConfigService {
 
 		JsonNode redacted = redactSecrets(currentNode.deepCopy(), schemaNode);
 		String userPrompt = buildPrompt(schemaJson, mapper.writeValueAsString(redacted), conversation(historyJson), instruction);
+		if (overlay) {
+			userPrompt += "\n\nThis file is a cluster or server overlay: it holds only what differs from the domain "
+					+ "file (maps merge by key, lists are appended to the domain's). Keep it partial; do not copy "
+					+ "the domain's settings into it.";
+		}
+		// An overlay is checked without `required`: it is partial on purpose.
+		JsonNode checkSchema = overlay ? withoutRequired(schemaNode) : schemaNode;
 
 		String text = callClaude(ai, apiKey, userPrompt);
 		JsonNode answer = extractJson(text);
@@ -115,7 +159,7 @@ public class AiConfigService {
 			result.putArray("errors");
 			return mapper.writeValueAsString(result);
 		}
-		List<String> errors = validate(schemaNode, proposed);
+		List<String> errors = validate(checkSchema, withSecrets(currentNode, proposed));
 
 		if (!errors.isEmpty()) {
 			logger.info("AI draft failed validation (" + errors.size() + " errors), retrying once");
@@ -129,10 +173,13 @@ public class AiConfigService {
 				proposed = repaired;
 				if (replyOf(answer) != null) reply = replyOf(answer);
 			}
-			errors = validate(schemaNode, proposed);
+			errors = validate(checkSchema, withSecrets(currentNode, proposed));
 		}
 
 		restoreRedacted(currentNode, proposed);
+		for (String at : unrestoredSecrets(proposed, "")) {
+			errors.add(at + ": a secret here could not be carried over; enter it again before saving");
+		}
 
 		ObjectNode result = mapper.createObjectNode();
 		result.put("reply", reply != null ? reply : "");
@@ -162,16 +209,16 @@ public class AiConfigService {
 			Message response = client.messages().create(params);
 
 			if (response.stopReason().filter(StopReason.REFUSAL::equals).isPresent()) {
-				throw new IllegalStateException("The model declined this request.");
+				throw new Unanswered("The model declined this request.");
 			}
 			if (response.stopReason().filter(StopReason.MAX_TOKENS::equals).isPresent()) {
-				throw new IllegalStateException("The model's response was truncated (max tokens). Try a narrower instruction.");
+				throw new Unanswered("The model's response was truncated (max tokens). Try a narrower instruction.");
 			}
 
 			StringBuilder sb = new StringBuilder();
 			response.content().forEach(block -> block.text().ifPresent(t -> sb.append(t.text())));
 			if (sb.length() == 0) {
-				throw new IllegalStateException("The model returned no text (stop reason: " + response.stopReason() + ").");
+				throw new Unanswered("The model returned no text (stop reason: " + response.stopReason() + ").");
 			}
 			return sb.toString();
 		} finally {
@@ -258,22 +305,82 @@ public class AiConfigService {
 		subschema = resolveRef(subschema, schemaRoot);
 		if (node.isObject()) {
 			ObjectNode obj = (ObjectNode) node;
+			// A name/value pair naming a secret ({"name": "X-Api-Key", "value": "..."}):
+			// the value is the secret, though neither key says so.
+			boolean namedSecret = false;
+			for (String n : new String[] { "name", "key", "header", "field" }) {
+				if (obj.path(n).isTextual() && secretName(obj.get(n).asText())) namedSecret = true;
+			}
 			Iterator<Map.Entry<String, JsonNode>> fields = obj.fields();
 			while (fields.hasNext()) {
 				Map.Entry<String, JsonNode> field = fields.next();
 				JsonNode childSchema = childSchema(subschema, field.getKey(), schemaRoot);
-				if (field.getValue().isTextual() && isSecret(field.getValue().asText(), childSchema)) {
+				if (field.getValue().isTextual()
+						&& (isSecret(field.getValue().asText(), childSchema) || secretName(field.getKey())
+								|| (namedSecret && "value".equals(field.getKey())))) {
 					obj.put(field.getKey(), REDACTED);
+				} else if (field.getValue().isContainerNode() && secretName(field.getKey())) {
+					redactAll(field.getValue());   // "tokens": [...], "credentials": {...}: every text in it
 				} else {
 					redactWalk(field.getValue(), childSchema, schemaRoot);
 				}
 			}
 		} else if (node.isArray()) {
 			JsonNode itemsSchema = (subschema != null) ? subschema.get("items") : null;
-			for (JsonNode item : node) {
-				redactWalk(item, itemsSchema, schemaRoot);
+			ArrayNode arr = (ArrayNode) node;
+			for (int i = 0; i < arr.size(); i++) {
+				JsonNode item = arr.get(i);
+				// A secret that is itself a list item (a list of passwords or keys).
+				if (item.isTextual() && isSecret(item.asText(), resolveRef(itemsSchema, schemaRoot))) {
+					arr.set(i, REDACTED);
+				} else {
+					redactWalk(item, itemsSchema, schemaRoot);
+				}
 			}
 		}
+	}
+
+	/// A copy of `proposed` with the secrets the model saw as {REDACTED} put
+	/// back, for validation only: a `pattern` on a password must judge the
+	/// password, not the marker. The model is never shown this copy.
+	private static JsonNode withSecrets(JsonNode current, JsonNode proposed) {
+		JsonNode copy = proposed.deepCopy();
+		restoreRedacted(current, copy);
+		return copy;
+	}
+
+	/// Every text value under `node` replaced by {REDACTED}.
+	private static void redactAll(JsonNode node) {
+		if (node.isObject()) {
+			ObjectNode obj = (ObjectNode) node;
+			List<String> keys = new ArrayList<>();
+			obj.fieldNames().forEachRemaining(keys::add);
+			for (String k : keys) {
+				if (obj.get(k).isTextual()) obj.put(k, REDACTED);
+				else redactAll(obj.get(k));
+			}
+		} else if (node.isArray()) {
+			ArrayNode arr = (ArrayNode) node;
+			for (int i = 0; i < arr.size(); i++) {
+				if (arr.get(i).isTextual()) arr.set(i, REDACTED);
+				else redactAll(arr.get(i));
+			}
+		}
+	}
+
+	/// A key that names a secret whatever its schema says: a header map's
+	/// "Authorization", a "token" or "apiKey" in a free-form map. Not one that
+	/// names where a secret goes or how it is handled (`tokenUrl`,
+	/// `secretName`, `passwordFile`, `tokenTtl`): the model needs those to
+	/// answer and to edit them.
+	static boolean secretName(String key) {
+		if (key == null) return false;
+		String k = key.toLowerCase(java.util.Locale.ROOT);
+		if (k.matches("pwd|pass|psk")) return true;
+		// keystorePass, trustStorePass, passphrase, preSharedKey (not bypass, compass)
+		if (k.matches(".*((?<!by|com)pass|passphrase|psk|presharedkey)")) return true;
+		return k.matches(".*(authorization|token|secret|password|passwd|api[-_]?key|cookie|credential|private[-_]?key).*")
+				&& !k.matches(".*(url|uri|endpoint|path|file|name|type|header|enabled|ttl|expiry|expiration|timeout|seconds|length|policy|scheme|algorithm)s?");
 	}
 
 	private static boolean isSecret(String value, JsonNode subschema) {
@@ -281,7 +388,21 @@ public class AiConfigService {
 		if (resolved != null && resolved.path("format").asText("").equals("password")) {
 			return true;
 		}
-		return isCredentialValue(value);
+		return isCredentialValue(value) || carriesCredential(value);
+	}
+
+	/// A value with a credential inside ordinary text: a URL's password
+	/// (`https://user:pass@host`), a connection string's `password=`, an
+	/// HTTP `Bearer` or `Basic` credential.
+	static boolean carriesCredential(String value) {
+		if (value == null) return false;
+		return value.matches("(?s)^[A-Za-z][A-Za-z0-9+.-]*://[^/@\\s:]+:[^@\\s/]+@.*")
+				// No "//": jdbc:oracle:thin:scott/tiger@db, sip:alice:pw@host
+				|| value.matches("(?s)^[A-Za-z][A-Za-z0-9+.-]*:([A-Za-z0-9+.-]+:)*[^/@\\s:;]+[:/][^@\\s/:;]+@.*")
+				// A header written out: "X-Api-Key: abc", "Authorization: Token xyz"
+				|| value.matches("(?is)^\\s*[a-z0-9-]*(authorization|token|api-?key|secret|cookie|password)[a-z0-9-]*\\s*:\\s*\\S.*")
+				|| value.matches("(?is).*(^|[;&?\\s])(password|pwd|passwd)=.*")
+				|| value.matches("(?is)^(authorization:\\s*)?(bearer|basic)\\s+[A-Za-z0-9._~+/=-]{8,}\\s*$");
 	}
 
 	private static JsonNode childSchema(JsonNode objectSchema, String fieldName, JsonNode schemaRoot) {
@@ -295,6 +416,31 @@ public class AiConfigService {
 		JsonNode additional = objectSchema.get("additionalProperties");
 		if (additional != null && additional.isObject()) {
 			return resolveRef(additional, schemaRoot);
+		}
+		// victools' variant wrapper: {"$ref": base, "properties": {"type": {const}}}.
+		// The wrapper's own properties pin the type; the fields are on the base.
+		JsonNode ref = objectSchema.get("$ref");
+		if (ref != null && ref.isTextual()) {
+			JsonNode base = resolveRef(objectSchema, schemaRoot);
+			if (base != null && base != objectSchema) {
+				JsonNode found = childSchema(base, fieldName, schemaRoot);
+				if (found != null) return found;
+			}
+		}
+		// A polymorphic object (a pipeline connector, an authentication): the
+		// field's schema in whichever variant has it, a password one first, so
+		// a plain password in any variant is redacted too.
+		for (String key : new String[] { "anyOf", "oneOf" }) {
+			JsonNode variants = objectSchema.get(key);
+			if (variants == null || !variants.isArray()) continue;
+			JsonNode found = null;
+			for (JsonNode v : variants) {
+				JsonNode child = childSchema(resolveRef(v, schemaRoot), fieldName, schemaRoot);
+				if (child == null) continue;
+				if (resolveRef(child, schemaRoot).path("format").asText("").equals("password")) return child;
+				if (found == null) found = child;
+			}
+			if (found != null) return found;
 		}
 		return null;
 	}
@@ -330,10 +476,18 @@ public class AiConfigService {
 			}
 		} else if (proposed.isArray()) {
 			ArrayNode arr = (ArrayNode) proposed;
+			// Each item's original first: one claimed by two proposed items (an
+			// edit made one equal to another apart from secrets) gives its
+			// secret to neither, or one would silently get the other's
+			// credential. Left {REDACTED}: reported, and Save asks for them.
+			JsonNode[] from = new JsonNode[arr.size()];
+			java.util.IdentityHashMap<JsonNode, Integer> claims = new java.util.IdentityHashMap<>();
 			for (int i = 0; i < arr.size(); i++) {
-				JsonNode originalChild = (original != null && original.isArray() && i < original.size()) //
-						? original.get(i)
-						: null;
+				from[i] = originalItem(original, arr.get(i), i, arr.size());
+				if (from[i] != null) claims.merge(from[i], 1, Integer::sum);
+			}
+			for (int i = 0; i < arr.size(); i++) {
+				JsonNode originalChild = (from[i] != null && claims.get(from[i]) == 1) ? from[i] : null;
 				if (arr.get(i).isTextual() && REDACTED.equals(arr.get(i).asText())) {
 					if (originalChild != null && originalChild.isTextual()) {
 						arr.set(i, originalChild);
@@ -345,10 +499,136 @@ public class AiConfigService {
 		}
 	}
 
+	/// The original item a proposed list item came from: the one with the same
+	/// `id` (or `name`), else the one at the same place when the list kept its
+	/// length. By place alone, removing the first endpoint would hand the
+	/// second endpoint's secret the first one's value.
+	private static JsonNode originalItem(JsonNode original, JsonNode item, int i, int proposedSize) {
+		if (original == null || !original.isArray()) return null;
+		// The one original that is this item apart from its secrets: neither an
+		// id shared by two items (connector ids need not be unique) nor a
+		// position (the list may have been reordered) can tell which it was.
+		JsonNode match = null;
+		for (JsonNode o : original) {
+			if (sameButSecrets(o, item)) {
+				if (match != null) { match = null; break; }   // two candidates: neither
+				match = o;
+			}
+		}
+		if (match != null) return match;
+		// A bare secret string in a list ("keys": ["{AES}a", "{AES}b"]): every
+		// text item matches it. In a list of the same length, the one at its
+		// place; else none (reported).
+		if (item.isTextual() && REDACTED.equals(item.asText()) && proposedSize == original.size()
+				&& original.get(i) != null && original.get(i).isTextual()) {
+			return original.get(i);
+		}
+		// Changed besides its secrets: by its id or name when that is unique.
+		for (String key : new String[] { "id", "name" }) {
+			if (item.isObject() && item.path(key).isTextual()) {
+				String want = item.get(key).asText();
+				JsonNode only = null;
+				int count = 0;
+				for (JsonNode o : original) {
+					if (o.isObject() && want.equals(o.path(key).asText(null))) { only = o; count++; }
+				}
+				return (count == 1) ? only : null;
+			}
+		}
+		return null;   // left as {REDACTED}: reported, and Save refuses it
+	}
+
+	/// Equal once every {REDACTED} in `proposed` is taken as matching anything.
+	private static boolean sameButSecrets(JsonNode original, JsonNode proposed) {
+		if (proposed.isTextual() && REDACTED.equals(proposed.asText())) return original != null && original.isTextual();
+		if (original == null || original.getNodeType() != proposed.getNodeType()) return false;
+		if (proposed.isObject()) {
+			if (original.size() != proposed.size()) return false;
+			java.util.Iterator<String> names = proposed.fieldNames();
+			while (names.hasNext()) {
+				String k = names.next();
+				if (!sameButSecrets(original.get(k), proposed.get(k))) return false;
+			}
+			return true;
+		}
+		if (proposed.isArray()) {
+			if (original.size() != proposed.size()) return false;
+			for (int j = 0; j < proposed.size(); j++) if (!sameButSecrets(original.get(j), proposed.get(j))) return false;
+			return true;
+		}
+		return original.equals(proposed);
+	}
+
+	/// Paths in `node` still holding `{REDACTED}`: secrets the proposal moved or
+	/// added that no original value matches. Saved as is, the marker would
+	/// become the credential.
+	static List<String> unrestoredSecrets(JsonNode node, String path) {
+		List<String> out = new java.util.ArrayList<>();
+		if (node == null) return out;
+		// Also a marker kept inside other text ("{REDACTED}!", a URL around
+		// it): nothing restores that, and saved it is the credential.
+		if (node.isTextual() && node.asText().contains(REDACTED)) {
+			out.add(path.isEmpty() ? "(root)" : path);
+		} else if (node.isObject()) {
+			node.fields().forEachRemaining(e -> out.addAll(unrestoredSecrets(e.getValue(), path.isEmpty() ? e.getKey() : path + "." + e.getKey())));
+		} else if (node.isArray()) {
+			for (int i = 0; i < node.size(); i++) out.addAll(unrestoredSecrets(node.get(i), path + "[" + i + "]"));
+		}
+		return out;
+	}
+
+	/// Marks for encryption every plain value in a password field: a secret
+	/// typed in the JSON tab arrives bare (only the form adds `{CLEARTEXT}`),
+	/// and the server encrypts only marked values. Already marked or
+	/// encrypted values (`{SCHEME}...`) and `${variable}` references stay as
+	/// they are.
+	static void markPasswordsForEncryption(JsonNode node, JsonNode subschema, JsonNode schemaRoot) {
+		subschema = resolveRef(subschema, schemaRoot);
+		if (node.isObject()) {
+			ObjectNode obj = (ObjectNode) node;
+			java.util.List<String> keys = new java.util.ArrayList<>();
+			obj.fieldNames().forEachRemaining(keys::add);
+			for (String k : keys) {
+				JsonNode child = childSchema(subschema, k, schemaRoot);
+				JsonNode v = obj.get(k);
+				if (v.isTextual() && bareSecret(v.asText(), child, schemaRoot)) obj.put(k, "{CLEARTEXT}" + v.asText());
+				else markPasswordsForEncryption(v, child, schemaRoot);
+			}
+		} else if (node.isArray()) {
+			JsonNode items = (subschema != null) ? subschema.get("items") : null;
+			ArrayNode arr = (ArrayNode) node;
+			for (int i = 0; i < arr.size(); i++) {
+				JsonNode v = arr.get(i);
+				if (v.isTextual() && bareSecret(v.asText(), items, schemaRoot)) arr.set(i, "{CLEARTEXT}" + v.asText());
+				else markPasswordsForEncryption(v, items, schemaRoot);
+			}
+		}
+	}
+
+	private static boolean bareSecret(String value, JsonNode schema, JsonNode schemaRoot) {
+		JsonNode s = resolveRef(schema, schemaRoot);
+		return s != null && "password".equals(s.path("format").asText("")) && !value.isEmpty()
+				&& !value.matches("^\\{(CLEARTEXT|AES|AES256|3DES)\\}.*") && !value.matches("^\\$\\{[^}]+\\}$")
+				&& !REDACTED.equals(value);
+	}
+
 	/// Same validation idiom as ValidationAPI: networknt against the app's
 	/// generated schema. Returns human-readable messages, empty when valid.
+	/// The validator for the schema's own draft (its `$schema`; victools writes
+	/// 2020-12), not draft 4: draft 4 has no `const`, so each variant's `type`
+	/// discriminator went unchecked.
+	static JsonSchemaFactory factoryFor(JsonNode schemaNode) {
+		SpecVersion.VersionFlag version;
+		try {
+			version = com.networknt.schema.SpecVersionDetector.detect(schemaNode);
+		} catch (Exception unstated) {
+			version = SpecVersion.VersionFlag.V202012;
+		}
+		return JsonSchemaFactory.getInstance(version);
+	}
+
 	static List<String> validate(JsonNode schemaNode, JsonNode configNode) {
-		JsonSchemaFactory factory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V4);
+		JsonSchemaFactory factory = factoryFor(schemaNode);
 		JsonSchema schema = factory.getSchema(schemaNode);
 		Set<ValidationMessage> messages = schema.validate(configNode);
 		List<String> errors = new ArrayList<>();
@@ -363,7 +643,7 @@ public class AiConfigService {
 		int start = trimmed.indexOf('{');
 		int end = trimmed.lastIndexOf('}');
 		if (start < 0 || end <= start) {
-			throw new IllegalStateException("The model's response contained no JSON document.");
+			throw new Unanswered("The model's response contained no JSON document.");
 		}
 		return mapper.readTree(trimmed.substring(start, end + 1));
 	}

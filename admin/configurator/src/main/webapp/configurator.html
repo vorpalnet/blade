@@ -10,10 +10,11 @@
     <link rel="stylesheet" href="/blade/portal/lib/blade-chat.css">
     <script src="/blade/portal/lib/blade-chat.js"></script>
     <link rel="icon" type="image/svg+xml" href="/blade/configurator/favicon.svg">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.8/ace.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.8/mode-json.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.8/theme-eclipse.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.8/theme-tomorrow_night.js"></script>
+    <!-- Pinned by integrity (cdnjs SRI): a changed file is refused, not run on a page that saves live config. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.8/ace.js" integrity="sha512-u8Li+VRzprAsXVzZsUJ/BJm5fk6T4yFNFqh8t2QjiwtRopvsrTPss4rwOxsUMdksqngUgLjN6wrxD4DU9c3l7Q==" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.8/mode-json.js" integrity="sha512-K9nwYxcdKq91w5NbC7rkORXlpgsywjgN7LbZUlMAWYq1GL8L5XVKVSQHSNNG5iaRqfqGnJS/PBT/sDn7ZzjdLQ==" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.8/theme-eclipse.js" integrity="sha512-WzzULpBkICxuHQoiNIO9odQXqDOYMAtVDr9p5S+s13vseb+a6nZhJsPsFX+YV90EGS8s4A8GTlSD923CssGBeQ==" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.8/theme-tomorrow_night.js" integrity="sha512-PH9WSuzKhK5ItfPV9sxmQ+G3FNBsr+9XizNgzjlwWvtf2QdlByE0b26TdjjJbe0MnqN2jaL4yU/srIJJFVnkKg==" crossorigin="anonymous"></script>
     <!-- Embed mode (?embed=1): tightens the in-page padding when iframed
          by the portal but keeps the brand topbar visible so navigation
          parity (Overview / Editor / Documentation) is preserved whether
@@ -50,7 +51,6 @@
             <a id="to-board" class="vorpal-topbar-link" href="/blade/dashboard/" target="blade-dashboard" style="display: none"
             	title="Back to the dashboard that opened this">Dashboard ↗</a>
             <script>if (/^blade-/.test(window.name) && window.name !== 'blade-dashboard') document.getElementById('to-board').style.display = '';</script>
-            <span class="vorpal-pill">Ready</span>
         </div>
     </header>
 
@@ -69,9 +69,13 @@
                 <option value="">-- Select a Schema --</option>
             </select>
             <span id="websocket-status" class="sync-status warning" style="display: inline-flex;">WebSocket: Connecting...</span>
-            <span id="schema-load-status" class="sync-status" style="display: none;"></span>
+            <span id="schema-load-status" class="sync-status" role="status" aria-live="polite" style="display: none;"></span>
+            <!-- Save, Publish, refusals: here, in view on every tab (it once sat in
+                 the JSON tab, so on the Form tab a conflict was never seen). -->
+            <span id="sync-status" class="sync-status" role="status" aria-live="polite" style="display: none;"></span>
             <!-- Feature: Dirty Indicator -->
             <span id="dirty-indicator" class="dirty-indicator" style="display: none;">● Unsaved Changes</span>
+            <span id="view-mode-indicator" class="view-mode-indicator" style="display: none;">◉ View Mode: read-only</span>
             <!-- Saved to disk but not yet pushed live. Only appears when auto-publish is off. -->
             <span id="unpublished-indicator" class="unpublished-indicator" style="display: none;"
                   title="These changes are saved to disk but not live yet. Click Publish to push them to running services.">▲ Not Published</span>
@@ -152,8 +156,8 @@
                     <h2>No configuration loaded</h2>
                     <p>Pick a target and a schema above to begin editing.</p>
                     <ol class="welcome-steps">
-                        <li><strong>Target</strong> — the scope to edit: Domain, Cluster, or Server.</li>
-                        <li><strong>Schema</strong> — which BLADE application's settings to open.</li>
+                        <li><strong>Target</strong>: the scope to edit, Domain, Cluster or Server.</li>
+                        <li><strong>Schema</strong>: which BLADE application's settings to open.</li>
                         <li><strong>Edit, Save</strong>: with Auto-publish on, a save goes live to running services immediately. With it off, click Publish.</li>
                     </ol>
                     <p class="welcome-links">New here? See the <a href="docs/overview.html">Overview</a> or the <a href="docs/index.html">Documentation</a>.</p>
@@ -178,7 +182,7 @@
                 </ul>
             </div>
 
-            <form id="dynamicForm">
+            <form id="dynamicForm" onsubmit="return false">
                 <!-- Form will be generated here -->
             </form>
         </div>
@@ -194,7 +198,6 @@
                 <button type="button" class="btn btn-secondary" onclick="validateJson()">Validate</button>
                 <button type="button" class="btn btn-secondary" onclick="loadSample()">Load Sample</button>
                 <button type="button" class="btn btn-secondary" onclick="resetJson()">Reset JSON</button>
-                <div id="sync-status" class="sync-status" style="display: none;"></div>
             </div>
 
             <div id="json-editor" class="json-editor-container"></div>
@@ -216,7 +219,7 @@
                 <button type="button" class="btn btn-primary" onclick="saveTextFile()" id="save-text-file-btn" disabled>Save</button>
                 <button type="button" class="btn btn-secondary" onclick="reloadTextFile()" id="reload-text-file-btn" disabled>Revert</button>
                 <button type="button" class="btn btn-secondary" onclick="showTextVersionHistory()" id="text-history-btn" disabled>Version History</button>
-                <span id="text-file-status" class="sync-status" style="display:none"></span>
+                <span id="text-file-status" class="sync-status" role="status" aria-live="polite" style="display:none"></span>
             </div>
             <div class="files-layout">
                 <aside class="files-rail">
@@ -265,7 +268,7 @@
     <div id="diffModal" class="modal">
         <div class="modal-content diff-modal">
             <div class="modal-header">
-                <h2>Diff — unsaved changes</h2>
+                <h2>Diff · unsaved changes</h2>
                 <button class="modal-close" onclick="closeDiffModal()">&times;</button>
             </div>
             <div class="modal-body">
@@ -315,6 +318,7 @@
             </div>
             <div class="modal-body">
                 <div id="versionListContainer"></div>
+                <pre id="versionPreview" class="version-preview" style="display:none"></pre>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="closeVersionHistory()">Close</button>

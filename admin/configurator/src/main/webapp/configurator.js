@@ -21,7 +21,7 @@ function aceThemeFor() {
 let currentTheme = aceThemeFor();
 new MutationObserver(function () {
     currentTheme = aceThemeFor();
-    [jsonEditor, schemaEditor].forEach(function (e) { if (e) e.setTheme('ace/theme/' + currentTheme); });
+    [jsonEditor, schemaEditor, typeof textEditor !== 'undefined' ? textEditor : null].forEach(function (e) { if (e) e.setTheme('ace/theme/' + currentTheme); });
 }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 let currentSchemaName = null;
 let websocket = null;
@@ -68,7 +68,10 @@ function connectWebSocket() {
     // single-segment context roots (`/configurator`) and multi-segment ones
     // (`/blade/configurator`) since we go to the last slash, not the first.
     const contextPath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
-    const wsUrl = protocol + '//' + window.location.host + contextPath + '/websocket';
+    // A random k per connection: the server keys this socket's handshake by
+    // it, so a page on another site cannot take this tab's access.
+    const k = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now());
+    const wsUrl = protocol + '//' + window.location.host + contextPath + '/websocket?k=' + encodeURIComponent(k);
 
     updateWebSocketStatus('Connecting...', 'warning');
 
@@ -76,10 +79,19 @@ function connectWebSocket() {
 
     websocket.onopen = function() {
         updateWebSocketStatus('Connected', 'success');
+        // Nothing is out on a new socket.
+        saving = false; publishing = false; publishingApps.clear(); cloneOut = false;
+        textSaveContent = null;   // a template save sent while it was down never went
+        // A load begun while it was down sent nothing: back to the form shown.
+        if (schemaLoading) {
+            abortLoad();
+            showSchemaLoadStatus('The connection was down: pick the schema or target again to load it', 'warning');
+        }
         reconnectAttempts = 0; // Reset on successful connection
         lastPongTime = Date.now();
         startHeartbeat(); // Start sending pings
         sendWebSocketMessage('get_autopublish', {}); // sync the auto-publish toggle
+        sendWebSocketMessage('get_unpublished', {}); // saved with auto-publish off, by any page
         sendWebSocketMessage('get_ai_status', {});   // show the Ask Claude box only when enabled
     };
 
@@ -94,6 +106,23 @@ function connectWebSocket() {
 
     websocket.onclose = function(event) {
         stopHeartbeat(); // Stop sending pings
+        publishing = false;   // its answer would come back on this socket
+        publishingApps.clear();
+        saving = false;
+        cloneOut = false;
+        textSaveContent = null;
+        // A load's replies come back on this socket too: stop waiting, keep the
+        // form that is there with its own name and target, and say so.
+        if (schemaLoading) {
+            abortLoad();
+            showSchemaLoadStatus('The connection dropped while loading: load again once it reconnects', 'error');
+        }
+        // The answer to a chat message comes back on this socket; it is gone.
+        if (aiPending) {
+            const p = aiPending;
+            aiPending = null;
+            p.reject(new Error('The connection to the server dropped; ask again.'));
+        }
 
         if (reconnectAttempts < maxReconnectAttempts) {
             reconnectAttempts++;
@@ -134,17 +163,130 @@ function handleWebSocketMessage(message) {
             handleSampleLoaded(message.content);
             break;
 
+        case 'file_version': {
+            let v = null; try { v = JSON.parse(message.content); } catch (e) { /* ignore */ }
+            if (v && currentSchemaName && selectedTargetDirectory && v.file === currentSavePath()) fileVersion = v.version;
+            break;
+        }
+
+        case 'save_conflict': {
+            let v = null; try { v = JSON.parse(message.content); } catch (e) { /* ignore */ }
+            if (cloneOut && v && v.file === lastClonePath) {
+                // The reply to the clone that is out: its destination exists.
+                cloneOut = false;
+                cloneOverwrite = true;
+                showSyncStatus('Not cloned: ' + v.file + ' already exists. Clone again to replace it.', 'error');
+                break;
+            }
+            if (!v || v.file !== lastSavePath) break;
+            saving = false;   // this page's save is answered
+            if (v.file !== (currentSchemaName && selectedTargetDirectory ? currentSavePath() : null)) {
+                // The operator moved on while it was out: the save did not happen.
+                showSyncStatus('Not saved: ' + v.file + ' changed since it was loaded (another save). Open it again to redo the change.', 'error');
+                lastSavedData = null;
+                break;
+            }
+            lastSavedData = null;
+            overwriteNext = true;
+            showSyncStatus('Not saved: ' + ((v && v.file) || 'the file') + ' changed since you loaded it (another save). '
+                + 'Reload to see it, or press Save again to overwrite it.', 'error');
+            break;
+        }
+
+        case 'save_refused': {
+            // The server would not write it: the application could not load it
+            // (IdentityCheck: a repeated or unknown id, merged as the loader merges).
+            let v = null; try { v = JSON.parse(message.content); } catch (e) { /* ignore */ }
+            if (!v) break;
+            const why = (v.problems || [])[0] + ((v.problems || []).length > 1 ? ' (and ' + (v.problems.length - 1) + ' more)' : '');
+            if (cloneOut && v.file === lastClonePath) {
+                cloneOut = false;
+                showSyncStatus('Not cloned: ' + why, 'error');
+                break;
+            }
+            if (v.file !== lastSavePath) break;
+            saving = false;
+            lastSavedData = null;
+            showSyncStatus('Not saved: ' + why, 'error');
+            break;
+        }
+
         case 'save_success':
+            // The server names the file it wrote (and its new version). A
+            // clone writes another target's file: the form's edits are still unsaved.
+            {
+                let v = null; try { v = JSON.parse(message.content); } catch (e) { v = { file: message.content }; }
+                // The reply to the clone that is out, first: with the form moved to
+                // the clone's target and still loading, it would read as the form's own.
+                if (cloneOut && v && v.file === lastClonePath) {
+                    cloneOut = false;
+                    cloneOverwrite = false;
+                    showSyncStatus('Cloned to ' + v.file, 'success');
+                    if (!autoPublishEnabled) setUnpublished(lastClonePath.split('/').pop().replace(/\.json$/, ''));
+                    break;
+                }
+                // The reply to this page's save, even if the form moved on since:
+                // the save is over (it is not a clone).
+                if (v && v.file === lastSavePath && saving) {
+                    saving = false;
+                    if (!(currentSchemaName && selectedTargetDirectory && v.file === currentSavePath())) {
+                        // That file's draft (this tab's) is what was saved.
+                        if (lastSaveDraftKey) { try { localStorage.removeItem(lastSaveDraftKey); } catch (e) { /* ignore */ } }
+                        showSyncStatus('Saved ' + v.file, 'success');
+                        lastSavedData = null;
+                        if (!lastSaveAutoPublish) setUnpublished(lastSaveApp);
+                        break;
+                    }
+                }
+                const isOwn = !(v && v.file && currentSchemaName && selectedTargetDirectory && v.file !== currentSavePath());
+                if (!isOwn) {
+                    if (v.file === lastClonePath) { cloneOut = false; cloneOverwrite = false; }
+                    showSyncStatus('Cloned to ' + v.file, 'success');
+                    // Saved, and with auto-publish off not live until Publish.
+                    if (!autoPublishEnabled) setUnpublished(currentSchemaName);
+                    break;
+                }
+                saving = false;
+                draftBaseVersion = null;
+                if (v && v.version) fileVersion = v.version;
+            }
             showSyncStatus('Data saved successfully', 'success');
             showSchemaLoadStatus('Saved', 'success');
-            clearDirty(); // Feature: Clear dirty state after successful save
-            if (typeof clearDraft === 'function') clearDraft();
-            // With auto-publish off, a save is on disk but not live until Publish.
-            // With it on, the watcher republishes automatically — nothing pending.
-            if (autoPublishEnabled) {
-                clearUnpublished();
+            // What is on disk now: Diff and Reset compare with this, not the
+            // file as first loaded.
+            {
+                const written = lastSavedData;
+                if (written) { initialData = written; currentData = written; lastSavedData = null; }
+                // Edits made while the save was out are not in the file: the
+                // form stays unsaved, with the file as its new baseline.
+                const now = activeEditorData();
+                const sameAsWritten = written && now !== undefined
+                    && JSON.stringify(canonicalJson(now)) === JSON.stringify(canonicalJson(written));
+                if (sameAsWritten || !written) {
+                    clearDirty();
+                    if (typeof clearDraft === 'function') clearDraft();
+                } else {
+                    savedDataSnapshot = JSON.stringify(written);
+                }
+            }
+            // The file is now what was written (repaired and encrypted on the
+            // server): the next Save repairs against the file itself (no source
+            // text), and a broken file this replaced is no longer the baseline.
+            loadedSourceText = initialText = null;
+            if (noFileYet) { noFileYet = false; const ls = document.getElementById('schema-load-status'); if (ls) ls.style.display = 'none'; }
+            leftEditorText = null;
+            fileBroken = false;
+            if (publishingApps.has(currentSchemaName)) savedDuringPublish.add(currentSchemaName);
+            // Live or pending by auto-publish as it was when the save was sent:
+            // the watcher started after this write never saw it.
+            if (lastSaveAutoPublish) {
+                // Live by the watcher, but an earlier failure elsewhere (another
+                // engine, another file of this app) may still stand: the server's
+                // list decides, not this page.
+                sendWebSocketMessage('get_unpublished', {});
             } else {
                 setUnpublished();
+                if (autoPublishEnabled) publishConfig();   // turned on meanwhile
             }
             break;
 
@@ -177,15 +319,66 @@ function handleWebSocketMessage(message) {
             handleTextFileSaved(message.content);
             break;
 
-        case 'reload_success':
-            showSyncStatus(message.content, 'success');
-            showSchemaLoadStatus('Published', 'success');
-            clearUnpublished(); // changes are now live
+        case 'text_file_pushed':
+            handleTextFilePushed(message.content);
             break;
+
+        case 'text_save_error':
+            textSaveContent = null;
+            showTextFileStatus('Error: ' + message.content, 'error');
+            break;
+
+        case 'text_save_conflict':
+            textSaveContent = null;
+            // About another template than the one open now: arms nothing here.
+            if (message.content !== currentTextFile) {
+                showTextFileStatus('Not saved: ' + message.content + ' changed since it was opened (another save)', 'error');
+                break;
+            }
+            textOverwrite = true;
+            showTextFileStatus('Not saved: ' + message.content + ' changed since you opened it (another save). '
+                + 'Revert to see it, or Save again to overwrite it.', 'error');
+            break;
+
+        case 'publish_error': {
+            // Its own type: a failed publish is not a failed load.
+            const m = /^Publish failed for ([^:]+):/.exec(message.content || '');
+            if (m && m[1] === TEMPLATES_PENDING) setUnpublished(TEMPLATES_PENDING);   // tried again by the next Publish
+            if (m) publishingApps.delete(m[1]); else publishingApps.clear();
+            publishing = publishingApps.size > 0;
+            showSyncStatus(message.content, 'error');
+            break;
+        }
+
+        case 'reload_success': {
+            // "Configuration published for <app>": that app is live now.
+            const m = /published for (\S+)$/.exec(message.content || '');
+            const app = m ? m[1] : currentSchemaName;
+            publishingApps.delete(app);
+            publishing = publishingApps.size > 0;
+            // Saved again while it was publishing: the engines have the earlier
+            // content, so it stays "Not Published".
+            if (savedDuringPublish.has(app)) savedDuringPublish.delete(app); else clearUnpublished(app);
+            // Another page may have saved it meanwhile: the server's list decides.
+            sendWebSocketMessage('get_unpublished', {});
+            showSyncStatus(message.content, 'success');
+            if (app === currentSchemaName) showSchemaLoadStatus('Published', 'success');
+            break;
+        }
 
         case 'autopublish_state':
             updateAutoPublishToggle(message.content === 'true');
             break;
+
+        case 'unpublished_list': {
+            // The server's list, templates included: any page's saves while
+            // auto-publish was off, and any push that failed.
+            let list = []; try { list = JSON.parse(message.content) || []; } catch (e) { /* ignore */ }
+            unpublishedApps.clear();
+            list.forEach(app => unpublishedApps.add(app));
+            renderUnpublished();
+            break;
+        }
 
         case 'version_list':
             displayVersionList(message.content);
@@ -232,8 +425,55 @@ function handleWebSocketMessage(message) {
             handleJsonFileResolved(message.content);
             break;
 
+        case 'save_error': {
+            // A refused save or clone (encryption unavailable, no writer role),
+            // naming its file: a clone and a save can both be out.
+            let v = null; try { v = JSON.parse(message.content); } catch (e) { v = { message: message.content }; }
+            if (cloneOut && v.file === lastClonePath) {
+                cloneOut = false;
+            } else if (saving && (!v.file || v.file === lastSavePath)) {
+                saving = false;
+                lastSavedData = null;
+            }
+            showSyncStatus('Error: ' + v.message, 'error');
+            break;
+        }
+
+        case 'load_error': {
+            let v = null; try { v = JSON.parse(message.content); } catch (e) { v = { message: message.content }; }
+            // For a load replaced since (another schema picked): not this one's.
+            if (v.seq != null && String(v.seq) !== String(loadSeq)) break;
+            showSchemaLoadStatus('Error: ' + v.message, 'error');
+            showSyncStatus('Error: ' + v.message, 'error');
+            // A load that failed (an unreadable file): stop waiting and put
+            // back the schema, name and target the form still holds, so Save
+            // and the chat do not treat the old form as the new app's.
+            if (schemaLoading) abortLoad();
+            break;
+        }
+
+        case 'autopublish_error':
+            // Refused (no writer role): the switch shows the server's state again.
+            showSyncStatus('Error: ' + message.content, 'error');
+            sendWebSocketMessage('get_autopublish', {});
+            break;
+
+        case 'version_error':
+            // A version list, preview or restore failed: none of them is
+            // still out, so a late reply cannot be taken for this one's.
+            pendingRequests.delete('versionTimestamp');
+            pendingRequests.delete('restoreTimestamp');
+            pendingRequests.delete('restoreFile');
+            showSyncStatus('Versions: ' + message.content, 'error');
+            break;
+
+        case 'text_error':
+            showTextFileStatus('Error: ' + message.content, 'error');
+            break;
+
         case 'error':
-            showSchemaLoadStatus('Error: ' + message.content, 'error');
+            // Answers nothing the page waits on (saves, loads and publishes
+            // fail with their own types): it is only shown.
             showSyncStatus('Error: ' + message.content, 'error');
             console.error('Server error:', message.content);
             break;
@@ -258,7 +498,9 @@ function startHeartbeat() {
         if (websocket && websocket.readyState === WebSocket.OPEN) {
             sendWebSocketMessage('ping', {});
 
-            // Set timeout to expect pong response
+            // Set timeout to expect pong response (one at a time: an earlier
+            // one left running would close a healthy socket)
+            clearTimeout(pongTimeout);
             pongTimeout = setTimeout(function() {
                 // Close connection to trigger reconnect
                 websocket.close(1000, 'No pong received');
@@ -311,7 +553,11 @@ function handleTargetDirectoriesList(content) {
             const wantedLc = wanted.toLowerCase();
             initial = targetDirectories.find(t => t.path === wanted)
                    || targetDirectories.find(t => (t.displayName || '').toLowerCase() === wantedLc)
-                   || targetDirectories.find(t => (t.type || '').toLowerCase() === wantedLc);
+                   || targetDirectories.find(t => (t.type || '').toLowerCase() === wantedLc)
+                   // The cluster or server name alone, as an operator writes a link.
+                   || targetDirectories.find(t => t.type !== 'domain' && (t.path || '').split('/').pop().toLowerCase() === wantedLc);
+            // Said, not silent: the Domain file is not the overlay the link named.
+            if (!initial) urlTargetMissing = wanted;
             urlInitialDomain = null;
         }
         if (!initial) {
@@ -323,6 +569,11 @@ function handleTargetDirectoriesList(content) {
         }
 
         maybeAutoLoadFromUrl();
+        // No schema to load means no load to say it after: say it now.
+        if (urlTargetMissing && !urlInitialSchema) {
+            showSchemaLoadStatus('No target "' + urlTargetMissing + '": this is the Domain file', 'error');
+            urlTargetMissing = null;
+        }
     } catch (e) {
         console.error('Error parsing target directories list:', e);
         showSchemaLoadStatus('Error loading target directories', 'error');
@@ -355,17 +606,33 @@ function populateTargetDirectoriesDropdown() {
 }
 
 function onTargetDirectoryChange(path) {
+    // Ask before the switch, not after: Save writes to the selected target,
+    // so a cancelled switch must leave it on the file the form came from.
+    const previous = selectedTargetDirectory;
+    // "-- Select Target --": the form would stay on a file no dropdown names.
+    if (!path && previous) {
+        const sel = document.getElementById('target-directory-select');
+        if (sel) sel.value = previous.path;
+        return;
+    }
+    if (!checkUnsavedChanges()) {
+        const sel = document.getElementById('target-directory-select');
+        if (sel) sel.value = previous ? previous.path : '';
+        return;
+    }
     if (!path) {
         selectedTargetDirectory = null;
         return;
     }
 
+    // What the form holds now, before the target changes under it.
+    if (!schemaLoading) loadFallback = { schema: schema, name: currentSchemaName, target: previous, version: fileVersion, draftBase: draftBaseVersion };
     selectedTargetDirectory = targetDirectories.find(t => t.path === path);
     showSchemaLoadStatus('Target: ' + (selectedTargetDirectory ? selectedTargetDirectory.displayName : 'None'), 'success');
 
     // Reload current schema's JSON file from the new target
     if (currentSchemaName && selectedTargetDirectory) {
-        loadSchema(currentSchemaName);
+        loadSchema(currentSchemaName, true);
     }
 }
 
@@ -405,7 +672,9 @@ function maybeAutoLoadFromUrl() {
                || schemaRegistry.find(e => (e.name || '').toLowerCase() === wantedLc);
     urlInitialSchema = null;
     if (!entry) {
-        showSchemaLoadStatus('Schema "' + wanted + '" from URL not found', 'error');
+        const target = urlTargetMissing ? '; no target "' + urlTargetMissing + '" either' : '';
+        urlTargetMissing = null;
+        showSchemaLoadStatus('Schema "' + wanted + '" from URL not found' + target, 'error');
         return;
     }
     const select = document.getElementById('schema-select');
@@ -439,42 +708,78 @@ function populateSchemaDropdown() {
 }
 
 // Load a schema and its associated JSON data via WebSocket
-function loadSchema(schemaName) {
-    if (!schemaName) return;
+function loadSchema(schemaName, alreadyAsked = false) {
+    // The dropdown back on what the form holds, whenever this does not load.
+    const keepSelect = () => { const sel = document.getElementById('schema-select'); if (sel) sel.value = currentSchemaName || ''; };
+    if (!schemaName) { keepSelect(); return; }
 
     // Feature: Check for unsaved changes before loading new schema
-    if (!checkUnsavedChanges()) return;
+    if (!alreadyAsked && !checkUnsavedChanges()) {
+        const sel = document.getElementById('schema-select');
+        if (sel) sel.value = currentSchemaName || '';
+        return;
+    }
 
     if (!selectedTargetDirectory) {
         showSchemaLoadStatus('Please select a target directory first', 'error');
+        keepSelect();
         return;
     }
 
     const entry = schemaRegistry.find(e => e.name === schemaName);
     if (!entry) {
         showSchemaLoadStatus('Schema not found', 'error');
+        keepSelect();
         return;
     }
+    hideDraftBanner();   // the file being left's offer; the new file's comes with it
 
     showSchemaLoadStatus('Loading schema...', 'warning');
+    // What the form holds now, to go back to if this load fails: taken once,
+    // before the first of overlapping loads (a target change took it already).
+    if (!schemaLoading && !alreadyAsked) loadFallback = { schema: schema, name: currentSchemaName, target: selectedTargetDirectory, version: fileVersion, draftBase: draftBaseVersion };
+    loadSeq++;              // replies to an earlier load are dropped (handleJsonFileResolved/Loaded)
+    // A message about the file being left (a conflict, a refusal) is not this one's.
+    { const st = document.getElementById('sync-status'); if (st) { clearTimeout(st._hideTimer); st.style.display = 'none'; } }
+    fileVersion = null;
+    draftBaseVersion = null;   // a restored draft belongs to the form being replaced
+    overwriteNext = false;
+    sampleIsEdit = false;   // a Load Sample that failed must not mark this load an edit
     currentSchemaName = schemaName;
+    // Until the file is in the form, Save would write the old form to the new file.
+    schemaLoading = true;
 
-    // Store the entry in a pending request
+    // Store the entry in a pending request. Its file is this load's, once
+    // resolved: the last load's (another target's) must not name Save's file.
+    entry.jsonFile = null;
     pendingRequests.set('schema', entry);
 
     // Request the schema from the filesystem
-    sendWebSocketMessage('load_schema', { appName: entry.appName });
+    sendWebSocketMessage('load_schema', { appName: entry.appName, seq: loadSeq });
 
     // Request JSON file resolution based on selected target
     sendWebSocketMessage('resolve_json_file', {
         schemaName: schemaName,
-        targetDirectory: selectedTargetDirectory.path
+        targetDirectory: selectedTargetDirectory.path,
+        seq: loadSeq
     });
 }
 
 function handleJsonFileResolved(content) {
     try {
         const resolution = JSON.parse(content);
+        // The server names what it resolved: a reply for an earlier schema or
+        // target (the operator moved on before it came) is dropped.
+        if ((resolution.schemaName && resolution.schemaName !== currentSchemaName)
+                || (resolution.targetDirectory && selectedTargetDirectory && resolution.targetDirectory !== selectedTargetDirectory.path)) {
+            return;
+        }
+        // Only for a load still waiting: one aborted since (a schema that
+        // failed to load) must not give the old form the file's newer version,
+        // or its next Save would pass the conflict check.
+        if (!schemaLoading) return;
+        jsonLoadSeq = loadSeq;
+        if (resolution.version) fileVersion = resolution.version;   // "none" before the file exists
 
         const entry = pendingRequests.get('schema');
         if (entry) {
@@ -486,19 +791,48 @@ function handleJsonFileResolved(content) {
             if (resolution.exists) {
                 if (resolution.jsonFileType === 'sample') {
                     // Load sample from filesystem
-                    sendWebSocketMessage('load_sample', { appName: resolution.appName });
+                    sendWebSocketMessage('load_sample', { appName: resolution.appName, seq: loadSeq });
                 } else {
                     // Load primary config from filesystem
-                    sendWebSocketMessage('load_json', { file: resolution.jsonFile });
+                    sendWebSocketMessage('load_json', { file: resolution.jsonFile, seq: loadSeq });
                 }
             } else {
+                loadedSourceText = initialText = null;
+                fileBroken = false;
                 finalizeSchemaLoad({});
+                noFileYet = true;
+                showSchemaLoadStatus('No file for this target yet: Save creates it.', 'warning');
             }
         }
     } catch (e) {
         console.error('Error processing JSON file resolution:', e);
         finalizeSchemaLoad({});
     }
+}
+
+/// A load that failed: stop waiting and put back the schema, name and target
+/// the form still holds, so Save and the chat do not treat the old form as
+/// the new app's; anything still coming for the load is dropped.
+function abortLoad() {
+    if (loadFallback) {
+        schema = loadFallback.schema;
+        currentSchemaName = loadFallback.name;
+        selectedTargetDirectory = loadFallback.target;
+        fileVersion = loadFallback.version || null;
+        // A restored draft's base: without it the next Save would pass the
+        // conflict check over versions the draft never saw.
+        draftBaseVersion = loadFallback.draftBase || null;
+        const ss = document.getElementById('schema-select');
+        if (ss) ss.value = currentSchemaName || '';
+        const ts = document.getElementById('target-directory-select');
+        if (ts) ts.value = selectedTargetDirectory ? selectedTargetDirectory.path : '';
+        const titleEl = document.getElementById('schema-title');
+        if (titleEl && schema) titleEl.textContent = schema.title || currentSchemaName || 'Configurator';
+    }
+    pendingRequests.delete('schema');
+    schemaLoading = false;
+    loadSeq++;
+    updateTitle();
 }
 
 function handleSchemaLoaded(content) {
@@ -527,52 +861,127 @@ function handleSchemaLoaded(content) {
     } catch (error) {
         console.error('Error processing schema:', error);
         showSchemaLoadStatus('Error: ' + error.message, 'error');
-        pendingRequests.delete('schema');
+        abortLoad();
     }
 }
 
+/// The exact text the form's content came from (the file as loaded, a
+/// sample, an imported file, a template, a restored version), sent with Save
+/// and Clone: the server repairs what the browser's JavaScript did to the
+/// document (key order, long integers) against it (JsonRepair). `initialText`
+/// is the file's own, for Reset.
+let loadedSourceText = null;
+let initialText = null;
+let writeEditorText = null;   // the JSON tab's text, when documentToWrite last read it
+let leftEditorText = null;    // the JSON tab's text when the operator last left it (cleared by a load or Save)
+
+/// The file as loaded does not parse: its text, not the empty form, is the baseline.
+let fileBroken = false;
+
 function handleJsonLoaded(content) {
+    // Loaded for a load the operator has since replaced: not this form's file.
+    if (jsonLoadSeq !== loadSeq) return;
+    fileBroken = false;
+    leftEditorText = null;
     try {
         let newData = {};
         if (content && content.trim() !== '') {
             newData = JSON.parse(content);
         }
+        loadedSourceText = initialText = content || null;
 
         finalizeSchemaLoad(newData);
 
     } catch (error) {
-        console.error('Error processing JSON data:', error);
-        showSchemaLoadStatus('Warning: Could not parse JSON data', 'warning');
-        // Continue with empty data
+        // Not an empty file: a broken one. Open its text in the JSON tab to
+        // fix there (leaving the tab or saving is refused while it does not
+        // parse); an empty form would save over it as if it were new.
+        if (!jsonEditor) {
+            // No JSON editor to fix it in: do not open it as an empty form that
+            // a Save would write over.
+            abortLoad();
+            showSchemaLoadStatus('This file does not parse, and the JSON editor is unavailable: fix it on disk (' + error.message + ')', 'error');
+            return;
+        }
         finalizeSchemaLoad({});
+        // The form's {} is not the file: Reset and Diff must not take it as
+        // the baseline (Reset would put {} in the JSON tab, and Save write it).
+        fileBroken = true;
+        initialText = content;
+        loadedSourceText = null;
+        switchTab('json');
+        setEditorText(content);
+        showSchemaLoadStatus('This file does not parse: fix it in the JSON tab (' + error.message + ')', 'error');
     }
 }
 
 function handleSampleLoaded(content) {
+    // Pressed Load Sample: the form now holds the sample, the file is unchanged.
+    // The snapshot stays the file's, so Diff, Reset and the leave warning see an edit.
+    if (sampleIsEdit) {
+        sampleIsEdit = false;
+        let sampleData;
+        try { sampleData = (content && content.trim() !== '') ? JSON.parse(content) : {}; }
+        catch (e) { showSchemaLoadStatus('Warning: Could not parse sample data', 'warning'); return; }
+        loadedSourceText = content;   // the form's content now; Reset goes back to initialText
+        leftEditorText = null;        // a JSON-tab text left before is not this content's
+        currentData = sampleData;
+        generateFormWithData(currentData);
+        if (jsonEditor) jsonEditor.setValue(JSON.stringify(currentData, null, 2), -1);
+        setDirty();
+        showSchemaLoadStatus('Sample loaded into the form · not saved', 'warning');
+        return;
+    }
+    if (jsonLoadSeq !== loadSeq) return;   // a fallback sample for a load since replaced
     try {
         let sampleData = {};
         if (content && content.trim() !== '') {
             sampleData = JSON.parse(content);
-            showSyncStatus('Loaded sample data (will save to primary location)', 'warning');
+            loadedSourceText = initialText = content;
+            fileBroken = false;
         }
         finalizeSchemaLoad(sampleData);
+        noFileYet = true;
+        // Lasting, not a 3-second toast: the form looks like a file that exists.
+        showSchemaLoadStatus('No file on disk yet: this is the sample. Save creates the file.', 'warning');
     } catch (error) {
         console.error('Error processing sample data:', error);
         showSchemaLoadStatus('Warning: Could not parse sample data', 'warning');
+        loadedSourceText = initialText = null;   // not the previous file's
         finalizeSchemaLoad({});
     }
 }
 
+let sampleIsEdit = false;   // Load Sample pressed: the sample replaces the form as an edit
+
 function loadSample() {
+    if (viewModeRefuses('load the sample')) return;
     if (!currentSchemaName) {
         showSchemaLoadStatus('Please select a schema first', 'error');
         return;
     }
+    if (schemaLoading) {
+        showSchemaLoadStatus('Still loading: load the sample once the file is in', 'warning');
+        return;
+    }
+    // A whole document saved as a cluster or server file would repeat every
+    // list of the domain's (overlay lists are appended), as Clone refuses.
+    if (selectedTargetDirectory && selectedTargetDirectory.type !== 'domain') {
+        showSyncStatus('A sample is a whole configuration: load it on the Domain target', 'warning');
+        return;
+    }
+    if (!checkUnsavedChanges()) return;
+    sampleIsEdit = true;
     showSchemaLoadStatus('Loading sample...', 'warning');
-    sendWebSocketMessage('load_sample', { appName: currentSchemaName });
+    sendWebSocketMessage('load_sample', { appName: currentSchemaName, seq: loadSeq });
 }
 
+let urlTargetMissing = null;   // a ?domain= that named no target
+let noFileYet = false;   // the form came from the sample or an empty overlay: nothing on disk
+
 function finalizeSchemaLoad(newData) {
+    noFileYet = false;
+    leftEditorText = null;   // the JSON tab's text of the form this replaces
     // First schema load: retire the welcome panel and reveal the toolbar.
     const welcomePanel = document.getElementById('welcome-panel');
     if (welcomePanel) welcomePanel.style.display = 'none';
@@ -597,28 +1006,44 @@ function finalizeSchemaLoad(newData) {
     // Note: If schema editor not yet initialized, it will get the schema when first shown
 
     showSchemaLoadStatus(`Loaded: ${schema.title || currentSchemaName}`, 'success');
+    // The URL names the file the form holds: a reload or a copied link opens
+    // this file, not the one the page was first opened on.
+    try {
+        const u = new URL(window.location.href);
+        u.searchParams.set('schema', currentSchemaName);
+        if (selectedTargetDirectory && selectedTargetDirectory.type !== 'domain') u.searchParams.set('domain', selectedTargetDirectory.path);
+        else u.searchParams.delete('domain');
+        history.replaceState(null, '', u);
+    } catch (e) { /* no history API */ }
+    if (urlTargetMissing) {   // said after the load, which would overwrite it
+        showSchemaLoadStatus('No target "' + urlTargetMissing + '": this is the Domain file', 'error');
+        urlTargetMissing = null;
+    }
 
     // Feature: Clear dirty state and validation errors when loading new data
     clearDirty();
-    clearUnpublished(); // indicator tracks the current editing session, like dirty
+    renderUnpublished(); // other apps' unpublished saves stay listed
     clearValidationErrors();
+
+    // Another app or target: the conversation was about that one.
+    const chatKey = currentSchemaName + '|' + (selectedTargetDirectory ? selectedTargetDirectory.path : '');
+    if (aiChat && lastChatKey !== null && lastChatKey !== chatKey) {
+        aiChat.reset();
+        aiPending = null;   // its answer, when it comes, belongs to the other app or target
+    }
+    lastChatKey = chatKey;
 
     // Clean up pending request
     pendingRequests.delete('schema');
+    schemaLoading = false;
 }
 
 function showSchemaLoadStatus(message, type) {
-    const statusEl = document.getElementById('schema-load-status');
-    statusEl.textContent = message;
-    statusEl.className = `sync-status ${type}`;
-    statusEl.style.display = 'inline-flex';
-
-    // Auto-hide success messages after 3 seconds
-    if (type === 'success') {
-        setTimeout(() => {
-            statusEl.style.display = 'none';
-        }, 3000);
-    }
+    // Warnings and errors here describe the file (no file yet, a bad link):
+    // they stay until the next message.
+    const el = document.getElementById('schema-load-status');
+    if (type === 'success') showStatusIn(el, message, type);
+    else { showStatusIn(el, message, 'error'); el.className = 'sync-status ' + (type || ''); }
 }
 
 function resolveRef(ref) {
@@ -704,9 +1129,36 @@ function readInputValue(input) {
     if (!input) return null;
     if (input.type === 'checkbox') return input.checked;
     // Number(), not parseInt: a decimal (39.0438) must not come back as 39.
-    if (input.type === 'number') return input.value !== '' ? Number(input.value) : null;
+    if (input.type === 'number') {
+        // Text the browser cannot read as a number ("1,000") reads as empty:
+        // saved, the field would vanish and the app's default go live.
+        if (input.validity && input.validity.badInput) {
+            readBackProblems.push((input.dataset.path || 'a number field') + ' is not a number');
+            return null;
+        }
+        if (input.value === '') return null;
+        const n = Number(input.value);
+        // Past 2^53 the page cannot hold an integer: typed here it would be
+        // saved rounded. The file's own value (the same double, however it
+        // is typed) is repaired on the server; a new one goes in the JSON
+        // tab, which keeps it. Refuses Save only, never leaving this tab:
+        // the JSON tab is the way out. (A decimal in an integer field, a
+        // value past its maximum: the server's schema check at Save.)
+        if (Number.isInteger(n) && !Number.isSafeInteger(n) && n !== Number(input.getAttribute('value'))) {
+            saveOnlyProblems.push((input.dataset.path || 'a number field')
+                + ': a number this large loses digits in the form; type it in the JSON tab');
+        }
+        return n;
+    }
     let v = input.value;
+    // Untouched, a textarea's text is the file's, line endings and all (mixed
+    // \r\n and \n, or a lone \r, which the textarea itself rewrites).
+    if (input.tagName === 'TEXTAREA' && !input._edited && typeof input._original === 'string'
+            && input._original.replace(/\r\n?/g, '\n') === (v || '').replace(/\r\n?/g, '\n')) {
+        return input._original === '' ? null : input._original;
+    }
     if (v == null || v === '') return null;
+    if (input.dataset && input.dataset.crlf === 'true') v = v.replace(/\r?\n/g, '\r\n');
     if (input.dataset && input.dataset.password === 'true') {
         // Any {SCHEME}... prefix means the value is already cleartext-marked or
         // encrypted (WebLogic 14.1 emits {AES256}); only bare cleartext gets wrapped.
@@ -714,7 +1166,9 @@ function readInputValue(input) {
         // decrypts to the ciphertext and breaks the credential.
         // A ${variable} is a reference resolved at run time, not a secret:
         // encrypting it would store the text "${apiKey}" in place of the key.
-        if (!/^\{[A-Za-z0-9]+\}/.test(v) && !/^\$\{[^}]+\}$/.test(v)) {
+        // Only BLADE's and WebLogic's own markers: a password that merely
+        // starts with "{Word}" is still a password to encrypt.
+        if (!/^\{(CLEARTEXT|AES|AES256|3DES|REDACTED)\}/.test(v) && !/^\$\{[^}]+\}$/.test(v)) {
             v = '{CLEARTEXT}' + v;
         }
     }
@@ -751,6 +1205,24 @@ function attachFieldValidation(input, schema) {
         }
         input.classList.toggle('invalid', !!err);
         if (err) input.title = err; else input.removeAttribute('title');
+        input.setAttribute('aria-invalid', err ? 'true' : 'false');
+        // Said in words, not by the red border alone. The stylesheet writes
+        // "✗ invalid" beside a field in a labelled row; elsewhere (a list
+        // item, a map value, a password) a marker goes after the field.
+        const covered = input.parentElement && (input.parentElement.matches('.form-group-header.inline')
+            || (input.tagName === 'TEXTAREA' && input.parentElement.matches('.form-group')));
+        const anchor = input.closest('.password-field') || input;
+        let mark = anchor.nextElementSibling && anchor.nextElementSibling.classList.contains('invalid-mark') ? anchor.nextElementSibling : null;
+        if (err && !covered) {
+            if (!mark) {
+                mark = document.createElement('span');
+                mark.className = 'invalid-mark';
+                anchor.after(mark);
+            }
+            mark.textContent = '\u2717 ' + err;
+        } else if (mark) {
+            mark.remove();
+        }
     };
     input.addEventListener('input', validate);
     input.addEventListener('blur', validate);
@@ -804,7 +1276,7 @@ function wireUriPreviewBadge(badge, container, basePath) {
     const recompute = () => {
         const vals = {};
         URI_PREVIEW_FIELDS.forEach(f => {
-            const el = container.querySelector(`[data-path="${basePath}.${f}"]`);
+            const el = container.querySelector(`[data-path="${cssEscape(basePath + '.' + f)}"]`);
             vals[f] = el ? readInputValue(el) : null;
         });
         const result = validateUriPreview(vals);
@@ -1022,6 +1494,8 @@ function createReferencePicker(itemsSchema, container, path, updateStatus) {
     select.title = 'Add a reference to an existing identity';
 
     function rebuildOptions() {
+        // Ids as the form holds them now: added, renamed or removed since load.
+        try { buildIdentityRegistry(getFormData()); } catch (e) { /* keep the last registry */ }
         select.innerHTML = '';
         const placeholder = document.createElement('option');
         placeholder.value = '';
@@ -1065,6 +1539,7 @@ function createReferencePicker(itemsSchema, container, path, updateStatus) {
         const id = select.value;
         if (!id) return;
         addArrayItem(container, itemsSchema, path, id, null, true);
+        setDirty();
         if (updateStatus) updateStatus();
         select.value = ''; // reset to placeholder for the next pick
     };
@@ -1129,10 +1604,26 @@ function identityMatchesItemsSchema(identity, itemsSchema) {
     return false;
 }
 
+/// The classes Jackson reads with `@JsonIdentityInfo` (declared or inherited):
+/// in them an item's `id` must be unique per class, and a bare id string
+/// names an item stated elsewhere in the file. Not every v2 class: v2
+/// `AttributeSelector` has none, so its ids may repeat. The v3 classes have
+/// none on purpose. ConfiguratorIdentityTest checks this list against the
+/// framework jar.
+const IDENTITY_CLASSES = new Set([
+    'ConfigAddressMap', 'ConfigHashMap', 'ConfigIPv4Map', 'ConfigLinkedHashMap', 'ConfigPrefixMap',
+    'ConfigPrefixMapApache', 'ConfigTreeMap', 'Selector', 'ServerPool', 'Translation', 'TranslationsMap',
+].map(n => 'org.vorpal.blade.framework.v2.config.' + n));
+
+/// Whether a class takes Jackson identity references (an item named by its id string).
+function takesIdentityReferences(r) {
+    return !!r && IDENTITY_CLASSES.has(r['x-java-class']);
+}
+
 // Returns true if the given items schema could accept a Jackson identity
-// reference (a bare id string). True when at least one resolved variant is
-// an object with an `id` property — the same predicate isIdentityReference
-// uses to decide on render.
+// reference (a bare id string): at least one resolved variant is an object
+// with an `id` property whose class takes identity references.
+
 function arrayItemsAcceptReferences(itemsSchema) {
     if (!itemsSchema) return false;
     let s = itemsSchema;
@@ -1142,10 +1633,10 @@ function arrayItemsAcceptReferences(itemsSchema) {
     if (variants) {
         return variants.some(v => {
             const r = v.$ref ? deref(v) : v;
-            return r && r.type === 'object' && r.properties && r.properties.id;
+            return r && r.type === 'object' && r.properties && r.properties.id && takesIdentityReferences(r);
         });
     }
-    return s.type === 'object' && s.properties && s.properties.id;
+    return s.type === 'object' && s.properties && s.properties.id && takesIdentityReferences(s);
 }
 
 // Compute a human-friendly label for one polymorphic variant in a
@@ -1227,8 +1718,9 @@ function createReferenceLink(id) {
 // Scroll to and briefly highlight the original object definition.
 // Full objects are tagged with DOM id="identity-{id}" during form generation.
 function scrollToIdentity(id) {
-    const target = document.getElementById('identity-' + CSS.escape(id));
+    const target = document.getElementById('identity-' + id);   // an id, not a selector
     if (target) {
+        revealField(target);
         target.scrollIntoView({ behavior: 'smooth', block: 'center' });
         target.classList.add('reference-highlight');
         setTimeout(() => target.classList.remove('reference-highlight'), 2000);
@@ -1372,6 +1864,15 @@ function createFormElement(fieldSchema, path, value = null, isMapKey = false) {
             if (value === option) optionEl.selected = true;
             select.appendChild(optionEl);
         });
+        // A value the schema does not list (a renamed constant, a newer app):
+        // offered and selected as it is, or Save would drop the field.
+        if (value !== null && value !== undefined && value !== '' && !fieldSchema.enum.includes(value)) {
+            const optionEl = document.createElement('option');
+            optionEl.value = value;
+            optionEl.textContent = value + ' (not in the schema)';
+            optionEl.selected = true;
+            select.appendChild(optionEl);
+        }
 
         return select;
     }
@@ -1381,7 +1882,7 @@ function createFormElement(fieldSchema, path, value = null, isMapKey = false) {
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.id = id;
-            checkbox.checked = value === true;
+            checkbox.checked = value === true || value === 'true';   // Jackson reads "true" as true
             checkbox.setAttribute('data-path', path);
             checkbox._schema = fieldSchema;
             return checkbox;
@@ -1409,7 +1910,7 @@ function createFormElement(fieldSchema, path, value = null, isMapKey = false) {
             let textInput;
             // A value with line breaks (JVM arguments, one per line) keeps them:
             // an <input> would silently join the lines.
-            if (fieldSchema.format === 'textarea' || (typeof value === 'string' && value.includes('\n'))) {
+            if (fieldSchema.format === 'textarea' || (typeof value === 'string' && /[\r\n]/.test(value))) {
                 // Multi-line editor for long strings (regex, templates, body).
                 textInput = document.createElement('textarea');
                 textInput.rows = 3;
@@ -1427,6 +1928,12 @@ function createFormElement(fieldSchema, path, value = null, isMapKey = false) {
             }
             textInput.setAttribute('data-path', path);
             textInput._schema = fieldSchema;
+            // A textarea reports CRLF as LF: remember the file's line ends
+            // (SDP and SIP text in CRUD values use CRLF).
+            if (typeof value === 'string' && value.includes('\r\n')) textInput.dataset.crlf = 'true';
+            // A textarea turns \r\n and a lone \r into \n: the value as drawn
+            // is given back exactly while the field is untouched (readInputValue).
+            if (typeof value === 'string' && textInput.tagName === 'TEXTAREA') textInput._original = value;
             // Use `default` (from @JsonProperty(defaultValue)) as the placeholder
             // hint so the user sees the expected format even before typing.
             if (fieldSchema.default !== undefined && fieldSchema.default !== null) {
@@ -1443,6 +1950,9 @@ function createFormElement(fieldSchema, path, value = null, isMapKey = false) {
                 // Mark for {CLEARTEXT}-wrapping on save, and wrap in a span
                 // with an eye toggle so the user can briefly verify the secret.
                 textInput.dataset.password = 'true';
+                // A multi-line secret (a PEM key) is a textarea, which has no
+                // password type: masked by style instead.
+                if (textInput.tagName === 'TEXTAREA') textInput.classList.add('secret-masked');
                 const wrapper = document.createElement('span');
                 wrapper.className = 'password-field';
                 const toggle = document.createElement('button');
@@ -1454,7 +1964,8 @@ function createFormElement(fieldSchema, path, value = null, isMapKey = false) {
                 toggle.onclick = (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    textInput.type = textInput.type === 'password' ? 'text' : 'password';
+                    if (textInput.tagName === 'TEXTAREA') textInput.classList.toggle('secret-masked');
+                    else textInput.type = textInput.type === 'password' ? 'text' : 'password';
                 };
                 wrapper.appendChild(textInput);
                 wrapper.appendChild(toggle);
@@ -1477,6 +1988,18 @@ function createFormElement(fieldSchema, path, value = null, isMapKey = false) {
 /// property's field by that name, never by the words its label shows,
 /// which are for people and may change.
 function createFormGroup(fieldSchema, title, description, path, value = null, isNested = false, originalSchema = null) {
+    // A property holding a v2 identity reference: a link, saved as the id.
+    if (typeof value === 'string' && isIdentityReference(value, fieldSchema)) {
+        const group = document.createElement('div');
+        group.className = 'form-group' + (isNested ? ' nested' : '');
+        const label = document.createElement('label');
+        label.textContent = title || '';
+        group.appendChild(label);
+        group.appendChild(createReferenceLink(value));
+        const prop = (path == null) ? '' : String(path).split('.').pop();
+        if (prop && !/\]$/.test(prop)) group.dataset.prop = prop;
+        return group;
+    }
     const el = createFormGroupElement(fieldSchema, title, description, path, value, isNested, originalSchema);
     const prop = (path == null) ? '' : String(path).split('.').pop();
     if (el && prop && !/\]$/.test(prop)) {
@@ -1597,7 +2120,7 @@ function createFormGroupElement(fieldSchema, title, description, path, value = n
         // renderer (createObjectGroup.renderPropInto and its siblings) from
         // the parent schema's `required` list.
         let deleteBtn = null;
-        if (!fieldSchema['x-required-here']) {
+        if (!fieldSchema['x-required-here'] && !fieldSchema['x-readonly']) {
             deleteBtn = document.createElement('button');
             deleteBtn.type = 'button';
             deleteBtn.className = 'delete-property-btn';
@@ -1657,6 +2180,14 @@ function createFormGroupElement(fieldSchema, title, description, path, value = n
             headerRow.classList.add('inline');
             headerRow.insertBefore(element, label.nextSibling);
         }
+        // The label names its control for a screen reader (and a click on it
+        // focuses the control).
+        const ctl = element.matches && element.matches('input, select, textarea') ? element
+            : (element.querySelector && element.querySelector('input, select, textarea'));
+        if (ctl) {
+            if (!ctl.id || document.getElementById(ctl.id)) ctl.id = 'fld-' + (++fieldIds);
+            label.htmlFor = ctl.id;
+        }
 
         return group;
     }
@@ -1665,6 +2196,8 @@ function createFormGroupElement(fieldSchema, title, description, path, value = n
 /// Update the small grey class-name label on a collapsible header.
 /// Pass the FQN (e.g. "org.vorpal.blade.framework.v3.RouterConfiguration").
 /// Visible text is the simple name; tooltip is the FQN. Falsy fqn hides the label.
+let fieldIds = 0;   // unique ids for label/control pairs
+
 function setJavaClassOnSection(labelEl, fqn) {
     if (!labelEl) return;
     if (!fqn) {
@@ -1687,6 +2220,7 @@ function applyReadOnly(fieldSchema, content) {
     if (fieldSchema['x-readonly'] !== true) return;
     content.classList.add('form-readonly');
     content.querySelectorAll('input, select, textarea, button').forEach(el => el.disabled = true);
+    content.querySelectorAll('[draggable="true"]').forEach(el => { el.draggable = false; });   // nor reordered
 }
 
 /// What a field shows as its label: the schema's title, else the property
@@ -1721,7 +2255,7 @@ function sectionSummary(content) {
             const fields = it.querySelectorAll('input:not([type=checkbox]):not([type=button]), select, textarea');
             const type = it.querySelector(':scope > .array-item-header .array-item-type-label');
             return (key && key.value) || (ids[0] && ids[0].value)
-                || (fields.length === 1 && fields[0].value)
+                || (fields.length === 1 && fields[0].type !== 'password' && !fields[0].dataset.password && fields[0].value)
                 || (type && type.textContent.trim()) || '#' + (i + 1);
         });
         parts.push(items.length + (items.length === 1 ? ' item: ' : ' items: ') + names.join(', '));
@@ -1734,7 +2268,8 @@ function sectionSummary(content) {
         if (!label || !input) return;
         const name = label.textContent.trim();
         if (input.type === 'checkbox') { if (input.checked) parts.push(name.toLowerCase()); return; }
-        if (input.type === 'password') { if (input.value) parts.push(name + ' set'); return; }
+        // A password field, shown or not (the eye toggle makes it type=text).
+        if (input.type === 'password' || input.dataset.password === 'true') { if (input.value) parts.push(name + ' set'); return; }
         const v = String(input.value || '').trim();
         if (v) parts.push(name + ' ' + (v.length > 40 ? v.slice(0, 40) + '…' : v));
     });
@@ -1894,6 +2429,7 @@ function toggleCollapse(header, content, arrow) {
         }, 350); // Wait for collapse animation
     }
     } finally {
+        header.setAttribute('aria-expanded', String(!header.classList.contains('collapsed')));
         refreshSectionSummary(header, content);
     }
 }
@@ -2001,7 +2537,7 @@ function updateParentHeights(section) {
 
 function hasValue(value) {
     if (value === null || value === undefined) return false;
-    if (typeof value === 'string' && value.trim() === '') return false;
+    if (typeof value === 'string' && value === '') return false;   // " " is a value (a CRUD replacement)
     if (Array.isArray(value) && value.length === 0) return false;
     if (typeof value === 'object' && Object.keys(value).length === 0) return false;
     return true;
@@ -2028,8 +2564,11 @@ function generateDefaultValue(fieldSchema) {
         delete fieldSchema.$ref;
     }
 
-    // Use schema default if provided
-    if (fieldSchema.default !== undefined) {
+    // Use schema default if provided. Not on a cluster or server file: a
+    // default written there overrides whatever the domain file sets, when the
+    // operator added the object to change one field.
+    const overlay = selectedTargetDirectory && selectedTargetDirectory.type !== 'domain';
+    if (fieldSchema.default !== undefined && !overlay) {
         return JSON.parse(JSON.stringify(fieldSchema.default));
     }
 
@@ -2038,27 +2577,22 @@ function generateDefaultValue(fieldSchema) {
         return JSON.parse(JSON.stringify(fieldSchema.const));
     }
 
-    // Generate based on type
-    if (fieldSchema.enum && fieldSchema.enum.length > 0) {
-        return fieldSchema.enum[0];
-    }
-
+    // No default in the schema: leave a plain value unset, so the field shows
+    // as "+ name" and the app's own default applies. Inventing one wrote 0
+    // into a REST connector's timeoutSeconds (Java default 5), "" into every
+    // string, and the first enum constant, each saved as if chosen.
     switch (fieldSchema.type) {
         case 'string':
-            return '';
         case 'integer':
         case 'number':
-            return 0;
         case 'boolean':
-            return false;
+            return null;
         case 'array':
-            return [];
+            return null;   // no list until one is added
         case 'object':
-            if (fieldSchema.additionalProperties) {
-                // Map type - return empty object
-                return {};
-            } else if (fieldSchema.properties) {
-                // Object with defined properties - generate defaults for each property
+            if (fieldSchema.properties) {
+                // Only what the schema pins (a variant's type) or defaults; an
+                // empty {} or [] here would be saved as if chosen.
                 const result = {};
                 Object.keys(fieldSchema.properties).forEach(prop => {
                     const propDefault = generateDefaultValue(fieldSchema.properties[prop]);
@@ -2066,9 +2600,9 @@ function generateDefaultValue(fieldSchema) {
                         result[prop] = propDefault;
                     }
                 });
-                return result;
+                return Object.keys(result).length ? result : null;
             }
-            return {};
+            return null;   // a map: no entries until one is added
         default:
             return null;
     }
@@ -2080,6 +2614,29 @@ function markStatedEmpty(placeholder, value) {
     if (isStatedEmpty(value)) {
         placeholder.dataset.statedEmpty = 'true';
         placeholder.title = 'Empty in the file, and saved that way';
+    }
+    // A null the file states: not the same as absent (it overrides a default,
+    // or on a cluster or server file the value below). Said, and removable.
+    if (value === null) {
+        placeholder.dataset.statedNull = 'true';
+        placeholder.title = 'null in this file' + (onOverlayTarget() ? ': overrides the value below it' : '') + '; × removes it';
+        const label = placeholder.querySelector('.add-property-label');
+        if (label) label.textContent += ' = null';
+        const x = document.createElement('button');
+        x.type = 'button';
+        x.className = 'delete-property-btn';
+        x.innerHTML = '<span class="delete-property-icon">×</span>';
+        x.title = 'Remove the null';
+        x.onclick = (e) => {
+            e.stopPropagation();
+            delete placeholder.dataset.statedNull;
+            placeholder.dataset.nullRemoved = 'true';   // read back as absent
+            placeholder.removeAttribute('title');
+            if (label) label.textContent = label.textContent.replace(/ = null$/, '');
+            x.remove();
+            setDirty();
+        };
+        placeholder.appendChild(x);
     }
 }
 
@@ -2107,17 +2664,27 @@ function createAddPropertyPlaceholder(fieldSchema, title, description, path, con
 
     placeholder.appendChild(addBtn);
     placeholder.appendChild(label);
+    // The name is a target too: the "+" alone is a small one.
+    label.addEventListener('click', () => addBtn.click());
+    label.style.cursor = 'pointer';
 
     addBtn.onclick = () => {
         // Generate default value and create the actual form element
         const defaultValue = generateDefaultValue(fieldSchema);
         const propGroup = createFormGroup(fieldSchema, title, description, path, defaultValue, isNested);
+        // A new value: the one removed before (×) is not its source, or its
+        // leftovers (an untyped variant, a mistyped value, unlisted keys) return.
+        propGroup.dataset.fresh = 'true';
 
         // Replace placeholder with actual form group
         placeholder.replaceWith(propGroup);
 
         // Mark form as dirty since we're adding content
         setDirty();
+
+        // Typing goes where the "+" put the field, as after Add Translation.
+        const first = propGroup.querySelector('input:not([type="hidden"]):not([readonly]), textarea, select');
+        if (first) first.focus();
 
         // Update parent heights
         setTimeout(() => {
@@ -2209,7 +2776,7 @@ function createPolymorphicObjectGroup(fieldSchema, title, description, path, val
             const propTitle = fieldTitle(propSchema, prop);
             const propDescription = propSchema.description;
             // Required-flag injection (suppresses the [-] button), same as createObjectGroup.renderPropInto.
-            const childSchema = requiredSet.has(prop)
+            const childSchema = (requiredSet.has(prop) && !onOverlayTarget())   // an overlay may leave any of them to the file below
                 ? Object.assign({}, propSchema, { 'x-required-here': true })
                 : propSchema;
             if (!hasValue(propValue)) {
@@ -2224,18 +2791,39 @@ function createPolymorphicObjectGroup(fieldSchema, title, description, path, val
     }
 
     typeSelect.onchange = () => {
+        if (typeSelect.value === '') {
+            // Back to "as in the file below": no type written.
+            delete content.dataset.variantChanged;
+            setDirty();
+            return;
+        }
         const newIdx = parseInt(typeSelect.value, 10);
         renderVariant(newIdx, generateDefaultValue(variants[newIdx]));
+        // The loaded value was another variant: none of its fields carry over.
+        content.dataset.variantChanged = 'true';
         setDirty();
     };
 
     renderVariant(initialIdx, value);
 
+    // A cluster or server file whose value states fields but no type (one it
+    // changes a field of): the type is the file below's, which this page does
+    // not show. Said so, and written only if picked; the fields drawn are the
+    // first variant's. An item just added with "+" has nothing below it
+    // (overlay lists append), so its type is the one drawn, and written.
+    if (onOverlayTarget() && changesBelow(value)) {
+        const below = document.createElement('option');
+        below.value = '';
+        below.textContent = 'As in the file below';
+        typeSelect.insertBefore(below, typeSelect.firstChild);
+        typeSelect.value = '';
+    }
+
     const hasData = hasValue(value);
     // Folded to one line that says what it holds (sectionSummary); a click,
     // or View > Expand All, opens it.
     const autoCollapse = true;
-    const deleteInfo = fieldSchema['x-required-here'] ? null : {
+    const deleteInfo = (fieldSchema['x-required-here'] || fieldSchema['x-readonly']) ? null : {
         schema: schemaForDelete || fieldSchema,
         title: title,
         description: description,
@@ -2298,7 +2886,7 @@ function createObjectGroup(fieldSchema, title, description, path, value = null, 
             }
             // Inject required marker via a shallow-cloned schema so we don't
             // mutate the shared $defs schema.
-            const childSchema = requiredSet.has(prop)
+            const childSchema = (requiredSet.has(prop) && !onOverlayTarget())   // an overlay may leave any of them to the file below
                 ? Object.assign({}, propSchema, { 'x-required-here': true })
                 : propSchema;
             // Fields in a @FormLayoutGroup row flow L-to-R and share the
@@ -2354,7 +2942,8 @@ function createObjectGroup(fieldSchema, title, description, path, value = null, 
                     cols.forEach(colFields => {
                         const colDiv = document.createElement('div');
                         colDiv.className = 'form-layout-column';
-                        (colFields || []).forEach(f => renderPropInto(colDiv, f, gi));
+                        // Only this list's fields: one a @FormSection draws elsewhere would be drawn twice.
+                        (colFields || []).filter(f => propList.includes(f)).forEach(f => renderPropInto(colDiv, f, gi));
                         row.appendChild(colDiv);
                     });
                 } else {
@@ -2399,7 +2988,7 @@ function createObjectGroup(fieldSchema, title, description, path, value = null, 
     }
 
     // Create deleteInfo for the collapsible section
-    const deleteInfo = fieldSchema['x-required-here'] ? null : {
+    const deleteInfo = (fieldSchema['x-required-here'] || fieldSchema['x-readonly']) ? null : {
         schema: schemaForDelete,
         title: title,
         description: description,
@@ -2483,7 +3072,7 @@ function createOpaqueObjectGroup(fieldSchema, title, description, path, value = 
     content.appendChild(textarea);
     content.appendChild(status);
 
-    const deleteInfo = fieldSchema['x-required-here'] ? null : {
+    const deleteInfo = (fieldSchema['x-required-here'] || fieldSchema['x-readonly']) ? null : {
         schema: schemaForDelete,
         title: title,
         description: description,
@@ -2520,9 +3109,31 @@ function createMapGroup(fieldSchema, title, description, path, value = null, isN
         const hint = container.querySelector(':scope > .empty-state-hint');
         if (hint) hint.remove();
         addMapEntry(container, fieldSchema.additionalProperties, path, '', null, true, keyEnum);
+        setDirty();
         updateSectionStatus();
     };
-    header.appendChild(addBtn);
+    // Values of several types (a keyed pipeline's connectors): pick the type
+    // when adding, as for a list; a plain Add always made the first variant.
+    const valueVariants = polymorphicVariants(deref(fieldSchema.additionalProperties) || fieldSchema.additionalProperties);
+    if (valueVariants && valueVariants.length > 1) {
+        const addSelect = document.createElement('select');
+        addSelect.className = 'btn btn-primary add-menu-select';
+        addSelect.innerHTML = '<option value="">+ ' + escapeHtml(addBtn.textContent) + '</option>'
+            + valueVariants.map((v, i) => '<option value="' + i + '">' + escapeHtml(variantLabel(v, i)) + '</option>').join('');
+        addSelect.onchange = () => {
+            if (addSelect.value === '') return;
+            const hint = container.querySelector(':scope > .empty-state-hint');
+            if (hint) hint.remove();
+            const variant = valueVariants[parseInt(addSelect.value, 10)];
+            addMapEntry(container, fieldSchema.additionalProperties, path, '', generateDefaultValue(variant), true, keyEnum);
+            setDirty();
+            updateSectionStatus();
+            addSelect.value = '';
+        };
+        header.appendChild(addSelect);
+    } else {
+        header.appendChild(addBtn);
+    }
 
     content.appendChild(header);
 
@@ -2548,7 +3159,7 @@ function createMapGroup(fieldSchema, title, description, path, value = null, isN
     }
 
     // Create deleteInfo for the collapsible section
-    const deleteInfo = fieldSchema['x-required-here'] ? null : {
+    const deleteInfo = (fieldSchema['x-required-here'] || fieldSchema['x-readonly']) ? null : {
         schema: schemaForDelete,
         title: title,
         description: description,
@@ -2614,7 +3225,7 @@ function createArrayGroup(fieldSchema, title, description, path, value = null, i
 
     // Resolve polymorphic variants (oneOf/anyOf) for the type selector
     const oneOfVariants = fieldSchema.items
-        ? polymorphicVariants(fieldSchema.items)
+        ? polymorphicVariants((fieldSchema.items.$ref ? deref(fieldSchema.items) : null) || fieldSchema.items)
         : null;
 
     const itemTypeName = arrayItemTypeName(fieldSchema.items);
@@ -2640,6 +3251,7 @@ function createArrayGroup(fieldSchema, title, description, path, value = null, i
             const selectedVariant = oneOfVariants[parseInt(raw, 10)];
             const defaultVal = generateDefaultValue(selectedVariant);
             addArrayItem(container, fieldSchema.items, path, defaultVal, null, true);
+            setDirty();
             updateSectionStatus();
             addSelect.value = '';
         };
@@ -2655,6 +3267,7 @@ function createArrayGroup(fieldSchema, title, description, path, value = null, i
         addBtn.textContent = `+ Add ${itemTypeName || 'Item'}`;
         addBtn.onclick = () => {
             addArrayItem(container, fieldSchema.items, path, null, null, true);
+            setDirty();
             updateSectionStatus();
         };
         header.appendChild(addBtn);
@@ -2683,7 +3296,7 @@ function createArrayGroup(fieldSchema, title, description, path, value = null, i
     }
 
     // Create deleteInfo for the collapsible section
-    const deleteInfo = fieldSchema['x-required-here'] ? null : {
+    const deleteInfo = (fieldSchema['x-required-here'] || fieldSchema['x-readonly']) ? null : {
         schema: schemaForDelete,
         title: title,
         description: description,
@@ -2731,6 +3344,13 @@ function renderInlineExtras(parent, valueTypeSchema, basePath, extras) {
     parent.appendChild(wrapper);
 }
 
+/// A map key as read back: exactly as the file stated it while untouched
+/// (the input's `value` attribute holds the key as loaded), trimmed once typed.
+function mapKeyOf(input) {
+    const raw = input.value;
+    return raw === input.getAttribute('value') ? raw : raw.trim();
+}
+
 function addExtraRow(wrapper, valueTypeSchema, basePath, key, value) {
     const row = document.createElement('div');
     row.className = 'extras-row';
@@ -2765,11 +3385,20 @@ function addExtraRow(wrapper, valueTypeSchema, basePath, key, value) {
     wrapper.appendChild(row);
 }
 
-function addMapEntry(container, valueSchema, basePath, key = '', value = null, prepend = false, keyEnum = null) {
+/// One entry of a map. `added`: the operator added it (Add), else it is drawn
+/// from the file. An added entry goes last: a map's order is run order (a
+/// keyed pipeline, rule sets), and entries cannot be dragged.
+function addMapEntry(container, valueSchema, basePath, key = '', value = null, added = false, keyEnum = null) {
     const hint = container.querySelector(':scope > .empty-state-hint');
     if (hint) hint.remove();
     const entry = document.createElement('div');
     entry.className = 'map-entry';
+    // The value this entry was drawn from; it stays with the entry through a key rename.
+    entry._source = value;
+    // A null the file states (not one the operator added): kept until edited.
+    entry._statedNull = value === null && !added;
+    // The key as the file has it: "" is a legal key there, not a blank row.
+    if (!added) entry._fileKey = key;
 
     // Tag map-entry values that have an id field so identity references
     // pointing at them (e.g. plan: ["callers"] referencing maps[0].map.callers)
@@ -2810,6 +3439,7 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null, p
     removeBtn.title = 'Remove entry';
     removeBtn.onclick = () => {
         entry.remove();
+        setDirty();
         // Update parent section status and heights
         updateParentSectionStatus(container);
         setTimeout(() => {
@@ -2826,14 +3456,31 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null, p
 
     const valuePath = basePath ? `${basePath}.${key}` : key;
 
+    // A v2 identity reference (the id of an object defined elsewhere): shown as
+    // a link and saved as the id, not drawn as an empty object.
+    if (typeof value === 'string' && isIdentityReference(value, valueSchema)) {
+        entryContent.appendChild(createReferenceLink(value));
+        entry.appendChild(entryContent);
+        container.appendChild(entry);
+        return;
+    }
+
     if (valueSchema.$ref) {
         valueSchema = deref(valueSchema);
     }
 
     if (valueSchema.oneOf || valueSchema.anyOf) {
-        valueSchema = resolveOneOf(valueSchema, value);
-        if (valueSchema && valueSchema.$ref) {
-            valueSchema = deref(valueSchema);
+        // A value no variant claims (a type newer than the schema) is kept as
+        // JSON, as for properties and list items; resolving it to the first
+        // variant would change its type and drop its fields.
+        const entryVariants = polymorphicVariants(valueSchema);
+        if (entryVariants && value && !polymorphicMatches(entryVariants, value)) {
+            valueSchema = { type: 'object' };
+        } else {
+            valueSchema = resolveOneOf(valueSchema, value);
+            if (valueSchema && valueSchema.$ref) {
+                valueSchema = deref(valueSchema);
+            }
         }
     }
 
@@ -2847,7 +3494,7 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null, p
             const propTitle = fieldTitle(propSchema, prop);
             const propDescription = propSchema.description;
             // Required-flag injection (suppresses the [-] button), same as createObjectGroup.renderPropInto.
-            const childSchema = requiredSet.has(prop)
+            const childSchema = (requiredSet.has(prop) && !onOverlayTarget())   // an overlay may leave any of them to the file below
                 ? Object.assign({}, propSchema, { 'x-required-here': true })
                 : propSchema;
 
@@ -2892,7 +3539,7 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null, p
     header.style.cursor = 'pointer';
     header.onclick = (e) => {
         // Don't toggle when clicking input, button, or inside them
-        if (e.target.closest('input, button')) return;
+        if (e.target.closest('input, button, select')) return;
         toggleCollapse(header, entryContent, arrow);
 
         // When expanding, ensure inner non-toggleable sections are also expanded
@@ -2918,16 +3565,40 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null, p
         innerHeader.style.cursor = 'default';
     });
 
-    if (prepend && container.firstChild) {
-        container.insertBefore(entry, container.firstChild);
-    } else {
-        container.appendChild(entry);
+    container.appendChild(entry);
+    if (added) {
+        entry.scrollIntoView({ block: 'nearest' });
+        const keyInput = entry.querySelector('.map-key-input');
+        if (keyInput) keyInput.focus();
     }
 
     // Update parent heights after adding
     setTimeout(() => {
         recalculateAllAncestorHeights(container.closest('.collapsible-section'));
     }, 10);
+}
+
+/// The ☰ that reorders a list item. Every kind of item has one: Add puts a
+/// new item first, and in an ordered list (a plan, rules) the order is what
+/// runs, so a reference or a plain value must be movable too.
+function makeDragHandle(item) {
+    const dragHandle = document.createElement('span');
+    dragHandle.className = 'drag-handle';
+    dragHandle.draggable = true;
+    dragHandle.title = 'Drag to reorder';
+    dragHandle.textContent = '\u2630'; // ☰
+    dragHandle.addEventListener('dragstart', (e) => {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', '');
+        item.classList.add('dragging');
+    });
+    dragHandle.addEventListener('dragend', () => {
+        if (item.classList.contains('dragging')) {
+            item.classList.remove('dragging');
+            setDirty(true);   // moved, not edited
+        }
+    });
+    return dragHandle;
 }
 
 function addArrayItem(container, itemSchema, basePath, value = null, index = null, prepend = false) {
@@ -2951,6 +3622,11 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
 
     const item = document.createElement('div');
     item.className = 'array-item';
+    // The value this item was drawn from, so the read-back compares it with
+    // itself after items are added, removed or moved (not by position).
+    item._source = value;
+    // A null the file states (a new item is drawn with prepend): kept until edited.
+    item._statedNull = value === null && !prepend;
 
     // Save original schema before resolution for identity reference check
     const originalItemSchema = itemSchema;
@@ -2971,11 +3647,13 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
         removeBtn.onclick = (e) => {
             e.stopPropagation();
             item.remove();
+            setDirty();
             updateParentSectionStatus(container);
             setTimeout(() => {
                 recalculateAllAncestorHeights(container.closest('.collapsible-section'));
             }, 10);
         };
+        header.appendChild(makeDragHandle(item));
         header.appendChild(removeBtn);
         item.appendChild(header);
         item.appendChild(createReferenceLink(value));
@@ -3015,6 +3693,7 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
     removeBtn.onclick = (e) => {
         e.stopPropagation();
         item.remove();
+        setDirty();
         // Update parent section status and heights
         updateParentSectionStatus(container);
         setTimeout(() => {
@@ -3031,12 +3710,54 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
     duplicateBtn.title = 'Duplicate item';
     duplicateBtn.onclick = (e) => {
         e.stopPropagation();
-        const idx = Array.from(container.children).filter(c => c.classList.contains('array-item')).indexOf(item);
-        if (idx < 0) return;
-        const all = getFormData();
-        const arr = resolveJsonPath(all, basePath);
-        if (!Array.isArray(arr) || idx >= arr.length) return;
-        const clone = JSON.parse(JSON.stringify(arr[idx]));
+        // The item's own value from a fresh read-back, not the value now at
+        // the path it was drawn at (an outer list may have been reordered).
+        getFormData();
+        // Inside a value read back whole (untouched, untyped or mistyped) the
+        // items were not visited: an untouched item is its own source.
+        let own = itemValues.get(item);
+        if (own === undefined) own = item._source;
+        if (own === undefined || own === null) return;
+        const clone = JSON.parse(JSON.stringify(own));
+        // Its own id: two items with one id fail to load where ids are
+        // identities (v2), and are ambiguous anywhere else.
+        // Every id inside it too (a map of translations, inline selectors):
+        // ids are one namespace for the whole file. References inside the
+        // copy to the copy's own objects follow the rename.
+        {
+            const taken = new Set();
+            const collect = v => {
+                if (Array.isArray(v)) v.forEach(collect);
+                else if (v && typeof v === 'object') { if (typeof v.id === 'string') taken.add(v.id); Object.values(v).forEach(collect); }
+            };
+            collect(getFormData());
+            const renamed = new Map();
+            const rename = v => {
+                if (Array.isArray(v)) v.forEach(rename);
+                else if (v && typeof v === 'object') {
+                    if (typeof v.id === 'string' && v.id) {
+                        let n = 2, id = v.id + '-copy';
+                        while (taken.has(id)) id = v.id + '-copy' + n++;
+                        taken.add(id);
+                        renamed.set(v.id, id);
+                        v.id = id;
+                    }
+                    Object.values(v).forEach(rename);
+                }
+            };
+            rename(clone);
+            const follow = v => {
+                if (Array.isArray(v)) return v.map(x => typeof x === 'string' && renamed.has(x) ? renamed.get(x) : follow(x));
+                if (v && typeof v === 'object') {
+                    for (const k of Object.keys(v)) {
+                        if (k !== 'id' && typeof v[k] === 'string' && renamed.has(v[k])) v[k] = renamed.get(v[k]);
+                        else v[k] = follow(v[k]);
+                    }
+                }
+                return v;
+            };
+            follow(clone);
+        }
         // Render at the end, then move right after the source item.
         const childrenBefore = container.children.length;
         addArrayItem(container, originalItemSchema, basePath, clone, null, false);
@@ -3050,6 +3771,7 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
         // Map type — render as inline key-value pairs within the array item
         const header = document.createElement('div');
         header.className = 'array-item-header';
+        header.appendChild(makeDragHandle(item));
         header.appendChild(removeBtn);
         item.appendChild(header);
 
@@ -3062,6 +3784,7 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
         addBtn.textContent = valueTypeName ? `Add ${valueTypeName}` : 'Add Entry';
         addBtn.onclick = () => {
             addMapEntry(mapContainer, itemSchema.additionalProperties, itemPath, '', null, true);
+            setDirty();
         };
         mapHeader.appendChild(addBtn);
         item.appendChild(mapHeader);
@@ -3089,23 +3812,7 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
 
         // Drag handle — only element that initiates reorder. Kept narrow so
         // it doesn't steal clicks from the header's collapse toggle.
-        const dragHandle = document.createElement('span');
-        dragHandle.className = 'drag-handle';
-        dragHandle.draggable = true;
-        dragHandle.title = 'Drag to reorder';
-        dragHandle.textContent = '\u2630'; // ☰
-        dragHandle.addEventListener('dragstart', (e) => {
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', '');
-            item.classList.add('dragging');
-        });
-        dragHandle.addEventListener('dragend', () => {
-            if (item.classList.contains('dragging')) {
-                item.classList.remove('dragging');
-                setDirty();
-            }
-        });
-        header.appendChild(dragHandle);
+        header.appendChild(makeDragHandle(item));
 
         // Read-only pill — e.g. "Selector: sdp" — identifies the item's
         // variant. Users who want a different type delete this item and
@@ -3154,7 +3861,7 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
             const propTitle = fieldTitle(propSchema, prop);
             const propDescription = propSchema.description;
             // Required-flag injection (suppresses the [-] button), same as createObjectGroup.renderPropInto.
-            const childSchema = requiredSet.has(prop)
+            const childSchema = (requiredSet.has(prop) && !onOverlayTarget())   // an overlay may leave any of them to the file below
                 ? Object.assign({}, propSchema, { 'x-required-here': true })
                 : propSchema;
 
@@ -3214,6 +3921,7 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
         const header = document.createElement('div');
         header.className = 'array-item-header';
         const itemInput = createFormElement(itemSchema, itemPath, value);
+        header.appendChild(makeDragHandle(item));
         header.appendChild(itemInput);
         header.appendChild(removeBtn);
         item.appendChild(header);
@@ -3264,6 +3972,53 @@ function ownFields(searchContainer, selector) {
     const mine = searchContainer.closest(FIELD_OWNER);
     return [...searchContainer.querySelectorAll(selector)].filter(e => e.parentElement.closest(FIELD_OWNER) === mine);
 }
+/// Whether a value is of the JSON type its schema names (any, when the schema
+/// names none or is a choice of variants). A file older or newer than its
+/// schema can hold "30s" where a number goes, or "yes" for a boolean; the
+/// form cannot show those, so an untouched field keeps them as they were.
+function fitsSchemaType(v, s) {
+    if (s && s.$ref) s = deref(s) || s;
+    if (s && (s.oneOf || s.anyOf)) {
+        // A choice of object variants holds an object (or, in v2, an id
+        // string, drawn as a reference link). Anything else is drift.
+        if (v !== null && typeof v === 'object' && !Array.isArray(v)) return true;
+        const variants = (s.oneOf || s.anyOf).map(x => (x && x.$ref ? deref(x) : x) || {});
+        if (typeof v === 'string' && variants.some(x => takesIdentityReferences(x))) return true;
+        return !variants.every(x => x.type === 'object' || x.properties);
+    }
+    if (!s || !s.type) return true;
+    const types = Array.isArray(s.type) ? s.type : [s.type];
+    return types.some(t => {
+        switch (t) {
+            case 'string': return typeof v === 'string';
+            case 'integer': return Number.isInteger(v);
+            case 'number': return typeof v === 'number';
+            case 'boolean': return typeof v === 'boolean';
+            case 'array': return Array.isArray(v);
+            case 'object': return (v !== null && typeof v === 'object' && !Array.isArray(v))
+                || (typeof v === 'string' && takesIdentityReferences(s));
+            case 'null': return v === null;
+            default: return true;
+        }
+    });
+}
+/// Whether the operator changed anything in `el` (or `el` itself) since it was drawn.
+function editedWithin(el) {
+    if (!el) return false;
+    if (el._touched || el._edited) return true;
+    return !!el.querySelectorAll && [...el.querySelectorAll('input, select, textarea')]
+        .some(i => i._edited && !i.classList.contains('map-key-input'));
+}
+/// Inside a property re-added with "+" after its ×: the file's value is not its source.
+function isFresh(el) {
+    return !!(el && el.closest && el.closest('[data-fresh="true"]'));
+}
+
+/// The file's value, kept, when it is not of its schema's type and nobody edited it.
+function keptDrift(src, schema, el) {
+    return src !== undefined && src !== null && !fitsSchemaType(src, schema) && !editedWithin(el);
+}
+
 /// The value a file states on purpose although it is empty: {}, [] or "".
 /// An `analytics.events` entry is `{}` (the event, with its defaults); a
 /// field left out means something else, so the form keeps what was there.
@@ -3271,10 +4026,44 @@ function isStatedEmpty(v) {
     return v === '' || (Array.isArray(v) && v.length === 0)
         || (v !== null && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0);
 }
+/// A list or map the operator emptied: the file has one (with items), the
+/// read-back is the empty one. Kept as [] or {}: left out, the application's
+/// default would come back (a grant's ["*"], every department).
+function emptiedFrom(v, src) {
+    if (Array.isArray(v)) return v.length === 0 && Array.isArray(src);
+    return v !== null && typeof v === 'object' && Object.keys(v).length === 0
+        && src !== null && typeof src === 'object' && !Array.isArray(src);
+}
 function isEmptyResult(v) {
     return v === null || v === undefined || v === '' || (typeof v === 'object' && Object.keys(v).length === 0);
 }
 /// A typed-in number stays a number, whatever kind of input showed it.
+/// As [coerceToSchema], except a value that is the file's own string, kept
+/// untouched (drift: "30" where the schema says integer), stays as written.
+/// Converting it would change the file on a Save nobody made; a string past
+/// 2^53 would also come back rounded, with nothing to repair it.
+/// `o[k] = v` that keeps a key named `__proto__` (from a file) as a key:
+/// plain assignment would set the object's prototype and drop it.
+function putOwn(o, k, v) {
+    Object.defineProperty(o, k, { value: v, enumerable: true, writable: true, configurable: true });
+}
+
+/// An overlay value the file states, with no type: the "As in the file
+/// below" case. Nothing (an item just added with "+") is not.
+function changesBelow(v) {
+    return !!v && typeof v === 'object' && !Array.isArray(v) && v.type === undefined;
+}
+
+/// A cluster or server file: partial, so `required` does not apply to it on
+/// its own (the merged document is checked on the server at Save).
+function onOverlayTarget() {
+    return !!(selectedTargetDirectory && selectedTargetDirectory.type !== 'domain');
+}
+
+function coerceUnlessKept(v, s, src) {
+    return (typeof v === 'string' && v === src) ? v : coerceToSchema(v, s);
+}
+
 function coerceToSchema(v, s) {
     if (typeof v !== 'string' || !s) return v;
     const t = s.$ref ? (deref(s) || {}).type : s.type;
@@ -3282,7 +4071,21 @@ function coerceToSchema(v, s) {
     return v;
 }
 
+/// What the last getFormData() could not read back faithfully (JSON that
+/// does not parse, duplicate or empty map keys). Save and Clone refuse while
+/// it is not empty: writing would drop or merge those values silently.
+let readBackProblems = [];
+/// Problems that refuse a Save but not leaving the Form tab (where the JSON
+/// tab is how to fix them).
+let saveOnlyProblems = [];
+/// Each array item's value from the last read-back, so Duplicate copies the
+/// item itself rather than whatever now sits at its old path.
+let itemValues = new WeakMap();
+
 function getFormData() {
+    readBackProblems = [];
+    saveOnlyProblems = [];
+    itemValues = new WeakMap();
     const form = document.getElementById('dynamicForm');
 
     // Recursively extract data from a container element. sourceData is
@@ -3299,23 +4102,43 @@ function getFormData() {
             schemaNode = deref(schemaNode);
             if (!schemaNode) return null;
         }
+        if (isFresh(container)) sourceData = null;   // re-added after ×: not the file's value
+        if (keptDrift(sourceData, schemaNode, container)) return JSON.parse(JSON.stringify(sourceData));
 
         // Resolve polymorphic schemas (anyOf/oneOf) using the actual type
         // discriminator value from the form's hidden input. This preserves
         // the correct variant (e.g. "hash" vs "prefix") during extraction.
         // Use :scope > to find only direct-child type inputs, not nested ones.
         if (schemaNode.oneOf || schemaNode.anyOf) {
+            // A file value with no type, untouched: kept as it is, before
+            // anything below reads the first variant's fields (or a nested
+            // field's raw-JSON box) as this value.
+            if (sourceData && typeof sourceData === 'object' && !Array.isArray(sourceData)
+                    && sourceData.type === undefined && !editedWithin(container)) {
+                return JSON.parse(JSON.stringify(sourceData));
+            }
             // Schema/data-mismatch fallback (createFormGroup, addArrayItem):
             // we rendered an opaque textarea instead of a polymorphic form.
             // Parse the textarea directly so the value round-trips intact.
-            const opaqueTa = container.querySelector(
-                ':scope > .opaque-object-input, :scope > div > .opaque-object-input, :scope > .collapsible-content > .opaque-object-input');
+            // Only this value's own box: a field nested in a typed value (an
+            // untyped `authentication`, say) is drawn the same way, one level
+            // deeper than the value's own type field. A typed value always
+            // has that field; the fallback has none.
+            const mineBoundary = container.closest(VALUE_BOUNDARY);
+            const ownType = [...container.querySelectorAll('input[data-path$=".type"], select[data-path$=".type"]')]
+                .filter(i => i.parentElement.closest(VALUE_BOUNDARY) === mineBoundary)
+                .map(i => i.dataset.path.length - '.type'.length)
+                .sort((a, b) => a - b)[0];
+            const opaqueTa = [...container.querySelectorAll('.opaque-object-input')]
+                .filter(t => t.parentElement.closest(VALUE_BOUNDARY) === mineBoundary)
+                .sort((a, b) => (a.dataset.path || '').length - (b.dataset.path || '').length)
+                .find(t => ownType === undefined || (t.dataset.path || '').length <= ownType) || null;
             if (opaqueTa) {
                 const txt = opaqueTa.value.trim();
                 if (txt === '' || txt === '{}') return null;
                 try { return JSON.parse(txt); }
                 catch (e) {
-                    console.warn('extractData: invalid JSON in opaque polymorphic at ' + debugPath + ': ' + e.message);
+                    readBackProblems.push((debugPath || '(root)') + ': the JSON there does not parse (' + e.message + ')');
                     return null;
                 }
             }
@@ -3328,6 +4151,39 @@ function getFormData() {
                 .sort((a, b) => a.dataset.path.length - b.dataset.path.length);
             const typeInput = typeInputs[0] || null;
             const typeVal = typeInput ? typeInput.value : null;
+            // Switched to another variant since load: the loaded value is not
+            // this one's, so none of its keys may be carried over.
+            const switched = container.dataset.variantChanged === 'true'
+                || !!container.querySelector(':scope > [data-variant-changed="true"]');
+            // On a cluster or server file the type is written only when this
+            // file states it or the operator picked one: the form draws the
+            // first variant for an entry with none (or one just added with
+            // "+"), and writing that type would change the kind of thing the
+            // domain file's entry is, under it.
+            container._omitType = onOverlayTarget() && !switched && changesBelow(sourceData);
+            if (switched || (sourceData && typeof sourceData === 'object' && typeVal
+                    && sourceData.type !== undefined && sourceData.type !== typeVal)) {
+                sourceData = null;
+            }
+            // The file names no type (an overlay changing one field of the
+            // domain's connector): the form drew the first variant to show it.
+            // Untouched, it is the file's own value, with no type added.
+            if (sourceData && typeof sourceData === 'object' && !Array.isArray(sourceData)
+                    && sourceData.type === undefined && !editedWithin(container)) {
+                return JSON.parse(JSON.stringify(sourceData));
+            }
+            // A file value whose type no variant claims, drawn as raw JSON, and
+            // that box removed (×): there is no value to write, and the first
+            // variant's type would turn it into another kind of thing.
+            if (!typeVal && !opaqueTa && sourceData && typeof sourceData === 'object' && typeof sourceData.type === 'string'
+                    && !(schemaNode.oneOf || schemaNode.anyOf).some(v => {
+                        const w = (v && v.$ref) ? deref(v) : v;
+                        const t = w && w.properties && w.properties.type;
+                        return t && (t.const === sourceData.type || (Array.isArray(t.enum) && t.enum.includes(sourceData.type)));
+                    })) {
+                readBackProblems.push((debugPath || '(root)') + ': its value was removed; remove the entry instead');
+                return null;
+            }
             schemaNode = resolveOneOf(schemaNode, typeVal ? { type: typeVal } : null);
             if (schemaNode && schemaNode.$ref) {
                 schemaNode = deref(schemaNode);
@@ -3351,8 +4207,7 @@ function getFormData() {
                     try {
                         return JSON.parse(txt);
                     } catch (e) {
-                        console.warn('extractData: invalid JSON in opaque object at ' +
-                            debugPath + ': ' + e.message);
+                        readBackProblems.push((debugPath || '(root)') + ': the JSON there does not parse (' + e.message + ')');
                         return null;
                     }
                 }
@@ -3374,30 +4229,60 @@ function getFormData() {
                 const result = {};
                 const entries = Array.from(mapContainer.children).filter(el => el.classList.contains('map-entry'));
 
+                const seenKeys = new Set();
                 entries.forEach((entry) => {
                     const keyInput = entry.querySelector('.map-key-input');
-                    const key = keyInput ? keyInput.value.trim() : '';
-                    if (key) {
-                        const childSource = (sourceData && typeof sourceData === 'object') ? sourceData[key] : null;
-                        const valueData = coerceToSchema(
+                    const key = keyInput ? mapKeyOf(keyInput) : '';
+                    // Two entries with one key would keep only one; an entry with
+                    // no key would vanish. Neither is written silently. The file's
+                    // own "" key, left as it is, is a key.
+                    const fileEmptyKey = key === '' && entry._fileKey === '';
+                    if (!key && !fileEmptyKey) {
+                        if (entry.querySelector('input:not(.map-key-input), select, textarea')) {
+                            readBackProblems.push((debugPath || '(root)') + ': an entry has no key');
+                        }
+                        return;
+                    }
+                    if (seenKeys.has(key)) {
+                        readBackProblems.push((debugPath || '(root)') + ': the key "' + key + '" is used twice');
+                        return;
+                    }
+                    seenKeys.add(key);
+                    const refLink = entry.querySelector(':scope > .map-entry-content > .reference-link');
+                    if (refLink) { putOwn(result, key, refLink.getAttribute('data-reference-id')); return; }
+                    if (entry._statedNull && !entry._touched) { putOwn(result, key, null); return; }
+                    {
+                        const childSource = ('_source' in entry) ? entry._source
+                            : ((sourceData && typeof sourceData === 'object') ? sourceData[key] : null);
+                        const valueData = coerceUnlessKept(
                             extractData(entry, schemaNode.additionalProperties, `${debugPath}.${key}`, childSource),
-                            schemaNode.additionalProperties);
+                            schemaNode.additionalProperties, childSource);
                         if (!isEmptyResult(valueData)) {
-                            result[key] = valueData;
+                            putOwn(result, key, valueData);
                         } else if (childSource !== null && childSource !== undefined && isStatedEmpty(childSource)) {
                             // The entry is there, empty on purpose ("callRiskAssessed": {}).
-                            result[key] = JSON.parse(JSON.stringify(childSource));
+                            putOwn(result, key, JSON.parse(JSON.stringify(childSource)));
+                        } else if (emptiedFrom(valueData, childSource)) {
+                            putOwn(result, key, valueData);
                         } else {
                             // An entry the operator added and left empty is still an entry.
                             const vs = schemaNode.additionalProperties.$ref ? deref(schemaNode.additionalProperties) : schemaNode.additionalProperties;
-                            if (vs && vs.type === 'object') result[key] = {};
-                            else if (vs && vs.type === 'array') result[key] = [];
+                            if (vs && vs.type === 'object') putOwn(result, key, {});
+                            else if (vs && vs.type === 'array') putOwn(result, key, []);
+                            // A key the form still shows is not dropped: an empty text
+                            // value is "", any other kind has to be filled in.
+                            else if (vs && vs.type === 'string') putOwn(result, key, '');
+                            else if (!(vs && (vs.oneOf || vs.anyOf))) {
+                                readBackProblems.push((debugPath || '(root)') + ': the entry "' + key + '" has no value');
+                            }
                         }
                     }
                 });
 
                 if (Object.keys(result).length > 0) return result;
-                return isStatedEmpty(sourceData) ? {} : null;
+                // Every entry removed from a map the file has: the file says {}
+                // (left out, the application's default would come back).
+                return (sourceData && typeof sourceData === 'object' && !Array.isArray(sourceData)) ? {} : null;
             } else if (schemaNode.properties) {
                 // Regular object with defined properties
                 const result = {};
@@ -3417,7 +4302,11 @@ function getFormData() {
                     const propTitle = fieldTitle(propSchema, propName);
 
                     if (propSchema.const !== undefined) {
-                        result[propName] = propSchema.const;
+                        // A constant the file left out (a type an overlay inherits)
+                        // stays out; a new value, or a switched variant, states it.
+                        if (!(sourceData && typeof sourceData === 'object' && !(propName in sourceData))) {
+                            result[propName] = propSchema.const;
+                        }
                         return;
                     }
 
@@ -3463,6 +4352,11 @@ function getFormData() {
                             }
                         });
 
+                        if (!targetContainer) {
+                            // A property holding a reference: its link carries the id.
+                            const refGroup = ownFields(searchContainer, '.form-group').find(g => g.dataset.prop === propName && g.querySelector(':scope > .reference-link'));
+                            if (refGroup) result[propName] = refGroup.querySelector(':scope > .reference-link').getAttribute('data-reference-id');
+                        }
                         if (targetContainer) {
                             const childSource = (sourceData && typeof sourceData === 'object') ? sourceData[propName] : null;
                             const propData = extractData(targetContainer, propSchema, `${debugPath}.${propName}`, childSource);
@@ -3470,6 +4364,8 @@ function getFormData() {
                                 result[propName] = propData;
                             } else if (childSource !== null && childSource !== undefined && isStatedEmpty(childSource)) {
                                 result[propName] = JSON.parse(JSON.stringify(childSource));
+                            } else if (emptiedFrom(propData, childSource)) {
+                                result[propName] = propData;
                             }
                         }
                     } else {
@@ -3495,9 +4391,11 @@ function getFormData() {
                             }
                         });
 
-                        if (foundInput) {
+                        const src = (sourceData && typeof sourceData === 'object' && !(foundInput && isFresh(foundInput))) ? sourceData[propName] : undefined;
+                        if (foundInput && keptDrift(src, propSchema, foundInput)) {
+                            result[propName] = JSON.parse(JSON.stringify(src));
+                        } else if (foundInput) {
                             const value = coerceToSchema(readInputValue(foundInput), propSchema);
-                            const src = (sourceData && typeof sourceData === 'object') ? sourceData[propName] : undefined;
                             if (value !== null && value !== '') {
                                 result[propName] = value;
                             } else if (src === '') {
@@ -3507,11 +4405,17 @@ function getFormData() {
                     }
                 });
 
-                // Values the file states empty, drawn as placeholders: kept.
+                // Values the file states empty, drawn as placeholders: kept. An
+                // explicit null too: it is not "absent" (it overrides a default,
+                // or the domain's value from an overlay).
                 if (sourceData && typeof sourceData === 'object') {
                     ownFields(searchContainer, '.add-property-placeholder[data-stated-empty="true"]').forEach(ph => {
                         const k = ph.dataset.prop;
-                        if (k && !(k in result) && isStatedEmpty(sourceData[k])) result[k] = JSON.parse(JSON.stringify(sourceData[k]));
+                        if (k && !Object.hasOwn(result, k) && isStatedEmpty(sourceData[k])) putOwn(result, k, JSON.parse(JSON.stringify(sourceData[k])));
+                    });
+                    ownFields(searchContainer, '.add-property-placeholder').forEach(ph => {
+                        const k = ph.dataset.prop;
+                        if (k && ph.dataset.nullRemoved !== 'true' && !Object.hasOwn(result, k) && Object.prototype.hasOwnProperty.call(sourceData, k) && sourceData[k] === null) putOwn(result, k, null);
                     });
                 }
 
@@ -3521,7 +4425,7 @@ function getFormData() {
                 if (sourceData && typeof sourceData === 'object' && !Array.isArray(sourceData)
                         && !(schemaNode.additionalProperties && typeof schemaNode.additionalProperties === 'object')) {
                     Object.keys(sourceData).forEach(k => {
-                        if (!(k in schemaNode.properties) && !(k in result)) result[k] = JSON.parse(JSON.stringify(sourceData[k]));
+                        if (!Object.hasOwn(schemaNode.properties, k) && !Object.hasOwn(result, k)) putOwn(result, k, JSON.parse(JSON.stringify(sourceData[k])));
                     });
                 }
 
@@ -3537,7 +4441,7 @@ function getFormData() {
                             const keyInput = row.querySelector('.extras-key-input');
                             const valueInput = row.querySelector('.extras-value-input');
                             if (!keyInput || !valueInput) return;
-                            const key = keyInput.value.trim();
+                            const key = mapKeyOf(keyInput);
                             if (!key || defined.has(key)) return;
                             const v = readInputValue(valueInput);
                             if (v !== null && v !== '') result[key] = v;
@@ -3545,7 +4449,12 @@ function getFormData() {
                     }
                 }
 
-                if (Object.keys(result).length > 0) return result;
+                // Required properties, ranges, patterns and types are checked
+                // by the server at Save, on the documents the servers build
+                // (SaveCheck): one check for every way a value reaches the form
+                // (typed, a draft, an import, a proposal, a copy).
+                if (container._omitType) delete result.type;
+                if (Object.keys(result).length > 0) return inSourceOrder(result, sourceData);
                 return isStatedEmpty(sourceData) ? {} : null;
             }
         } else if (schemaNode.type === 'array') {
@@ -3587,8 +4496,7 @@ function getFormData() {
                         if (txt !== '' && txt !== '{}') {
                             try { result.push(JSON.parse(txt)); }
                             catch (e) {
-                                console.warn('extractData: invalid JSON in opaque array item at ' +
-                                    debugPath + '[' + idx + ']: ' + e.message);
+                                readBackProblems.push(debugPath + '[' + idx + ']: the JSON there does not parse (' + e.message + ')');
                             }
                         }
                         return;
@@ -3609,20 +4517,34 @@ function getFormData() {
                     const typeVal = typeInput ? typeInput.value : null;
                     itemSchemaNode = resolveOneOf(itemSchemaNode, typeVal ? { type: typeVal } : null);
                 }
-                const itemSource = Array.isArray(sourceData) ? sourceData[idx] : null;
-                const itemData = coerceToSchema(extractData(item, itemSchemaNode, `${debugPath}[${idx}]`, itemSource), itemSchemaNode);
+                if (item._statedNull && !item._touched) { result.push(null); itemValues.set(item, null); return; }
+                // The value the item was drawn from (null for one added since).
+                const itemSource = ('_source' in item) ? item._source
+                    : (Array.isArray(sourceData) ? sourceData[idx] : null);
+                const itemData = coerceUnlessKept(extractData(item, itemSchemaNode, `${debugPath}[${idx}]`, itemSource), itemSchemaNode, itemSource);
+                itemValues.set(item, itemData);
                 if (itemData !== null) {
                     result.push(itemData);
                 } else if (itemSource !== null && itemSource !== undefined && isStatedEmpty(itemSource)) {
                     result.push(JSON.parse(JSON.stringify(itemSource)));
+                } else {
+                    // An item emptied (every field removed) or added and left blank:
+                    // dropping it would move the later ones up a place, silently.
+                    readBackProblems.push(`${debugPath}[${idx}]` + ' is empty: fill it in or remove it');
                 }
             });
 
             if (result.length > 0) return result;
-            return Array.isArray(sourceData) && sourceData.length === 0 ? [] : null;
+            // Every item removed from a list the file has: the file says []. Left
+            // out, the default would come back (a grant's ["*"]: every department).
+            // Added with "+" and left empty: the operator stated a list, and a
+            // required one may legitimately be [].
+            const freshGroup = container.closest && container.closest('[data-fresh="true"]');
+            if (freshGroup && ownValueElement(freshGroup, '.array-container') === arrayContainer) return [];
+            return Array.isArray(sourceData) ? [] : null;
         } else {
             // Primitive type - find the input
-            const input = container.querySelector('input:not(.map-key-input), select, textarea');
+            const input = container.querySelector('input:not(.map-key-input), select:not(.map-key-input), textarea');
             if (!input) return null;
 
             const value = readInputValue(input);
@@ -3642,7 +4564,10 @@ function getFormData() {
 
             // const-only top-level property — emit straight from the schema.
             if (propSchema.const !== undefined) {
-                result[propName] = propSchema.const;
+                // Left out by the file: stays out (as nested constants).
+                if (!(currentData && typeof currentData === 'object' && !(propName in currentData))) {
+                    result[propName] = propSchema.const;
+                }
                 return;
             }
 
@@ -3687,6 +4612,10 @@ function getFormData() {
                     }
                 });
 
+                if (!targetSection) {
+                    const refGroup = ownFields(form, '.form-group').find(g => g.dataset.prop === propName && g.querySelector(':scope > .reference-link'));
+                    if (refGroup) result[propName] = refGroup.querySelector(':scope > .reference-link').getAttribute('data-reference-id');
+                }
                 if (targetSection) {
                     const content = targetSection.querySelector('.collapsible-content');
                     if (content) {
@@ -3696,6 +4625,8 @@ function getFormData() {
                             result[propName] = propData;
                         } else if (childSource !== null && childSource !== undefined && isStatedEmpty(childSource)) {
                             result[propName] = JSON.parse(JSON.stringify(childSource));
+                        } else if (emptiedFrom(propData, childSource)) {
+                            result[propName] = propData;
                         }
                     }
                 }
@@ -3714,7 +4645,10 @@ function getFormData() {
                     }
                 });
 
-                if (foundInput) {
+                const src = currentData && typeof currentData === 'object' && !(foundInput && isFresh(foundInput)) ? currentData[propName] : undefined;
+                if (foundInput && keptDrift(src, propSchema, foundInput)) {
+                    result[propName] = JSON.parse(JSON.stringify(src));
+                } else if (foundInput) {
                     const value = coerceToSchema(readInputValue(foundInput), propSchema);
                     if (value !== null && value !== '') {
                         result[propName] = value;
@@ -3726,11 +4660,16 @@ function getFormData() {
         });
     }
 
-    // Top-level values the file states empty, drawn as placeholders: kept.
+    // Top-level values the file states empty, drawn as placeholders: kept (an
+    // explicit null too).
     if (currentData && typeof currentData === 'object') {
         ownFields(form, '.add-property-placeholder[data-stated-empty="true"]').forEach(ph => {
             const k = ph.dataset.prop;
-            if (k && !(k in result) && isStatedEmpty(currentData[k])) result[k] = JSON.parse(JSON.stringify(currentData[k]));
+            if (k && !Object.hasOwn(result, k) && isStatedEmpty(currentData[k])) putOwn(result, k, JSON.parse(JSON.stringify(currentData[k])));
+        });
+        ownFields(form, '.add-property-placeholder').forEach(ph => {
+            const k = ph.dataset.prop;
+            if (k && ph.dataset.nullRemoved !== 'true' && !Object.hasOwn(result, k) && Object.prototype.hasOwnProperty.call(currentData, k) && currentData[k] === null) putOwn(result, k, null);
         });
     }
 
@@ -3738,11 +4677,23 @@ function getFormData() {
     // kept as the file had them; the form never drew them.
     if (schema && schema.properties && currentData && typeof currentData === 'object') {
         Object.keys(currentData).forEach(k => {
-            if (!(k in schema.properties) && !(k in result)) result[k] = JSON.parse(JSON.stringify(currentData[k]));
+            if (!Object.hasOwn(schema.properties, k) && !Object.hasOwn(result, k)) putOwn(result, k, JSON.parse(JSON.stringify(currentData[k])));
         });
     }
 
-    return result;
+    return inSourceOrder(result, currentData);
+}
+
+/// `obj` with its keys in the order `src` (the file) has them, new keys after.
+/// Values kept from the file (a stated-empty list, a key the schema does not
+/// list) are added after the form's own, so without this an untouched key
+/// would move to the end and show up in every diff.
+function inSourceOrder(obj, src) {
+    if (!src || typeof src !== 'object' || Array.isArray(src)) return obj;
+    const out = {};
+    Object.keys(src).forEach(k => { if (Object.hasOwn(obj, k)) putOwn(out, k, obj[k]); });
+    Object.keys(obj).forEach(k => { if (!Object.hasOwn(out, k)) putOwn(out, k, obj[k]); });
+    return out;
 }
 
 function setNestedValue(obj, path, value) {
@@ -3776,21 +4727,118 @@ function setNestedValue(obj, path, value) {
     current[lastSegment.value] = value;
 }
 
-function saveData() {
-    let data;
-    const activeTab = document.querySelector('.tab-content.active').id;
+let schemaLoading = false;   // a schema's file is on its way into the form
+let loadSeq = 0;             // which load the form is waiting for
+let loadFallback = null;     // the schema the form holds, if a load fails
+let jsonLoadSeq = -1;        // the load a load_json / load_sample in flight belongs to
+let lastSavePath = null;     // the file the last save_json was for
+let lastSaveDraftKey = null; // that file's draft key, cleared when its reply comes after a switch
 
-    // Get data from active tab
-    if (activeTab === 'form-tab') {
-        data = getFormData();
-    } else {
+/// The file the form shows, for Version History, Preview and Restore: the one
+/// Save writes, never a registry entry a failed load left pointing elsewhere.
+function formFile() {
+    return (currentSchemaName && selectedTargetDirectory && !schemaLoading) ? currentSavePath() : null;
+}
+
+/// The file Save writes: the loaded file, else this schema in the selected target.
+function currentSavePath() {
+    const entry = pendingRequests.get('schema');
+    if (entry && entry.jsonFile) return entry.jsonFile;
+    return selectedTargetDirectory.path + '/' + currentSchemaName + '.json';
+}
+
+/// The document Save or Clone would write, or null (with the reason shown):
+/// the JSON tab's text when that tab is active, else the form. Refused while
+/// a schema is loading, while the form holds something it cannot write
+/// faithfully, and while any secret still reads {REDACTED}.
+function documentToWrite(what) {
+    if (document.body.classList.contains('view-mode')) {
+        showSyncStatus('View Mode: switch to Edit Mode to ' + what, 'warning');
+        return null;
+    }
+    if (schemaLoading) {
+        showSyncStatus('Still loading: ' + what + ' once the file is in the form', 'warning');
+        return null;
+    }
+    const activeTab = document.querySelector('.tab-content.active').id;
+    let data;
+    writeEditorText = leftEditorText;   // typed in the JSON tab, then left
+    if (activeTab === 'json-tab') {
+        // Sent too, as the last repair source: the page's own serialization
+        // (already reordered), so it only counts when nothing else parses (a
+        // broken file fixed in this tab).
+        writeEditorText = jsonEditor.getValue();
         try {
-            data = JSON.parse(jsonEditor.getValue());
+            data = JSON.parse(writeEditorText);
         } catch (e) {
-            showSyncStatus('Cannot save invalid JSON', 'error');
-            return;
+            showSyncStatus('Cannot ' + what + ' invalid JSON', 'error');
+            return null;
+        }
+    } else {
+        data = getFormData();
+        // What the schema says (a port past its maximum, a missing required
+        // property) the server checks at Save, against the file on disk.
+        readBackProblems.push(...saveOnlyProblems);
+        if (readBackProblems.length) {
+            const n = readBackProblems.length;
+            showSyncStatus('Not ' + (what === 'save' ? 'saved' : 'cloned') + ': ' + readBackProblems[0]
+                + (n > 1 ? ' (and ' + (n - 1) + ' more)' : ''), 'error');
+            return null;
         }
     }
+    // A configuration is one JSON object (the JSON tab could hold null, a list, a string).
+    if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+        showSyncStatus('Not ' + (what === 'save' ? 'saved' : 'cloned') + ': a configuration is a JSON object { … }', 'error');
+        return null;
+    }
+    // A secret the assistant (or a restored draft) could not carry over is
+    // still the marker: writing it would make "{REDACTED}" the credential. A
+    // value that was "{REDACTED}" in the file as loaded is the file's own text.
+    const marker = newRedactedMarkers(data, initialData);
+    if (marker) {
+        // Where: in a password field the marker shows only as dots.
+        showSyncStatus('Not ' + (what === 'save' ? 'saved' : 'cloned') + ': the secret at ' + marker + ' still reads {REDACTED}; enter it again first', 'error');
+        return null;
+    }
+    return data;
+}
+
+let lastSavedData = null;   // what the last save_json of this file wrote
+let fileVersion = null;     // the version of the file the form was loaded from (server's)
+let draftBaseVersion = null;   // a restored draft's base version, for its first save
+let overwriteNext = false;  // the operator saw a conflict and pressed Save again
+let lastSaveAutoPublish = true;   // auto-publish as it was when that save was sent
+let lastSaveApp = null;           // the app that save was for
+
+/// Whether `data` holds a whole-value "{REDACTED}" where `loaded` did not.
+function newRedactedMarkers(data, loaded) {
+    const at = (v, path, out) => {
+        if (typeof v === 'string' && v.includes('{REDACTED}')) out.add(JSON.stringify(path));
+        else if (Array.isArray(v)) v.forEach((x, i) => at(x, path.concat(i), out));
+        else if (v && typeof v === 'object') Object.keys(v).forEach(k => at(v[k], path.concat(k), out));
+        return out;
+    };
+    const was = at(loaded, [], new Set());
+    const fresh = [...at(data, [], new Set())].find(p => !was.has(p));
+    // The first one's path, as the form names fields (a.b[2].c); null when none.
+    return fresh ? JSON.parse(fresh).map((k, i) => typeof k === 'number' ? '[' + k + ']' : (i ? '.' : '') + k).join('') : null;
+}
+
+let saving = false;   // a save_json from this page is out
+let lastClonePath = null;     // the destination of the last Clone
+let cloneOut = false;         // a Clone's save_json is out
+let cloneOverwrite = false;   // the operator saw it exists and cloned again
+
+function saveData() {
+    // One save at a time: a second, sent before the first's reply, carries the
+    // old version and would come back as a conflict with the first.
+    if (saving) { showSyncStatus('Still saving…', 'warning'); return; }
+    if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+        showSyncStatus('Not connected to the server: save once it reconnects', 'error');
+        return;
+    }
+    const data = documentToWrite('save');
+    if (data === null) return;
 
     // Validate that we have a target directory selected
     if (!selectedTargetDirectory) {
@@ -3806,21 +4854,28 @@ function saveData() {
 
     // Construct save path based on selected target and schema
     // If we loaded from a sample file, the server will automatically convert to primary location
-    let savePath;
-    const entry = pendingRequests.get('schema');
-    if (entry && entry.jsonFile) {
-        savePath = entry.jsonFile;
-    } else {
-        // No file loaded, create new one in target directory
-        savePath = selectedTargetDirectory.path + '/' + currentSchemaName + '.json';
-    }
+    const savePath = currentSavePath();
 
     // Send save request via WebSocket
     const jsonContent = JSON.stringify(data, null, 2);
-    sendWebSocketMessage('save_json', {
-        file: savePath,
-        content: jsonContent
-    });
+    lastSavePath = savePath;
+    lastSaveDraftKey = draftStorageKey();
+    lastSavedData = data;
+    lastSaveAutoPublish = autoPublishEnabled;
+    lastSaveApp = currentSchemaName;
+    const msg = { file: savePath, content: jsonContent };
+    if (loadedSourceText) msg.sourceText = loadedSourceText;
+    msg.sourceFile = savePath;   // the form's file, as it is now (after earlier Saves)
+    if (writeEditorText) msg.editorText = writeEditorText;
+    // The version the form came from: the server refuses the save if someone
+    // saved the file since, unless the operator chose to overwrite.
+    // A restored draft is checked against the version it was taken over.
+    const base = draftBaseVersion || fileVersion;
+    if (base) msg.baseVersion = base;
+    if (overwriteNext) msg.force = true;
+    overwriteNext = false;
+    saving = true;
+    sendWebSocketMessage('save_json', msg);
 
     showSyncStatus('Saving data...', 'warning');
 }
@@ -3835,14 +4890,39 @@ function loadConfig() {
     loadSchema(currentSchemaName);
 }
 
+let publishing = false;            // a Publish from this page is out
+const publishingApps = new Set();  // which apps it is publishing
+const savedDuringPublish = new Set();   // apps saved while their publish was out
+
+/// Publishes this app and every other app saved here but not yet published.
+/// Refused in View Mode, saying so: it changes the servers or the files.
+function viewModeRefuses(what) {
+    if (!document.body.classList.contains('view-mode')) return false;
+    showSyncStatus('View Mode: switch to Edit Mode to ' + what, 'warning');
+    return true;
+}
+
 function publishConfig() {
-    if (!currentSchemaName) {
+    if (viewModeRefuses('publish')) return;
+    if (publishing) { showSyncStatus('Already publishing…', 'warning'); return; }
+    if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+        showSyncStatus('Not connected to the server: publish once it reconnects', 'error');
+        return;
+    }
+    const apps = new Set(unpublishedApps);
+    if (currentSchemaName) apps.add(currentSchemaName);
+    if (!apps.size) {
         showSyncStatus('Please select a schema first', 'warning');
         return;
     }
-
-    sendWebSocketMessage('reload', { appName: currentSchemaName });
-    showSyncStatus('Publishing configuration...', 'warning');
+    publishing = true;
+    // "_templates": the templates saved while auto-publish was off, pushed to every server.
+    apps.forEach(app => {
+        publishingApps.add(app);
+        if (app === TEMPLATES_PENDING) sendWebSocketMessage('publish_templates', {});
+        else sendWebSocketMessage('reload', { appName: app });
+    });
+    showSyncStatus('Publishing ' + [...apps].join(', ') + '...', 'warning');
 }
 
 // --- Auto-publish toggle ---------------------------------------------------
@@ -3852,6 +4932,11 @@ function publishConfig() {
 // server-side reload that starts/stops the watcher thread immediately.
 
 function setAutoPublish(enabled) {
+    if (viewModeRefuses('change auto-publish')) {
+        const toggle = document.getElementById('autopublish-toggle');
+        if (toggle) toggle.checked = autoPublishEnabled;   // the switch back where it was
+        return;
+    }
     sendWebSocketMessage('set_autopublish', { enabled: enabled });
     showSyncStatus(enabled ? 'Auto-publish on…' : 'Auto-publish off…', 'warning');
 }
@@ -3863,34 +4948,99 @@ function updateAutoPublishToggle(enabled) {
     if (toggle) toggle.checked = enabled;
     if (stateLabel) stateLabel.textContent = enabled ? 'on' : 'off';
     document.body.classList.toggle('autopublish-on', enabled);
-    if (enabled) clearUnpublished(); // the watcher owns publishing now
+    // The watcher publishes changes from now on. What was saved while it was
+    // off the server publishes itself on the switch (every page's saves, and
+    // every template), and its list tells each page as they go live.
+    if (enabled) {
+        unpublishedApps.delete(TEMPLATES_PENDING);
+        renderUnpublished();
+    }
 }
 
 function resetForm() {
-    currentData = { ...initialData };
+    if (schemaLoading) { showSyncStatus('Still loading: reset once the file is in the form', 'warning'); return false; }
+    if (!checkUnsavedChanges()) return false;   // the edits, and the draft that holds them
+    leftEditorText = null;   // what was typed in the JSON tab is discarded with the rest
+    if (fileBroken) {
+        // Back to the file as it is: its own (unparseable) text, in the JSON tab.
+        switchTab('json');
+        setEditorText(initialText || '');
+        clearDirty();
+        showSyncStatus('Reset: the file as it is on disk, which does not parse', 'warning');
+        return true;
+    }
+    currentData = JSON.parse(JSON.stringify(initialData));
     generateFormWithData(currentData);
     if (jsonEditor) {
         jsonEditor.setValue(JSON.stringify(currentData, null, 2), -1);
     }
+    // Back to the file as it is on disk: nothing unsaved (the JSON editor's
+    // change event above marked it dirty), and no restored draft to check.
+    draftBaseVersion = null;
+    overwriteNext = false;   // the conflict it answered was about the edits just dropped
+    loadedSourceText = initialText;   // the file's text again, not a sample's or an import's
+    clearDirty();
+    if (typeof clearDraft === 'function') clearDraft();
     showSyncStatus('Form reset to initial data', 'success');
+    return true;
 }
 
 // ---------------------------------------------------------------------------
 // Export / Import — one-click JSON download/upload of the current config.
 
+/// What JSON.stringify cannot write back as the file had it: an integer past
+/// 2^53 (rounded) or an integer-like key (listed first, ascending, whatever
+/// the file's order, which in a keyed pipeline is run order).
+function exportWouldAlter(v) {
+    if (typeof v === 'number') return Number.isInteger(v) && Math.abs(v) > Number.MAX_SAFE_INTEGER;
+    if (v === null || typeof v !== 'object') return false;
+    if (Array.isArray(v)) return v.some(exportWouldAlter);
+    return Object.keys(v).some(k => /^(0|[1-9][0-9]*)$/.test(k)) || Object.values(v).some(exportWouldAlter);
+}
+
+/// Typed secrets are read back as {CLEARTEXT}<text>; a downloaded file is no
+/// place for them. {REDACTED} instead: an Import then Save keeps the
+/// destination's secret.
+function exportWithoutCleartext(v) {
+    if (typeof v === 'string') return v.startsWith('{CLEARTEXT}') ? '{REDACTED}' : v;
+    if (v === null || typeof v !== 'object') return v;
+    if (Array.isArray(v)) return v.map(exportWithoutCleartext);
+    const out = {};
+    for (const k of Object.keys(v)) out[k] = exportWithoutCleartext(v[k]);
+    return out;
+}
+
 function exportConfig() {
-    let data;
-    const activeTab = document.querySelector('.tab-content.active');
-    if (activeTab && activeTab.id === 'form-tab') {
-        data = getFormData();
-    } else if (jsonEditor) {
-        try { data = JSON.parse(jsonEditor.getValue()); }
-        catch (e) { showSyncStatus('Cannot export invalid JSON', 'error'); return; }
+    if (!currentSchemaName || schemaLoading) { showSyncStatus('Nothing to export yet', 'warning'); return; }
+    const t = selectedTargetDirectory;
+    // An overlay is a fragment: named so, and Import refuses it on the Domain target.
+    const filename = currentSchemaName + (t && t.type !== 'domain' ? '.' + t.type + '-' + t.name.replace(/^[^:]*:\s*/, '').replace(/[^A-Za-z0-9_-]/g, '_') : '') + '.json';
+    let text;
+    if (!isDirty && !fileBroken && loadedSourceText && loadedSourceText === initialText
+            && !loadedSourceText.includes('{CLEARTEXT}')) {
+        text = loadedSourceText;   // the file as loaded: exact longs, its key order, ciphertext
     } else {
-        data = currentData;
+        let data;
+        const activeTab = document.querySelector('.tab-content.active');
+        if (activeTab && activeTab.id === 'form-tab') {
+            data = getFormData();
+            if (readBackProblems.length) {
+                showSyncStatus('Not exported: ' + readBackProblems[0], 'error');
+                return;
+            }
+        } else if (jsonEditor) {
+            try { data = JSON.parse(jsonEditor.getValue()); }
+            catch (e) { showSyncStatus('Cannot export invalid JSON', 'error'); return; }
+        } else {
+            data = currentData;
+        }
+        if (exportWouldAlter(data)) {
+            showSyncStatus('Not exported: this file has numbers past 2^53 or numbered keys the browser cannot write back as they are. Save first, load it again, then Export.', 'warning');
+            return;
+        }
+        text = JSON.stringify(exportWithoutCleartext(data), null, 2);
     }
-    const filename = (currentSchemaName || 'config') + '.json';
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const blob = new Blob([text], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -3910,19 +5060,44 @@ function importConfig() {
 function handleImportFile(event) {
     const file = event.target && event.target.files && event.target.files[0];
     if (!file) return;
+    if (viewModeRefuses('import')) { event.target.value = ''; return; }
+    if (/\.(cluster|server)-[^.]+\.json$/.test(file.name)) {
+        event.target.value = '';
+        showSyncStatus('Import refused: ' + file.name + ' is a cluster or server overlay\'s export, not a whole configuration', 'warning');
+        return;
+    }
+    if (selectedTargetDirectory && selectedTargetDirectory.type !== 'domain') {
+        event.target.value = '';
+        showSyncStatus('An import is a whole configuration: import it on the Domain target', 'warning');
+        return;
+    }
+    if (!checkUnsavedChanges()) { event.target.value = ''; return; }
+    const forApp = currentSchemaName, forTarget = selectedTargetDirectory && selectedTargetDirectory.path, forLoad = loadSeq;
     const reader = new FileReader();
     reader.onload = () => {
+        // Read later: still the form it was imported into?
+        if (schemaLoading || currentSchemaName !== forApp || loadSeq !== forLoad
+                || (selectedTargetDirectory && selectedTargetDirectory.path) !== forTarget) {
+            showSyncStatus('Import not applied: the editor moved to another application or file', 'warning');
+            return;
+        }
         let data;
         try { data = JSON.parse(reader.result); }
         catch (e) {
             showSyncStatus('Import failed: ' + e.message, 'error');
             return;
         }
+        if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+            showSyncStatus('Import refused: a configuration is a JSON object { … }', 'error');
+            return;
+        }
+        loadedSourceText = reader.result;   // its own key order and long integers, at Save
+        leftEditorText = null;
         currentData = data;
         generateFormWithData(currentData);
         if (jsonEditor) jsonEditor.setValue(JSON.stringify(currentData, null, 2), -1);
         setDirty();
-        showSyncStatus('Imported ' + file.name + ' — review and Save', 'success');
+        showSyncStatus('Imported ' + file.name + ': review and Save', 'success');
     };
     reader.onerror = () => showSyncStatus('Import failed: could not read file', 'error');
     reader.readAsText(file);
@@ -3934,23 +5109,224 @@ function handleImportFile(event) {
 function toggleViewMode() {
     const on = !document.body.classList.contains('view-mode');
     document.body.classList.toggle('view-mode', on);
+    // Every control disabled (Tab and the keyboard reach a field too), not
+    // the form made inert: sections still open, Diff still jumps to a field,
+    // and a screen reader still reads the values.
+    lockForViewMode(document.getElementById('dynamicForm'), on);
+    if (jsonEditor) jsonEditor.setReadOnly(on);
+    if (textEditor) textEditor.setReadOnly(on);
     const btn = document.getElementById('view-mode-toggle');
     if (btn) btn.textContent = on ? 'Edit Mode' : 'View Mode';
+    const badge = document.getElementById('view-mode-indicator');
+    if (badge) badge.style.display = on ? 'inline-flex' : 'none';
 }
+
+/// Disables (or re-enables) the controls under `root` that View Mode locks;
+/// ones already disabled for their own reasons stay as they are.
+function lockForViewMode(root, on) {
+    if (!root) return;
+    root.querySelectorAll('input, select, textarea, button').forEach(el => {
+        // Tools that change nothing (show a password, test a regex) stay usable.
+        if (el.matches('.password-toggle, .regex-test-btn')) return;
+        // Text stays focusable (the inspector and breadcrumb follow focus):
+        // read-only, not disabled. A select or checkbox has no read-only.
+        const textual = (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !/^(checkbox|radio|button|file|hidden)$/.test(el.type)));
+        if (textual) {
+            if (on && !el.readOnly) { el.readOnly = true; el.dataset.viewLocked = 'ro'; }
+            else if (!on && el.dataset.viewLocked === 'ro') { el.readOnly = false; delete el.dataset.viewLocked; }
+        } else if (on && !el.disabled) { el.disabled = true; el.dataset.viewLocked = '1'; }
+        else if (!on && el.dataset.viewLocked === '1') { el.disabled = false; delete el.dataset.viewLocked; }
+    });
+}
+
+/// What the form draws later (a section filled on expand, a re-render): the
+/// section arrows become keyboard buttons, and in View Mode new controls
+/// are locked like the rest.
+(function watchForm() {
+    if (typeof document === 'undefined') return;
+    const prep = (root) => {
+        const all = (sel) => (root.matches && root.matches(sel) ? [root] : []).concat([...root.querySelectorAll(sel)]);
+        all('.collapsible-arrow:not([tabindex])').forEach(a => {
+            a.tabIndex = 0;
+            a.setAttribute('role', 'button');
+            a.setAttribute('aria-label', 'Expand or collapse');
+            const h = a.closest('.collapsible-header, .map-entry-header, .array-item-header');
+            if (h) h.setAttribute('aria-expanded', String(!h.classList.contains('collapsed')));
+        });
+        // A control with no label of its own (a list item, a map value) is
+        // named by its path.
+        all('input, select, textarea').forEach(el => {
+            if (!el.getAttribute('aria-label') && !(el.labels && el.labels.length) && el.dataset.path && el.type !== 'hidden') {
+                el.setAttribute('aria-label', el.dataset.path);
+            }
+        });
+        if (document.body.classList.contains('view-mode')) lockForViewMode(root, true);
+    };
+    document.addEventListener('DOMContentLoaded', () => {
+        const form = document.getElementById('dynamicForm');
+        if (!form) return;
+        // Only what was added (a render appends one node per property: the
+        // whole form scanned per node was quadratic), each subtree once.
+        new MutationObserver(muts => {
+            const roots = [];
+            for (const m of muts) {
+                if (m.type === 'attributes') {
+                    const h = m.target;
+                    if (h.matches && h.matches('.collapsible-header, .map-entry-header, .array-item-header') && h.hasAttribute('aria-expanded')) {
+                        h.setAttribute('aria-expanded', String(!h.classList.contains('collapsed')));
+                    }
+                    continue;
+                }
+                m.addedNodes.forEach(n => { if (n.nodeType === 1 && n.isConnected) roots.push(n); });
+            }
+            roots.filter(n => !roots.some(o => o !== n && o.contains(n))).forEach(n => prep(n));
+        }).observe(form, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+        // A + or × replaces the control that was clicked: focus goes to
+        // what took its place, not back to the top of the page.
+        form.addEventListener('click', e => {
+            const btn = e.target.closest && e.target.closest('button');
+            if (!btn) return;
+            const spot = btn.closest('.form-group, .add-property-placeholder, .collapsible-section, .array-item, .map-entry');
+            const parent = spot && spot.parentElement;
+            const at = parent ? [...parent.children].indexOf(spot) : -1;
+            setTimeout(() => {
+                if (btn.isConnected || !parent || !parent.isConnected) return;
+                if (document.activeElement && document.activeElement !== document.body) return;
+                const near = parent.children[Math.min(at, parent.children.length - 1)] || parent;
+                const target = near.querySelector('input:not([type=hidden]), select, textarea, button, [tabindex="0"]');
+                if (target) target.focus();
+            }, 0);
+        }, true);
+        // Enter or Space on an arrow opens or folds its section.
+        form.addEventListener('keydown', e => {
+            if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('collapsible-arrow')) {
+                e.preventDefault();
+                const h = e.target.closest('.collapsible-header, .map-entry-header, .array-item-header');
+                if (h && h.onclick) h.onclick({ target: e.target });
+            }
+        });
+    });
+})();
 
 // ---------------------------------------------------------------------------
 // Auto-save draft to localStorage — snapshot every 2s when dirty; restore
 // banner on load when a draft exists. Cheap insurance against accidental tab
 // closes and power outages.
 
-function draftStorageKey() {
+/// This page load's id. Each tab keeps its own draft of a file: two tabs on
+/// one file used to share a key, so the last writer won, one tab's Save
+/// cleared the other's crash copy, and a fresh tab was offered (and could
+/// discard) another tab's live edits.
+const DRAFT_TAB = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const DRAFT_LIVE = 'configurator-live:';   // + tab id: a heartbeat every 2 s while the tab is open
+let offeredDraftKey = null;   // the draft the banner offers (perhaps a closed tab's)
+let draftStoreFull = false;   // said once: drafts stopped because storage is full
+
+function draftFileKey() {
     const target = (selectedTargetDirectory && selectedTargetDirectory.path) || '';
     const schemaName = currentSchemaName || '';
     if (!target || !schemaName) return null;
     return 'configurator-draft:' + target + ':' + schemaName;
 }
 
+function draftStorageKey() {
+    const base = draftFileKey();
+    return base ? base + '#' + DRAFT_TAB : null;
+}
+
+/// Tabs known open by the Web Locks they hold (a background tab's timers
+/// are throttled to once a minute, so a heartbeat alone goes stale while the
+/// tab is open): refreshed every 2 s and before a draft is offered.
+let lockedTabs = null;
+function refreshLockedTabs() {
+    if (!(navigator.locks && navigator.locks.query)) return Promise.resolve();
+    return navigator.locks.query().then(q => {
+        lockedTabs = new Set((q.held || []).map(l => l.name).filter(n => n.startsWith('configurator-tab:')).map(n => n.slice('configurator-tab:'.length)));
+    }).catch(() => {});
+}
+if (typeof navigator !== 'undefined' && navigator.locks && navigator.locks.request) {
+    // Held for the life of this page: released when the tab closes or crashes.
+    navigator.locks.request('configurator-tab:' + DRAFT_TAB, () => new Promise(() => {})).catch(() => {});
+    refreshLockedTabs();
+    setInterval(refreshLockedTabs, 2000);
+}
+
+/// Whether the tab that wrote a draft is still open: it holds its lock, or
+/// (no Web Locks) its heartbeat is fresh.
+function draftTabLive(tab) {
+    if (tab === DRAFT_TAB) return true;
+    if (lockedTabs) return lockedTabs.has(tab);
+    try {
+        const beat = Number(localStorage.getItem(DRAFT_LIVE + tab) || 0);
+        return Date.now() - beat < 6000;
+    } catch (e) { return false; }
+}
+
+/// The draft to offer for this file: this tab's, else the newest left by a
+/// tab that is gone (a crash, a closed tab). Never another open tab's.
+function offerableDraftKey() {
+    const base = draftFileKey();
+    if (!base) return null;
+    let best = null, bestAt = -1;
+    try {
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k !== base && !k.startsWith(base + '#')) continue;   // the bare key: drafts from before tab ids
+            const tab = k === base ? null : k.slice(base.length + 1);
+            if (tab && tab !== DRAFT_TAB && draftTabLive(tab)) continue;
+            if (tab === DRAFT_TAB) return k;
+            let at = 0;
+            try { at = (JSON.parse(localStorage.getItem(k)) || {}).savedAt || 0; } catch (e) { /* unreadable */ }
+            if (at > bestAt) { bestAt = at; best = k; }
+        }
+    } catch (e) { return null; }
+    return best;
+}
+
+(function draftHousekeeping() {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    const beat = () => { try { localStorage.setItem(DRAFT_LIVE + DRAFT_TAB, String(Date.now())); } catch (e) { /* full */ } };
+    beat();
+    setInterval(beat, 2000);
+    window.addEventListener('pagehide', () => { try { localStorage.removeItem(DRAFT_LIVE + DRAFT_TAB); } catch (e) { /* ignore */ } });
+    // Drafts and heartbeats nobody will come back for: a month old.
+    try {
+        const old = Date.now() - 30 * 24 * 3600 * 1000, stale = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k.startsWith(DRAFT_LIVE)) { if (Number(localStorage.getItem(k)) < Date.now() - 60000) stale.push(k); continue; }
+            if (!k.startsWith('configurator-draft:')) continue;
+            let at = 0;
+            try { at = (JSON.parse(localStorage.getItem(k)) || {}).savedAt || 0; } catch (e) { /* unreadable */ }
+            if (at < old) stale.push(k);
+        }
+        stale.forEach(k => localStorage.removeItem(k));
+    } catch (e) { /* unavailable */ }
+})();
+
+/// A field's schema within an object schema: its own property, the map's
+/// value, or the variant that has it (a password one first).
+function draftChildSchema(sch, key) {
+    if (!sch) return null;
+    if (sch.$ref) sch = deref(sch) || sch;
+    if (sch.properties && sch.properties[key]) return sch.properties[key];
+    if (sch.additionalProperties && typeof sch.additionalProperties === 'object') return sch.additionalProperties;
+    const variants = polymorphicVariants(sch) || [];
+    let found = null;
+    for (const v of variants) {
+        const c = draftChildSchema(v, key);
+        if (!c) continue;
+        const r = c.$ref ? (deref(c) || c) : c;
+        if (r.format === 'password') return c;
+        if (!found) found = c;
+    }
+    return found;
+}
+
 function saveDraft() {
+    // Mid-load the key already names the new file while the form still holds
+    // the old one: a draft now would file the old form under the new file.
+    if (schemaLoading) return;
     const key = draftStorageKey();
     if (!key) return;
     if (!document.getElementById('dirty-indicator') ||
@@ -3958,25 +5334,67 @@ function saveDraft() {
         return; // only persist when the form is dirty
     }
     try {
-        const data = getFormData();
+        // Typed secrets ({CLEARTEXT}...) stay out of browser storage. They
+        // come back as {REDACTED}, which Save refuses until each is typed
+        // again; dropped, Save would write the file without the credential.
+        // A password typed in the JSON tab is bare: found by the schema's
+        // password fields, as the server finds it to encrypt.
+        // A secret that is the file's own (a bare password the file holds,
+        // untouched) is stored as {FROM-FILE}: restoring takes it from the
+        // file. A typed one is {REDACTED}, never filled from the file: that
+        // would put the old credential back over the new one, silently.
+        const strip = (v, sch, f) => {
+            sch = (sch && sch.$ref) ? (deref(sch) || sch) : sch;
+            if (typeof v === 'string') {
+                const bare = v !== '' && !/^\{(AES|AES256|3DES|REDACTED|FROM-FILE)\}/.test(v) && !/^\$\{[^}]+\}$/.test(v);
+                if (!v.startsWith('{CLEARTEXT}') && !(bare && sch && sch.format === 'password')) return v;
+                // Compared without the marker on either side: after a Save the
+                // snapshot holds what was sent ({CLEARTEXT}pw), not the file's pw.
+                const plain = x => String(x).replace(/^\{CLEARTEXT\}/, '');
+                return (typeof f === 'string' && plain(f) === plain(v)) ? '{FROM-FILE}' : '{REDACTED}';
+            }
+            if (Array.isArray(v)) return v.map((x, i) => strip(x, sch && sch.items, Array.isArray(f) ? f[i] : undefined));
+            if (v && typeof v === 'object') {
+                const fo = (f && typeof f === 'object' && !Array.isArray(f)) ? f : {};
+                return Object.keys(v).reduce((o, k) => { o[k] = strip(v[k], draftChildSchema(sch, k), fo[k]); return o; }, {});
+            }
+            return v;
+        };
+        const now = activeEditorData();   // the JSON tab's text when that is where the edits are
+        if (now === undefined) return;    // invalid JSON mid-edit: keep the last good draft
+        const data = strip(now, schema, initialData);
         localStorage.setItem(key, JSON.stringify({
             data: data,
             savedAt: Date.now(),
-            schema: currentSchemaName
+            schema: currentSchemaName,
+            version: draftBaseVersion || fileVersion   // a restored draft keeps the version it was taken over
         }));
-    } catch (e) { /* localStorage full or unavailable — ignore */ }
+        draftStoreFull = false;
+    } catch (e) {
+        // Full (or unavailable): the crash copy has stopped. Said once.
+        if (!draftStoreFull) showSchemaLoadStatus('Drafts are not being kept: browser storage is full or unavailable. Save to keep your edits.', 'warning');
+        draftStoreFull = true;
+    }
 }
 
 function clearDraft() {
-    const key = draftStorageKey();
-    if (key) {
-        try { localStorage.removeItem(key); } catch (e) { /* ignore */ }
+    // This tab's draft, and the one the banner offered (a closed tab's) once
+    // the operator has dealt with it.
+    for (const key of [draftStorageKey(), offeredDraftKey]) {
+        if (key) { try { localStorage.removeItem(key); } catch (e) { /* ignore */ } }
     }
     hideDraftBanner();
 }
 
-function maybeOfferDraftRestore() {
-    const key = draftStorageKey();
+function maybeOfferDraftRestore(locksFresh = false) {
+    // Asked again once the lock list is fresh: a draft must not be offered
+    // from a tab that is open.
+    if (lockedTabs && !locksFresh) {
+        refreshLockedTabs().then(() => maybeOfferDraftRestore(true));
+        return;
+    }
+    const key = offerableDraftKey();
+    offeredDraftKey = key;
     if (!key) { hideDraftBanner(); return; }
     let rec;
     try {
@@ -3989,30 +5407,82 @@ function maybeOfferDraftRestore() {
     const text = document.getElementById('draft-banner-text');
     if (banner && text) {
         const when = rec.savedAt ? new Date(rec.savedAt).toLocaleString() : 'recently';
-        text.textContent = 'Unsaved draft from ' + when + ' — restore?';
+        text.textContent = 'Unsaved draft from ' + when + '. Restore it?';
         banner.style.display = 'flex';
     }
 }
 
 function hideDraftBanner() {
+    offeredDraftKey = null;
     const banner = document.getElementById('draft-banner');
     if (banner) banner.style.display = 'none';
 }
 
 function restoreDraft() {
-    const key = draftStorageKey();
-    if (!key) return;
+    // Mid-load the key names the file being opened, the form the one left.
+    if (schemaLoading) { showSyncStatus('Still loading: restore the draft once the file is in', 'warning'); return; }
+    const key = offeredDraftKey;
+    if (!key || !key.startsWith(draftFileKey() || '\u0000')) { hideDraftBanner(); return; }
     try {
         const rec = JSON.parse(localStorage.getItem(key) || 'null');
         if (rec && rec.data) {
-            currentData = rec.data;
+            // Secrets were kept out of storage as {REDACTED}: put back the
+            // file's own where the draft's item is still recognisably that one.
+            currentData = fillRedactedFrom(rec.data, initialData);
             generateFormWithData(currentData);
             if (jsonEditor) jsonEditor.setValue(JSON.stringify(currentData, null, 2), -1);
             setDirty();
-            showSyncStatus('Draft restored', 'success');
+            // Taken over an older file: restoring it and saving would undo
+            // what was saved since. Saving is still possible; it is not hidden.
+            draftBaseVersion = rec.version || null;
+            if (key !== draftStorageKey()) { try { localStorage.removeItem(key); } catch (e) { /* ignore */ } }   // now this tab's
+            if (rec.version && fileVersion && rec.version !== fileVersion) {
+                showSyncStatus('Draft restored, but the file has changed since it was taken: check before saving', 'warning');
+            } else {
+                showSyncStatus('Draft restored', 'success');
+            }
         }
     } catch (e) { /* ignore */ }
     hideDraftBanner();
+}
+
+/// `draft` with each {FROM-FILE} secret (the file's own, untouched when the
+/// draft was taken) replaced by the file's value at the same place: a list
+/// item is matched by being equal apart from secrets, else by a unique id.
+/// Unmatched, it becomes {REDACTED}, as a typed secret always stays: Save
+/// asks for it again.
+function fillRedactedFrom(draft, file) {
+    const R = '{FROM-FILE}';
+    const same = (a, b) => {
+        if (a === R || a === '{REDACTED}') return typeof b === 'string';
+        if (Array.isArray(a)) return Array.isArray(b) && a.length === b.length && a.every((x, i) => same(x, b[i]));
+        if (a && typeof a === 'object') return b && typeof b === 'object' && !Array.isArray(b)
+            && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every(k => same(a[k], b[k]));
+        return a === b;
+    };
+    const pick = (d, list) => {
+        const eq = list.filter(f => same(d, f));
+        if (eq.length === 1) return eq[0];
+        if (d && typeof d === 'object' && typeof d.id === 'string') {
+            const byId = list.filter(f => f && f.id === d.id);
+            if (byId.length === 1) return byId[0];
+        }
+        return undefined;
+    };
+    if (draft === R) return (typeof file === 'string') ? file : '{REDACTED}';
+    if (Array.isArray(draft)) {
+        // An original claimed by two draft items gives its secret to neither.
+        const picks = draft.map(d => Array.isArray(file) ? pick(d, file) : undefined);
+        return draft.map((d, i) => fillRedactedFrom(d,
+            picks[i] !== undefined && picks.filter(p => p === picks[i]).length === 1 ? picks[i] : undefined));
+    }
+    if (draft && typeof draft === 'object') {
+        const out = {};
+        const f = (file && typeof file === 'object' && !Array.isArray(file)) ? file : {};
+        Object.keys(draft).forEach(k => { out[k] = fillRedactedFrom(draft[k], f[k]); });
+        return out;
+    }
+    return draft;
 }
 
 function discardDraft() {
@@ -4041,6 +5511,7 @@ function initTextEditorIfNeeded() {
     if (!el) return;
     textEditor = ace.edit('text-editor');
     textEditor.setTheme('ace/theme/' + (currentTheme || 'eclipse'));
+    if (document.body.classList.contains('view-mode')) textEditor.setReadOnly(true);   // turned on before this tab opened
     textEditor.session.setMode('ace/mode/text');
     textEditor.setOptions({
         fontSize: 13,
@@ -4049,6 +5520,10 @@ function initTextEditorIfNeeded() {
         autoScrollEditorIntoView: true
     });
     textEditor.session.on('change', () => updateTextEditorDirtyState());
+}
+
+function textFileDirty() {
+    return !!(textEditor && currentTextFile && textEditor.getValue() !== currentTextFileBaseline);
 }
 
 function updateTextEditorDirtyState() {
@@ -4082,6 +5557,7 @@ function handleTextFileList(raw) {
     ).join('');
     body.querySelectorAll('.files-rail-entry').forEach(btn => {
         btn.onclick = () => {
+            if (textFileDirty() && !confirm('Discard the unsaved changes to ' + currentTextFile + '?')) return;
             body.querySelectorAll('.files-rail-entry.active').forEach(a => a.classList.remove('active'));
             btn.classList.add('active');
             sendWebSocketMessage('load_text_file', { fileName: btn.dataset.path });
@@ -4097,12 +5573,26 @@ function handleTextFileLoaded(raw) {
     if (!textEditor) return;
     currentTextFile = payload.fileName;
     currentTextFileBaseline = payload.content;
+    textFileVersion = payload.version || null;
+    textOverwrite = false;
     textEditor.session.setMode('ace/mode/' + aceModeForFile(payload.fileName));
     textEditor.setValue(payload.content, -1);
+    // The editor holds one kind of line ending (the first it finds): a file
+    // mixing CRLF and LF, or holding a lone CR, comes back uniform. Its
+    // baseline is the editor's text, so opening it is not an edit; a Save
+    // writes them all one way, and says so here first.
+    const c = payload.content;
+    const mixed = /\r(?!\n)/.test(c) || (/\r\n/.test(c) && /(^|[^\r])\n/.test(c));
+    if (mixed) currentTextFileBaseline = textEditor.getValue();
     updateTextEditorDirtyState();
     const histBtn = document.getElementById('text-history-btn');
     if (histBtn) histBtn.disabled = false;
-    showTextFileStatus('Loaded ' + currentTextFile, 'success');
+    if (mixed) {
+        showTextFileStatus('Loaded ' + currentTextFile + '. It mixes line endings: a Save writes every one as '
+            + (textEditor.session.getDocument().getNewLineCharacter() === '\r\n' ? 'CRLF' : 'LF') + '.', 'warning');
+    } else {
+        showTextFileStatus('Loaded ' + currentTextFile, 'success');
+    }
 }
 
 function aceModeForFile(name) {
@@ -4114,19 +5604,59 @@ function aceModeForFile(name) {
     return map[ext] || 'text';
 }
 
+let textSaveContent = null;   // what the last save_text_file sent
+let textFileVersion = null;   // the template's version as loaded
+let textOverwrite = false;    // the operator saw a conflict and saved again
+
 function saveTextFile() {
+    if (viewModeRefuses('save')) return;
+    if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+        showTextFileStatus('Not connected to the server: save once it reconnects', 'error');
+        return;
+    }
     if (!textEditor || !currentTextFile) return;
-    sendWebSocketMessage('save_text_file', {
-        fileName: currentTextFile,
-        content: textEditor.getValue()
-    });
+    // One at a time: a second, sent before the first's reply, carries the
+    // same version and would come back as a conflict with the first.
+    if (textSaveContent !== null) { showTextFileStatus('Still saving…', 'warning'); return; }
+    textSaveContent = textEditor.getValue();
+    const msg = { fileName: currentTextFile, content: textSaveContent };
+    if (textFileVersion) msg.baseVersion = textFileVersion;
+    if (textOverwrite) msg.force = true;
+    textOverwrite = false;
+    sendWebSocketMessage('save_text_file', msg);
 }
 
-function handleTextFileSaved(name) {
+function handleTextFileSaved(raw) {
     if (!textEditor) return;
-    currentTextFileBaseline = textEditor.getValue();
+    let name = raw, auto = false, version = null;
+    try { const p = JSON.parse(raw); name = p.fileName; version = p.version || null; auto = p.autoPublish === true; } catch (e) { /* plain name */ }
+    // Another template opened since it was sent: its version and text are
+    // not this editor's.
+    if (name && name !== currentTextFile) {
+        textSaveContent = null;
+        showTextFileStatus('Saved ' + name, 'success');
+        return;
+    }
+    textFileVersion = version;
+    // The file holds what was sent; typing since then is still unsaved.
+    currentTextFileBaseline = (textSaveContent !== null) ? textSaveContent : textEditor.getValue();
+    textSaveContent = null;
     updateTextEditorDirtyState();
-    showTextFileStatus('Saved ' + name, 'success');
+    // Pushed to every server like a configuration: now with auto-publish on
+    // (text_file_pushed says how it went), else by the next Publish.
+    if (auto) showTextFileStatus('Saved ' + name + '; sending it to the servers…', 'warning');
+    else {
+        setUnpublished(TEMPLATES_PENDING);
+        showTextFileStatus('Saved ' + name + '. Auto-publish is off: Publish sends it to the servers.', 'warning');
+    }
+}
+
+/// The entry in "Not Published" for templates saved with auto-publish off.
+const TEMPLATES_PENDING = '_templates';
+
+function handleTextFilePushed(raw) {
+    let p = null; try { p = JSON.parse(raw); } catch (e) { return; }
+    showTextFileStatus(p.fileName + ': ' + p.summary, p.ok ? 'success' : 'error');
 }
 
 function reloadTextFile() {
@@ -4135,12 +5665,7 @@ function reloadTextFile() {
 }
 
 function showTextFileStatus(text, kind) {
-    const el = document.getElementById('text-file-status');
-    if (!el) return;
-    el.textContent = text;
-    el.className = 'sync-status ' + (kind || '');
-    el.style.display = 'inline-flex';
-    setTimeout(() => { el.style.display = 'none'; }, 2500);
+    showStatusIn(document.getElementById('text-file-status'), text, kind);
 }
 
 // Template-file version history. Reuses the shared version modal, but its
@@ -4168,6 +5693,8 @@ function previewTextVersion(timestamp) {
 
 function restoreTextVersion(timestamp) {
     if (!currentTextFile) return;
+    if (viewModeRefuses('restore')) return;
+    if (textFileDirty() && !confirm('Discard the unsaved changes to ' + currentTextFile + ' and restore this version?')) return;
     if (!confirm('Restore this version? The current content will be saved as a backup first.')) {
         return;
     }
@@ -4178,21 +5705,31 @@ function handleTextVersionContent(raw) {
     let payload;
     try { payload = JSON.parse(raw); } catch (e) { return; }
     if (!textEditor || typeof payload.content !== 'string') return;
-    // Preview = drop the old content into the editor without touching the
-    // baseline, so it reads as unsaved and the user can Save or Revert.
-    textEditor.setValue(payload.content, -1);
-    updateTextEditorDirtyState();
-    closeVersionHistory();
-    showTextFileStatus('Preview loaded (not saved)', 'warning');
+    // Shown read-only in the dialog: dropping it into the editor would
+    // overwrite unsaved edits there. Restore loads a version.
+    const pre = document.getElementById('versionPreview');
+    if (pre) {
+        pre.textContent = (payload.fileName || currentTextFile) + ', earlier version (read-only; Restore to load it):\n\n' + payload.content;
+        pre.style.display = 'block';
+    }
 }
 
 function handleTextVersionRestored(raw) {
     let payload;
     try { payload = JSON.parse(raw); } catch (e) { return; }
     if (!textEditor || typeof payload.content !== 'string') return;
+    // Another template opened since: the restore happened, but this editor
+    // holds the other file.
+    if (payload.fileName && payload.fileName !== currentTextFile) {
+        showTextFileStatus('Restored ' + payload.fileName, 'success');
+        return;
+    }
     // Restore already wrote the file server-side; sync the editor to match.
     textEditor.setValue(payload.content, -1);
     currentTextFileBaseline = payload.content;
+    if (payload.version) textFileVersion = payload.version;   // the next Save is over the restored file
+    if (!autoPublishEnabled) setUnpublished(TEMPLATES_PENDING);   // a restore is a save
+    textOverwrite = false;   // a conflict seen before is about a file this replaced
     updateTextEditorDirtyState();
     closeVersionHistory();
     showTextFileStatus('Restored ' + (payload.fileName || currentTextFile), 'success');
@@ -4239,6 +5776,7 @@ function handleTemplateList(raw) {
     list.querySelectorAll('.template-entry').forEach(btn => {
         btn.onclick = () => {
             const name = btn.dataset.name;
+            templateAskedFor = currentSchemaName;
             sendWebSocketMessage('load_template', {
                 schemaName: currentSchemaName,
                 templateName: name
@@ -4247,19 +5785,38 @@ function handleTemplateList(raw) {
     });
 }
 
+let templateAskedFor = null;   // the application whose template was asked for
+
 function handleTemplateLoaded(raw) {
+    if (viewModeRefuses('load a template')) return;
+    // Asked for one app's template: the editor may have moved on since.
+    if (schemaLoading || currentSchemaName !== templateAskedFor) {
+        showSyncStatus('Template not loaded: the editor moved to another application', 'warning');
+        return;
+    }
+    if (selectedTargetDirectory && selectedTargetDirectory.type !== 'domain') {
+        showSyncStatus('A template is a whole configuration: use it on the Domain target', 'warning');
+        return;
+    }
+    if (!checkUnsavedChanges()) return;
     let data;
     try { data = JSON.parse(raw); }
     catch (e) {
         showSyncStatus('Template contained invalid JSON: ' + e.message, 'error');
         return;
     }
+    if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+        showSyncStatus('Template not loaded: it is not a JSON object { … }', 'error');
+        return;
+    }
+    loadedSourceText = raw;
+    leftEditorText = null;
     currentData = data;
     generateFormWithData(currentData);
     if (jsonEditor) jsonEditor.setValue(JSON.stringify(currentData, null, 2), -1);
     setDirty();
     closeTemplateLibrary();
-    showSyncStatus('Template loaded — review and Save', 'success');
+    showSyncStatus('Template loaded: review and Save', 'success');
 }
 
 // ---------------------------------------------------------------------------
@@ -4294,8 +5851,8 @@ function diffObjects(a, b, path) {
     const keys = new Set(Object.keys(a).concat(Object.keys(b)));
     keys.forEach(k => {
         const child = path ? path + '.' + k : k;
-        if (!(k in a)) out.push({ path: child, kind: 'added', to: b[k] });
-        else if (!(k in b)) out.push({ path: child, kind: 'removed', from: a[k] });
+        if (!Object.hasOwn(a, k)) out.push({ path: child, kind: 'added', to: b[k] });
+        else if (!Object.hasOwn(b, k)) out.push({ path: child, kind: 'removed', from: a[k] });
         else for (const d of diffObjects(a[k], b[k], child)) out.push(d);
     });
     return out;
@@ -4311,14 +5868,28 @@ function showDiff() {
         return currentData;
     })();
     if (current == null) { showSyncStatus('Cannot diff invalid JSON', 'error'); return; }
+    if (fileBroken) { showSyncStatus('The file on disk does not parse: there is nothing to compare with', 'warning'); return; }
     const baseline = initialData || {};
-    const diffs = diffObjects(baseline, current);
+    // A bare password the file holds reads back marked {CLEARTEXT} (to be
+    // encrypted on Save): the same value, not a change.
+    const unmark = (c, b) => {
+        if (typeof c === 'string' && c.startsWith('{CLEARTEXT}') && b === c.slice('{CLEARTEXT}'.length)) return b;
+        if (Array.isArray(c)) return c.map((x, i) => unmark(x, Array.isArray(b) ? b[i] : undefined));
+        if (c && typeof c === 'object') {
+            const o = {};
+            Object.keys(c).forEach(k => { o[k] = unmark(c[k], b && typeof b === 'object' ? b[k] : undefined); });
+            return o;
+        }
+        return c;
+    };
+    const diffs = diffObjects(baseline, unmark(current, baseline));
     const summary = document.getElementById('diff-summary');
     const body = document.getElementById('diff-body');
     if (!summary || !body) return;
 
     if (diffs.length === 0) {
-        summary.textContent = 'No changes vs. the last-loaded server copy.';
+        summary.textContent = noFileYet ? 'No changes, and no file on disk yet: Save creates it.'
+            : 'No changes vs. the last-loaded server copy.';
         body.innerHTML = '';
     } else {
         const counts = { added: 0, removed: 0, changed: 0 };
@@ -4329,6 +5900,10 @@ function showDiff() {
         body.innerHTML = diffs.map((d, i) => renderDiffRow(d, i)).join('');
         body.querySelectorAll('.diff-row').forEach(row => {
             row.onclick = () => jumpToPath(row.dataset.path);
+            // By keyboard too: a row is a button that jumps to its field.
+            row.tabIndex = 0;
+            row.setAttribute('role', 'button');
+            row.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); row.onclick(); } };
         });
     }
     const modal = document.getElementById('diffModal');
@@ -4356,6 +5931,8 @@ function renderDiffValue(v) {
     let s;
     try { s = JSON.stringify(v); } catch (e) { s = String(v); }
     if (s === undefined) s = 'undefined';
+    // A typed secret is not shown, here or in a value holding one.
+    s = s.replace(/\{CLEARTEXT\}(?:[^"\\]|\\.)*/g, '{CLEARTEXT}••••');
     if (s.length > 120) s = s.slice(0, 117) + '\u2026';
     return escapeHtml(s);
 }
@@ -4379,11 +5956,29 @@ function jumpToPath(path) {
     if (!el) return;
     // Close the modal so the scroll target is visible.
     closeDiffModal();
+    revealField(el);   // folded sections around it open: a hidden field cannot be seen or focused
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     // Briefly highlight the target so it's obvious.
     el.classList.add('diff-highlight');
     setTimeout(() => el.classList.remove('diff-highlight'), 1600);
     if (typeof el.focus === 'function') el.focus({ preventScroll: true });
+}
+
+/// Opens every folded section, list item and map entry around `el`.
+function revealField(el) {
+    for (let n = el.parentElement; n && n.id !== 'dynamicForm'; n = n.parentElement) {
+        if (!n.classList.contains('collapsed')) continue;
+        if (!n.matches('.collapsible-content, .array-item-body, .map-entry-content')) continue;
+        n.classList.remove('collapsed');
+        n.style.maxHeight = 'none';
+        const h = n.parentElement && n.parentElement.querySelector(':scope > .collapsible-header, :scope > .array-item-header, :scope > .map-entry-header');
+        if (h) {
+            h.classList.remove('collapsed');
+            h.setAttribute('aria-expanded', 'true');
+            const a = h.querySelector('.collapsible-arrow');
+            if (a) a.classList.remove('collapsed');
+        }
+    }
 }
 
 function cssEscape(s) {
@@ -4472,6 +6067,7 @@ function insertVariableIntoFocused(name) {
     const before = (input.value || '').slice(0, start);
     const after = (input.value || '').slice(end);
     input.value = before + insertion + after;
+    input.dispatchEvent(new Event('input', { bubbles: true }));   // an edit like typing: kept, marked, validated
     const caret = start + insertion.length;
     input.focus();
     if (input.setSelectionRange) input.setSelectionRange(caret, caret);
@@ -4508,24 +6104,31 @@ const aiChat = (typeof BladeChat !== 'undefined') ? BladeChat.create({
         + '<li>Set the logging level to FINE</li>'
         + '<li>What does session expiration do?</li>'
         + '<li>Turn on the keep-alive with a 60-second interval</li></ul>'
-        + 'It sees this app\'s schema and the configuration as it is in the editor. Secrets are never sent. '
+        + 'It sees this app\'s schema and the configuration as it is in the editor. Secrets in the configuration are never sent; what you type here is, so do not type one. '
         + 'A change loads into the form for you to check; nothing is saved until you Save.',
     send: askClaude,
 }) : null;
-let aiPending = null;   // {resolve, reject, app} while a message is out
+let aiPending = null;
+let lastChatKey = null;   // the app and target the conversation is about
+let aiSeq = 0;            // numbers each question; an answer names the one it is for   // {resolve, reject, app} while a message is out
 
 function handleAiStatus(content) {
     if (aiChat) aiChat.enable(content === 'true');
 }
 
+let aiLoads = 0;          // proposals loaded into the form, to retire older "Load it anyway" buttons
+
 function askClaude(text, history, onSteps) {
+    if (document.body.classList.contains('view-mode')) return Promise.reject(new Error('View Mode: switch to Edit Mode to ask for changes.'));
     if (!currentSchemaName) return Promise.reject(new Error('Pick a target and a schema first.'));
+    if (schemaLoading) return Promise.reject(new Error('Still loading the file: ask once it is in the form.'));
     // Baseline = whatever the operator is looking at right now (same source
     // selection as saveData): unsaved edits are part of the message's context.
     let data;
     const activeTab = document.querySelector('.tab-content.active').id;
     if (activeTab === 'form-tab') {
         data = getFormData();
+        if (readBackProblems.length) return Promise.reject(new Error('Fix this first: ' + readBackProblems[0]));
     } else {
         try {
             data = JSON.parse(jsonEditor.getValue());
@@ -4533,53 +6136,133 @@ function askClaude(text, history, onSteps) {
             return Promise.reject(new Error('The JSON tab holds invalid JSON: fix it, or switch to the form.'));
         }
     }
+    if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+        return Promise.reject(new Error('Not connected to the server; reload the page and ask again.'));
+    }
     onSteps(['asking Claude: a large schema can take a minute']);
     return new Promise((resolve, reject) => {
-        aiPending = { resolve, reject, app: currentSchemaName };
+        // What the proposal is built from, to tell whether the operator kept
+        // editing (or changed target) while it was written.
+        aiSeq++;
+        aiPending = { id: String(aiSeq), resolve, reject, app: currentSchemaName,
+            target: selectedTargetDirectory ? selectedTargetDirectory.path : null,
+            baseline: JSON.stringify(canonicalJson(data)),
+            version: draftBaseVersion || fileVersion };
         sendWebSocketMessage('ai_generate', {
             appName: currentSchemaName,
             instruction: text,
             config: JSON.stringify(data),
-            history: history
+            history: history,
+            requestId: String(aiSeq),
+            // An overlay is drafted, and checked, as a partial file.
+            targetDirectory: selectedTargetDirectory ? selectedTargetDirectory.path : ''
         });
     });
 }
 
 function handleAiResult(raw) {
-    const pending = aiPending;
-    aiPending = null;
-    if (!pending) return;
     let result;
     try { result = JSON.parse(raw); }
     catch (e) {
-        pending.reject(new Error('The server returned an unreadable result: ' + e.message));
+        const p = aiPending; aiPending = null;
+        if (p) p.reject(new Error('The server returned an unreadable result: ' + e.message));
         return;
     }
+    // The answer to an earlier question (asked before a switch): not this one's.
+    if (!aiPending || (result.requestId && result.requestId !== aiPending.id)) return;
+    const pending = aiPending;
+    aiPending = null;
     if (!result.config) {
         pending.resolve({ text: result.reply || '(no answer)' });
         return;
     }
-    if (pending.app !== currentSchemaName) {
-        pending.resolve({ text: (result.reply || '') + '\n\nNot loaded: the editor now shows another schema.' });
+    const here = selectedTargetDirectory ? selectedTargetDirectory.path : null;
+    if (pending.app !== currentSchemaName || pending.target !== here) {
+        pending.resolve({ text: (result.reply || '') + '\n\nNot loaded: the editor now shows another '
+            + (pending.app !== currentSchemaName ? 'schema' : 'target') + '. Ask again there.' });
         return;
     }
-    currentData = result.config;
-    generateFormWithData(currentData);
-    if (jsonEditor) jsonEditor.setValue(JSON.stringify(currentData, null, 2), -1);
-    setDirty();
     const count = (result.errors || []).length;
+    const loadsAtAnswer = aiLoads, loadAtAnswer = loadSeq;
+    const apply = (later) => {
+        if (viewModeRefuses('load a proposal')) return false;
+        // A button left in the log: a later proposal, or a reload, since
+        // replaced what this one was offered over.
+        if (later && (aiLoads !== loadsAtAnswer || loadSeq !== loadAtAnswer)) {
+            showSyncStatus('Not loaded: the form has changed since (another proposal or a reload). Ask again.', 'warning');
+            return false;
+        }
+        // Clicked later: still the schema and target the proposal was made for?
+        const nowTarget = selectedTargetDirectory ? selectedTargetDirectory.path : null;
+        if (currentSchemaName !== pending.app || nowTarget !== pending.target) {
+            showSyncStatus('Not loaded: this proposal was for ' + pending.app + ' on another target or schema', 'warning');
+            return;
+        }
+        if (schemaLoading) {
+            showSyncStatus('Not loaded: the file is reloading; ask again', 'warning');
+            return;
+        }
+        // Built from the file as it was when asked. If the form now holds a
+        // later version (a reload, a restore), loading it and saving would
+        // quietly undo that version's changes: the save carries its version.
+        const nowData = activeEditorData();
+        const sameBase = (draftBaseVersion || fileVersion) === pending.version
+            || (nowData !== undefined && JSON.stringify(canonicalJson(nowData)) === pending.baseline);
+        if (!sameBase) {
+            showSyncStatus('Not loaded: the file changed since you asked (a reload or restore brought in another version). Ask again.', 'error');
+            return;
+        }
+        aiLoads++;
+        currentData = result.config;
+        leftEditorText = null;   // the proposal replaces what the JSON tab held
+        setDirty();   // first: a form that fails to draw is still not the file
+        try {
+            generateFormWithData(currentData);
+            if (jsonEditor) jsonEditor.setValue(JSON.stringify(currentData, null, 2), -1);
+        } catch (e) {
+            showSyncStatus('The proposal could not be drawn (' + e.message + '): Reset goes back to the file', 'error');
+            return false;
+        }
+        return true;
+    };
+    // What the server found, shown (a secret it could not carry over, a schema error).
+    const problemsLine = count ? ' · ' + (result.errors || []).slice(0, 2).join('; ') + (count > 2 ? ' (and ' + (count - 2) + ' more)' : '') : '';
+    if (schemaLoading) {
+        // The file is being reloaded: what was asked about is being replaced.
+        pending.resolve({ text: (result.reply || '') + '\n\nNot loaded: the file was reloading. Ask again.' });
+        return;
+    }
+    const now = activeEditorData();
+    const edited = now === undefined || JSON.stringify(canonicalJson(now)) !== pending.baseline;
+    if (edited) {
+        // The operator kept editing while this was written: their edits win
+        // unless they choose the proposal, which was built without them.
+        pending.resolve({
+            text: result.reply || 'A proposal is ready.',
+            meta: 'Not loaded: you edited the form while this was written' + (count ? ' · ' + count + ' problem' + (count === 1 ? '' : 's') + problemsLine : ''),
+            actions: [{ label: 'Load it anyway', title: 'Replace the form, and the edits made since asking, with this proposal', run: () => apply(true) }],
+        });
+        return;
+    }
+    if (!apply(false)) {
+        pending.resolve({ text: result.reply || 'A proposal is ready.', meta: 'Not loaded: see the status line' });
+        return;
+    }
     pending.resolve({
         text: result.reply || 'Loaded a proposal.',
         meta: result.valid ? 'Loaded into the form · not saved'
-            : 'Loaded with ' + count + ' validation error' + (count === 1 ? '' : 's') + ' · check before saving',
+            : 'Loaded with ' + count + ' problem' + (count === 1 ? '' : 's') + problemsLine,
         actions: [{ label: 'Show changes', title: 'What this changes against the file on disk', run: showDiff }],
     });
 }
 
-function handleAiError(message) {
+function handleAiError(raw) {
+    let message = raw, id = null;
+    try { const e = JSON.parse(raw); message = e.error; id = e.requestId || null; } catch (x) { /* plain text */ }
+    if (!aiPending || (id && id !== aiPending.id)) return;   // an earlier question's failure
     const pending = aiPending;
     aiPending = null;
-    if (pending) pending.reject(new Error(message || 'No answer.'));
+    pending.reject(new Error(message || 'No answer.'));
 }
 
 function openRegexTest(patternInput) {
@@ -4599,18 +6282,66 @@ function closeRegexTest() {
     if (modal) modal.style.display = 'none';
     regexTestBoundPatternInput = null;
 }
+/// A Java pattern (java.util.regex, as RegexSelector compiles it) as a
+/// JavaScript one: leading inline flags ((?i), (?im)) become flags, \A and
+/// \z/\Z become ^ and $ (outside a character class). Constructs JavaScript
+/// lacks or reads differently (possessive and atomic groups, \p{Alpha}-style
+/// classes) are named in `javaOnly` instead of being tested wrongly.
+function javaRegexForJs(p) {
+    let flags = '';
+    const lead = p.match(/^\(\?([imsux]+)\)/);
+    if (lead) {
+        if (lead[1].includes('i')) flags += 'i';
+        if (lead[1].includes('m')) flags += 'm';
+        if (lead[1].includes('x')) return { javaOnly: 'the (?x) comments flag' };
+        p = p.slice(lead[0].length);
+    }
+    let out = '', inClass = false;
+    for (let i = 0; i < p.length; i++) {
+        const c = p[i];
+        if (c === '\\' && i + 1 < p.length) {
+            const d = p[i + 1];
+            if (!inClass && d === 'A') { out += '^'; i++; continue; }
+            if (!inClass && (d === 'z' || d === 'Z')) { out += '$'; i++; continue; }
+            if (d === 'p' || d === 'P') {
+                if (p[i + 2] === '{' && /^\{(Alpha|Digit|Alnum|Upper|Lower|Punct|Space|XDigit|Blank|Cntrl|Graph|Print|ASCII|java\w+|Is\w+|In\w+)\}/.test(p.slice(i + 2))) {
+                    return { javaOnly: '\\' + d + p.slice(i + 2, p.indexOf('}', i) + 1) };
+                }
+                return { javaOnly: '\\' + d + ' classes' };
+            }
+            out += c + d; i++; continue;
+        }
+        if (c === '[' && !inClass) inClass = true;
+        else if (c === ']' && inClass) inClass = false;
+        if (!inClass) {
+            if (c === '(' && p.startsWith('(?>', i)) return { javaOnly: 'an atomic group (?>...)' };
+            if (c === '+' && i > 0 && /[*+?}]/.test(p[i - 1]) && p[i - 2] !== '\\') return { javaOnly: 'a possessive quantifier' };
+            if (c === '(' && /^\(\?[imsux-]+[):]/.test(p.slice(i))) return { javaOnly: 'an inline flag inside the pattern' };
+        }
+        out += c;
+    }
+    return { source: out, flags: flags };
+}
+
 function runRegexTest() {
     const sampleEl = document.getElementById('regex-test-sample');
     const resultEl = document.getElementById('regex-test-result');
     if (!sampleEl || !resultEl) return;
-    const pattern = regexTestBoundPatternInput ? (regexTestBoundPatternInput.value || '').trim() : '';
+    // The pattern as saved: not trimmed (a trailing space is part of it).
+    const pattern = regexTestBoundPatternInput ? (regexTestBoundPatternInput.value || '') : '';
     const sample = sampleEl.value || '';
     if (!pattern) { resultEl.innerHTML = '<em>No pattern set.</em>'; return; }
     // Anchor for parity with RegexSelector.extract (which uses Matcher.matches()
-    // — require the whole input to match, not a substring). Wrap in (?:...) so
-    // existing numbered/named capture groups keep their indices.
+    // — require the whole input to match, not a substring), DOTALL as there.
+    // Wrap in (?:...) so existing numbered/named capture groups keep their indices.
+    const j = javaRegexForJs(pattern);
+    if (j.javaOnly) {
+        resultEl.innerHTML = '<span class="regex-test-error">This pattern uses Java-only syntax (' + escapeHtml(j.javaOnly)
+            + '). The server accepts it; this browser tester cannot run it.</span>';
+        return;
+    }
     let re;
-    try { re = new RegExp('^(?:' + pattern + ')$', 's'); }
+    try { re = new RegExp('^(?:' + j.source + ')$', 's' + j.flags); }
     catch (err) { resultEl.innerHTML = '<span class="regex-test-error">Invalid pattern: ' + escapeHtml(err.message) + '</span>'; return; }
     const m = re.exec(sample);
     if (!m) { resultEl.innerHTML = '<span class="regex-test-nomatch">No match. (full-string match, same as iRouter)</span>'; return; }
@@ -4635,8 +6366,11 @@ function runRegexTest() {
     document.addEventListener('focusin', (e) => {
         const t = e.target;
         if (!t) return;
-        if ((t.tagName === 'INPUT' && (t.type === 'text' || t.type === 'password' || t.type === 'search' || t.type === 'number')) ||
-            t.tagName === 'TEXTAREA') {
+        // The form's text fields only: a number field cannot hold "${var}"
+        // (the browser blanks it), and the filter, chat and regex boxes are
+        // not configuration.
+        if (t.closest && t.closest('#dynamicForm') && !t.classList.contains('map-key-input')
+                && ((t.tagName === 'INPUT' && (t.type === 'text' || t.type === 'password')) || t.tagName === 'TEXTAREA')) {
             lastFocusedTextInput = t;
         }
         if (t._schema) {
@@ -4645,6 +6379,37 @@ function runRegexTest() {
         }
     });
 })();
+
+/// An edit inside a map entry or list item marks it, and every entry around
+/// it, as touched: a null the file states is kept only while untouched.
+/// What the latest user action could have changed: every element around its
+/// target, taken when the event fires (a × removes its own element before
+/// the change is reported). setDirty, which every action that changes the
+/// form calls, marks them all touched; an action that changes nothing (help,
+/// the password eye) never calls it. A key's rename touches the map that
+/// holds the entry, not the entry's value: renaming keeps a null or a
+/// mistyped value as the file had it.
+let lastActionAround = [];
+(function initTouchTracking() {
+    if (typeof document === 'undefined') return;
+    const mark = (e) => {
+        const t = e.target;
+        if (!t || !t.closest || !t.closest('#dynamicForm')) return;
+        if (e.type === 'input' || e.type === 'change') t._edited = true;
+        const isKey = t.classList && t.classList.contains('map-key-input');
+        const around = [];
+        const form = document.getElementById('dynamicForm');
+        let el = isKey ? (t.closest('.map-entry') || t).parentElement : t;
+        for (; el && el !== form; el = el.parentElement) around.push(el);
+        lastActionAround = around;
+        // Typing marks at once (an input event is a change by itself).
+        if (e.type === 'input' || e.type === 'change') touchAround();
+    };
+    ['input', 'change', 'click', 'dragstart', 'drop'].forEach(type => document.addEventListener(type, mark, true));
+})();
+function touchAround() {
+    lastActionAround.forEach(el => { el._touched = true; });
+}
 
 /// Global keyboard shortcuts. Ctrl/Cmd-S saves; Ctrl/Cmd-F focuses the
 /// field-filter input; Escape clears it. Scoped to the configurator so
@@ -4665,10 +6430,16 @@ function runRegexTest() {
         }
         if (e.key === 's' || e.key === 'S') {
             e.preventDefault();
-            if (typeof saveData === 'function') saveData();
+            // Save what the visible tab edits: a template on the Files tab, the
+            // config on the Form and JSON tabs, nothing on the read-only Schema tab.
+            const tab = document.querySelector('.tab-content.active');
+            if (tab && tab.id === 'files-tab') { if (textFileDirty()) saveTextFile(); }
+            else if (tab && tab.id === 'schema-tab') { /* read-only */ }
+            else if (typeof saveData === 'function') saveData();
         } else if (e.key === 'f' || e.key === 'F') {
             const f = document.getElementById('form-filter');
-            if (f) {
+            const onForm = document.querySelector('.tab-content.active#form-tab');
+            if (f && onForm) {
                 e.preventDefault();
                 f.focus();
                 f.select();
@@ -4773,6 +6544,7 @@ function filterForm(query) {
             (el.querySelector('[data-path]').getAttribute('data-path') || '') : '';
         const label = (el.querySelector('label, .add-property-label') || {}).textContent || '';
         const inputVals = Array.from(el.querySelectorAll('input, textarea, select'))
+            .filter(i => i.type !== 'password' && i.dataset.password !== 'true')   // no guessing a secret
             .map(i => i.value || '').join(' ');
         const key = (el.querySelector('.map-key-input, .extras-key-input') || {}).value || '';
         const title = el.querySelector('.collapsible-title, .array-item-type-label');
@@ -4885,14 +6657,34 @@ function collapseEmpty() {
 // Feature 1: Unsaved Changes Warning
 // ========================================
 
-function setDirty() {
+/// Key order does not make two documents differ.
+function canonicalJson(v) {
+    return Array.isArray(v) ? v.map(canonicalJson)
+        : (v && typeof v === 'object') ? Object.keys(v).sort().reduce((o, k) => (o[k] = canonicalJson(v[k]), o), {}) : v;
+}
+
+function setDirty(moved = false) {
+    // What the action that made the change was in; not a drag, which moves
+    // values without editing them (a file's mistyped value stays its own).
+    if (!moved) touchAround();
     if (!isDirty) {
         isDirty = true;
         const indicator = document.getElementById('dirty-indicator');
         if (indicator) {
             indicator.style.display = 'inline-flex';
         }
+        updateTitle();
     }
+}
+
+/// The tab's title names the file and whether it has unsaved edits, so two
+/// tabs on two files (or one file) can be told apart.
+function updateTitle() {
+    const t = selectedTargetDirectory;
+    const where = currentSchemaName
+        ? currentSchemaName + (t && t.type !== 'domain' ? ' (' + t.displayName + ')' : '') + ' · '
+        : 'Editor · ';
+    document.title = (isDirty ? '* ' : '') + where + 'BLADE Configurator';
 }
 
 function clearDirty() {
@@ -4903,29 +6695,54 @@ function clearDirty() {
     }
     // Save current snapshot for comparison
     savedDataSnapshot = JSON.stringify(getFormData());
+    updateTitle();
 }
 
-function setUnpublished() {
-    isUnpublished = true;
+/// Apps saved (auto-publish off) and not yet published. Kept across schema
+/// switches: leaving an app does not publish it, and the indicator and Publish
+/// keep it in view until it is.
+const unpublishedApps = new Set();
+
+function renderUnpublished() {
+    isUnpublished = unpublishedApps.size > 0;
+    document.body.classList.toggle('has-unpublished', isUnpublished);   // Publish stays reachable
     const indicator = document.getElementById('unpublished-indicator');
-    if (indicator) {
-        indicator.style.display = 'inline-flex';
-    }
+    if (!indicator) return;
+    indicator.style.display = isUnpublished ? 'inline-flex' : 'none';
+    const names = [...unpublishedApps];
+    indicator.textContent = '▲ Not Published' + (names.length === 1 && names[0] === currentSchemaName ? '' : ': ' + names.join(', '));
+    indicator.title = 'Saved but not live yet: ' + names.join(', ') + '. Publish pushes them to the running services.';
 }
 
-function clearUnpublished() {
-    isUnpublished = false;
-    const indicator = document.getElementById('unpublished-indicator');
-    if (indicator) {
-        indicator.style.display = 'none';
+function setUnpublished(app = currentSchemaName) {
+    if (app) unpublishedApps.add(app);
+    renderUnpublished();
+}
+
+function clearUnpublished(app = currentSchemaName) {
+    if (app) unpublishedApps.delete(app);
+    renderUnpublished();
+}
+
+/// The editor's data as the active tab holds it: the JSON tab's text is not
+/// in the form until it is applied, and edits made there count too.
+function activeEditorData() {
+    const active = document.querySelector('.tab-content.active');
+    if (active && active.id === 'json-tab' && jsonEditor) {
+        try { return JSON.parse(jsonEditor.getValue()); } catch (e) { return undefined; }
     }
+    return getFormData();
 }
 
 function checkUnsavedChanges() {
     if (isDirty && savedDataSnapshot !== null) {
-        const currentData = JSON.stringify(getFormData());
-        if (currentData !== savedDataSnapshot) {
-            return confirm('You have unsaved changes. Do you want to discard them?');
+        const now = activeEditorData();
+        const currentData = (now === undefined) ? null : JSON.stringify(now);
+        if (currentData === null || JSON.stringify(canonicalJson(JSON.parse(currentData))) !== JSON.stringify(canonicalJson(JSON.parse(savedDataSnapshot)))) {
+            const discard = confirm('You have unsaved changes. Do you want to discard them?');
+            // Discarded: not offered back as a draft on the next open.
+            if (discard && typeof clearDraft === 'function') clearDraft();
+            return discard;
         }
     }
     return true;
@@ -4943,14 +6760,14 @@ function setupDirtyTracking() {
     // Track JSON editor changes
     if (jsonEditor) {
         jsonEditor.session.on('change', function() {
-            setDirty();
+            if (!syncingEditor) setDirty();
         });
     }
 
     // Warn before leaving page — unsaved edits (data loss) or saved-but-not-live
     // changes (auto-publish off, no Publish yet).
     window.addEventListener('beforeunload', function(e) {
-        if (isDirty) {
+        if (isDirty || textFileDirty()) {
             e.preventDefault();
             e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
             return e.returnValue;
@@ -4977,15 +6794,25 @@ function showCloneDialog() {
     const select = document.getElementById('clone-target-select');
     select.innerHTML = '<option value="">-- Select Target --</option>';
 
+    // Only between targets of one kind. A cluster or server file is merged
+    // over the domain file, its lists added to the domain's: a whole domain
+    // file cloned there repeats every list, and an overlay cloned to the
+    // domain replaces the whole domain file with a partial one.
+    const kind = selectedTargetDirectory ? selectedTargetDirectory.type : null;
     targetDirectories.forEach(target => {
         // Don't include current target in list
-        if (target.path !== selectedTargetDirectory?.path) {
+        if (target.path !== selectedTargetDirectory?.path && target.type === kind) {
             const option = document.createElement('option');
             option.value = target.path;
             option.textContent = target.displayName;
             select.appendChild(option);
         }
     });
+
+    if (select.options.length === 1) {
+        showSyncStatus('Nothing to clone to: a ' + (kind || 'domain') + ' file clones only to another ' + (kind || 'domain') + ' target', 'warning');
+        return;
+    }
 
     // Show modal
     document.getElementById('cloneModal').style.display = 'flex';
@@ -5004,175 +6831,44 @@ function executeClone() {
         return;
     }
 
-    // Get current data
-    let data;
-    const activeTab = document.querySelector('.tab-content.active').id;
-    if (activeTab === 'form-tab') {
-        data = getFormData();
-    } else {
-        try {
-            data = JSON.parse(jsonEditor.getValue());
-        } catch (e) {
-            alert('Cannot clone invalid JSON');
-            return;
-        }
+    if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+        showSyncStatus('Not connected to the server: clone once it reconnects', 'error');
+        return;
     }
+    // One at a time: a second would leave the first's answer unmatched.
+    if (cloneOut) { showSyncStatus('Still cloning…', 'warning'); return; }
+    // The same document, and the same checks, as Save.
+    const data = documentToWrite('clone');
+    if (data === null) return;
+    // Refused by the server if the destination exists, until cloned again.
+    const sameAsLast = lastClonePath === targetPath + '/' + currentSchemaName + '.json';
+    const replace = cloneOverwrite && sameAsLast;
+    cloneOverwrite = false;
+    lastClonePath = targetPath + '/' + currentSchemaName + '.json';
 
     // Construct save path for clone
     const clonePath = targetPath + '/' + currentSchemaName + '.json';
 
     // Send save request via WebSocket
     const jsonContent = JSON.stringify(data, null, 2);
+    cloneOut = true;
     sendWebSocketMessage('save_json', {
         file: clonePath,
-        content: jsonContent
+        content: jsonContent,
+        sourceText: loadedSourceText || undefined,
+        sourceFile: currentSavePath(),   // the clone's source: this form's file
+        editorText: writeEditorText || undefined,
+        clone: true,
+        force: replace
     });
 
     closeCloneDialog();
-    showSyncStatus('Configuration cloned to ' + targetPath, 'success');
+    showSyncStatus('Cloning to ' + targetPath + '…', 'warning');   // save_success or a refusal says how it went
 }
 
 // ========================================
 // Feature 9: Validation Indicators
 // ========================================
-
-function validateField(fieldPath, value, fieldSchema) {
-    const errors = [];
-
-    if (!fieldSchema) return errors;
-
-    // Required validation
-    if (fieldSchema.required && (value === '' || value === null || value === undefined)) {
-        errors.push('This field is required');
-    }
-
-    // Type validation
-    if (value !== '' && value !== null && value !== undefined) {
-        switch (fieldSchema.type) {
-            case 'number':
-            case 'integer':
-                const num = Number(value);
-                if (isNaN(num)) {
-                    errors.push('Must be a valid number');
-                } else {
-                    if (fieldSchema.minimum !== undefined && num < fieldSchema.minimum) {
-                        errors.push(`Minimum value is ${fieldSchema.minimum}`);
-                    }
-                    if (fieldSchema.maximum !== undefined && num > fieldSchema.maximum) {
-                        errors.push(`Maximum value is ${fieldSchema.maximum}`);
-                    }
-                }
-                break;
-
-            case 'string':
-                if (fieldSchema.minLength && value.length < fieldSchema.minLength) {
-                    errors.push(`Minimum length is ${fieldSchema.minLength}`);
-                }
-                if (fieldSchema.maxLength && value.length > fieldSchema.maxLength) {
-                    errors.push(`Maximum length is ${fieldSchema.maxLength}`);
-                }
-                if (fieldSchema.pattern) {
-                    const regex = new RegExp(fieldSchema.pattern);
-                    if (!regex.test(value)) {
-                        errors.push('Value does not match required pattern');
-                    }
-                }
-                break;
-        }
-    }
-
-    return errors;
-}
-
-function validateForm() {
-    validationErrors.clear();
-
-    // Clear previous error displays
-    document.querySelectorAll('.field-error').forEach(el => {
-        el.classList.remove('field-error');
-    });
-    document.querySelectorAll('.field-error-message').forEach(el => {
-        el.remove();
-    });
-
-    // Get all input fields
-    const inputs = document.querySelectorAll('#dynamicForm input, #dynamicForm select, #dynamicForm textarea');
-
-    inputs.forEach(input => {
-        const fieldPath = input.dataset.path || input.name;
-        if (!fieldPath) return;
-
-        // Try to find field schema
-        const fieldSchema = getFieldSchema(fieldPath);
-        const errors = validateField(fieldPath, input.value, fieldSchema);
-
-        if (errors.length > 0) {
-            validationErrors.set(fieldPath, errors);
-
-            // Add error class to input
-            input.classList.add('field-error');
-
-            // Add error message
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'field-error-message';
-            errorDiv.textContent = '\u26a0 ' + errors[0];
-            input.parentElement.appendChild(errorDiv);
-        }
-    });
-
-    displayValidationSummary();
-    return validationErrors.size === 0;
-}
-
-function getFieldSchema(fieldPath) {
-    // This is a simplified schema lookup
-    // In a full implementation, you'd traverse the schema tree
-    const parts = fieldPath.split('.');
-    let current = schema;
-
-    for (const part of parts) {
-        if (current.properties && current.properties[part]) {
-            current = current.properties[part];
-        } else if (current.$ref) {
-            // Handle $ref - resolve via the shared resolveRef helper which
-            // supports both victools $defs and kjetland definitions.
-            const resolvedRef = resolveRef(current.$ref);
-            if (resolvedRef) {
-                current = resolvedRef;
-                if (current.properties && current.properties[part]) {
-                    current = current.properties[part];
-                }
-            }
-        } else {
-            return null;
-        }
-    }
-
-    return current;
-}
-
-function displayValidationSummary() {
-    const summary = document.getElementById('validation-summary');
-    const list = document.getElementById('validation-summary-list');
-
-    if (!summary || !list) return;
-
-    if (validationErrors.size === 0) {
-        summary.classList.remove('active');
-        return;
-    }
-
-    list.innerHTML = '';
-    validationErrors.forEach((errors, fieldPath) => {
-        errors.forEach(error => {
-            const li = document.createElement('li');
-            li.textContent = `${fieldPath}: ${error}`;
-            list.appendChild(li);
-        });
-    });
-
-    summary.classList.add('active');
-}
 
 function clearValidationErrors() {
     validationErrors.clear();
@@ -5201,7 +6897,17 @@ document.addEventListener('DOMContentLoaded', function() {
     requestSchemaList(); // Request schemas from server instead of using hardcoded list
 
     // Initialize with empty form and editor - user will select data from dropdowns
-    initializeJsonEditor();
+    // Ace comes from a CDN: without it (an admin host with no internet) only the
+    // JSON tab is lost; dirty tracking, drafts and the leave warning below must
+    // still be wired.
+    try {
+        initializeJsonEditor();
+    } catch (e) {
+        jsonEditor = null;
+        console.error('JSON editor unavailable:', e);
+        const je = document.getElementById('json-editor');
+        if (je) je.textContent = 'The JSON editor could not load (no access to its CDN). The form still works.';
+    }
 
     // Feature: Initialize enhancements
     setupDirtyTracking(); // Set up unsaved changes tracking
@@ -5286,32 +6992,63 @@ function initializeJsonEditor() {
     // Schema editor will be initialized lazily when first shown
 }
 
+/// Sets the JSON editor's text without counting it as an edit (its change
+/// event would otherwise mark a mere tab switch unsaved).
+let syncingEditor = false;
+function setEditorText(text) {
+    syncingEditor = true;
+    try { jsonEditor.setValue(text, -1); } finally { syncingEditor = false; }
+}
+
 function switchTab(tabName) {
+    // Mid-load the schema is the new app's while the form is still the old
+    // one's: syncing the two tabs now would read one with the other.
+    if (schemaLoading && (tabName === 'json' || tabName === 'form')) {
+        showSyncStatus('Still loading: switch tabs once the file is in the form', 'warning');
+        return;
+    }
+    if (tabName === 'json' && !jsonEditor) {
+        showSyncStatus('The JSON editor could not load (no access to its CDN); use the form', 'warning');
+        return;
+    }
     try {
         const activeContent = document.querySelector('.tab-content.active');
         const previousTab = activeContent ? activeContent.id : 'form-tab';
 
         // Auto-sync data when switching tabs
         try {
-            if ((tabName === 'json' || tabName === 'schema') && previousTab === 'form-tab') {
-                // Switching to JSON or Schema tab - sync form data to JSON
+            if (previousTab === 'form-tab' && tabName !== 'form') {
+                // Leaving the form, for any tab: the JSON editor takes the form
+                // (Form → Files → JSON showed, and saved, a stale copy). Not while
+                // the form holds something it cannot read back faithfully.
                 const formData = getFormData();
-                currentData = formData;
-                if (jsonEditor) {
-                    jsonEditor.setValue(JSON.stringify(formData, null, 2), -1);
+                if (readBackProblems.length) {
+                    showSyncStatus('Fix this first: ' + readBackProblems[0], 'error');
+                    return;
                 }
-            } else if (tabName === 'form' && previousTab === 'json-tab') {
-                // Switching to Form tab - sync JSON data to form
+                currentData = formData;
+                if (jsonEditor) setEditorText(JSON.stringify(formData, null, 2));
+            } else if (previousTab === 'json-tab' && tabName !== 'json') {
+                // Leaving the JSON tab, for any tab: its text becomes the form,
+                // or edits made there would be lost by way of Schema or Files.
                 if (jsonEditor) {
                     const jsonData = JSON.parse(jsonEditor.getValue());
+                    // The form draws an object; anything else would read back as {}.
+                    if (jsonData === null || typeof jsonData !== 'object' || Array.isArray(jsonData)) {
+                        showSyncStatus('A configuration is a JSON object { … }: fix it here first', 'error');
+                        return;
+                    }
+                    // The text, kept as a repair source for a Save from the form:
+                    // a long or a key order typed there is not in the form's copy.
+                    leftEditorText = jsonEditor.getValue();
                     currentData = jsonData;
                     generateFormWithData(jsonData);
                 }
             }
         } catch (e) {
             console.error('Error syncing data in switchTab:', e);
-            if (tabName === 'form' && previousTab === 'json-tab') {
-                showSyncStatus('Cannot sync invalid JSON to form: ' + e.message, 'error');
+            if (previousTab === 'json-tab' && tabName !== 'json') {
+                showSyncStatus('Cannot leave the JSON tab with invalid JSON: ' + e.message, 'error');
                 return;
             }
         }
@@ -5398,22 +7135,28 @@ function validateJson() {
     }
 }
 
+/// The JSON tab's Reset: the same as the form's, both editors back to the file.
 function resetJson() {
-    jsonEditor.setValue(JSON.stringify(initialData, null, 2), -1);
-    currentData = { ...initialData };
+    if (!resetForm()) return;
     showSyncStatus('JSON reset to initial data', 'success');
 }
 
 function showSyncStatus(message, type) {
-    const statusEl = document.getElementById('sync-status');
-    statusEl.textContent = message;
-    statusEl.className = `sync-status ${type}`;
-    statusEl.style.display = 'inline-flex';
+    showStatusIn(document.getElementById('sync-status'), message, type);
+}
 
-    // Auto-hide after 3 seconds
-    setTimeout(() => {
-        statusEl.style.display = 'none';
-    }, 3000);
+/// Shows `message` in a status line. Each message owns the line until the
+/// next one: an earlier message's timer never cuts a later one short. A
+/// success goes after 4 s; a warning stays 12 s; an error stays until the
+/// next message replaces it (a conflict's "press Save again" must be read).
+function showStatusIn(el, message, type) {
+    if (!el) return;
+    clearTimeout(el._hideTimer);
+    el.textContent = message;
+    el.className = 'sync-status ' + (type || '');
+    el.style.display = 'inline-flex';
+    const ms = type === 'success' ? 4000 : type === 'warning' ? 12000 : 0;
+    if (ms) el._hideTimer = setTimeout(() => { el.style.display = 'none'; }, ms);
 }
 
 function generateFormWithData(data) {
@@ -5431,7 +7174,7 @@ function generateFormWithData(data) {
             const propDescription = propSchema.description;
             // Same required-flag injection as createObjectGroup.renderPropInto:
             // shallow clone so the shared schema object isn't mutated.
-            const childSchema = requiredSet.has(prop)
+            const childSchema = (requiredSet.has(prop) && !onOverlayTarget())   // an overlay may leave any of them to the file below
                 ? Object.assign({}, propSchema, { 'x-required-here': true })
                 : propSchema;
 
@@ -5448,7 +7191,9 @@ function generateFormWithData(data) {
     }
     // After a fresh render, offer to restore any locally-saved draft that
     // survives from a prior session.
-    if (typeof maybeOfferDraftRestore === 'function') {
+    if (typeof maybeOfferDraftRestore === 'function' && schemaLoading) {
+        // Only for a load: after a Restore, a tab switch or a proposal the
+        // draft is the editor's own state, not something to offer back.
         setTimeout(maybeOfferDraftRestore, 0);
     }
 }
@@ -5460,8 +7205,8 @@ function showVersionHistory() {
         return;
     }
 
-    const entry = schemaRegistry.find(e => e.name === currentSchemaName);
-    if (!entry || !entry.jsonFile) {
+    const entry = { jsonFile: formFile() };
+    if (!entry.jsonFile) {
         showSyncStatus('No file associated with this schema', 'warning');
         return;
     }
@@ -5481,6 +7226,9 @@ function showVersionHistory() {
 function closeVersionHistory() {
     const modal = document.getElementById('versionModal');
     modal.classList.remove('active');
+    // A preview belongs to the list it came from.
+    const pre = document.getElementById('versionPreview');
+    if (pre) { pre.textContent = ''; pre.style.display = 'none'; }
 }
 
 // 'json' (schema-backed config) or 'text' (a _templates/ file). Controls which
@@ -5516,7 +7264,7 @@ function displayVersionList(versionListJson, context) {
         html += `
             <li class="version-item ${isRecent ? 'version-current' : ''}">
                 <div class="version-info">
-                    <div class="version-date">${dateStr} ${isRecent ? '(Latest)' : ''}</div>
+                    <div class="version-date">${dateStr} ${isRecent ? '(the content before the last save)' : ''}</div>
                     <div class="version-size">${sizeKB} KB</div>
                 </div>
                 <div class="version-actions">
@@ -5534,14 +7282,17 @@ function displayVersionList(versionListJson, context) {
 }
 
 function restoreVersionFromHistory(timestamp) {
+    if (viewModeRefuses('restore')) return;
+    if (!checkUnsavedChanges()) return;
     if (!confirm('Are you sure you want to restore this version? The current version will be saved as a backup.')) {
         return;
     }
 
-    const entry = schemaRegistry.find(e => e.name === currentSchemaName);
-    if (!entry || !entry.jsonFile) return;
+    const entry = { jsonFile: formFile() };
+    if (!entry.jsonFile) return;
 
     pendingRequests.set('restoreTimestamp', timestamp);
+    pendingRequests.set('restoreFile', entry.jsonFile);
 
     sendWebSocketMessage('restore_version', {
         file: entry.jsonFile,
@@ -5552,14 +7303,29 @@ function restoreVersionFromHistory(timestamp) {
 }
 
 function handleVersionRestored(content) {
+    leftEditorText = null;
+    let restoredHere = false;
     try {
-        const data = JSON.parse(content);
         const timestamp = pendingRequests.get('restoreTimestamp');
         pendingRequests.delete('restoreTimestamp');
         const dateStr = timestamp ? new Date(Number(timestamp)).toLocaleString() : '';
+        const restoredFile = pendingRequests.get('restoreFile');
+        pendingRequests.delete('restoreFile');
+        if (restoredFile && restoredFile !== formFile()) {
+            // The operator moved to another file while it was out: that file's
+            // form and draft are not this restore's.
+            const app = restoredFile.split('/').pop().replace(/\.json$/, '');
+            if (!autoPublishEnabled) setUnpublished(app);
+            showSyncStatus('Restored ' + restoredFile + ' (' + dateStr + ')', 'success');
+            return;
+        }
+        restoredHere = true;
+        const data = JSON.parse(content);
 
         currentData = data;
         initialData = data;
+        loadedSourceText = initialText = content;
+        fileBroken = false;
 
         // Update both form and JSON editor
         generateFormWithData(data);
@@ -5567,17 +7333,33 @@ function handleVersionRestored(content) {
             jsonEditor.setValue(JSON.stringify(data, null, 2), -1);
         }
 
+        // The form now equals the file on disk: clean, with no draft. The
+        // restore wrote the file, so with auto-publish off it waits for Publish.
+        draftBaseVersion = null;
+        overwriteNext = false;   // a conflict seen before is about a file this replaced
+        clearDirty();
+        if (typeof clearDraft === 'function') clearDraft();
+        if (!autoPublishEnabled) setUnpublished();
+
         showSyncStatus('Restored: ' + dateStr, 'success');
         showSchemaLoadStatus('Restored: ' + dateStr, 'success');
         closeVersionHistory();
     } catch (e) {
-        showSyncStatus('Error restoring version: ' + e.message, 'error');
+        if (!restoredHere) { showSyncStatus('Error restoring version: ' + e.message, 'error'); return; }
+        // The file on disk is the restored one, and file_version is about to
+        // name it: the old form left in place would Save over the restore.
+        // Load the file again instead.
+        clearDirty();
+        if (typeof clearDraft === 'function') clearDraft();
+        closeVersionHistory();
+        showSyncStatus('Restored, but the page could not show it (' + e.message + '): loading the file again', 'warning');
+        loadSchema(currentSchemaName, true);
     }
 }
 
 function previewVersion(timestamp) {
-    const entry = schemaRegistry.find(e => e.name === currentSchemaName);
-    if (!entry || !entry.jsonFile) return;
+    const entry = { jsonFile: formFile() };
+    if (!entry.jsonFile) return;
 
     pendingRequests.set('versionTimestamp', timestamp);
 
@@ -5589,26 +7371,21 @@ function previewVersion(timestamp) {
     showSyncStatus('Loading version preview...', 'warning');
 }
 
-function handleVersionContent(content) {
-    try {
-        const data = JSON.parse(content);
-        const timestamp = pendingRequests.get('versionTimestamp');
-        pendingRequests.delete('versionTimestamp');
-        const dateStr = timestamp ? new Date(Number(timestamp)).toLocaleString() : '';
-
-        // Switch to JSON tab
-        switchTab('json');
-
-        // Show preview in JSON editor
-        if (jsonEditor) {
-            jsonEditor.setValue(JSON.stringify(data, null, 2), -1);
-        }
-
-        showSyncStatus('Preview: ' + dateStr + ' (not saved)', 'warning');
-        showSchemaLoadStatus('Preview: ' + dateStr, 'warning');
-        closeVersionHistory();
-    } catch (e) {
-        showSyncStatus('Error loading preview: ' + e.message, 'error');
+function handleVersionContent(raw) {
+    let reply;
+    try { reply = JSON.parse(raw); } catch (e) { showSyncStatus('Error loading preview: ' + e.message, 'error'); return; }
+    const timestamp = pendingRequests.get('versionTimestamp');
+    // Asked for another file, or another version, since: not this preview.
+    if (reply.file !== formFile() || String(reply.timestamp) !== String(timestamp)) return;
+    pendingRequests.delete('versionTimestamp');
+    const dateStr = timestamp ? new Date(Number(timestamp)).toLocaleString() : '';
+    // Shown in the dialog, read-only, as the file has it (JSON.parse would
+    // round long integers and reorder numbered keys, and refuse a broken one).
+    // Loading it into the editor would overwrite the edits in progress.
+    const pre = document.getElementById('versionPreview');
+    if (pre) {
+        pre.textContent = 'Version of ' + dateStr + ' (read-only; Restore to load it):\n\n' + (reply.content || '');
+        pre.style.display = 'block';
     }
 }
 
@@ -5643,8 +7420,6 @@ async function configuratorRoundTripCheck(opts = {}) {
                 : [...new Set([...Object.keys(a), ...Object.keys(b)])];
             return keys.flatMap(k => diffs(a[k], b[k], p + (Array.isArray(a) ? `[${k}]` : `.${k}`)));
         }
-        // null and absent are the same to Jackson.
-        if ((a === null || a === undefined) && (b === null || b === undefined)) return [];
         return [`${p}: loaded ${JSON.stringify(a)} · read back ${JSON.stringify(b)}`];
     };
     const wait = async (test, tries) => { for (let i = 0; i < tries && !test(); i++) await new Promise(r => setTimeout(r, 250)); };
@@ -5668,3 +7443,69 @@ async function configuratorRoundTripCheck(opts = {}) {
     clearDirty();
     return results;
 }
+
+
+// ---------------------------------------------------------------------------
+// Dialogs: Esc closes the one open (before anything behind it sees the key),
+// focus moves into it when it opens, Tab stays inside it, and focus goes back
+// to where it was when it closes. Every .modal in the page, however it is
+// opened (a class or a style).
+(function dialogs() {
+    if (typeof document === 'undefined') return;
+    const isOpen = m => getComputedStyle(m).display !== 'none';
+    const focusables = m => [...m.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+        .filter(el => !el.disabled && el.offsetParent !== null);
+    let lastFocus = null;
+    document.addEventListener('focusin', e => { if (!e.target.closest || !e.target.closest('.modal')) lastFocus = e.target; });
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.modal').forEach(m => {
+            const box = m.querySelector('.modal-content') || m;
+            box.setAttribute('role', 'dialog');
+            box.setAttribute('aria-modal', 'true');
+            const h = m.querySelector('.modal-header h2, .modal-header h3');
+            if (h) { if (!h.id) h.id = m.id + '-title'; box.setAttribute('aria-labelledby', h.id); }
+            const x = m.querySelector('.modal-close');
+            if (x) x.setAttribute('aria-label', 'Close');
+            let was = false, back = null;
+            new MutationObserver(() => {
+                const open = isOpen(m);
+                if (open && !was) {
+                    // A menu item closes its menu before the dialog opens, so
+                    // focus is already on the page body: the last real focus.
+                    back = (document.activeElement && document.activeElement !== document.body) ? document.activeElement : lastFocus;
+                    setTimeout(() => { const f = focusables(m); (f.find(el => !el.classList.contains('modal-close')) || f[0] || box).focus(); }, 0);
+                } else if (!open && was && back && document.contains(back)) {
+                    // Only if nothing else took focus (jump-to-field focuses
+                    // its field), and to the menu's button when the item that
+                    // opened it is in a closed menu.
+                    const a = document.activeElement;
+                    if (a && a !== document.body && !m.contains(a)) { was = open; return; }
+                    let to = back;
+                    if (to.offsetParent === null) {
+                        const menu = to.closest('.toolbar-menu');
+                        to = menu ? menu.querySelector('.toolbar-menu-trigger') : null;
+                    }
+                    if (to) to.focus();
+                }
+                was = open;
+            }).observe(m, { attributes: true, attributeFilter: ['class', 'style'] });
+        });
+    });
+    document.addEventListener('keydown', (e) => {
+        const m = [...document.querySelectorAll('.modal')].reverse().find(isOpen);
+        if (!m) return;
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();   // not the form filter behind it
+            const x = m.querySelector('.modal-close');
+            if (x) x.click();
+        } else if (e.key === 'Tab') {
+            const f = focusables(m);
+            if (!f.length) return;
+            const first = f[0], last = f[f.length - 1];
+            if (!m.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+            else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+            else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
+    }, true);
+})();

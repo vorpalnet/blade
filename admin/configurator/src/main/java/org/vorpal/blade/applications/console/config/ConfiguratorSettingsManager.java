@@ -78,9 +78,10 @@ public class ConfiguratorSettingsManager extends SettingsManager<ConfiguratorSet
 	}
 
 	private synchronized void startMonitor() {
-		if (monitor != null) {
+		if (monitor != null && monitor.isAlive()) {
 			return; // already running
 		}
+		monitor = null;   // stopped on its own (its folder gone, an error): start again
 		try {
 			ConfigurationMonitor m = new ConfigurationMonitor();
 			m.initialize(WATCH_DIR, true);
@@ -106,6 +107,11 @@ public class ConfiguratorSettingsManager extends SettingsManager<ConfiguratorSet
 		} finally {
 			monitor = null;
 		}
+	}
+
+	/// Whether the watcher is running, so saves are pushed as they land.
+	synchronized boolean watching() {
+		return monitor != null && monitor.isAlive();
 	}
 
 	/// Stop the monitor on undeploy.
