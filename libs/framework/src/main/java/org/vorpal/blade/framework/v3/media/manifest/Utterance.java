@@ -55,6 +55,14 @@ public class Utterance {
 	private String redacted;
 	private List<Redaction> redactions;
 
+	/// Set on an INVITE by an application that publishes the call's utterances
+	/// ([org.vorpal.blade.framework.v3.events.BladeEventTypes#CALL_UTTERANCE]) for the whole call,
+	/// both sides, before passing the call on. An application further along that hears the same
+	/// call, a conference the caller joins, leaves that caller's lines to it; otherwise every line
+	/// goes out twice, under the same call, from two transcribers that disagree on timing and on
+	/// who spoke.
+	public static final String PUBLISHED_HEADER = "X-Vorpal-Utterances";
+
 	public Utterance() {
 	}
 

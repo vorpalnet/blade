@@ -284,7 +284,7 @@ export class BladePhone {
         await this.#drainCandidates();
         this.#adoptVideo();
         this.#setState('ringing');
-        this.onIncoming({ callId: this.callId, from: event.data.from });
+        this.onIncoming({ callId: this.callId, from: event.data.from, joinMuted: event.data.joinMuted === true });
         break;
       }
 

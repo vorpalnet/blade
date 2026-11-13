@@ -79,17 +79,35 @@ public final class FlightRecorder {
 				ladder = new CallLadder();
 				CALLS.put(id, ladder);
 			}
-			synchronized (ladder) {
-				if (ladder.vorpalId == null) {
-					ladder.vorpalId = Analytics.getVorpalId(app);
-					if (ladder.vorpalId != null) {
-						ladder.startedAt = Analytics.getCallStartedAt(app);
-						ladder.scope = CallScope.of(app);
-					}
+			// Everything the step needs from the container is read before taking the ladder's
+			// monitor. Off a SIP thread (a REST request placing a call) a session read locks
+			// the call state, and a SIP thread already holding that lock may be waiting for
+			// this monitor to draw its own arrow: read inside, and each waits on the other
+			// until the container gives up retrying, about 5 s, with every message of the
+			// call held back.
+			Long vorpalId = null;
+			java.util.Date startedAt = null;
+			CallScope scope = null;
+			if (ladder.vorpalId == null) {
+				vorpalId = Analytics.getVorpalId(app);
+				if (vorpalId != null) {
+					startedAt = Analytics.getCallStartedAt(app);
+					scope = CallScope.of(app);
 				}
-				ladder.add(new CallLadder.Step(System.currentTimeMillis(), out, ladder.leg(message.getSession().getId()),
-						message.getMethod(), (response != null) ? response.getStatus() : 0, cseq(message),
-						peer(out, request, response)));
+			}
+			String session = message.getSession().getId();
+			String method = message.getMethod();
+			int status = (response != null) ? response.getStatus() : 0;
+			long cseq = cseq(message);
+			String peer = peer(out, request, response);
+			synchronized (ladder) {
+				if (ladder.vorpalId == null && vorpalId != null) {
+					ladder.vorpalId = vorpalId;
+					ladder.startedAt = startedAt;
+					ladder.scope = scope;
+				}
+				ladder.add(new CallLadder.Step(System.currentTimeMillis(), out, ladder.leg(session), method, status,
+						cseq, peer));
 			}
 		} catch (Throwable t) {
 			// A missing step is better than a failed message.
@@ -126,6 +144,11 @@ public final class FlightRecorder {
 
 	static void clear() {
 		CALLS.clear();
+	}
+
+	/// The ladder being kept for an application session, or null.
+	static CallLadder ladder(String applicationSessionId) {
+		return CALLS.get(applicationSessionId);
 	}
 
 	private static void publish(CallLadder ladder, CallLadder.Verdict verdict, boolean dropped) {

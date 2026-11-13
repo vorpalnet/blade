@@ -73,6 +73,30 @@ class FlightRecorderTest {
 		return r;
 	}
 
+	/// The container is never called with the ladder's monitor held. A session read off a SIP
+	/// thread locks the call state, and a SIP thread holding that lock may be waiting for the
+	/// monitor: the two deadlocked until the container gave up, about 5 s per call placed by REST.
+	@Test
+	void theCallStateIsNeverReadWhileHoldingTheLadder() throws Exception {
+		FlightRecorder.record(true, invite(caller, "sip:+15550199@pbx.example.net"), null);
+		CallLadder ladder = FlightRecorder.ladder(app.getId());
+		boolean[] heldWhileRead = { false };
+		DetachedRequest next = new DetachedRequest(app, "INVITE", "sip:+15550100@example.com",
+				"sip:alice@example.com") {
+			@Override
+			public javax.servlet.sip.SipSession getSession() {
+				heldWhileRead[0] |= Thread.holdsLock(ladder);
+				return super.getSession();
+			}
+		};
+		next.setRequestURI(Callflow.getSipFactory().createURI("sip:alice@example.com"));
+		next.setSession(callee);
+		next.setHeader("CSeq", "1 INVITE");
+		FlightRecorder.record(true, next, null);
+		assertTrue(ladder != null, "the first INVITE starts a ladder");
+		assertTrue(!heldWhileRead[0], "getSession() was called holding the ladder's monitor");
+	}
+
 	@Test
 	void aRefusedCallIsWrittenOutWithItsVerdict() throws Exception {
 		DetachedRequest in = invite(caller, "sip:+15550199@blade.example.net");

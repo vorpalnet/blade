@@ -151,6 +151,12 @@ public class ListenerServlet extends B2buaServlet implements B2buaListener {
 		if (cfg == null || (!cfg.needsAudio() && CallAnalyzer.installed().isEmpty())) {
 			return;
 		}
+		if (cfg.isPublishUtterances()) {
+			// This call's lines are published from here, both sides; an application
+			// further along that hears the call too leaves them to us.
+			outboundRequest.setHeader(org.vorpal.blade.framework.v3.media.manifest.Utterance.PUBLISHED_HEADER,
+					"listener");
+		}
 
 		final InitialInvite callflow = (InitialInvite) outboundRequest.getAttribute("callflow");
 		if (callflow == null) {

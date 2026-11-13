@@ -101,7 +101,9 @@ public final class SignalProtocol {
 	/// identity was taken on trust rather than proved.
 	public static final String SESSION_READY = "session.ready";
 	/// A call is arriving. `data.from` identifies the caller; `data.sdp`, when present, is the
-	/// media server's offer for the browser to answer.
+	/// media server's offer for the browser to answer. `data.joinMuted` is true when the call
+	/// brings the browser into a conversation already under way (a supervisor brought in from
+	/// the agent console): answer it with the microphone off.
 	public static final String CALL_INCOMING = "call.incoming";
 	/// The far end is ringing (a SIP 180/183).
 	public static final String CALL_PROGRESS = "call.progress";

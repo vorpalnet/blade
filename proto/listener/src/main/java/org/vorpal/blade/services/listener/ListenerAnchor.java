@@ -578,6 +578,9 @@ public class ListenerAnchor extends MediaCallflow {
 	/// The SIP session attribute that marks a dialog to a party brought into the
 	/// call, holding the party's leg URI, so the servlet routes its requests here
 	/// rather than to the two-party B2BUA.
+	/// On an INVITE that brings someone into a call already up. Read by the WebRTC gateway, which
+	/// tells the browser phone to answer it muted.
+	static final String JOIN_HEADER = "X-Vorpal-Join";
 	static final String PARTY = "org.vorpal.blade.listener.party";
 
 	/// Bring another party into the call: a fresh leg on the call's mixer, an
@@ -610,6 +613,9 @@ public class ListenerAnchor extends MediaCallflow {
 					getSipFactory().createSipURI(from == null ? "listener" : String.valueOf(from), host));
 			SipServletRequest invite = getSipFactory().createRequest(call, "INVITE", fromAddress, to);
 			invite.setContent(offered.getMediaServerSdp(), "application/sdp");
+			// They join a call already talking: a phone that understands this answers with its
+			// microphone off, so the room hears nothing until they choose to speak.
+			invite.setHeader(JOIN_HEADER, "live");
 			invite.getSession().setAttribute(PARTY, legUri);
 			sendRequest(invite, response -> partyAnswered(appId, legUri, response));
 		});

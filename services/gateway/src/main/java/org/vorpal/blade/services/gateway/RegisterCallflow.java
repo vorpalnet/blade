@@ -62,11 +62,15 @@ public class RegisterCallflow extends TrunkRegistrar {
 		try {
 			SipApplicationSession sas = (sasId != null) ? getSipUtil().getApplicationSessionById(sasId) : null;
 			if (sas != null) {
+				// Send before cancelling the timer. The refresh timer is the only thing
+				// keeping this session alive between REGISTERs: once it is cancelled the
+				// session is ready to invalidate, the container invalidates it at once,
+				// and the de-register fails with "Session has been invalidated already".
+				sendRegister(sas, 0); // Expires:0 → de‑register
 				if (timerId != null) {
 					stopTimer(sas, timerId);
 					timerId = null;
 				}
-				sendRegister(sas, 0); // Expires:0 → de‑register
 			}
 		} catch (Exception e) {
 			sipLogger.warning("gateway " + name() + ": de‑register failed: " + e.getMessage());

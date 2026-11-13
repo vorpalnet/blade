@@ -40,6 +40,8 @@ const els = {
 
 let phone = null;
 let muted = false;
+/** The ringing call brings this phone into a call already talking: answer it muted. */
+let joinMuted = false;
 let callStartedAt = 0;
 let timerHandle = null;
 /** Stops for the two level meters of the call in progress. */
@@ -435,6 +437,7 @@ function endCall() {
   setParty(null);
   resetFacts();
   muted = false;
+  joinMuted = false;
   setPressed(els.btn.mute, false, 'Mute', 'Unmute');
   setPressed(els.btn.camera, false, 'Camera', 'Camera on');
   els.remoteVideo.srcObject = null;
@@ -623,7 +626,11 @@ async function register() {
     }
     setAuthPill(d && d.authenticated !== false, grant.user);
   };
-  phone.onIncoming = (c) => { setParty(c.from); els.incomingFrom.textContent = c.from; log(`incoming from ${c.from}`); };
+  phone.onIncoming = (c) => {
+    joinMuted = c.joinMuted;
+    setParty(c.from); els.incomingFrom.textContent = c.from;
+    log(`incoming from ${c.from}${c.joinMuted ? ' (joining a live call)' : ''}`);
+  };
   phone.onProgress = (d) => log(`progress: ${d.status ?? 'trying'}`);
   phone.onEstablished = () => {
     log('call answered');
@@ -700,6 +707,13 @@ els.btn.call.addEventListener('click', () => {
 els.btn.answer.addEventListener('click', async () => {
   stopRinging();
   log('answering', 'out');
+  if (joinMuted) {
+    // Brought into a call already talking: start silent, speak by pressing Unmute.
+    muted = true;
+    phone.setMuted(true);
+    setPressed(els.btn.mute, true, 'Mute', 'Unmute');
+    log('joining a live call: microphone muted, press Unmute to speak', 'out');
+  }
   try { await phone.answer(); } catch (e) { log(`answer failed: ${e.message}`, 'err'); }
 });
 

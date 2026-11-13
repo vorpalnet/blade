@@ -154,7 +154,7 @@ public class InboundToBrowser extends WebrtcCallflow {
 
 		boolean rang = BrowserRegistry.deliver(aor,
 				SignalProtocol.event(SignalProtocol.CALL_INCOMING, callId,
-						SignalProtocol.data().put("from", callerOf(invite))
+						SignalProtocol.data().put("from", callerOf(invite)).put("joinMuted", joiningLiveCall(invite))
 								.put("sdp", new String(offer, StandardCharsets.UTF_8))));
 		if (!rang) {
 			// The socket died between routing and here.
@@ -232,7 +232,7 @@ public class InboundToBrowser extends WebrtcCallflow {
 
 			boolean rang = BrowserRegistry.deliver(aor,
 					SignalProtocol.event(SignalProtocol.CALL_INCOMING, callId,
-							SignalProtocol.data().put("from", callerOf(invite))
+							SignalProtocol.data().put("from", callerOf(invite)).put("joinMuted", joiningLiveCall(invite))
 									.put("sdp", new String(offerEvent.getMediaServerSdp(), StandardCharsets.UTF_8))));
 			if (!rang) {
 				// The socket died between the check above and here.
@@ -387,6 +387,13 @@ public class InboundToBrowser extends WebrtcCallflow {
 			return sip.getUser() + "@" + sip.getHost();
 		}
 		return uri.toString();
+	}
+
+	/// Whether the INVITE brings this browser into a call already talking (a supervisor brought in
+	/// from the agent console carries `X-Vorpal-Join: live`). The phone then answers with its
+	/// microphone off, so the room does not hear the browser's surroundings before its user speaks.
+	static boolean joiningLiveCall(SipServletRequest invite) {
+		return "live".equalsIgnoreCase(String.valueOf(invite.getHeader("X-Vorpal-Join")));
 	}
 
 	/// Who is calling, for the browser to display.
