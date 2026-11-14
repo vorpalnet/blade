@@ -19,14 +19,16 @@ import org.vorpal.blade.framework.v3.CallStep;
 ///
 /// Two things live here:
 ///
-/// - **The step buffer.** `v3.Callflow.record()` appends every [CallStep] of an
-///   ARMED call (unarmed calls never reach this class). Bounded ring — beyond
+/// - **The step buffer.** `v3.Callflow`'s trace recording appends every
+///   [CallStep] of an ARMED call (unarmed calls never reach this class), and
+///   [HttpSteps] adds the HTTP messages of the same calls. Bounded ring — beyond
 ///   [#CAPACITY] steps the oldest fall off — so an armed rule left overnight
 ///   can't grow memory. Read and cleared over JMX by [Trace].
 /// - **The arming policy.** A [Diagnostics] holding the live [TraceRule]s,
 ///   edited over JMX ([Trace#arm]/[Trace#disarm]). `v3.Callflow` consults it
-///   once per `SipApplicationSession` (the first outbound send) and arms the
-///   session on a match. In-memory only, deliberately: a trace session is
+///   once per `SipApplicationSession`, at the session's first trace event
+///   (usually the receive of its initial request), and arms the session on a
+///   match. In-memory only, deliberately: a trace session is
 ///   "arm, reproduce, disarm" — rules vanish on redeploy/restart, which is the
 ///   safe default for a debugging tool.
 public final class TraceLog {

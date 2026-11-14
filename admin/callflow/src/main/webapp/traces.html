@@ -71,6 +71,7 @@
 					<button id="tr-report" type="button" class="tr-btn" title="Open the selected call as a printable report — sequence diagram plus every SIP message.">Print Report</button>
 					<input id="tr-file" type="file" accept=".html,.json" hidden>
 					<button id="tr-recorded" type="button" class="tr-btn" title="Calls the flight recorder wrote out because they went wrong, from the analytics database. Press again for live captures.">Recorded Calls</button>
+					<button id="tr-saved" type="button" class="tr-btn" title="Calls saved on the server with Save Call, to reopen or delete. Press again for live captures.">Saved Calls</button>
 					<button id="tr-refresh" type="button" class="tr-btn">Refresh</button>
 					<label class="tr-auto"><input id="tr-auto" type="checkbox"> auto-refresh</label>
 				</div>
@@ -87,7 +88,7 @@
 					<div id="tr-timeline"><p class="cf-muted">Pick a call above.</p></div>
 				</aside>
 
-				<!-- Right: tabbed detail — sequence diagram, raw message, source -->
+				<!-- Right: tabbed detail — sequence diagram, raw message, source; an arrow also opens its message in a dialog -->
 				<article class="cf-detail">
 					<div class="cf-detail-head">
 						<h1 id="tr-title">Call Traces</h1>
@@ -99,6 +100,10 @@
 						<div id="tr-source-path" class="cf-source-path" hidden></div>
 						<button id="tr-like" type="button" class="tr-btn" hidden
 							title="Fill in a rule that captures the next call from the same address. You press Arm.">Trace the next call like this</button>
+						<button id="tr-keep" type="button" class="tr-btn" hidden
+							title="Keep this call on the server under its Vorpal-ID, with the source behind each step, to reopen from Saved Calls.">Save Call</button>
+						<button id="tr-forget" type="button" class="tr-btn" hidden
+							title="Delete this saved call from the server.">Delete Saved Call</button>
 						<button id="tr-copy" type="button" class="tr-btn" hidden
 							title="The verdict, every step and what surrounded the call, as plain text: for a ticket or a carrier.">Copy as text</button>
 						<section id="tr-around" class="tr-around" hidden></section>
@@ -113,6 +118,13 @@
 						<pre id="tr-message" class="tr-sipmsg tr-panel" data-tab="msg" hidden></pre>
 						<pre id="tr-code-panel" class="cf-code tr-panel" data-tab="src" hidden><ol id="tr-code" class="tr-lines"></ol></pre>
 					</div>
+					<dialog id="tr-msg-dialog" class="tr-msg-dialog" aria-labelledby="tr-msg-title">
+						<div class="tr-msg-head">
+							<h2 id="tr-msg-title"></h2>
+							<button id="tr-msg-close" type="button" class="tr-btn" aria-label="Close">Close</button>
+						</div>
+						<pre id="tr-msg-popup" class="tr-sipmsg"></pre>
+					</dialog>
 				</article>
 
 			</div>

@@ -310,7 +310,38 @@
 .tr-larrow-on .tr-larrow-line, .tr-larrow-on .tr-larrow-head { stroke: var(--vorpal-purple); stroke-width: 3; }
 .tr-larrow-on .tr-larrow-label { fill: var(--vorpal-ink-900); font-weight: 700; }
 
-/* ---- Raw SIP message (Traces step detail) ---- */
+/* ---- Raw SIP message: the Message tab, and a dialog opened from a ladder arrow ---- */
+/* No padding on the dialog itself: a click that lands on the dialog element is
+ * a click on the backdrop, and closes it. */
+.tr-msg-dialog {
+	width: min(900px, calc(100vw - 32px));
+	max-height: calc(100vh - 64px);
+	padding: 0;
+	border: 1px solid var(--vorpal-slate-400);
+	border-radius: 8px;
+	background: var(--vorpal-surface);
+	color: var(--vorpal-ink-900);
+	box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+}
+.tr-msg-dialog[open] { display: flex; flex-direction: column; }
+.tr-msg-dialog::backdrop { background: rgba(0, 0, 0, 0.35); }
+.tr-msg-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 10px 14px 10px 20px;
+	border-bottom: 1px solid var(--vorpal-divider);
+}
+.tr-msg-head h2 {
+	margin: 0;
+	font-family: var(--vorpal-font-mono, ui-monospace, Menlo, Consolas, monospace);
+	font-size: 13px;
+	font-weight: 700;
+	white-space: pre;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
 .tr-sipmsg {
 	margin: 0;
 	padding: 16px 20px;

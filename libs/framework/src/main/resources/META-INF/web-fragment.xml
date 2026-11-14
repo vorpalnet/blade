@@ -87,5 +87,19 @@
         <url-pattern>/*</url-pattern>
     </filter-mapping>
 
+    <!-- Trace: the REST request that places or changes a traced call, and its
+         response, join that call's trace. Passes everything straight through
+         unless a trace rule is armed in this application, and saves a request
+         only when its thread sends SIP on a traced call. -->
+    <filter>
+        <filter-name>BladeHttpTraceFilter</filter-name>
+        <filter-class>org.vorpal.blade.framework.v3.diagnostics.HttpTraceFilter</filter-class>
+        <async-supported>true</async-supported>
+    </filter>
+    <filter-mapping>
+        <filter-name>BladeHttpTraceFilter</filter-name>
+        <url-pattern>/*</url-pattern>
+    </filter-mapping>
+
     <distributable/>
 </web-fragment>

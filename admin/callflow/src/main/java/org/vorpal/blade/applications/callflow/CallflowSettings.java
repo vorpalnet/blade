@@ -8,10 +8,8 @@ import org.vorpal.blade.framework.v2.config.Configuration;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
-/// Settings for the Trace admin app. The tool is read-only — it records live
-/// call traces and reads source over federated JMX from the per-app Source
-/// MBeans — so besides the inherited metadata this carries only the choice of
-/// which engine node serves the source reads.
+/// Settings for the Trace admin app: which engine node serves the source reads,
+/// where recorded calls are read from, and where saved calls are kept.
 @SchemaAbout(
 		name = "Trace",
 		tagline = "Which app in the chain misbehaved?",
@@ -25,6 +23,7 @@ public class CallflowSettings extends Configuration implements Serializable {
 
 	protected String sourceServer = null;
 	protected String analyticsDataSource = "jdbc/BladeAnalytics";
+	protected String savedTracesDirectory = SavedCalls.DEFAULT_DIRECTORY;
 
 	public CallflowSettings() {
 	}
@@ -50,6 +49,19 @@ public class CallflowSettings extends Configuration implements Serializable {
 	public CallflowSettings setAnalyticsDataSource(String analyticsDataSource) {
 		this.analyticsDataSource = (analyticsDataSource == null || analyticsDataSource.isEmpty())
 				? "jdbc/BladeAnalytics" : analyticsDataSource;
+		return this;
+	}
+
+	@JsonPropertyDescription("Directory on the AdminServer's host where saved calls are kept, one folder per "
+			+ "call named for its Vorpal-ID. A leading ~ is the home of the user WebLogic runs as. "
+			+ "Unset: ~/.blade/traces.")
+	public String getSavedTracesDirectory() {
+		return savedTracesDirectory;
+	}
+
+	public CallflowSettings setSavedTracesDirectory(String savedTracesDirectory) {
+		this.savedTracesDirectory = (savedTracesDirectory == null || savedTracesDirectory.isEmpty())
+				? SavedCalls.DEFAULT_DIRECTORY : savedTracesDirectory;
 		return this;
 	}
 }

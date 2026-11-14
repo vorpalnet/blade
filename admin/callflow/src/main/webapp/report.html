@@ -120,8 +120,11 @@
 
 		document.getElementById('rpt-ts').textContent = new Date().toLocaleString();
 		var want = new URLSearchParams(location.search).get('session');
+		// ?saved=1: the call saved on the server under that id, not the live buffer
+		var saved = new URLSearchParams(location.search).get('saved') === '1' && want;
 
-		fetch('api/traces', { headers: { Accept: 'application/json' } })
+		fetch(saved ? 'api/traces/saved/' + encodeURIComponent(want) : 'api/traces',
+				{ headers: { Accept: 'application/json' } })
 			.then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
 			.then(function (data) { render(aggregate(data.sources)); })
 			.catch(function (err) {
@@ -185,18 +188,18 @@
 
 			h += '<h2>Message Detail</h2>';
 			steps.forEach(function (s, i) {
-				var kindWord = s.kind === 'request' ? 'request' : 'response';
 				var dirWord = s.direction === 'in' ? 'received by' : 'sent by';
-				var src = s.direction === 'in'
+				var src = isHttp(s) ? (s.methodName || '')
+					: s.direction === 'in'
 					? (isHandlerMethod(s.methodName) ? s.className + '.' + s.methodName + ' (handler)' : 'received by ' + s.className)
 					: s.className + '.' + s.methodName + (s.line > 0 ? ':' + s.line : '');
 				h += '<div class="step">'
 					+ '<div class="step-head"><strong>#' + (i + 1) + ' &middot; ' + he(s.label) + '</strong> &mdash; '
-					+ kindWord + ' ' + dirWord + ' ' + he(s.app)
+					+ kindWord(s) + ' ' + dirWord + ' ' + he(s.app)
 					+ ' &middot; ' + he(hhmmss(s.epochMillis))
 					+ (s.server ? ' &middot; recorded on ' + he(s.server) : '') + '</div>'
 					+ (src ? '<div class="step-src mono">' + he(src) + '</div>' : '')
-					+ '<pre class="mono">' + he(s.message || '(no raw SIP message was recorded for this step)') + '</pre>'
+					+ '<pre class="mono">' + he(s.message || '(no raw message was recorded for this step)') + '</pre>'
 					+ '</div>';
 			});
 

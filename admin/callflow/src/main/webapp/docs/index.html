@@ -132,25 +132,50 @@
 						restart.
 					</p>
 					<p>
-						The detail panel on the right has three tabs —
+						The detail panel on the right has three tabs:
 						<strong>Sequence</strong>, <strong>Message</strong> and
 						<strong>Source</strong>. Picking a call opens the Sequence tab;
 						picking a step updates all three but leaves you on whichever tab
 						you are viewing. The Sequence tab draws the same
 						steps as a <strong>ladder diagram</strong> — one lifeline per
 						party (each BLADE app boxed, the external softphones dashed) and
-						one arrow per message hop, in time order. A message crossing an
+						one arrow per message hop, in time order. An arrow whose message
+						carries a session description is labelled <code>(SDP)</code>, as
+						in <code>INVITE (SDP)</code>. A message crossing an
 						app is logged twice — the app that sends it and the next app that
 						receives it — and the two are matched by <strong>Call-ID</strong>
 						(the reliable per-hop key) into a single arrow between their two
-						lanes; a routed call lays out
+						lanes. The receive is often logged first: a send is recorded once
+						the container returns from sending it, and an app on the same
+						engine has taken the message by then; a routed call lays out
 						<em>caller → app₁ → … → appₙ → callee</em> and the responses flow
 						back. The external softphone names come from the From/To headers
 						only at the true ends of the chain (they are end-to-end, so they
 						can't name an internal hop). The timeline and the diagram are
 						linked both ways: click a step on the left and its hop lights up;
-						click a hop and its step is selected, with the raw message and
-						source line following along.
+						click a hop and its step is selected, its raw SIP message also opens in
+						a window over the diagram, and the Message and Source tabs follow
+						along. Close
+						the window with its button, Escape, or a click outside it.
+					</p>
+
+					<h2>HTTP steps</h2>
+					<p>
+						A traced call also shows the HTTP messages that drove it, as
+						arrows labelled <code>HTTP</code>: the REST request that placed
+						or changed the call and its response (an <code>HTTP client</code>
+						lane); each callout a REST connector made while routing it, with
+						the OAuth token fetches those callouts needed; and the transfer
+						service's webhooks. Each callout runs to a lane named for the
+						host it called. A request joins a call
+						when the thread serving it sends that call's SIP, so a tpcc
+						<code>POST</code> sits just before the INVITE it caused. Requests
+						that send no SIP, and every request while no rule is armed, are
+						not recorded. Credential headers (<code>Authorization</code>,
+						cookies, API keys) are masked before anything is saved, and so
+						are the secrets and tokens in a token fetch's body. Each
+						application records its HTTP steps once it is running a framework
+						build that has this feature.
 					</p>
 
 					<h2>Snapshots — sharing what you saw</h2>
@@ -168,6 +193,27 @@
 						live viewer (Refresh returns to live data) — the saved file
 						also opens directly on its own, so loading is only needed when
 						you want it side-by-side with live captures.
+					</p>
+
+					<h2>Saved calls: keeping one on the server</h2>
+					<p>
+						The step buffer is memory: it wraps after 2,000 steps per app and
+						empties on a restart or a redeploy. <strong>Save Call</strong>
+						keeps the call you are looking at on the AdminServer's host, under
+						its Vorpal-ID, in the directory the <code>savedTracesDirectory</code>
+						setting names (<code>~/.blade/traces</code> unless set, in the home
+						of the user WebLogic runs as). Each call is a folder holding its
+						steps from every app and the source behind them, so the Source tab
+						still shows the code as it ran after that code has changed. Saving
+						the same call again replaces it.
+					</p>
+					<p>
+						<strong>Saved Calls</strong> lists them, newest first; pick one to
+						open it, print its report, or delete it. Opening a link of the form
+						<code>traces.html?saved=&lt;Vorpal-ID&gt;</code> opens that call. The
+						folders are readable by their owner only, since a trace holds whole
+						SIP messages, and every open, save and delete is written to the
+						access log.
 					</p>
 					<div class="vorpal-callout vorpal-callout-note">
 						<div class="vorpal-callout-title">Snapshots carry source code</div>

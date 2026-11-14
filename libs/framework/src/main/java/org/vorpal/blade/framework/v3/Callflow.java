@@ -23,6 +23,7 @@ import org.vorpal.blade.framework.v2.logging.Logger.Direction;
 import org.vorpal.blade.framework.sip.DetachedResponse;
 import org.vorpal.blade.framework.v3.crud.CrudHook;
 import org.vorpal.blade.framework.v3.diagnostics.Diagnostics;
+import org.vorpal.blade.framework.v3.diagnostics.HttpTraceFilter;
 import org.vorpal.blade.framework.v3.diagnostics.TraceLog;
 
 /// The v3 Callflow — the same lambda-continuation model as v2, plus two things
@@ -157,7 +158,7 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	/// Cap on recorded SIP message text. A step is a debugging artifact, not a
 	/// media store — an oversized body (huge SDP, ISUP blob) is truncated so an
 	/// armed ring buffer stays memory-bounded.
-	static final int MESSAGE_MAX_CHARS = 16384;
+	public static final int MESSAGE_MAX_CHARS = 16384;
 
 	public static void enableTrace(SipApplicationSession appSession) {
 		if (appSession != null) {
@@ -1436,16 +1437,12 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 					handlerClass = handlerName(handler, "?");
 				}
 			}
-			String sessionId = safeSessionId(appSession);
-			if (sessionId.isEmpty() && armingRequest != null) {
-				try {
-					String resolved = getVorpalSessionId(armingRequest);
-					if (resolved != null) {
-						sessionId = resolved;
-					}
-				} catch (Exception ignore) {
-					// resolver needs container services; record without an id
-				}
+			String sessionId = traceSessionId(appSession, armingRequest);
+			// The HTTP request this thread is serving, when it is what sent this
+			// call's SIP (tpcc's POST placing the call): it joins the trace here.
+			CallStep http = HttpTraceFilter.claim(sessionId);
+			if (http != null) {
+				TraceLog.append(http);
 			}
 			String kind = isResponse ? "response" : "request";
 			String label = isResponse ? String.valueOf(response.getStatus()) : request.getMethod();
@@ -1551,6 +1548,42 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 			return text;
 		} catch (Exception e) {
 			return null;
+		}
+	}
+
+	/// The id that stitches a call's steps together across apps: the session's
+	/// `X-Vorpal-Session`, or, at an app's first dispatch before that attribute
+	/// is set, the id the request's headers name. Empty if neither resolves.
+	private static String traceSessionId(SipApplicationSession appSession, SipServletRequest request) {
+		String sessionId = safeSessionId(appSession);
+		if (sessionId.isEmpty() && request != null) {
+			try {
+				String resolved = getVorpalSessionId(request);
+				if (resolved != null) {
+					sessionId = resolved;
+				}
+			} catch (Exception ignore) {
+				// resolver needs container services; record without an id
+			}
+		}
+		return sessionId;
+	}
+
+	/// The trace id of the call `request` belongs to, or null when that call is
+	/// not traced. For code that records its own steps beside the SIP ones, such
+	/// as a REST connector's callout. It makes the arming decision first, since a
+	/// CRUD pipeline runs its connectors before the call's first trace event.
+	/// Call it on the call's own thread: it reads session state.
+	public static String tracedSessionId(SipServletRequest request) {
+		try {
+			if (request == null) {
+				return null;
+			}
+			SipApplicationSession appSession = request.getApplicationSession();
+			maybeArm(request, appSession);
+			return isTraceEnabled(appSession) ? traceSessionId(appSession, request) : null;
+		} catch (Exception e) {
+			return null; // tracing is best-effort; it must never affect call handling
 		}
 	}
 

@@ -11,8 +11,12 @@ import java.util.regex.Pattern;
 import javax.management.MBeanServer;
 import javax.management.ObjectInstance;
 import javax.management.ObjectName;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
+import javax.ws.rs.PUT;
+import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
@@ -126,6 +130,95 @@ public class TracesAPI {
 		} catch (Exception e) {
 			return error(e);
 		}
+	}
+
+	/// The calls saved on this host, newest first: `{"calls":[{"id", "savedAt",
+	/// "savedBy", "firstMillis", "steps", "apps"}]}`. See [SavedCalls].
+	@GET
+	@javax.ws.rs.Path("/saved")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(summary = "List the saved calls.")
+	public Response savedCalls() {
+		try {
+			return Response.ok(SavedCalls.list(savedDirectory()).toString()).build();
+		} catch (Exception e) {
+			return error(e);
+		}
+	}
+
+	/// One saved call, in the shape of a trace snapshot: `sources` as
+	/// [#traces] returns them, `sourceFiles`, `savedAt`, `savedBy`.
+	@GET
+	@javax.ws.rs.Path("/saved/{id}")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(summary = "Read one saved call.")
+	public Response savedCall(@PathParam("id") String id) {
+		String vorpalId = SavedCalls.vorpalId(id);
+		if (vorpalId == null) {
+			return bad("A saved call is named by its Vorpal-ID: hexadecimal digits");
+		}
+		try {
+			String trace = SavedCalls.read(savedDirectory(), vorpalId);
+			if (trace == null) {
+				return Response.status(Response.Status.NOT_FOUND).type(MediaType.TEXT_PLAIN)
+						.entity("No saved call " + vorpalId).build();
+			}
+			accessed("read:trace", "call", vorpalId);
+			return Response.ok(trace).build();
+		} catch (Exception e) {
+			return error(e);
+		}
+	}
+
+	/// Saves call `id` from the page: `{"sources":[...], "sourceFiles":{...}}`.
+	/// Only that call's steps are kept. Saving again replaces it.
+	@PUT
+	@javax.ws.rs.Path("/saved/{id}")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(summary = "Save one captured call on this host.")
+	public Response saveCall(@PathParam("id") String id, String body) {
+		String vorpalId = SavedCalls.vorpalId(id);
+		if (vorpalId == null) {
+			return bad("A saved call is named by its Vorpal-ID: hexadecimal digits");
+		}
+		try {
+			java.security.Principal user = (security == null) ? null : security.getUserPrincipal();
+			ObjectNode summary = SavedCalls.write(savedDirectory(), vorpalId, mapper.readTree(body),
+					(user == null) ? null : user.getName());
+			accessed("admin:trace", "call", vorpalId);
+			return Response.ok(summary.toString()).build();
+		} catch (IllegalArgumentException | com.fasterxml.jackson.core.JsonProcessingException e) {
+			return bad(e.getMessage());
+		} catch (Exception e) {
+			return error(e);
+		}
+	}
+
+	/// Deletes saved call `id`.
+	@DELETE
+	@javax.ws.rs.Path("/saved/{id}")
+	@Operation(summary = "Delete one saved call.")
+	public Response deleteCall(@PathParam("id") String id) {
+		String vorpalId = SavedCalls.vorpalId(id);
+		if (vorpalId == null) {
+			return bad("A saved call is named by its Vorpal-ID: hexadecimal digits");
+		}
+		try {
+			if (!SavedCalls.delete(savedDirectory(), vorpalId)) {
+				return Response.status(Response.Status.NOT_FOUND).type(MediaType.TEXT_PLAIN)
+						.entity("No saved call " + vorpalId).build();
+			}
+			accessed("admin:trace", "call", vorpalId);
+			return Response.noContent().build();
+		} catch (Exception e) {
+			return error(e);
+		}
+	}
+
+	private static java.nio.file.Path savedDirectory() {
+		CallflowSettings settings = CallflowStartup.settings();
+		return SavedCalls.directory((settings != null) ? settings.getSavedTracesDirectory() : null);
 	}
 
 	/// The armed rules as each app on each node sees them:

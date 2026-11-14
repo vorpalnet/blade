@@ -23,8 +23,11 @@ import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.FormLayoutGroup;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
+import org.vorpal.blade.framework.v3.CallStep;
 import org.vorpal.blade.framework.v3.configuration.Context;
 import org.vorpal.blade.framework.v3.configuration.auth.Authentication;
+import org.vorpal.blade.framework.v3.diagnostics.HttpSteps;
+import org.vorpal.blade.framework.v3.diagnostics.TraceLog;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
@@ -261,7 +264,17 @@ public class RestConnector extends Connector implements Serializable {
 
 			HttpRequest httpReq = reqBuilder.build();
 			if (sipLogger.isLoggable(Level.FINEST)) {
-				sipLogger.finest(sipReq, formatHttpRequest(connectorId, method, resolvedUrl, httpReq, resolvedBody));
+				sipLogger.finest(sipReq, "RestConnector[" + connectorId + "] HTTP request:\n"
+						+ formatHttpRequest(method, resolvedUrl, httpReq, resolvedBody));
+			}
+			// A traced call gets the callout and its answer as steps. The answer
+			// arrives on the HTTP client's thread, so the decision and the call's
+			// id are taken here, on the call's own.
+			String traced = org.vorpal.blade.framework.v3.Callflow.tracedSessionId(sipReq);
+			if (traced != null) {
+				TraceLog.append(HttpSteps.step(traced, System.currentTimeMillis(), CallStep.OUT, HttpSteps.REQUEST,
+						method + " " + httpReq.uri().getRawPath(), "connector " + connectorId,
+						formatHttpRequest(method, resolvedUrl, httpReq, resolvedBody)));
 			}
 
 			String remote = Remotes.hostOf(resolvedUrl);
@@ -271,7 +284,13 @@ public class RestConnector extends Connector implements Serializable {
 						long ms = (System.nanoTime() - started) / 1_000_000L;
 						try {
 							if (sipLogger.isLoggable(Level.FINEST)) {
-								sipLogger.finest(sipReq, formatHttpResponse(connectorId, httpResp));
+								sipLogger.finest(sipReq, "RestConnector[" + connectorId + "] HTTP response:\n"
+										+ formatHttpResponse(httpResp));
+							}
+							if (traced != null) {
+								TraceLog.append(HttpSteps.step(traced, System.currentTimeMillis(), CallStep.IN,
+										HttpSteps.RESPONSE, String.valueOf(httpResp.statusCode()), "connector " + connectorId,
+										formatHttpResponse(httpResp)));
 							}
 							if (httpResp.statusCode() < 200 || httpResp.statusCode() >= 300) {
 								sipLogger.warning(sipReq, "RestConnector[" + connectorId + "] HTTP "
@@ -293,6 +312,10 @@ public class RestConnector extends Connector implements Serializable {
 					.exceptionally(t -> {
 						sipLogger.warning(sipReq, "RestConnector[" + connectorId + "] request failed: "
 								+ t.getMessage());
+						if (traced != null) {
+							TraceLog.append(HttpSteps.step(traced, System.currentTimeMillis(), CallStep.IN,
+									HttpSteps.RESPONSE, "failed", "connector " + connectorId, "No response: " + t.getMessage()));
+						}
 						Remotes.failed(KIND, remote, Remotes.reason(t), (System.nanoTime() - started) / 1_000_000L);
 						if (breakerEnabled) breaker.recordFailure(circuitBreakerCooldownSeconds,
 								Boolean.TRUE.equals(circuitBreakerTrap), sipReq, tag(), t.getMessage(), KIND, remote);
@@ -405,14 +428,13 @@ public class RestConnector extends Connector implements Serializable {
 		return offsets;
 	}
 
-	/// HTTP-message-style render of the outbound request for FINEST logs, with
-	/// credential headers masked. Log files are read by the logs app and by
-	/// anyone with file access, and a live bearer token, API key or signature in
-	/// them is as good as the credential itself.
-	private String formatHttpRequest(String connectorId, String method,
-			String resolvedUrl, HttpRequest httpReq, String body) {
+	/// HTTP-message-style render of the outbound request, for FINEST logs and a
+	/// traced call's steps, with credential headers masked. Log files are read by
+	/// the logs app and by anyone with file access, traces by anyone with the
+	/// Trace app or a saved snapshot, and a live bearer token, API key or
+	/// signature in either is as good as the credential itself.
+	private String formatHttpRequest(String method, String resolvedUrl, HttpRequest httpReq, String body) {
 		StringBuilder sb = new StringBuilder();
-		sb.append("RestConnector[").append(connectorId).append("] HTTP request:\n");
 		sb.append(method).append(' ').append(resolvedUrl).append('\n');
 		httpReq.headers().map().forEach((k, vs) -> {
 			for (String v : vs) {
@@ -431,9 +453,7 @@ public class RestConnector extends Connector implements Serializable {
 		if (name == null) {
 			return false;
 		}
-		String lower = name.toLowerCase(java.util.Locale.ROOT);
-		if (lower.contains("auth") || lower.contains("key") || lower.contains("token")
-				|| lower.contains("secret") || lower.contains("signature") || lower.contains("cookie")) {
+		if (HttpSteps.isCredentialHeader(name)) {
 			return true;
 		}
 		String schemeHeader = null;
@@ -445,12 +465,14 @@ public class RestConnector extends Connector implements Serializable {
 		return schemeHeader != null && schemeHeader.equalsIgnoreCase(name);
 	}
 
-	private static String formatHttpResponse(String connectorId, HttpResponse<String> httpResp) {
+	/// The response the same way, its credential headers (`Set-Cookie`, a
+	/// returned token) masked too.
+	private static String formatHttpResponse(HttpResponse<String> httpResp) {
 		StringBuilder sb = new StringBuilder();
-		sb.append("RestConnector[").append(connectorId).append("] HTTP response:\n");
-		sb.append("HTTP/").append(httpResp.version()).append(' ').append(httpResp.statusCode()).append('\n');
+		sb.append(httpResp.version() == HttpClient.Version.HTTP_2 ? "HTTP/2" : "HTTP/1.1")
+				.append(' ').append(httpResp.statusCode()).append('\n');
 		httpResp.headers().map().forEach((k, vs) -> {
-			for (String v : vs) sb.append(k).append(": ").append(v).append('\n');
+			for (String v : vs) HttpSteps.appendHeader(sb, k, v);
 		});
 		sb.append('\n');
 		if (httpResp.body() != null) sb.append(httpResp.body());

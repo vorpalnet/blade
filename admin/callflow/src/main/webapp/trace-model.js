@@ -87,6 +87,15 @@ function sipHeader(message, name, compact) {
 	return null;
 }
 
+// True when the message carries a session description: an SDP body, alone or
+// as one part of a multipart body. A Content-Length of 0 means no body at all.
+function hasSdp(message) {
+	var type = sipHeader(message, 'content-type', 'c');
+	if (!type || sipHeader(message, 'content-length', 'l') === '0') { return false; }
+	return /application\/sdp/i.test(type)
+		|| (/^multipart\//i.test(type) && /content-type:\s*application\/sdp/i.test(message));
+}
+
 // User part of a From/To/Contact value, falling back to the host — the same
 // identity rule the framework's ASCII sequence diagram uses (Logger.from/to).
 function addrLabel(headerVal) {
@@ -117,6 +126,41 @@ function farParty(s) {
 	return name || '(network)';
 }
 
+// An HTTP message of the call (the REST request that placed it, a connector's
+// callout), as the framework's HttpSteps records it.
+function isHttp(s) {
+	return s.kind === 'http-request' || s.kind === 'http-response';
+}
+
+// "request", "response", or the same with "HTTP " in front: how a step's kind
+// reads in the timeline, the step detail and the report.
+function kindWord(s) {
+	switch (s.kind) {
+	case 'http-request': return 'HTTP request';
+	case 'http-response': return 'HTTP response';
+	case 'request': return 'request';
+	default: return 'response';
+	}
+}
+
+// The far end of each HTTP step, by index: "HTTP client" for whoever called
+// this app's API, and the host a callout went to. A callout's response does
+// not name its host, so it takes the one its app's last callout went to.
+function httpParties(steps) {
+	var lastHost = {}, out = {};
+	steps.forEach(function (s, i) {
+		if (!isHttp(s)) { return; }
+		var callout = (s.kind === 'http-request') === (s.direction === 'out');
+		if (!callout) { out[i] = 'HTTP client'; return; }
+		if (s.kind === 'http-request') {
+			var m = /^\S+\s+\w+:\/\/([^\/:\s?]+)/.exec(s.message || '');
+			lastHost[s.app] = m ? m[1] : 'HTTP server';
+		}
+		out[i] = lastHost[s.app] || 'HTTP server';
+	});
+	return out;
+}
+
 // Turn the ordered steps into lifelines + one arrow per message HOP.
 //
 // In a routed chain a message is logged twice — app N sends it (out) and the
@@ -131,34 +175,65 @@ function farParty(s) {
 // boundary steps — the first receive (real caller) and an out nobody received
 // (real external callee). A routed call lays out caller | app₁ | … | appₙ |
 // callee. (Method+time is the fallback only when a step carries no message.)
+//
+// The out may sort AFTER its in. A send is recorded once the container's
+// send() returns, and a co-located next app takes the message on the sending
+// thread: gateway logs receiving tpcc's INVITE before tpcc logs sending it.
+// So a Call-ID match looks both ways and takes the nearest unmatched out; the
+// hop sorts at its earlier step, which puts the arrow where the message moved.
+//
+// HTTP steps carry no Call-ID and are never paired: each is one arrow between
+// its app and the party httpParties names.
 function buildLadder(call) {
 	var steps = call.steps;
-	var pending = [];   // unmatched out steps: {i, app, label, cid, cseq}
+	var httpPeer = httpParties(steps);
+	var outs = [];      // every out step: {i, app, label, cid, cseq, used}
 	var hops = [];      // {steps:[…], canonical, fromP, toP, label}
+	var appsOn = {};    // Call-ID → the traced apps that saw it
+	var keyed = steps.map(function (s, i) {
+		var k = { i: i, app: s.app || '(app)', label: s.label,
+			cid: isHttp(s) ? null : sipHeader(s.message, 'call-id', 'i'), cseq: sipHeader(s.message, 'cseq', null) };
+		if (isHttp(s)) {
+			hops.push(s.direction === 'in'
+				? { steps: [i], canonical: i, fromP: httpPeer[i], toP: k.app, label: s.label }
+				: { steps: [i], canonical: i, fromP: k.app, toP: httpPeer[i], label: s.label });
+			return k;
+		}
+		if (s.direction !== 'in') { outs.push(k); }
+		if (k.cid) {
+			var on = appsOn[k.cid] = appsOn[k.cid] || [];
+			if (on.indexOf(k.app) < 0) { on.push(k.app); }
+		}
+		return k;
+	});
+	// A step whose other half went unrecorded (tracing is best-effort, so a send
+	// on a session the app just tore down can be lost) still names its peer when
+	// exactly one other traced app shares its Call-ID: that leg runs between them.
+	function peer(k) {
+		var others = (appsOn[k.cid] || []).filter(function (a) { return a !== k.app; });
+		return others.length === 1 ? others[0] : farParty(steps[k.i]);
+	}
 	steps.forEach(function (s, i) {
-		var app = s.app || '(app)';
-		var cid = sipHeader(s.message, 'call-id', 'i');
-		var cseq = sipHeader(s.message, 'cseq', null);
-		if (s.direction === 'in') {
-			var m = -1;
-			for (var p = pending.length - 1; p >= 0; p--) {
-				var c = pending[p];
-				if (c.app === app || c.label !== s.label) { continue; }
-				if (cid) { if (c.cid === cid && c.cseq === cseq) { m = p; break; } }
-				else { m = p; break; } // no Call-ID (legacy) → nearest same-method out
-			}
-			if (m >= 0) {
-				var out = pending.splice(m, 1)[0];
-				hops.push({ steps: [out.i, i], canonical: out.i, fromP: out.app, toP: app, label: s.label });
-			} else { // arrived from outside the chain — name the real caller
-				hops.push({ steps: [i], canonical: i, fromP: farParty(s), toP: app, label: s.label });
-			}
-		} else {
-			pending.push({ i: i, app: app, label: s.label, cid: cid, cseq: cseq });
+		if (s.direction !== 'in' || isHttp(s)) { return; }
+		var k = keyed[i], best = null;
+		outs.forEach(function (c) {
+			if (c.used || c.app === k.app || c.label !== k.label) { return; }
+			if (k.cid) {
+				if (c.cid !== k.cid || c.cseq !== k.cseq) { return; }
+			} else if (c.i > i) { return; } // no Call-ID (legacy) → nearest earlier same-method out
+			if (!best || Math.abs(c.i - i) < Math.abs(best.i - i)) { best = c; }
+		});
+		if (best) {
+			best.used = true;
+			hops.push({ steps: [best.i, i], canonical: best.i, fromP: best.app, toP: k.app, label: s.label });
+		} else { // arrived from outside the chain — name the real caller
+			hops.push({ steps: [i], canonical: i, fromP: peer(k), toP: k.app, label: s.label });
 		}
 	});
-	pending.forEach(function (out) { // left the chain — name the real callee
-		hops.push({ steps: [out.i], canonical: out.i, fromP: out.app, toP: farParty(steps[out.i]), label: out.label });
+	outs.forEach(function (out) { // left the chain — name the real callee
+		if (!out.used) {
+			hops.push({ steps: [out.i], canonical: out.i, fromP: out.app, toP: peer(out), label: out.label });
+		}
 	});
 	hops.sort(function (a, b) { return Math.min.apply(null, a.steps) - Math.min.apply(null, b.steps); });
 
@@ -181,7 +256,14 @@ function buildLadder(call) {
 	Object.keys(side).forEach(function (n) { (side[n] === 'L' ? left : right).push(n); });
 	var lanes = left.concat(spine, right);
 	var arrows = hops.map(function (h) {
-		return { steps: h.steps, canonical: h.canonical, from: lanes.indexOf(h.fromP), to: lanes.indexOf(h.toP), label: h.label };
+		var first = steps[h.steps[0]];
+		if (isHttp(first)) { // said in words, so it reads apart from SIP without colour
+			return { steps: h.steps, canonical: h.canonical, from: lanes.indexOf(h.fromP), to: lanes.indexOf(h.toP),
+				label: 'HTTP ' + h.label };
+		}
+		var sdp = h.steps.some(function (i) { return hasSdp(steps[i].message); });
+		return { steps: h.steps, canonical: h.canonical, from: lanes.indexOf(h.fromP), to: lanes.indexOf(h.toP),
+			label: h.label + (sdp ? ' (SDP)' : '') };
 	});
 	return { lanes: lanes, arrows: arrows };
 }
@@ -200,7 +282,7 @@ function ladderSvg(call, selectedStep) {
 	(call.apps || []).forEach(function (a) { appSet[a] = true; });
 
 	var out = ['<svg class="tr-ladder-svg" viewBox="0 0 ' + width + ' ' + height + '" width="' + width
-		+ '" height="' + height + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SIP sequence diagram">'];
+		+ '" height="' + height + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Sequence diagram">'];
 
 	lanes.forEach(function (name, i) {
 		var x = laneX[i], isApp = !!appSet[name];

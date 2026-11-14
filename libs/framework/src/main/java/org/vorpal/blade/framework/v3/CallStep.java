@@ -30,8 +30,8 @@ public final class CallStep implements Serializable {
 	private final long epochMillis;  // when this step fired
 	private final int order;         // per-app sequence within this callflow
 	private final String direction;  // "out" (we sent it) | "in" (we observed it arrive)
-	private final String kind;       // "request" | "response"
-	private final String label;      // SIP method ("INVITE") or status code ("200")
+	private final String kind;       // "request" | "response", or HttpSteps' "http-request" | "http-response"
+	private final String label;      // SIP method ("INVITE") or status code ("200"); HTTP "POST /path" or "200"
 	private final String className;  // concrete callflow class (which app code)
 	private final String methodName; // method or lambda that called send* ("process"/"received" for in)
 	private final int line;          // source line of the send* call (-1 for in)

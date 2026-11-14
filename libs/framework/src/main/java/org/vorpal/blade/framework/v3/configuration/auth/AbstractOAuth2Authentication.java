@@ -6,7 +6,11 @@ import java.net.http.HttpRequest;
 
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
+import org.vorpal.blade.framework.v3.CallStep;
+import org.vorpal.blade.framework.v3.Callflow;
 import org.vorpal.blade.framework.v3.configuration.Context;
+import org.vorpal.blade.framework.v3.diagnostics.HttpSteps;
+import org.vorpal.blade.framework.v3.diagnostics.TraceLog;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
@@ -29,6 +33,11 @@ import com.nimbusds.oauth2.sdk.token.AccessToken;
 /// Thread-safety: [#currentToken] is synchronized so concurrent calls
 /// with the same Authentication instance don't fire parallel token
 /// fetches during refresh.
+///
+/// A fetch made for a traced call joins its trace, both HTTP messages, with
+/// the secrets in the request and the tokens in the answer masked. A token
+/// served from the cache makes no request, so a call shows a fetch only when
+/// it was the one that needed a new token.
 ///
 /// Failure mode: if the token fetch fails, [#currentToken] returns null
 /// and [#applyTo] leaves the Authorization header unset. The upstream
@@ -92,6 +101,8 @@ public abstract class AbstractOAuth2Authentication extends Authentication {
 		Logger sipLogger = SettingsManager.getSipLogger();
 		long started = System.nanoTime();
 		String remote = null;
+		String traced = Callflow.tracedSessionId(ctx != null ? ctx.getRequest() : null);
+		boolean sent = false;
 		try {
 			TokenRequest req = buildTokenRequest(ctx);
 			remote = Remotes.hostOf(String.valueOf(req.getEndpointURI()));
@@ -100,7 +111,17 @@ public abstract class AbstractOAuth2Authentication extends Authentication {
 			if (ssl != null) {
 				httpRequest.setSSLSocketFactory(ssl.getSocketFactory());
 			}
-			TokenResponse response = TokenResponse.parse(httpRequest.send());
+			if (traced != null) {
+				trace(traced, CallStep.OUT, HttpSteps.REQUEST,
+						httpRequest.getMethod() + " " + httpRequest.getURL().getPath(), requestText(httpRequest));
+			}
+			sent = true;
+			com.nimbusds.oauth2.sdk.http.HTTPResponse httpResponse = httpRequest.send();
+			if (traced != null) {
+				trace(traced, CallStep.IN, HttpSteps.RESPONSE, String.valueOf(httpResponse.getStatusCode()),
+						responseText(httpResponse));
+			}
+			TokenResponse response = TokenResponse.parse(httpResponse);
 			if (!response.indicatesSuccess()) {
 				ErrorObject err = response.toErrorResponse().getErrorObject();
 				if (sipLogger != null) {
@@ -121,9 +142,51 @@ public abstract class AbstractOAuth2Authentication extends Authentication {
 			if (sipLogger != null) {
 				sipLogger.warning("OAuth2 token fetch failed: " + e.getMessage());
 			}
+			if (traced != null && sent) {
+				trace(traced, CallStep.IN, HttpSteps.RESPONSE, "failed", "No response: " + e.getMessage());
+			}
 			Remotes.failed("oauth", remote, Remotes.reason(e), (System.nanoTime() - started) / 1_000_000L);
 			return null;
 		}
+	}
+
+	private static void trace(String sessionId, String direction, String kind, String label, String text) {
+		TraceLog.append(HttpSteps.step(sessionId, System.currentTimeMillis(), direction, kind, label, "OAuth token",
+				text));
+	}
+
+	/// The token request as it goes on the wire. Its body is a form of
+	/// credentials (client secret, password, assertion), each value masked;
+	/// `client_secret_basic` puts the secret in the masked `Authorization`.
+	private static String requestText(com.nimbusds.oauth2.sdk.http.HTTPRequest request) {
+		StringBuilder sb = new StringBuilder();
+		sb.append(request.getMethod()).append(' ').append(request.getURL()).append('\n');
+		request.getHeaderMap().forEach((name, values) -> {
+			for (String value : values) {
+				HttpSteps.appendHeader(sb, name, value);
+			}
+		});
+		sb.append('\n');
+		if (request.getBody() != null) {
+			sb.append(HttpSteps.maskForm(request.getBody()));
+		}
+		return sb.toString();
+	}
+
+	/// The answer, its tokens masked.
+	private static String responseText(com.nimbusds.oauth2.sdk.http.HTTPResponse response) {
+		StringBuilder sb = new StringBuilder();
+		sb.append("HTTP ").append(response.getStatusCode()).append('\n');
+		response.getHeaderMap().forEach((name, values) -> {
+			for (String value : values) {
+				HttpSteps.appendHeader(sb, name, value);
+			}
+		});
+		sb.append('\n');
+		if (response.getBody() != null) {
+			sb.append(HttpSteps.maskJson(response.getBody()));
+		}
+		return sb.toString();
 	}
 
 	/// Subclasses construct the Nimbus [TokenRequest] embodying their

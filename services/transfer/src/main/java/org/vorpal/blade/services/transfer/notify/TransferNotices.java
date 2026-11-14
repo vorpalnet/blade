@@ -105,7 +105,7 @@ public final class TransferNotices {
 
 			Webhook webhook = webhookFor(settings(), notice.request);
 			if (webhook != null && webhook.wants(event)) {
-				WebhookSender.send(webhook, json);
+				WebhookSender.send(webhook, json, tracedSessionId(message));
 			}
 
 			boolean onBus;
@@ -127,6 +127,16 @@ public final class TransferNotices {
 				SettingsManager.getSipLogger().warning(message, "TransferNotices - " + event + " not sent: " + e);
 			}
 		}
+	}
+
+	/// The trace id of the call `message` belongs to, when that call is traced:
+	/// its webhook POSTs then join the trace. Decided here, on the call's
+	/// thread, since the POST runs on another.
+	private static String tracedSessionId(SipServletMessage message) {
+		SipServletRequest request = (message instanceof SipServletResponse)
+				? ((SipServletResponse) message).getRequest()
+				: (SipServletRequest) message;
+		return org.vorpal.blade.framework.v3.Callflow.tracedSessionId(request);
 	}
 
 	static TransferNotice notice(String event, SipServletMessage message) {

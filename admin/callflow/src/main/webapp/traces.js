@@ -43,6 +43,10 @@
 		stepInfo: document.getElementById('tr-step-info'),
 		sourcePath: document.getElementById('tr-source-path'),
 		message: document.getElementById('tr-message'),
+		msgPopup: document.getElementById('tr-msg-popup'),
+		msgDialog: document.getElementById('tr-msg-dialog'),
+		msgTitle: document.getElementById('tr-msg-title'),
+		msgClose: document.getElementById('tr-msg-close'),
 		code: document.getElementById('tr-code'),
 		rules: document.getElementById('tr-rules'),
 		armForm: document.getElementById('tr-arm-form'),
@@ -60,6 +64,9 @@
 		file: document.getElementById('tr-file'),
 		report: document.getElementById('tr-report'),
 		recorded: document.getElementById('tr-recorded'),
+		saved: document.getElementById('tr-saved'),
+		keep: document.getElementById('tr-keep'),
+		forget: document.getElementById('tr-forget'),
 		like: document.getElementById('tr-like'),
 		around: document.getElementById('tr-around'),
 		copy: document.getElementById('tr-copy')
@@ -88,6 +95,12 @@
 	var since = /^\d+$/.test(params.get('since') || '') ? params.get('since') : null;
 	var recordedMode = !snapshot && (!!linkedCall || params.get('recorded') === '1');
 	var verdicts = {};         // sessionId → [{app, verdict}] for recorded calls
+	// Saved mode lists the calls kept on the server with Save Call
+	// (api/traces/saved) and opens one at a time. traces.html?saved=<Vorpal-ID>
+	// opens that one.
+	var linkedSaved = params.get('saved');
+	var savedMode = !snapshot && !recordedMode && linkedSaved != null;
+	var savedList = [];        // summaries: {id, savedAt, savedBy, firstMillis, steps, apps}
 
 	// What a recorded call's verdict says, in words. The finding names are the
 	// framework's (CallLadder.Verdict); one sentence each.
@@ -145,6 +158,7 @@
 		renderTimeline();
 		renderLadder(currentCall());
 		if (recordedMode && currentCall() && selectedStep == null) { showVerdict(currentCall()); }
+		callButtons();
 	}
 
 	function currentCall() {
@@ -157,6 +171,12 @@
 			return;
 		}
 		if (els.recorded) { els.recorded.textContent = recordedMode ? 'Live Captures' : 'Recorded Calls'; }
+		if (els.saved) { els.saved.textContent = savedMode ? 'Live Captures' : 'Saved Calls'; }
+		if (savedMode) {
+			refreshSaved();
+			refreshRules();
+			return;
+		}
 		var url = recordedMode
 			? API + '/traces/recorded' + (linkedCall ? '?call=' + encodeURIComponent(linkedCall)
 				: since ? '?since=' + since : '')
@@ -175,6 +195,126 @@
 				els.calls.innerHTML = '<p class="cf-muted">Could not load traces: ' + escapeHtml(err.message) + '</p>';
 			});
 		refreshRules();
+	}
+
+	// ---- saved calls ----
+
+	function refreshSaved() {
+		fetch(API + '/traces/saved', { headers: { Accept: 'application/json' } })
+			.then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
+			.then(function (data) {
+				savedList = data.calls || [];
+				setStatus('saved · ' + savedList.length + (savedList.length === 1 ? ' call' : ' calls'));
+				renderCalls();
+				if (linkedSaved) {
+					var id = linkedSaved.toUpperCase();
+					linkedSaved = null;
+					openSaved(id);
+				}
+			})
+			.catch(function (err) {
+				setStatus('Error');
+				els.calls.innerHTML = '<p class="cf-muted">Could not list saved calls: ' + escapeHtml(err.message) + '</p>';
+			});
+	}
+
+	// Open one saved call: its steps, and the source as it was when it was saved.
+	function openSaved(id) {
+		fetch(API + '/traces/saved/' + encodeURIComponent(id), { headers: { Accept: 'application/json' } })
+			.then(function (r) { if (!r.ok) { throw new Error(r.status === 404 ? 'it is no longer saved' : 'HTTP ' + r.status); } return r.json(); })
+			.then(function (data) {
+				lastSources = data.sources || [];
+				verdicts = {};
+				calls = aggregate(lastSources);
+				sourceCache = data.sourceFiles || {};
+				selectedCall = id;
+				selectedStep = null;
+				renderCalls();
+				renderTimeline();
+				renderLadder(currentCall());
+				setTab('seq');
+				els.title.textContent = 'Call ' + id;
+				els.stepInfo.textContent = 'Saved ' + new Date(data.savedAt).toLocaleString()
+					+ (data.savedBy ? ' by ' + data.savedBy : '') + '. Pick a step to see its message and source.';
+				els.sourcePath.hidden = true;
+				callButtons();
+			})
+			.catch(function (err) { setStatus('Could not open saved call ' + id + ': ' + err.message); });
+	}
+
+	function renderSaved() {
+		if (!savedList.length) {
+			els.calls.innerHTML = '<p class="cf-muted">No saved calls. Pick a captured call and press Save Call.</p>';
+			return;
+		}
+		var frag = document.createDocumentFragment();
+		savedList.forEach(function (c) {
+			var btn = document.createElement('button');
+			btn.type = 'button';
+			btn.className = 'cf-item' + (c.id === selectedCall ? ' cf-active' : '');
+			btn.innerHTML = '<span class="cf-item-title"></span><span class="cf-item-cat"></span>';
+			btn.querySelector('.cf-item-title').textContent = c.id + '  ·  ' + c.steps + ' steps';
+			btn.querySelector('.cf-item-cat').textContent = new Date(c.firstMillis).toLocaleString()
+				+ '  ·  ' + (c.apps || []).join(', ');
+			btn.title = 'Saved ' + new Date(c.savedAt).toLocaleString() + (c.savedBy ? ' by ' + c.savedBy : '');
+			btn.addEventListener('click', function () { openSaved(c.id); });
+			frag.appendChild(btn);
+		});
+		els.calls.innerHTML = '';
+		els.calls.appendChild(frag);
+	}
+
+	// Save Call shows on a captured or recorded call; Delete Saved Call on a
+	// saved one.
+	function callButtons() {
+		var call = currentCall();
+		if (els.keep) { els.keep.hidden = !call || savedMode || !!snapshot; }
+		if (els.forget) { els.forget.hidden = !call || !savedMode; }
+	}
+
+	// Keep the selected call on the server: its steps from every app, and the
+	// source behind them, so it reopens as it was.
+	function saveCall() {
+		var call = currentCall();
+		if (!call) { return; }
+		var id = call.sessionId;
+		var sources = (lastSources || []).map(function (src) {
+			var copy = {};
+			Object.keys(src).forEach(function (k) { copy[k] = src[k]; });
+			copy.steps = (src.steps || []).filter(function (s) { return s.sessionId === id; });
+			return copy;
+		}).filter(function (src) { return src.steps.length; });
+		setStatus('Saving call ' + id + '…');
+		fetchSources([call]).then(function (files) {
+			return fetch(API + '/traces/saved/' + encodeURIComponent(id), {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+				body: JSON.stringify({ sources: sources, sourceFiles: files })
+			});
+		}).then(function (r) {
+			if (!r.ok) { return r.text().then(function (t) { throw new Error(t || 'HTTP ' + r.status); }); }
+			setStatus('Saved call ' + id + ' · open it from Saved Calls');
+		}).catch(function (err) { setStatus('Could not save call ' + id + ': ' + err.message); });
+	}
+
+	function deleteSaved() {
+		var call = currentCall();
+		if (!call || !window.confirm('Delete saved call ' + call.sessionId + '? This cannot be undone.')) { return; }
+		var id = call.sessionId;
+		fetch(API + '/traces/saved/' + encodeURIComponent(id), { method: 'DELETE' })
+			.then(function (r) {
+				if (!r.ok && r.status !== 404) { throw new Error('HTTP ' + r.status); }
+				selectedCall = null;
+				selectedStep = null;
+				calls = [];
+				lastSources = [];
+				renderTimeline();
+				renderLadder(null);
+				callButtons();
+				setStatus('Deleted saved call ' + id);
+				refreshSaved();
+			})
+			.catch(function (err) { setStatus('Could not delete saved call ' + id + ': ' + err.message); });
 	}
 
 	function refreshRules() {
@@ -210,6 +350,10 @@
 	// ---- rendering ----
 
 	function renderCalls() {
+		if (savedMode) {
+			renderSaved();
+			return;
+		}
 		if (!calls.length) {
 			els.calls.innerHTML = snapshot
 				? '<p class="cf-muted">This snapshot holds no captured calls.</p>'
@@ -242,6 +386,7 @@
 				renderLadder(c);
 				setTab('seq');
 				showVerdict(c);
+				callButtons();
 			});
 			frag.appendChild(btn);
 		});
@@ -256,6 +401,7 @@
 			return;
 		}
 		var frag = document.createDocumentFragment();
+		var httpPeer = httpParties(call.steps);
 		call.steps.forEach(function (s, i) {
 			var btn = document.createElement('button');
 			btn.type = 'button';
@@ -266,11 +412,16 @@
 			var arrow = s.direction ? (s.direction === 'in' ? '←' : '→')
 				: (s.kind === 'request' ? '→' : '←');
 			btn.querySelector('.cf-item-title').textContent =
-				'#' + (i + 1) + '  ' + s.app + '  ' + arrow + ' ' + s.label;
+				'#' + (i + 1) + '  ' + s.app + '  ' + arrow + ' ' + (isHttp(s) ? 'HTTP ' : '') + s.label;
 			// an in-step names its handler method when one was resolved
 			// (process / processContinue / …); a receive nobody handled (a
 			// fire-and-forget request's response) honestly names the servlet.
-			btn.querySelector('.cf-item-cat').textContent = !s.className
+			// An HTTP step names its far end, and what made it (a connector, a token
+			// fetch, a webhook).
+			btn.querySelector('.cf-item-cat').textContent = isHttp(s)
+				? (s.direction === 'in' ? 'from ' : 'to ') + httpPeer[i]
+					+ (s.methodName ? '  ·  ' + s.methodName : '') + '  ·  ' + hhmmss(s.epochMillis)
+				: !s.className
 				? (s.direction === 'in' ? 'from ' : 'to ') + (s.peer || 'the network') + '  ·  ' + hhmmss(s.epochMillis)
 				: (s.direction === 'in'
 					? (isHandlerMethod(s.methodName)
@@ -290,7 +441,8 @@
 	}
 
 	// Show one of the three detail panels; the ladder, message and source live in
-	// tabs so they don't stack and push each other off-screen.
+	// tabs so they don't stack and push each other off-screen. An arrow also
+	// opens its message in a dialog (openMessage).
 	function setTab(name) {
 		activeTab = name;
 		if (els.ladder) { els.ladder.hidden = name !== 'seq'; }
@@ -570,6 +722,18 @@
 	}
 
 	function showStep(call, s, i) {
+		if (isHttp(s)) { // the message, but no callflow line sent it
+			els.title.textContent = 'Step #' + (i + 1) + ' — ' + kindWord(s) + ' ' + s.label
+				+ (s.direction === 'in' ? ' received by ' : ' sent by ') + s.app;
+			els.stepInfo.textContent = hhmmss(s.epochMillis) + '  ·  ' + (s.direction === 'in' ? 'from ' : 'to ')
+				+ httpParties(call.steps)[i] + '  ·  session ' + call.sessionId
+				+ (s.server ? '  ·  recorded on ' + s.server : '');
+			els.sourcePath.textContent = s.methodName || '';
+			els.sourcePath.hidden = !s.methodName;
+			if (els.message) { els.message.textContent = s.message || '(no message was recorded for this step)'; }
+			if (els.code) { els.code.innerHTML = '<li class="tr-line"><span class="tr-line-text">An HTTP step has no source line: it came in, or the framework sent it, not a line of callflow code.</span></li>'; }
+			return;
+		}
 		if (!s.className) { // recorded: no SIP text, no source position
 			var kind = s.kind === 'request' ? 'request' : 'response';
 			els.title.textContent = 'Step #' + (i + 1) + ' — ' + kind + ' ' + s.label
@@ -581,9 +745,8 @@
 			if (els.code) { els.code.innerHTML = '<li class="tr-line"><span class="tr-line-text">The flight recorder keeps no source position.</span></li>'; }
 			return;
 		}
-		var kindWord = s.kind === 'request' ? 'request' : 'response';
 		var dirWord = s.direction === 'in' ? 'received by' : 'sent by';
-		els.title.textContent = 'Step #' + (i + 1) + ' — ' + kindWord + ' ' + s.label + ' ' + dirWord + ' ' + s.app;
+		els.title.textContent = 'Step #' + (i + 1) + ' — ' + kindWord(s) + ' ' + s.label + ' ' + dirWord + ' ' + s.app;
 		els.stepInfo.textContent = hhmmss(s.epochMillis) + '  ·  session ' + call.sessionId
 			+ (s.server ? '  ·  recorded on ' + s.server : '');
 		els.sourcePath.textContent = s.direction === 'in'
@@ -593,7 +756,7 @@
 			: s.className + '.' + s.methodName + (s.line > 0 ? ':' + s.line : '');
 		els.sourcePath.hidden = false;
 		if (els.message) {
-			els.message.textContent = s.message || '(no raw SIP message was recorded for this step)';
+			els.message.textContent = s.message || '(no raw message was recorded for this step)';
 		}
 
 		var key = s.app + '|' + s.className;
@@ -704,10 +867,11 @@
 	// One source file per unique app|className across every captured step, so
 	// the exported timeline keeps its marked-line code view. A class whose
 	// source the gallery can't serve is skipped, not fatal.
-	function fetchSources() {
+	// The source behind every step of `list` (default: every call on screen).
+	function fetchSources(list) {
 		if (snapshot && snapshot.sourceFiles) { return Promise.resolve(snapshot.sourceFiles); }
 		var wanted = {};
-		calls.forEach(function (c) {
+		(list || calls).forEach(function (c) {
 			c.steps.forEach(function (s) {
 				if (s.className) { wanted[s.app + '|' + s.className] = s; }
 			});
@@ -823,6 +987,11 @@
 			'<pre id="tr-message" class="tr-sipmsg tr-panel" data-tab="msg" hidden></pre>',
 			'<pre id="tr-code-panel" class="cf-code tr-panel" data-tab="src" hidden><ol id="tr-code" class="tr-lines"></ol></pre>',
 			'</div>',
+			'<dialog id="tr-msg-dialog" class="tr-msg-dialog" aria-labelledby="tr-msg-title">',
+			'<div class="tr-msg-head"><h2 id="tr-msg-title"></h2>',
+			'<button id="tr-msg-close" type="button" class="tr-btn" aria-label="Close">Close</button></div>',
+			'<pre id="tr-msg-popup" class="tr-sipmsg"></pre>',
+			'</dialog>',
 			'</article>',
 			'</div>',
 			'</div>',
@@ -921,6 +1090,7 @@
 		if (els.recorded) {
 			els.recorded.addEventListener('click', function () {
 				recordedMode = !recordedMode;
+				if (savedMode) { savedMode = false; sourceCache = {}; }
 				linkedCall = null;
 				if (els.like) { els.like.hidden = true; }
 				if (els.copy) { els.copy.hidden = true; }
@@ -929,6 +1099,26 @@
 				refresh();
 			});
 		}
+		if (els.saved) {
+			els.saved.addEventListener('click', function () {
+				savedMode = !savedMode;
+				recordedMode = false;
+				linkedCall = null;
+				sourceCache = {};
+				calls = [];
+				if (els.like) { els.like.hidden = true; }
+				if (els.copy) { els.copy.hidden = true; }
+				if (els.around) { els.around.hidden = true; }
+				selectedCall = null;
+				selectedStep = null;
+				renderTimeline();
+				renderLadder(null);
+				callButtons();
+				refresh();
+			});
+		}
+		if (els.keep) { els.keep.addEventListener('click', saveCall); }
+		if (els.forget) { els.forget.addEventListener('click', deleteSaved); }
 		els.refresh.addEventListener('click', function () {
 			if (snapshot) { // leave snapshot view, back to live
 				snapshot = null;
@@ -947,7 +1137,8 @@
 		els.report.addEventListener('click', function () {
 			if (snapshot) { alert('The report prints live captures — Refresh back to live data first.'); return; }
 			if (!selectedCall) { alert('Pick a call first.'); return; }
-			window.open('report.html?session=' + encodeURIComponent(selectedCall), '_blank');
+			window.open('report.html?session=' + encodeURIComponent(selectedCall) + (savedMode ? '&saved=1' : ''),
+				'_blank');
 		});
 		els.load.addEventListener('click', function () { els.file.click(); });
 		els.file.addEventListener('change', function () {
@@ -958,15 +1149,44 @@
 		});
 	}
 
+	// The raw SIP message of one arrow, in a dialog over the ladder. Titled the
+	// way the arrow reads: label, then who sent it to whom. The Message tab
+	// shows the same text, for stepping through the timeline without a dialog.
+	function openMessage(call, i) {
+		if (!els.msgDialog) { return; }
+		var model = buildLadder(call);
+		var a = model.arrows.filter(function (x) { return x.canonical === i; })[0];
+		els.msgTitle.textContent = '#' + (i + 1) + '  ' + (a
+			? a.label + '  ·  ' + model.lanes[a.from] + ' → ' + model.lanes[a.to]
+			: call.steps[i].label + '  ·  ' + call.steps[i].app);
+		els.msgPopup.textContent = els.message ? els.message.textContent : (call.steps[i].message || '');
+		if (!els.msgDialog.open) { els.msgDialog.showModal(); }
+		els.msgPopup.scrollTop = 0;
+	}
+
 	// Clicking a ladder arrow selects its step (the reverse of the timeline →
-	// ladder link). Delegated so it survives every re-render of the SVG.
+	// ladder link) and opens its message. Delegated so it survives every
+	// re-render of the SVG.
 	if (els.ladder) {
 		els.ladder.addEventListener('click', function (ev) {
 			var t = ev.target;
 			var g = t && t.closest ? t.closest('[data-step]') : null;
 			if (!g || !ladderCall) { return; }
 			var i = parseInt(g.getAttribute('data-step'), 10);
-			if (!isNaN(i) && ladderCall.steps[i]) { selectStep(ladderCall, i); }
+			if (!isNaN(i) && ladderCall.steps[i]) {
+				var call = ladderCall;
+				selectStep(call, i);
+				openMessage(call, i);
+			}
+		});
+	}
+
+	// The dialog closes on its button, on Escape (the browser's own), and on a
+	// click outside its box, which lands on the dialog element itself.
+	if (els.msgDialog) {
+		els.msgClose.addEventListener('click', function () { els.msgDialog.close(); });
+		els.msgDialog.addEventListener('click', function (ev) {
+			if (ev.target === els.msgDialog) { els.msgDialog.close(); }
 		});
 	}
 
