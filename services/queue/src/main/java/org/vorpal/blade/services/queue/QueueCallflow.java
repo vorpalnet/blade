@@ -20,8 +20,8 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipSession.State;
 
-import org.vorpal.blade.framework.v2.b2bua.Terminate;
-import org.vorpal.blade.framework.v2.callflow.Expectation;
+import org.vorpal.blade.framework.v3.b2bua.Terminate;
+import org.vorpal.blade.framework.Expectation;
 import org.vorpal.blade.framework.v3.events.BladeEventTypes;
 import org.vorpal.blade.framework.v3.events.Events;
 import org.vorpal.blade.framework.v3.media.CallflowHold;

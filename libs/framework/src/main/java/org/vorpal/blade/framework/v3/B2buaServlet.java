@@ -9,11 +9,11 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.UAMode;
 
-import org.vorpal.blade.framework.v2.b2bua.B2buaListener;
-import org.vorpal.blade.framework.v2.b2bua.InitialInvite;
-import org.vorpal.blade.framework.v2.b2bua.Passthru;
-import org.vorpal.blade.framework.v2.b2bua.Reinvite;
-import org.vorpal.blade.framework.v2.b2bua.Terminate;
+import org.vorpal.blade.framework.v3.b2bua.B2buaListener;
+import org.vorpal.blade.framework.v3.b2bua.InitialInvite;
+import org.vorpal.blade.framework.v3.b2bua.Passthru;
+import org.vorpal.blade.framework.v3.b2bua.Reinvite;
+import org.vorpal.blade.framework.v3.b2bua.Terminate;
 
 /// The v3 `B2buaServlet` — the v2 B2BUA behavior on top of the v3
 /// [AsyncSipServlet] dispatch (which carries the trace eventing at the

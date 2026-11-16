@@ -12,13 +12,13 @@
 <div id="transition-view">
 
 	<div id="transition-tabs">
-		<div class="tab-strip">
-			<button type="button" class="tab-btn tab-active" data-tab="transition-tabs-basic">Basic</button>
-			<button type="button" class="tab-btn" data-tab="transition-tabs-routing">Routing</button>
+		<div class="tab-strip vorpal-tabs" role="tablist">
+			<button type="button" class="tab-btn tab-active" role="tab" aria-selected="true" data-tab="transition-tabs-basic">Basic</button>
+			<button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="transition-tabs-routing">Routing</button>
 		</div>
 
 		<div id="transition-tabs-basic" class="tab-page tab-active">
-			<label>SIP Method</label>
+			<label class="vorpal-label">SIP Method</label>
 			<select id="transition-method">
 				<option>INVITE</option>
 				<option>REGISTER</option>
@@ -30,8 +30,8 @@
 				<option>NOTIFY</option>
 			</select>
 
-			<label>When <span class="hint">(condition over extracted values; empty = always matches)</span></label>
-			<textarea id="transition-when" placeholder="${To.user} == 'bob' &amp;&amp; ${tier} == 'gold'"></textarea>
+			<label class="vorpal-label">When <span class="hint">(condition over extracted values; empty = always matches)</span></label>
+			<textarea id="transition-when" class="vorpal-mono" placeholder="${To.user} == 'bob' &amp;&amp; ${tier} == 'gold'"></textarea>
 
 			<!-- What the expression engine actually supports. None of this was
 			     discoverable from the editor before, so configs used == and
@@ -96,21 +96,21 @@
 				</div>
 			</details>
 
-			<label>Evaluation Order <span class="hint">(within same state+method; lower runs first — first match wins)</span></label>
+			<label class="vorpal-label">Evaluation Order <span class="hint">(within same state+method; lower runs first — first match wins)</span></label>
 			<input id="transition-seq" type="number" min="0" step="1" />
 
-			<label>Transition ID <span class="hint">(for logging)</span></label>
+			<label class="vorpal-label">Transition ID <span class="hint">(for logging)</span></label>
 			<input id="transition-txid" type="text" placeholder="e.g. INV-1" />
 
-			<label>Next Application <span class="hint">(edge target — read-only)</span></label>
+			<label class="vorpal-label">Next Application <span class="hint">(edge target — read-only)</span></label>
 			<input id="transition-next" type="text" readonly />
 		</div>
 
 		<div id="transition-tabs-routing" class="tab-page">
-			<label>Subscriber Header <span class="hint">(e.g. From, To)</span></label>
+			<label class="vorpal-label">Subscriber Header <span class="hint">(e.g. From, To)</span></label>
 			<input id="transition-subscriber" type="text" placeholder="From" />
 
-			<label>Region <span class="hint">(JSR-289 routing region; blank = NEUTRAL)</span></label>
+			<label class="vorpal-label">Region <span class="hint">(JSR-289 routing region; blank = NEUTRAL)</span></label>
 			<select id="transition-region">
 				<option value=""></option>
 				<option>ORIGINATING</option>
@@ -136,7 +136,7 @@
 				     getPoppedRoute(). Shown only when the target app actually has
 				     virtual gateways configured. -->
 				<div id="transition-vgw-section" style="display:none;">
-					<label>Virtual gateway <span class="hint">(trunk)</span>
+					<label class="vorpal-label">Virtual gateway <span class="hint">(trunk)</span>
 						<span class="info-tip" tabindex="0" role="button" aria-label="About Virtual gateway"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.7" r="1" fill="currentColor" stroke="none"/></svg><span class="info-tip-text">
 							Pick a trunk from the target gateway app's config; the editor keeps
 							<code>;vgw=&lt;name&gt;</code> on the route(s) below, so that app sends the
@@ -146,14 +146,14 @@
 					<select id="transition-vgw"><option value="">(none)</option></select>
 				</div>
 
-				<label>Route URIs</label>
+				<label class="vorpal-label">Route URIs</label>
 				<div style="margin-bottom: 4px;">
 					<svg class="add-btn" id="add-route" title="Add route" viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5v7M4.5 8h7" stroke="currentColor" stroke-width="1.5"/></svg>
 					<span class="hint">Pushed as Route headers; ${} placeholders resolve against the context</span>
 				</div>
 				<div id="transition-routes"></div>
 
-				<label>Route Modifier <span class="hint">(how routes are applied; blank = ROUTE)</span></label>
+				<label class="vorpal-label">Route Modifier <span class="hint">(how routes are applied; blank = ROUTE)</span></label>
 				<!-- NO_ROUTE is deliberately not offered: with routes the container
 				     ignores them, without routes it is the default anyway. An
 				     imported NO_ROUTE is re-added by the panel so it stays visible. -->

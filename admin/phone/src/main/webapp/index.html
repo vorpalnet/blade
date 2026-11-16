@@ -3,9 +3,10 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>BLADE Phone</title>
+	<title>Phone · BLADE</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
 	<script src="/blade/portal/brand/theme.js"></script>
+	<script src="/blade/portal/brand/shell.js" data-context="/blade/phone" defer></script>
 	<link rel="stylesheet" href="assets/phone.css">
 	<link rel="icon" type="image/svg+xml" href="favicon.svg">
 </head>
@@ -24,10 +25,6 @@
 		<div class="vorpal-topbar-right">
 			<span class="vorpal-pill" id="pill" data-state="idle">Offline</span>
 			<span data-theme-switch></span>
-			<span class="phone-acct" id="acct" hidden>
-				<span class="phone-acct-badge" id="acct-badge" aria-hidden="true"></span>
-				<span class="phone-acct-name" id="acct-name"></span>
-			</span>
 		</div>
 	</header>
 
@@ -37,7 +34,7 @@
 			<div class="phone-layout" id="layout" data-details="false">
 
 				<!-- ------------------------------------------------ the handset -->
-				<section class="phone-handset" aria-label="Phone">
+				<section class="vorpal-panel phone-handset" aria-label="Phone">
 					<div class="phone-display" id="display" data-live="false">
 						<div class="phone-stage" id="stage" aria-label="Video" hidden>
 							<video id="remote-video" autoplay playsinline muted></video>
@@ -59,43 +56,43 @@
 					</div>
 
 					<div class="phone-incoming" id="incoming" hidden>
-						<div class="phone-incoming-label">Incoming call</div>
+						<div class="vorpal-label">Incoming call</div>
 						<div class="phone-incoming-from" id="incoming-from"></div>
 						<div class="phone-incoming-actions">
-							<button class="phone-btn phone-btn-call" id="btn-answer">Answer</button>
-							<button class="phone-btn" id="btn-decline">Decline</button>
+							<button class="vorpal-btn phone-btn phone-btn-call" id="btn-answer">Answer</button>
+							<button class="vorpal-btn vorpal-btn-danger phone-btn" id="btn-decline">Decline</button>
 						</div>
 					</div>
 
 					<div class="phone-dial-field">
-						<input id="target" inputmode="tel" autocomplete="off" spellcheck="false"
+						<input class="vorpal-input vorpal-mono" id="target" inputmode="tel" autocomplete="off" spellcheck="false"
 						       placeholder="Number or user@host" aria-label="Number to dial">
-						<button class="phone-backspace" id="btn-back" title="Backspace" aria-label="Backspace">&#9003;</button>
+						<button class="vorpal-btn vorpal-btn-secondary phone-backspace" id="btn-back" title="Backspace" aria-label="Backspace">&#9003;</button>
 					</div>
 
 					<div class="phone-keypad" id="keypad" role="group" aria-label="Dial pad"></div>
 
 					<div class="phone-actions">
-						<button class="phone-btn phone-btn-call" id="btn-call" disabled>
+						<button class="vorpal-btn phone-btn phone-btn-call" id="btn-call" disabled>
 							<span class="phone-btn-icon" aria-hidden="true">&#9990;</span><span id="call-label">Call</span>
 						</button>
-						<button class="phone-btn" id="btn-mute" aria-pressed="false" disabled>Mute</button>
-						<button class="phone-btn" id="btn-camera" aria-pressed="false" disabled>Camera</button>
+						<button class="vorpal-btn vorpal-btn-secondary phone-btn" id="btn-mute" aria-pressed="false" disabled>Mute</button>
+						<button class="vorpal-btn vorpal-btn-secondary phone-btn" id="btn-camera" aria-pressed="false" disabled>Camera</button>
 					</div>
 
 					<div class="phone-agent">
-						<input id="skills" autocomplete="off" spellcheck="false" placeholder="Skills: spanish billing"
+						<input class="vorpal-input" id="skills" autocomplete="off" spellcheck="false" placeholder="Skills: spanish billing"
 						       aria-label="Your skills, separated by spaces" title="The skills you take calls for">
-						<button class="phone-btn" id="btn-agent" aria-pressed="false" disabled
+						<button class="vorpal-btn vorpal-btn-secondary phone-btn" id="btn-agent" aria-pressed="false" disabled
 						        title="For calls routed by skill: say whether you take the next one">Agent: Not ready</button>
 					</div>
 
 					<div class="phone-recent" id="recent" hidden>
-						<div class="phone-recent-head">Recent</div>
+						<div class="vorpal-label phone-recent-head">Recent</div>
 						<div class="phone-recent-list" id="recent-list"></div>
 					</div>
 
-					<button class="phone-details-toggle" id="btn-details" type="button"
+					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-block phone-details-toggle" id="btn-details" type="button"
 					        aria-controls="details" aria-expanded="false">
 						<span class="phone-details-toggle-name">Connection and signaling</span>
 						<span class="phone-auth-short" id="auth-short">Not registered</span>
@@ -103,24 +100,24 @@
 					</button>
 				</section>
 				<!-- ------------------------------------------------ everything a demo does not need -->
-				<aside class="phone-details" id="details" aria-label="Connection and signaling" hidden>
-					<div class="phone-details-head">
-						<h2>Connection and signaling</h2>
-						<button class="phone-details-close" id="btn-details-close" type="button"
+				<aside class="vorpal-panel phone-details" id="details" aria-label="Connection and signaling" hidden>
+					<div class="vorpal-panel-head phone-details-head">
+						<h2 class="vorpal-panel-title">Connection and signaling</h2>
+						<button class="vorpal-btn vorpal-btn-ghost vorpal-btn-sm" id="btn-details-close" type="button"
 						        title="Close" aria-label="Close connection and signaling">&#10005;</button>
 					</div>
 
 					<details class="phone-panel" data-panel="connection" open>
 						<summary class="phone-panel-title"><span class="phone-panel-name">Connection</span><span class="phone-panel-peek" id="peek-connection"></span></summary>
-						<div class="phone-field">
+						<div class="vorpal-field phone-field">
 							<label for="gateway">Gateway<span class="phone-tip" tabindex="0"
 								aria-describedby="tip-gateway"><span class="phone-tip-mark" aria-hidden="true">?</span><span
 								class="phone-tip-bubble" role="tooltip" id="tip-gateway">The <code>webrtc</code> service runs on
 								the engine tier. This page comes from the admin tier, so the address is configuration, not this
 								page&rsquo;s own origin.</span></span></label>
-							<input id="gateway" autocomplete="off" spellcheck="false">
+							<input class="vorpal-input" id="gateway" autocomplete="off" spellcheck="false">
 						</div>
-						<div class="phone-field">
+						<div class="vorpal-field phone-field">
 							<label for="aor">Your address<span class="phone-tip" tabindex="0"
 								aria-describedby="tip-aor"><span class="phone-tip-mark" aria-hidden="true">?</span><span
 								class="phone-tip-bubble" role="tooltip" id="tip-aor">The address other browsers dial to reach
@@ -128,22 +125,22 @@
 								else, which a browser&#8209;to&#8209;browser test from one account needs. The gateway honours
 								only the address inside your signed token, and the token still records who signed
 								in.</span></span></label>
-							<input id="aor" placeholder="user@host" autocomplete="off" spellcheck="false"
+							<input class="vorpal-input" id="aor" placeholder="user@host" autocomplete="off" spellcheck="false"
 							       readonly aria-readonly="true">
 						</div>
-						<div class="phone-field">
+						<div class="vorpal-field phone-field">
 							<label for="stun">STUN server<span class="phone-tip" tabindex="0"
 								aria-describedby="tip-stun"><span class="phone-tip-mark" aria-hidden="true">?</span><span
 								class="phone-tip-bubble" role="tooltip" id="tip-stun">Browsers publish <code>&lt;uuid&gt;.local</code>
 								mDNS candidates instead of private addresses, so a reachable STUN or TURN server is
 								required.</span></span></label>
-							<input id="stun" autocomplete="off" spellcheck="false">
+							<input class="vorpal-input" id="stun" autocomplete="off" spellcheck="false">
 						</div>
-						<div class="phone-row">
+						<div class="vorpal-toolbar phone-row">
 							<button class="vorpal-btn" id="btn-register">Register</button>
 							<button class="vorpal-btn vorpal-btn-secondary" id="btn-unregister" disabled>Unregister</button>
 						</div>
-						<p class="phone-auth" id="auth-state" data-verified="unknown">Not registered.</p>
+						<p class="vorpal-note phone-auth" id="auth-state" data-verified="unknown">Not registered.</p>
 					</details>
 
 					<details class="phone-panel" data-panel="media" open>

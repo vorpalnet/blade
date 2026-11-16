@@ -128,6 +128,7 @@ class OidcLoginFilterTest {
 		Principal principal;
 		boolean authenticateAnswer;
 		int authenticateCalls;
+		int logoutCalls;
 		final Map<String, String> headers = new LinkedHashMap<>();
 		final Map<String, String> params = new LinkedHashMap<>();
 		Session session;
@@ -162,6 +163,10 @@ class OidcLoginFilterTest {
 						case "authenticate":
 							authenticateCalls++;
 							return authenticateAnswer;
+						case "logout":
+							logoutCalls++;
+							principal = null;
+							return null;
 						case "changeSessionId":
 							return "sess-2";
 						case "getSession":
@@ -253,6 +258,26 @@ class OidcLoginFilterTest {
 			f.doFilter(req.proxy(), res.proxy(), chain);
 			assertEquals(1, req.authenticateCalls);
 			assertNull(chain.passed, "the container's login owns the response");
+		}
+
+		@Test
+		void signsOutAContainerLogin() throws Exception {
+			// A WebLogic user's /oidc/logout must not pass through to the
+			// application, which serves no such path.
+			for (OidcLoginConfig cfg : new OidcLoginConfig[] { config(), null }) {
+				OidcLoginFilter f = new OidcLoginFilter(cfg, c -> PROVIDER, null, null);
+				Request req = new Request();
+				req.uri = CONTEXT + OidcLoginFilter.LOGOUT_PATH;
+				req.principal = () -> "weblogic";
+				req.session = new Session();
+				Response res = new Response();
+				Chain chain = new Chain();
+				f.doFilter(req.proxy(), res.proxy(), chain);
+				assertNull(chain.passed);
+				assertTrue(req.session.invalidated);
+				assertEquals(1, req.logoutCalls);
+				assertEquals(CONTEXT + "/", res.redirect, "home, not the provider's end-session");
+			}
 		}
 
 		@Test
@@ -451,6 +476,8 @@ class OidcLoginFilterTest {
 			req.session.attributes.put(OidcLoginFilter.IDENTITY_ATTR,
 					new JwtIdentity("reviewer1", Collections.emptySet(), null, new java.util.LinkedHashSet<>(groups)));
 			req.session.attributes.put(OidcLoginFilter.SIGNED_IN_ATTR, System.currentTimeMillis());
+			// What the callback stores beside the identity, as every sign-in does.
+			req.session.attributes.put(OidcLoginFilter.ID_TOKEN_ATTR, "the-id-token");
 			return req;
 		}
 
@@ -504,6 +531,39 @@ class OidcLoginFilterTest {
 			assertTrue(res.redirect.startsWith(ISSUER + "/oauth2/v1/userlogout?"), res.redirect);
 			assertEquals(HOST + ":443" + CONTEXT + "/", query(res.redirect).get("post_logout_redirect_uri"),
 					"the registered address, from the redirect URL, not the request's host (a proxy's)");
+		}
+
+		@Test
+		void signOutLandsWhereThenSays() throws Exception {
+			OidcLoginFilter f = filter(config(), providerKeys(), null);
+			Request req = signedIn(Arrays.asList("Reviewer"));
+			req.uri = CONTEXT + OidcLoginFilter.LOGOUT_PATH;
+			req.params.put(OidcLoginFilter.THEN_PARAM, "/blade/portal/logout");
+			Response res = new Response();
+			f.doFilter(req.proxy(), res.proxy(), new Chain());
+			assertEquals(HOST + ":443/blade/portal/logout", query(res.redirect).get("post_logout_redirect_uri"));
+		}
+
+		@Test
+		void aContainerLoginSignsOutToThen() throws Exception {
+			OidcLoginFilter f = new OidcLoginFilter(config(), c -> PROVIDER, null, null);
+			Request req = new Request();
+			req.uri = CONTEXT + OidcLoginFilter.LOGOUT_PATH;
+			req.principal = () -> "weblogic";
+			req.params.put(OidcLoginFilter.THEN_PARAM, "/blade/portal/logout");
+			Response res = new Response();
+			f.doFilter(req.proxy(), res.proxy(), new Chain());
+			assertEquals("/blade/portal/logout", res.redirect);
+		}
+
+		@Test
+		void thenNeverNamesAnotherSite() {
+			String home = CONTEXT + "/";
+			assertEquals("/blade/portal/logout", OidcLoginFilter.landing("/blade/portal/logout", home));
+			for (String other : new String[] { null, "", "https://elsewhere.example/", "//elsewhere.example/x",
+					"/\\elsewhere.example/x", "relative", "/a\r\nSet-Cookie: x=y" }) {
+				assertEquals(home, OidcLoginFilter.landing(other, home), String.valueOf(other));
+			}
 		}
 
 		@Test

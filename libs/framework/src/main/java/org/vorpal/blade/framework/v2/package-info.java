@@ -55,7 +55,7 @@
 ///
 /// ## Key Features
 ///
-/// - **Lambda Callflows**: Entire SIP conversations expressed as readable, sequential code using [org.vorpal.blade.framework.v2.callflow.Callback] lambdas
+/// - **Lambda Callflows**: Entire SIP conversations expressed as readable, sequential code using [org.vorpal.blade.framework.Callback] lambdas
 /// - **Automatic State Persistence**: Callflow variables survive node failover in distributed clusters — no manual attribute management
 /// - **Glare Prevention**: Automatic queuing of conflicting requests to prevent 491 responses on UDP transport
 /// - **Session Management**: Sophisticated session linking and attribute extraction using configurable [org.vorpal.blade.framework.v2.config.AttributeSelector] objects
@@ -89,7 +89,7 @@
 /// - `callflow` - Callback-based call flow processing patterns through [org.vorpal.blade.framework.v2.callflow.Callflow] implementations
 /// - `config` - Session parameter extraction using [org.vorpal.blade.framework.v2.config.SessionParameters] and [org.vorpal.blade.framework.v2.config.AttributeSelector]
 /// - `logging` - Centralized logging with SIP message tracing via [org.vorpal.blade.framework.v2.logging.Logger]
-/// - `b2bua` - Back-to-Back User Agent implementation patterns including [org.vorpal.blade.framework.v2.b2bua.Terminate] functionality
+/// - `b2bua` - Back-to-Back User Agent implementation patterns including [org.vorpal.blade.framework.v3.b2bua.Terminate] functionality
 ///
 /// The framework is designed for deployment in SIP servlet containers implementing the
 /// JSR 289 specification and provides both servlet context and SIP session lifecycle
@@ -148,15 +148,15 @@
 ///
 /// ### [org.vorpal.blade.framework.v2.b2bua]
 /// Implements Back-to-Back User Agent functionality through [B2buaServlet][org.vorpal.blade.framework.v2.b2bua.B2buaServlet] and specialized
-/// callflow handlers including [InitialInvite][org.vorpal.blade.framework.v2.b2bua.InitialInvite], [Reinvite][org.vorpal.blade.framework.v2.b2bua.Reinvite], [Terminate][org.vorpal.blade.framework.v2.b2bua.Terminate], and [Passthru][org.vorpal.blade.framework.v2.b2bua.Passthru].
-/// Applications extend [B2buaServlet][org.vorpal.blade.framework.v2.b2bua.B2buaServlet] and implement [B2buaListener][org.vorpal.blade.framework.v2.b2bua.B2buaListener] to customize call
+/// callflow handlers including [InitialInvite][org.vorpal.blade.framework.v3.b2bua.InitialInvite], [Reinvite][org.vorpal.blade.framework.v3.b2bua.Reinvite], [Terminate][org.vorpal.blade.framework.v3.b2bua.Terminate], and [Passthru][org.vorpal.blade.framework.v3.b2bua.Passthru].
+/// Applications extend [B2buaServlet][org.vorpal.blade.framework.v2.b2bua.B2buaServlet] and implement [B2buaListener][org.vorpal.blade.framework.v3.b2bua.B2buaListener] to customize call
 /// handling with lifecycle callbacks for started, answered, connected, and completed states.
 ///
 /// ### [org.vorpal.blade.framework.v2.callflow]
 /// Provides the core callback-based programming model for building SIP application callflows.
 /// The [Callflow][org.vorpal.blade.framework.v2.callflow.Callflow] abstract base class offers asynchronous callback registration, timer management,
 /// proxy and B2BUA functionality, and dialog linking. Includes pre-built callflows like
-/// [CallflowResponse][org.vorpal.blade.framework.v3.CallflowResponse] and [CallflowAckBye][org.vorpal.blade.framework.v2.callflow.CallflowAckBye] for common SIP scenarios.
+/// [CallflowResponse][org.vorpal.blade.framework.v3.CallflowResponse] and [CallflowAckBye][org.vorpal.blade.framework.v3.CallflowAckBye] for common SIP scenarios.
 ///
 /// ### [org.vorpal.blade.framework.v2.config]
 /// Delivers comprehensive configuration management with translation maps, routing configurations,
@@ -177,16 +177,14 @@
 /// management with servlet context integration.
 ///
 /// ### [org.vorpal.blade.framework.v2.proxy]
-/// Provides a framework for building SIP proxy applications with multi-tier routing and failover.
-/// [ProxyServlet][org.vorpal.blade.framework.v2.proxy.ProxyServlet] serves as the base servlet, while [ProxyPlan][org.vorpal.blade.framework.v2.proxy.ProxyPlan] and [ProxyTier][org.vorpal.blade.framework.v2.proxy.ProxyTier] define
-/// hierarchical routing strategies supporting both parallel and serial execution modes with
-/// configurable timeouts.
+/// Deprecated: v3 has no proxy servlet. A v3 [org.vorpal.blade.framework.v3.Callflow] with
+/// `session.passthru` set proxies the caller's INVITE a tier at a time; the proxy-balancer
+/// service is the worked example.
 ///
 /// ### [org.vorpal.blade.framework.v2.transfer]
-/// Implements SIP call transfer operations supporting blind, attended, conference, and
-/// REFER-based transfer patterns. The [Transfer][org.vorpal.blade.framework.v2.transfer.Transfer] base class and [TransferInitialInvite][org.vorpal.blade.framework.v2.transfer.TransferInitialInvite]
-/// handler integrate with B2BUA functionality, while [TransferSettings][org.vorpal.blade.framework.v2.transfer.TransferSettings] and [TransferListener][org.vorpal.blade.framework.v2.transfer.TransferListener]
-/// provide configurable behavior and lifecycle event notifications.
+/// Deprecated: call transfer moved to [org.vorpal.blade.framework.v3.transfer], and its
+/// REST API to [org.vorpal.blade.framework.v3.transfer.api]. The v2 names remain as empty
+/// subclasses of the v3 classes, so existing code compiles.
 ///
 /// @see AsyncSipServlet
 package org.vorpal.blade.framework.v2;

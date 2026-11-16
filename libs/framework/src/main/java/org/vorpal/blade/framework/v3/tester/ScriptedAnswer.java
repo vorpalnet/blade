@@ -10,7 +10,7 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.Callflow;
 
 /// Endpoint-mode responder driven by a [Scenario]'s [ResponseScript]: plays
 /// the `send` steps in order (each with its own delay and optional custom

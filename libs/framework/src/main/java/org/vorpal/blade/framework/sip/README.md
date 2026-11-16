@@ -187,4 +187,4 @@ destination. See
 ## Related
 
 - [Framework Developer's Guide](../../../../../../../../../../DEVELOPING.md) — how callflows work
-- [callflow guide](../v2/callflow/README.md) · [b2bua guide](../v2/b2bua/README.md)
+- [callflow guide](../v2/callflow/README.md) · [b2bua guide](../v3/b2bua/README.md)

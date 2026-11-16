@@ -144,7 +144,7 @@ function updateWebSocketStatus(message, type) {
     const statusEl = document.getElementById('websocket-status');
     if (statusEl) {
         statusEl.textContent = 'WebSocket: ' + message;
-        statusEl.className = `sync-status ${type}`;
+        statusEl.className = statusClass(type);
         statusEl.style.display = 'inline-flex';
     }
 }
@@ -1043,7 +1043,7 @@ function showSchemaLoadStatus(message, type) {
     // they stay until the next message.
     const el = document.getElementById('schema-load-status');
     if (type === 'success') showStatusIn(el, message, type);
-    else { showStatusIn(el, message, 'error'); el.className = 'sync-status ' + (type || ''); }
+    else { showStatusIn(el, message, 'error'); el.className = statusClass(type); }
 }
 
 function resolveRef(ref) {
@@ -1283,6 +1283,8 @@ function wireUriPreviewBadge(badge, container, basePath) {
         badge.textContent = result.ok ? '✓' : '✗'; // ✓ / ✕ — never color-only
         badge.classList.toggle('valid', result.ok);
         badge.classList.toggle('invalid', !result.ok);
+        badge.classList.toggle('vorpal-badge-ok', result.ok);
+        badge.classList.toggle('vorpal-badge-warn', !result.ok);
         badge.title = result.ok ? 'Valid SIP URI: ' + result.uri : 'Invalid: ' + result.reason;
     };
     badge.style.display = '';
@@ -1490,7 +1492,7 @@ function createReferencePicker(itemsSchema, container, path, updateStatus) {
     if (!arrayItemsAcceptReferences(itemsSchema)) return null;
 
     const select = document.createElement('select');
-    select.className = 'btn btn-primary reference-picker add-menu-select';
+    select.className = 'vorpal-btn vorpal-btn-secondary vorpal-btn-sm reference-picker add-menu-select';
     select.title = 'Add a reference to an existing identity';
 
     function rebuildOptions() {
@@ -1957,7 +1959,7 @@ function createFormElement(fieldSchema, path, value = null, isMapKey = false) {
                 wrapper.className = 'password-field';
                 const toggle = document.createElement('button');
                 toggle.type = 'button';
-                toggle.className = 'password-toggle';
+                toggle.className = 'password-toggle vorpal-btn vorpal-btn-ghost vorpal-btn-sm';
                 toggle.setAttribute('aria-label', 'Show/hide password');
                 toggle.title = 'Show/hide';
                 toggle.textContent = '\u{1F441}'; // 👁
@@ -2123,7 +2125,7 @@ function createFormGroupElement(fieldSchema, title, description, path, value = n
         if (!fieldSchema['x-required-here'] && !fieldSchema['x-readonly']) {
             deleteBtn = document.createElement('button');
             deleteBtn.type = 'button';
-            deleteBtn.className = 'delete-property-btn';
+            deleteBtn.className = 'delete-property-btn vorpal-btn vorpal-btn-danger vorpal-btn-icon';
             deleteBtn.innerHTML = '<span class="delete-property-icon">×</span>';
             deleteBtn.title = `Remove ${title}`;
             deleteBtn.onclick = (e) => {
@@ -2143,7 +2145,7 @@ function createFormGroupElement(fieldSchema, title, description, path, value = n
         if (fieldSchema['x-regex-test']) {
             const testBtn = document.createElement('button');
             testBtn.type = 'button';
-            testBtn.className = 'regex-test-btn';
+            testBtn.className = 'regex-test-btn vorpal-btn vorpal-btn-secondary vorpal-btn-sm';
             testBtn.title = 'Test this regex against a sample string';
             testBtn.textContent = 'test';
             testBtn.onclick = (e) => {
@@ -2331,7 +2333,7 @@ function createCollapsibleSection(title, description, content, hasData = false, 
     badgeContainer.appendChild(javaClassLabel);
 
     const statusBadge = document.createElement('span');
-    statusBadge.className = `collapsible-badge ${hasData ? 'has-data' : 'null'}`;
+    statusBadge.className = `collapsible-badge vorpal-badge ${hasData ? 'has-data' : 'null'}`;
     statusBadge.textContent = hasData ? 'has data' : 'empty';
     badgeContainer.appendChild(statusBadge);
 
@@ -2339,7 +2341,7 @@ function createCollapsibleSection(title, description, content, hasData = false, 
     if (deleteInfo) {
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
-        deleteBtn.className = 'delete-property-btn';
+        deleteBtn.className = 'delete-property-btn vorpal-btn vorpal-btn-danger vorpal-btn-icon';
         deleteBtn.innerHTML = '<span class="delete-property-icon">×</span>';
         deleteBtn.title = `Remove ${title}`;
         deleteBtn.onclick = (e) => {
@@ -2624,7 +2626,7 @@ function markStatedEmpty(placeholder, value) {
         if (label) label.textContent += ' = null';
         const x = document.createElement('button');
         x.type = 'button';
-        x.className = 'delete-property-btn';
+        x.className = 'delete-property-btn vorpal-btn vorpal-btn-danger vorpal-btn-icon';
         x.innerHTML = '<span class="delete-property-icon">×</span>';
         x.title = 'Remove the null';
         x.onclick = (e) => {
@@ -2648,7 +2650,7 @@ function createAddPropertyPlaceholder(fieldSchema, title, description, path, con
 
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
-    addBtn.className = 'add-property-btn';
+    addBtn.className = 'add-property-btn vorpal-btn vorpal-btn-secondary vorpal-btn-sm';
     addBtn.innerHTML = '<span class="add-property-icon">+</span>';
     addBtn.title = `Add ${title}`;
 
@@ -3021,7 +3023,7 @@ function createOpaqueObjectGroup(fieldSchema, title, description, path, value = 
     const autoCollapse = true;
 
     const textarea = document.createElement('textarea');
-    textarea.className = 'opaque-object-input';
+    textarea.className = 'opaque-object-input vorpal-input vorpal-mono';
     textarea.setAttribute('data-path', path);
     textarea.setAttribute('data-opaque-object', 'true');
     textarea.spellcheck = false;
@@ -3058,11 +3060,11 @@ function createOpaqueObjectGroup(fieldSchema, title, description, path, value = 
         try {
             JSON.parse(txt);
             status.textContent = '✓ valid JSON';
-            status.style.color = 'var(--text-secondary)';
+            status.style.color = 'var(--vorpal-ink-700)';
             textarea.classList.remove('opaque-object-invalid');
         } catch (e) {
             status.textContent = '✗ ' + e.message;
-            status.style.color = '#c43';
+            status.style.color = 'var(--vorpal-error)';
             textarea.classList.add('opaque-object-invalid');
         }
     }
@@ -3102,7 +3104,7 @@ function createMapGroup(fieldSchema, title, description, path, value = null, isN
 
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
-    addBtn.className = 'btn btn-primary';
+    addBtn.className = 'vorpal-btn vorpal-btn-secondary vorpal-btn-sm';
     const valueTypeName = arrayItemTypeName(fieldSchema.additionalProperties);
     addBtn.textContent = valueTypeName ? `Add ${valueTypeName}` : 'Add Entry';
     addBtn.onclick = () => {
@@ -3117,7 +3119,7 @@ function createMapGroup(fieldSchema, title, description, path, value = null, isN
     const valueVariants = polymorphicVariants(deref(fieldSchema.additionalProperties) || fieldSchema.additionalProperties);
     if (valueVariants && valueVariants.length > 1) {
         const addSelect = document.createElement('select');
-        addSelect.className = 'btn btn-primary add-menu-select';
+        addSelect.className = 'vorpal-btn vorpal-btn-secondary vorpal-btn-sm add-menu-select';
         addSelect.innerHTML = '<option value="">+ ' + escapeHtml(addBtn.textContent) + '</option>'
             + valueVariants.map((v, i) => '<option value="' + i + '">' + escapeHtml(variantLabel(v, i)) + '</option>').join('');
         addSelect.onchange = () => {
@@ -3146,7 +3148,7 @@ function createMapGroup(fieldSchema, title, description, path, value = null, isN
     // (from @JsonPropertyDescription) so the user knows what to add.
     if (!hasData && description) {
         const hint = document.createElement('div');
-        hint.className = 'empty-state-hint';
+        hint.className = 'empty-state-hint vorpal-note';
         hint.textContent = description;
         container.appendChild(hint);
     }
@@ -3175,7 +3177,7 @@ function createMapGroup(fieldSchema, title, description, path, value = null, isN
         const badge = section.querySelector('.collapsible-badge.null, .collapsible-badge.has-data');
         const hasItems = container.children.length > 0;
         badge.textContent = hasItems ? 'has data' : 'empty';
-        badge.className = `collapsible-badge ${hasItems ? 'has-data' : 'null'}`;
+        badge.className = `collapsible-badge vorpal-badge ${hasItems ? 'has-data' : 'null'}`;
     }
 
     return section;
@@ -3234,7 +3236,7 @@ function createArrayGroup(fieldSchema, title, description, path, value = null, i
         // variants. Picking one adds an item of that type. More obvious than
         // the old split [Add Item button] + [type select] UI.
         const addSelect = document.createElement('select');
-        addSelect.className = 'btn btn-primary add-menu-select';
+        addSelect.className = 'vorpal-btn vorpal-btn-secondary vorpal-btn-sm add-menu-select';
         const placeholder = document.createElement('option');
         placeholder.value = '';
         placeholder.textContent = `+ Add ${itemTypeName || 'Item'}`;
@@ -3263,7 +3265,7 @@ function createArrayGroup(fieldSchema, title, description, path, value = null, i
     } else {
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
-        addBtn.className = 'btn btn-primary';
+        addBtn.className = 'vorpal-btn vorpal-btn-secondary vorpal-btn-sm';
         addBtn.textContent = `+ Add ${itemTypeName || 'Item'}`;
         addBtn.onclick = () => {
             addArrayItem(container, fieldSchema.items, path, null, null, true);
@@ -3283,7 +3285,7 @@ function createArrayGroup(fieldSchema, title, description, path, value = null, i
     // as guidance so the user knows what this list is for before they add.
     if ((!Array.isArray(value) || value.length === 0) && description) {
         const hint = document.createElement('div');
-        hint.className = 'empty-state-hint';
+        hint.className = 'empty-state-hint vorpal-note';
         hint.textContent = description;
         container.appendChild(hint);
     }
@@ -3312,7 +3314,7 @@ function createArrayGroup(fieldSchema, title, description, path, value = null, i
         const badge = section.querySelector('.collapsible-badge.null, .collapsible-badge.has-data');
         const hasItems = container.children.length > 0;
         badge.textContent = hasItems ? 'has data' : 'empty';
-        badge.className = `collapsible-badge ${hasItems ? 'has-data' : 'null'}`;
+        badge.className = `collapsible-badge vorpal-badge ${hasItems ? 'has-data' : 'null'}`;
     }
 
     return section;
@@ -3329,7 +3331,7 @@ function renderInlineExtras(parent, valueTypeSchema, basePath, extras) {
 
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
-    addBtn.className = 'btn btn-primary extras-add-btn';
+    addBtn.className = 'vorpal-btn vorpal-btn-secondary vorpal-btn-sm extras-add-btn';
     addBtn.textContent = '+ Add Extra';
     addBtn.onclick = () => {
         addExtraRow(wrapper, valueTypeSchema, basePath, '', null);
@@ -3370,7 +3372,7 @@ function addExtraRow(wrapper, valueTypeSchema, basePath, key, value) {
 
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
-    removeBtn.className = 'delete-property-btn';
+    removeBtn.className = 'delete-property-btn vorpal-btn vorpal-btn-danger vorpal-btn-icon';
     removeBtn.innerHTML = '<span class="delete-property-icon">×</span>';
     removeBtn.title = 'Remove extra';
     removeBtn.onclick = () => {
@@ -3428,13 +3430,13 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null, a
     // below); cheap to create unconditionally, avoids an awkward mid-function
     // insertion point once the schema is resolved.
     const uriBadge = document.createElement('span');
-    uriBadge.className = 'uri-preview-badge';
+    uriBadge.className = 'uri-preview-badge vorpal-badge';
     uriBadge.style.display = 'none';
     header.appendChild(uriBadge);
 
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
-    removeBtn.className = 'delete-property-btn';
+    removeBtn.className = 'delete-property-btn vorpal-btn vorpal-btn-danger vorpal-btn-icon';
     removeBtn.innerHTML = '<span class="delete-property-icon">×</span>';
     removeBtn.title = 'Remove entry';
     removeBtn.onclick = () => {
@@ -3641,7 +3643,7 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
 
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
-        removeBtn.className = 'delete-property-btn';
+        removeBtn.className = 'delete-property-btn vorpal-btn vorpal-btn-danger vorpal-btn-icon';
         removeBtn.innerHTML = '<span class="delete-property-icon">×</span>';
         removeBtn.title = 'Remove item';
         removeBtn.onclick = (e) => {
@@ -3687,7 +3689,7 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
     // Create remove button (shared across all item types)
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
-    removeBtn.className = 'delete-property-btn';
+    removeBtn.className = 'delete-property-btn vorpal-btn vorpal-btn-danger vorpal-btn-icon';
     removeBtn.innerHTML = '<span class="delete-property-icon">×</span>';
     removeBtn.title = 'Remove item';
     removeBtn.onclick = (e) => {
@@ -3705,7 +3707,7 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
     // fresh clone right after it. Only shown on object-with-properties items.
     const duplicateBtn = document.createElement('button');
     duplicateBtn.type = 'button';
-    duplicateBtn.className = 'duplicate-item-btn';
+    duplicateBtn.className = 'duplicate-item-btn vorpal-btn vorpal-btn-secondary vorpal-btn-sm';
     duplicateBtn.innerHTML = '<span class="duplicate-item-icon">\u29C9</span>'; // ⧉
     duplicateBtn.title = 'Duplicate item';
     duplicateBtn.onclick = (e) => {
@@ -3779,7 +3781,7 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
         mapHeader.className = 'array-header';
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
-        addBtn.className = 'btn btn-primary';
+        addBtn.className = 'vorpal-btn vorpal-btn-secondary vorpal-btn-sm';
         const valueTypeName = arrayItemTypeName(itemSchema.additionalProperties);
         addBtn.textContent = valueTypeName ? `Add ${valueTypeName}` : 'Add Entry';
         addBtn.onclick = () => {
@@ -3826,7 +3828,7 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
             }
             if (labelParts.length > 0) {
                 const typeLabel = document.createElement('span');
-                typeLabel.className = 'array-item-type-label';
+                typeLabel.className = 'array-item-type-label vorpal-badge vorpal-mono';
                 typeLabel.textContent = labelParts.join(': ');
                 header.appendChild(typeLabel);
             }
@@ -3904,7 +3906,7 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
         item.appendChild(header);
 
         const textarea = document.createElement('textarea');
-        textarea.className = 'opaque-object-input';
+        textarea.className = 'opaque-object-input vorpal-input vorpal-mono';
         textarea.setAttribute('data-path', itemPath);
         textarea.setAttribute('data-opaque-object', 'true');
         textarea.spellcheck = false;
@@ -3948,7 +3950,7 @@ function updateParentSectionStatus(container) {
         if (badge) {
             const hasItems = container.children.length > 0;
             badge.textContent = hasItems ? 'has data' : 'empty';
-            badge.className = `collapsible-badge ${hasItems ? 'has-data' : 'null'}`;
+            badge.className = `collapsible-badge vorpal-badge ${hasItems ? 'has-data' : 'null'}`;
         }
     }
 }
@@ -5769,7 +5771,7 @@ function handleTemplateList(raw) {
         return;
     }
     list.innerHTML = items.map(entry =>
-        '<button type="button" class="template-entry" data-name="' + escapeHtml(entry.name) + '">' +
+        '<button type="button" class="template-entry vorpal-btn vorpal-btn-secondary vorpal-btn-block" data-name="' + escapeHtml(entry.name) + '">' +
         '<span class="template-entry-name">' + escapeHtml(entry.name) + '</span>' +
         '</button>'
     ).join('');
@@ -6051,7 +6053,7 @@ function refreshInspectorVars() {
         return;
     }
     body.innerHTML = vars.map(v =>
-        '<button type="button" class="inspector-var" data-var="' + escapeHtml(v) + '">${' + escapeHtml(v) + '}</button>'
+        '<button type="button" class="inspector-var vorpal-btn vorpal-btn-secondary vorpal-btn-sm vorpal-mono" data-var="' + escapeHtml(v) + '">${' + escapeHtml(v) + '}</button>'
     ).join('');
     body.querySelectorAll('.inspector-var').forEach(btn => {
         btn.onclick = () => insertVariableIntoFocused(btn.dataset.var);
@@ -6683,8 +6685,8 @@ function updateTitle() {
     const t = selectedTargetDirectory;
     const where = currentSchemaName
         ? currentSchemaName + (t && t.type !== 'domain' ? ' (' + t.displayName + ')' : '') + ' · '
-        : 'Editor · ';
-    document.title = (isDirty ? '* ' : '') + where + 'BLADE Configurator';
+        : '';
+    document.title = (isDirty ? '* ' : '') + where + 'Configurator · BLADE';
 }
 
 function clearDirty() {
@@ -7145,6 +7147,13 @@ function showSyncStatus(message, type) {
     showStatusIn(document.getElementById('sync-status'), message, type);
 }
 
+/// The classes of a status line: the shared badge, its state's variant, and
+/// the type itself (`success`, `warning`, `error`), which the words repeat.
+function statusClass(type) {
+    const variant = { success: ' vorpal-badge-ok', warning: ' vorpal-badge-warn', error: ' vorpal-badge-bad' }[type] || '';
+    return 'sync-status vorpal-badge' + variant + (type ? ' ' + type : '');
+}
+
 /// Shows `message` in a status line. Each message owns the line until the
 /// next one: an earlier message's timer never cuts a later one short. A
 /// success goes after 4 s; a warning stays 12 s; an error stays until the
@@ -7153,7 +7162,7 @@ function showStatusIn(el, message, type) {
     if (!el) return;
     clearTimeout(el._hideTimer);
     el.textContent = message;
-    el.className = 'sync-status ' + (type || '');
+    el.className = statusClass(type);
     el.style.display = 'inline-flex';
     const ms = type === 'success' ? 4000 : type === 'warning' ? 12000 : 0;
     if (ms) el._hideTimer = setTimeout(() => { el.style.display = 'none'; }, ms);
@@ -7245,10 +7254,10 @@ function displayVersionList(versionListJson, context) {
 
     if (versions.length === 0) {
         container.innerHTML = `
-            <div class="empty-state">
+            <div class="empty-state vorpal-empty">
                 <div class="empty-state-icon">📋</div>
                 <p>No version history available yet.</p>
-                <p style="font-size: 14px;">Versions will be created automatically when you save changes.</p>
+                <p>Versions will be created automatically when you save changes.</p>
             </div>
         `;
         return;
@@ -7268,9 +7277,9 @@ function displayVersionList(versionListJson, context) {
                     <div class="version-size">${sizeKB} KB</div>
                 </div>
                 <div class="version-actions">
-                    <button type="button" class="btn btn-secondary btn-small"
+                    <button type="button" class="vorpal-btn vorpal-btn-ghost vorpal-btn-sm"
                             onclick="${previewFn}('${version.timestamp}')">Preview</button>
-                    <button type="button" class="btn btn-primary btn-small"
+                    <button type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm"
                             onclick="${restoreFn}('${version.timestamp}')">Restore</button>
                 </div>
             </li>

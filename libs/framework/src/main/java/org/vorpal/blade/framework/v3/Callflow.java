@@ -1057,7 +1057,7 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	/// the response), the event sent, the analytics stopped. The INVITE was
 	/// never sent, so no callee response will report it. A failing listener
 	/// does not stop the rest.
-	public static void reportRefusal(SipServletResponse refusal, org.vorpal.blade.framework.v2.b2bua.B2buaListener listener) {
+	public static void reportRefusal(SipServletResponse refusal, org.vorpal.blade.framework.v3.b2bua.B2buaListener listener) {
 		try {
 			org.vorpal.blade.framework.v2.config.SettingsManager.createEvent("callDeclined", refusal);
 		} catch (Exception e) {
@@ -1078,9 +1078,9 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 		}
 	}
 
-	private org.vorpal.blade.framework.v2.b2bua.B2buaListener b2buaListenerOrNull() {
-		return (this instanceof org.vorpal.blade.framework.v2.b2bua.InitialInvite)
-				? ((org.vorpal.blade.framework.v2.b2bua.InitialInvite) this).getB2buaListener() : null;
+	private org.vorpal.blade.framework.v3.b2bua.B2buaListener b2buaListenerOrNull() {
+		return (this instanceof org.vorpal.blade.framework.v3.b2bua.InitialInvite)
+				? ((org.vorpal.blade.framework.v3.b2bua.InitialInvite) this).getB2buaListener() : null;
 	}
 
 	/// Sends an initial INVITE's `requests` as branches of a proxy on the
@@ -1279,7 +1279,7 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 		}
 	}
 
-	/// An analytics event for a passthru call, sent as [org.vorpal.blade.framework.v2.b2bua.Terminate]
+	/// An analytics event for a passthru call, sent as [org.vorpal.blade.framework.v3.b2bua.Terminate]
 	/// sends a B2BUA's: the application's analytics configuration decides
 	/// whether it is kept.
 	private static void passthruEvent(String name, SipServletResponse response) {
@@ -1530,6 +1530,7 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	}
 
 	private static void store(SipApplicationSession appSession, List<CallStep> trace, CallStep step) {
+		step.scoped(org.vorpal.blade.framework.v3.events.CallScope.of(appSession));
 		trace.add(step);
 		appSession.setAttribute(TRACE_ATTR, trace);
 		// publish to the per-app ring buffer the Trace MBean serves, so the

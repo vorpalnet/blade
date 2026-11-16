@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- A waveform: a recorded call. Recordings. -->
+  <g fill="none" stroke="#1f3a66" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 16h2 M9 11v10 M13 6v20 M17 10v12 M21 13v6 M25 8v16 M28 16h0"/>
+  </g>
+</svg>

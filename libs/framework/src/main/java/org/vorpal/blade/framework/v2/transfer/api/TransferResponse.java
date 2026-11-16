@@ -1,23 +1,12 @@
 package org.vorpal.blade.framework.v2.transfer.api;
 
-import java.io.Serializable;
-
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
-/**
- * REST API response for transfer operation results.
- *
- * <p>Contains the transfer event type, SIP method, status code,
- * description, and the original request.
- */
-@JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonPropertyOrder({ "event", "method", "status", "description", "request" })
-public class TransferResponse implements Serializable {
+/// @deprecated Use [org.vorpal.blade.framework.v3.transfer.api.TransferResponse]. This type is the v3 one under its old
+///             name, kept so code that names it still compiles.
+@Deprecated
+public class TransferResponse extends org.vorpal.blade.framework.v3.transfer.api.TransferResponse {
 	private static final long serialVersionUID = 1L;
-	public String event;
-	public String method;
-	public Integer status;
-	public String description;
-	public TransferRequest request;
+
+	public TransferResponse() {
+		super();
+	}
 }

@@ -101,6 +101,11 @@ public final class RealmSubjectAttributes implements SubjectAttributes {
 	}
 
 	@Override
+	public String signIn() {
+		return WEBLOGIC;
+	}
+
+	@Override
 	public String toString() {
 		return "RealmSubjectAttributes[" + name + " groups=" + groups + "]";
 	}

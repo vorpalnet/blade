@@ -2,134 +2,62 @@
 <html lang="en">
 <head>
 	<meta charset="utf-8">
-	<title>iRouter pipeline &amp; routing</title>
+	<title>iRouter Editor · BLADE</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
 	<script src="/blade/portal/brand/theme.js"></script>
+	<script src="/blade/portal/brand/shell.js" data-context="/blade/irouter-editor" defer></script>
 	<link rel="stylesheet" href="/blade/portal/lib/blade-editor.css">
 	<link rel="icon" type="image/svg+xml" href="/blade/irouter-editor/favicon.svg">
 	<style>
-		:root {
-			/* Dark shell, light document — same aliasing of the shared
-			   --vorpal-* tokens the other editors use; the kit CSS depends
-			   on these names. */
-			--bg: var(--vorpal-slate-100);
-			--panel: var(--vorpal-surface);
-			--text: var(--vorpal-ink-900);
-			--muted: var(--vorpal-slate-600);
-			--accent: var(--vorpal-purple);
-			--good: #1a7f37;
-			--bad: #cf222e;
-			--border: var(--vorpal-divider);
-		}
-		* { box-sizing: border-box; }
-		body {
-			font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-			color: var(--text);
-			margin: 0;
-		}
+		/* Layout and the visuals no shared component has. The controls are
+		   brand.css components (.vorpal-btn, .vorpal-panel, .vorpal-input,
+		   .vorpal-table, .vorpal-badge...); the editor kit's own layout loads
+		   from /blade/portal/lib/blade-editor.css. */
 		.page-content { max-width: 1400px; margin: 0 auto; padding: 24px; }
-		.vorpal-glass .page-content > h1 { color: var(--vorpal-ink-900); }
-		.vorpal-glass .page-content > .subtitle { color: var(--vorpal-slate-600); }
-		.vorpal-glass .page-content > .subtitle code { color: var(--vorpal-ink-900); }
-		h1 { margin: 0 0 8px; font-size: 20px; font-weight: 600; }
-		.subtitle { color: var(--muted); margin-bottom: 24px; }
-		label {
-			display: block;
-			color: var(--muted);
-			font-size: 12px;
-			text-transform: uppercase;
-			letter-spacing: 0.5px;
-			margin-bottom: 4px;
-		}
-		input, select, textarea, button {
-			background: var(--panel);
-			color: var(--text);
-			border: 1px solid var(--border);
-			border-radius: 4px;
-			padding: 8px 10px;
-			font: inherit;
-		}
-		textarea {
+		.page-content > h1 { margin: 0 0 8px; font-size: 20px; font-weight: 600; color: var(--vorpal-ink-900); }
+		.subtitle { color: var(--vorpal-slate-600); margin: 0 0 24px; }
+		.subtitle code { color: var(--vorpal-ink-900); }
+		.check-toggle { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; color: var(--vorpal-ink-900); }
+		.check-toggle input { width: 15px; height: 15px; margin: 0; }
+		#input {
 			width: 100%;
 			min-height: 280px;
-			font: 12px/1.45 "JetBrains Mono", Menlo, "Cascadia Code", "Consolas", monospace;
 			tab-size: 2;
 			resize: vertical;
 		}
-		button {
-			background: var(--accent);
-			color: #fff;
-			font-weight: 600;
-			border: none;
-			cursor: pointer;
-			padding: 8px 18px;
-		}
-		button:hover { filter: brightness(1.1); }
-		button:disabled { opacity: 0.5; cursor: not-allowed; }
-		.panel {
-			background: var(--panel);
-			border: 1px solid var(--border);
-			border-radius: 6px;
-			padding: 12px;
-		}
-		.panel h2 {
-			font-size: 13px;
-			color: var(--muted);
-			text-transform: uppercase;
-			letter-spacing: 0.5px;
-			margin: 0 0 8px;
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-		}
+		.run-row { margin-top: 8px; }
 		.dry-grid {
 			display: grid;
 			grid-template-columns: 1fr 1fr;
 			gap: 16px;
 			max-width: 1400px;
 		}
-		.status { font-size: 13px; color: var(--muted); }
-		.status.ok { color: var(--good); }
-		.status.err { color: var(--bad); }
+		.status { font-size: 13px; color: var(--vorpal-slate-600); }
+		.status.ok { color: var(--vorpal-success); }
+		.status.err { color: var(--vorpal-error); }
+		/* The decision in words: a note with the brand bar at its edge. */
 		.outcome {
 			font-size: 15px;
 			line-height: 1.5;
-			padding: 10px 12px;
-			border: 1px solid var(--border);
-			border-left: 4px solid var(--accent);
-			border-radius: 4px;
-			background: var(--bg);
+			border-left-color: var(--vorpal-purple);
+			color: var(--vorpal-ink-900);
 			margin-bottom: 10px;
 			word-break: break-all;
 		}
-		.result-table {
-			width: 100%;
-			border-collapse: collapse;
-			font-family: "JetBrains Mono", Menlo, monospace;
-			font-size: 12px;
-			margin-bottom: 10px;
-		}
-		.result-table td { padding: 4px 8px; border-top: 1px solid var(--border); vertical-align: top; }
-		.result-table td.k { color: var(--accent); white-space: nowrap; }
-		.result-note { font-size: 12px; color: var(--muted); margin: 6px 0; }
-		.dry-warn {
-			border: 1px solid var(--bad);
-			border-radius: 4px;
-			padding: 8px 10px;
-			margin-top: 10px;
-			font-size: 12px;
-			white-space: pre-wrap;
-			color: var(--bad);
-		}
+		.result-table { margin-bottom: 10px; }
+		.result-table td.k { color: var(--vorpal-purple); white-space: nowrap; }
+		.result-note { font-size: 12px; color: var(--vorpal-slate-600); margin: 6px 0; }
+		.dry-warn { margin-top: 10px; white-space: pre-wrap; }
 		details.raw { margin-top: 10px; font-size: 12px; }
 		details.raw pre {
-			background: var(--bg);
-			border: 1px solid var(--border);
-			border-radius: 4px;
+			background: var(--vorpal-slate-100);
+			border: 1px solid var(--vorpal-divider);
+			border-radius: var(--vorpal-radius-sm);
+			color: var(--vorpal-ink-900);
 			padding: 8px 10px;
 			max-height: 240px;
 			overflow: auto;
-			font: 11px/1.4 "JetBrains Mono", Menlo, monospace;
+			font: 11px/1.4 var(--vorpal-font-mono);
 			white-space: pre-wrap;
 			word-break: break-all;
 		}
@@ -154,61 +82,61 @@
 		</div>
 	</header>
 
-	<main class="page-content">
+	<main class="page-content" data-shell-main>
 	<h1>iRouter pipeline &amp; routing</h1>
 	<p class="subtitle" title="Save keeps the previous version; Publish tells the running iRouter to reload.">
 		Editing <code id="targetFile">irouter.json</code>
 	</p>
 
-	<details class="editor-shell" id="editorShell" open>
+	<details class="editor-shell vorpal-panel" id="editorShell" open>
 		<summary>
-			<span>Configuration</span>
-			<span class="src-badge" id="srcBadge">loading…</span>
-			<span class="dirty-badge" id="dirtyBadge" style="display:none;">unsaved changes</span>
+			<span class="vorpal-panel-title">Configuration</span>
+			<span class="src-badge vorpal-badge" id="srcBadge">loading…</span>
+			<span class="dirty-badge vorpal-badge vorpal-badge-warn" id="dirtyBadge" style="display:none;">unsaved changes</span>
 		</summary>
 
 		<div class="editor-toolbar editor-actions">
-			<label style="display:flex;align-items:center;gap:6px;margin:0;text-transform:none;letter-spacing:0;font-size:12px;color:var(--text);">
-				<input type="checkbox" id="liveDryRun" checked style="width:15px;height:15px;">
+			<label class="check-toggle">
+				<input type="checkbox" id="liveDryRun" checked>
 				re-run dry-run on change
 			</label>
 			<div class="spacer"></div>
-			<button id="helpBtn" class="secondary" type="button" title="What is all this?">? Help</button>
-			<button id="reloadEditor" class="secondary" type="button" title="Discard the draft and reload from disk">Reload</button>
-			<button id="showJson" class="secondary" type="button" title="Read-only view of the document Save would write">JSON</button>
-			<button id="showVersions" class="secondary" type="button">Versions</button>
-			<button id="saveConfig" type="button">Save</button>
-			<button id="publishConfig" type="button">Publish</button>
+			<button id="helpBtn" class="vorpal-btn vorpal-btn-ghost vorpal-btn-sm" type="button" title="What is all this?">? Help</button>
+			<button id="reloadEditor" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" title="Discard the draft and reload from disk">Reload</button>
+			<button id="showJson" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" title="Read-only view of the document Save would write">JSON</button>
+			<button id="showVersions" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button">Versions</button>
+			<button id="saveConfig" type="button" class="vorpal-btn vorpal-btn-sm">Save</button>
+			<button id="publishConfig" type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm">Publish</button>
 			<a class="handoff" href="/blade/configurator/configurator.html?schema=irouter"
 				title="Logging, session settings, and cluster/server overlays are edited in the Configurator">
 				logging &amp; session → Configurator</a>
 		</div>
 
 		<div class="versions-panel" id="versionsPanel" style="display:none;">
-			<h2 style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 8px;">Version history</h2>
+			<div class="vorpal-panel-head"><h2 class="vorpal-panel-title">Version history</h2></div>
 			<div id="versionsBody"></div>
 			<pre id="versionPreview" style="display:none;"></pre>
 		</div>
 
 		<div class="versions-panel" id="jsonPanel" style="display:none;">
-			<h2 style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 8px;display:flex;justify-content:space-between;align-items:center;">
-				<span id="jsonTitle">Draft irouter.json · read-only, exactly what Save writes</span>
-				<button id="copyJson" type="button" class="mini">copy</button>
-			</h2>
+			<div class="vorpal-panel-head">
+				<h2 class="vorpal-panel-title" id="jsonTitle">Draft irouter.json · read-only, exactly what Save writes</h2>
+				<div class="vorpal-toolbar"><button id="copyJson" type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm">copy</button></div>
+			</div>
 			<pre id="jsonBody"></pre>
 		</div>
 
 		<div class="section-head">
 			<span class="step">1</span>
-			<span class="section-title" title="Connectors run in order on each initial INVITE, extracting values (and REST, database or directory lookups) into variables the routing decision reads.">Pipeline</span>
-			<button class="mini help-mini" type="button" data-help="pipeline">?</button>
+			<span class="vorpal-panel-title" title="Connectors run in order on each initial INVITE, extracting values (and REST, database or directory lookups) into variables the routing decision reads.">Pipeline</span>
+			<button class="help-mini vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" data-help="pipeline">?</button>
 		</div>
 		<div id="pipelinePanel" class="pipeline-panel"></div>
 
 		<div class="section-head">
 			<span class="step">2</span>
-			<span class="section-title" title="One strategy (table, conditional or direct) produces the Route: forward downstream, or answer with a final response.">Routing</span>
-			<button class="mini help-mini" type="button" data-help="routing">?</button>
+			<span class="vorpal-panel-title" title="One strategy (table, conditional or direct) produces the Route: forward downstream, or answer with a final response.">Routing</span>
+			<button class="help-mini vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" data-help="routing">?</button>
 		</div>
 		<div id="routingPanel" class="pipeline-panel"></div>
 
@@ -216,37 +144,37 @@
 
 	<div class="section-head on-glass">
 		<span class="step">3</span>
-		<span class="section-title" title="Runs the unsaved draft in-process on the AdminServer; nothing is proxied.">Dry-run</span>
-		<button class="mini help-mini" type="button" data-help="dryrun">?</button>
-		<span class="section-sub">rest, jdbc and ldap connectors really call their backends</span>
+		<span class="vorpal-panel-title" title="Runs the unsaved draft in-process on the AdminServer; nothing is proxied.">Dry-run</span>
+		<button class="help-mini vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" data-help="dryrun">?</button>
+		<span class="vorpal-panel-sub">rest, jdbc and ldap connectors really call their backends</span>
 	</div>
 
 	<div class="dry-grid">
-		<div class="panel">
-			<h2>
-				<span>Input request</span>
-				<button id="loadSample" style="font-size:11px;padding:3px 8px;">Load sample INVITE</button>
-			</h2>
-			<textarea id="input" spellcheck="false" placeholder="INVITE sip:bob@example.com SIP/2.0&#10;From: ...&#10;To: ...&#10;..."></textarea>
-			<div style="display:flex;gap:12px;align-items:center;margin-top:8px;">
-				<button id="run">Dry-run</button>
+		<div class="vorpal-panel">
+			<div class="vorpal-panel-head">
+				<h2 class="vorpal-panel-title">Input request</h2>
+				<div class="vorpal-toolbar"><button id="loadSample" type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm">Load sample INVITE</button></div>
+			</div>
+			<textarea id="input" class="vorpal-input vorpal-mono" spellcheck="false" placeholder="INVITE sip:bob@example.com SIP/2.0&#10;From: ...&#10;To: ...&#10;..."></textarea>
+			<div class="run-row vorpal-toolbar">
+				<button id="run" type="button" class="vorpal-btn">Dry-run</button>
 				<span id="status" class="status"></span>
 			</div>
 		</div>
 
-		<div class="panel">
-			<h2>Decision</h2>
-			<div id="outcome" class="outcome" style="display:none;"></div>
+		<div class="vorpal-panel">
+			<div class="vorpal-panel-head"><h2 class="vorpal-panel-title">Decision</h2></div>
+			<div id="outcome" class="outcome vorpal-note" style="display:none;"></div>
 			<div id="headersWrap" style="display:none;">
 				<div class="result-note">Headers stamped on the outbound message:</div>
-				<table class="result-table" id="headersTable"></table>
+				<table class="result-table vorpal-table vorpal-mono" id="headersTable"></table>
 			</div>
 			<div id="skippedWrap" class="result-note" style="display:none;"></div>
 			<div id="varsWrap" style="display:none;">
 				<div class="result-note">Variables after enrichment:</div>
-				<table class="result-table" id="varsTable"></table>
+				<table class="result-table vorpal-table vorpal-mono" id="varsTable"></table>
 			</div>
-			<div id="warnPanel" class="dry-warn" style="display:none;"></div>
+			<div id="warnPanel" class="dry-warn vorpal-error" style="display:none;"></div>
 			<details class="raw" id="rawWrap" style="display:none;">
 				<summary>Raw response</summary>
 				<pre id="rawBody"></pre>
@@ -256,8 +184,8 @@
 
 	<dialog id="helpDialog" class="help-dialog">
 		<div class="help-head">
-			<span>How the iRouter works</span>
-			<button type="button" id="helpClose" class="mini">close</button>
+			<h2 class="vorpal-panel-title">How the iRouter works</h2>
+			<button type="button" id="helpClose" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm">close</button>
 		</div>
 		<div class="help-body">
 			<section id="help-pipeline">
@@ -468,7 +396,7 @@ Max-Forwards: 70
 
 				renderAll();
 			} catch (e) {
-				pipelinePanel.innerHTML = '<div class="empty-guide">failed to load configuration — '
+				pipelinePanel.innerHTML = '<div class="vorpal-error">failed to load configuration: '
 					+ escapeHtml(e.message) + '</div>';
 			}
 		}
@@ -486,7 +414,7 @@ Max-Forwards: 70
 
 			if (pipe.length === 0) {
 				const guide = document.createElement('div');
-				guide.className = 'empty-guide';
+				guide.className = 'empty-guide vorpal-note';
 				guide.textContent = 'No pipeline: routing runs with no variables.';
 				guide.title = 'Only a direct route or literal table keys can work. The usual first step: a sip connector extracting the dialed number and caller.';
 				panel.appendChild(guide);
@@ -575,7 +503,7 @@ Max-Forwards: 70
 				panel.appendChild(field);
 				if (!ed.doc.routing) {
 					const guide = document.createElement('div');
-					guide.className = 'empty-guide';
+					guide.className = 'empty-guide vorpal-note';
 					guide.style.marginTop = '8px';
 					guide.textContent = 'No strategy: every call gets 503.';
 					panel.appendChild(guide);
@@ -793,17 +721,18 @@ Max-Forwards: 70
 			if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
 			panel.style.display = '';
 			preview.style.display = 'none';
-			body.innerHTML = '<div class="result-note">loading…</div>';
+			body.innerHTML = '<div class="vorpal-empty">loading…</div>';
 			try {
 				const resp = await fetch(cfgUrl('/versions'));
 				const data = await resp.json();
 				if (data.error) throw new Error(data.error);
 				const versions = data.versions || [];
 				if (versions.length === 0) {
-					body.innerHTML = '<div class="result-note">no saved versions yet</div>';
+					body.innerHTML = '<div class="vorpal-empty">no saved versions yet</div>';
 					return;
 				}
 				const table = document.createElement('table');
+				table.className = 'vorpal-table';
 				for (const v of versions) {
 					const tr = document.createElement('tr');
 					const when = document.createElement('td');
@@ -842,7 +771,7 @@ Max-Forwards: 70
 				body.innerHTML = '';
 				body.appendChild(table);
 			} catch (e) {
-				body.innerHTML = '<div class="result-note">failed to load versions — ' + escapeHtml(e.message) + '</div>';
+				body.innerHTML = '<div class="vorpal-error">failed to load versions: ' + escapeHtml(e.message) + '</div>';
 			}
 		}
 

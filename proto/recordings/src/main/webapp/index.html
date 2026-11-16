@@ -3,11 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Recordings</title>
+<title>Recordings · BLADE</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+<script src="/blade/portal/brand/theme.js"></script>
+<script src="/blade/portal/brand/shell.js" data-context="/blade/recordings" defer></script>
 <!--
   The review page: search the call catalog, read a transcript, hear a call.
-  Hand-rolled and served from this WAR, with nothing fetched from outside it:
-  a reviewer's browser must not be sent to a third party to render a PHI page.
+  Hand-rolled and served from this WAR and the portal's shared styles on the
+  same host, with nothing fetched from another site: a reviewer's browser must
+  not be sent to a third party to render a PHI page.
   Everything it shows comes from this application's own API, which decides
   per record what this reviewer may see, so the page carries no policy of its
   own and no state beyond the current search.
@@ -16,63 +21,46 @@
   muted recording says so in words; an incomplete record says so in words.
 -->
 <style>
-  :root { --ink: #1f1f1f; --muted: #5a5a5a; --line: #d8d8d8; --panel: #f6f6f6; --brand: #602671; }
-  body { margin: 0; font: 14px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--ink); background: #fff; }
-  header { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 16px; }
-  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
-  header .who { color: var(--muted); font-size: 13px; margin-left: auto; }
-  header a { color: var(--brand); }
-  main { display: grid; grid-template-columns: minmax(360px, 1fr) minmax(420px, 1.4fr); gap: 0; min-height: calc(100vh - 50px); }
-  .search { padding: 16px 20px; border-right: 1px solid var(--line); }
+  main.review { display: grid; grid-template-columns: minmax(360px, 1fr) minmax(420px, 1.4fr); gap: 16px; padding: 16px 20px; align-items: start; }
   form.filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin-bottom: 12px; }
-  form.filters label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); }
-  form.filters input, form.filters select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; }
   form.filters .wide { grid-column: 1 / -1; }
-  form.filters button { grid-column: 1 / -1; justify-self: start; font: inherit; padding: 7px 14px; border: 1px solid var(--brand); background: var(--brand); color: #fff; border-radius: 4px; cursor: pointer; }
-  .status { color: var(--muted); font-size: 13px; margin: 6px 0 10px; min-height: 1.4em; }
-  table.hits { width: 100%; border-collapse: collapse; font-size: 13px; }
-  table.hits th { text-align: left; font-weight: 600; border-bottom: 1px solid var(--line); padding: 6px 6px; color: var(--muted); }
-  table.hits td { border-bottom: 1px solid var(--line); padding: 6px 6px; vertical-align: top; }
+  form.filters button { grid-column: 1 / -1; justify-self: start; }
+  .status { color: var(--vorpal-slate-600); font-size: 13px; margin: 6px 0 10px; min-height: 1.4em; }
   table.hits tr.hit { cursor: pointer; }
-  table.hits tr.hit:hover td, table.hits tr.selected td { background: var(--panel); }
-  table.hits tr.selected td:first-child { box-shadow: inset 3px 0 0 var(--brand); }
-  .snippet { color: var(--muted); font-style: italic; }
-  .record { padding: 16px 20px; }
-  .record h2 { font-size: 16px; margin: 0 0 4px; font-weight: 600; }
-  .facts { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+  .snippet { color: var(--vorpal-slate-600); font-style: italic; }
+  .record h2 { margin: 0 0 4px; }
+  .facts { color: var(--vorpal-slate-600); font-size: 13px; margin-bottom: 12px; }
   .facts span + span::before { content: " · "; }
   .player { margin: 8px 0 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .player audio { width: 100%; max-width: 520px; }
-  .player .note { color: var(--muted); font-size: 12px; }
-  .transcript { border: 1px solid var(--line); border-radius: 4px; padding: 6px 0; max-height: 60vh; overflow: auto; }
+  .player .note { color: var(--vorpal-slate-600); font-size: 12px; }
+  .transcript { border: 1px solid var(--vorpal-divider); border-radius: var(--vorpal-radius-sm); padding: 6px 0; max-height: 60vh; overflow: auto; }
   .line { display: grid; grid-template-columns: 64px 150px 1fr; gap: 10px; padding: 5px 12px; }
-  .line:hover { background: var(--panel); }
-  .line .t { color: var(--muted); font-variant-numeric: tabular-nums; cursor: pointer; }
+  .line:hover { background: var(--vorpal-slate-200); }
+  .line .t { color: var(--vorpal-slate-600); font-variant-numeric: tabular-nums; cursor: pointer; }
   .line .p { font-weight: 600; overflow-wrap: anywhere; }
-  .line .p.callee { font-weight: 400; color: var(--muted); }
-  .line .p::after { content: ""; }
-  .line .x .k { border: 1px solid var(--ink); border-radius: 3px; padding: 0 4px; font-size: 12px; }
-  .empty { color: var(--muted); padding: 24px 0; }
-  .toggle { font-size: 12px; color: var(--muted); }
+  .line .p.callee { font-weight: 400; color: var(--vorpal-slate-600); }
+  .toggle { font-size: 12px; color: var(--vorpal-slate-600); }
   .toggle input { vertical-align: middle; }
 </style>
 </head>
 <body>
-<header>
-  <h1>Recordings</h1>
-  <span class="who" id="who"></span>
-  <a href="oidc/logout" id="logout" hidden>Sign out</a>
+<div class="vorpal-app">
+<header class="vorpal-topbar">
+  <a class="vorpal-brand" href="./" title="Recordings"><img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal"></a>
+  <a class="vorpal-appmark" href="./">Recordings</a>
+  <div class="vorpal-topbar-right"></div>
 </header>
-<main>
-  <section class="search">
+<main class="review">
+  <section class="search vorpal-panel">
     <form class="filters" id="filters" autocomplete="off">
-      <label>From day <input type="date" name="from"></label>
-      <label>To day <input type="date" name="to"></label>
-      <label class="wide">Number, calling or called (prefix) <input name="number" placeholder="816555"></label>
-      <label>Attribute <input name="attrName" placeholder="department"></label>
-      <label>equals <input name="attrValue" placeholder="cardiology"></label>
-      <label>Found in the call
-        <select name="kind">
+      <label class="vorpal-field"><span class="vorpal-label">From day</span><input class="vorpal-input" type="date" name="from"></label>
+      <label class="vorpal-field"><span class="vorpal-label">To day</span><input class="vorpal-input" type="date" name="to"></label>
+      <label class="vorpal-field wide"><span class="vorpal-label">Number, calling or called (prefix)</span><input class="vorpal-input" name="number" placeholder="816555"></label>
+      <label class="vorpal-field"><span class="vorpal-label">Attribute</span><input class="vorpal-input" name="attrName" placeholder="department"></label>
+      <label class="vorpal-field"><span class="vorpal-label">equals</span><input class="vorpal-input" name="attrValue" placeholder="cardiology"></label>
+      <label class="vorpal-field"><span class="vorpal-label">Found in the call</span>
+        <select class="vorpal-input" name="kind">
           <option value="">anything</option>
           <option value="card">a card number</option>
           <option value="ssn">a social security number</option>
@@ -82,22 +70,23 @@
           <option value="address">an address</option>
         </select>
       </label>
-      <label>Call id <input name="call" placeholder="0C360643.1a08…"></label>
-      <label class="wide">Words said <input name="q" placeholder="cancel my appointment"></label>
-      <label class="wide">Protected value spoken (needs unredact) <input name="value" placeholder="member id, card…"></label>
-      <button type="submit">Search</button>
+      <label class="vorpal-field"><span class="vorpal-label">Call id</span><input class="vorpal-input vorpal-mono" name="call" placeholder="0C360643.1a08…"></label>
+      <label class="vorpal-field wide"><span class="vorpal-label">Words said</span><input class="vorpal-input" name="q" placeholder="cancel my appointment"></label>
+      <label class="vorpal-field wide"><span class="vorpal-label">Protected value spoken (needs unredact)</span><input class="vorpal-input" name="value" placeholder="member id, card…"></label>
+      <button type="submit" class="vorpal-btn">Search</button>
     </form>
     <div class="status" id="status"></div>
-    <table class="hits" id="hits" hidden>
+    <table class="hits vorpal-table" id="hits" hidden>
       <thead><tr><th>When (UTC)</th><th>From</th><th>To</th><th>Length</th><th>Found</th></tr></thead>
       <tbody></tbody>
     </table>
-    <div class="empty" id="empty" hidden>Nothing you may see matches.</div>
+    <div class="vorpal-empty" id="empty" hidden>Nothing you may see matches.</div>
   </section>
-  <section class="record" id="record">
-    <div class="empty">Search, then pick a call.</div>
+  <section class="record vorpal-panel" id="record">
+    <div class="vorpal-empty">Search, then pick a call.</div>
   </section>
 </main>
+</div>
 <script>
 (function () {
   var api = 'api/v1/recordings';
@@ -233,7 +222,7 @@
 
   function show(hit, verbatim) {
     record.innerHTML = '';
-    var h2 = text(el('h2'), (hit.from || '?') + ' → ' + (hit.to || '?'));
+    var h2 = text(el('h2', 'vorpal-panel-title'), (hit.from || '?') + ' → ' + (hit.to || '?'));
     record.appendChild(h2);
     var facts = el('div', 'facts');
     facts.appendChild(text(el('span'), fmtWhen(hit.epochUtc) + ' UTC'));
@@ -287,7 +276,7 @@
           var x = el('span', 'x');
           // A protected span arrives as [kind]; render it as a tag, not as colour.
           String(u.text || '').split(/(\[[a-zA-Z]+\])/).forEach(function (part) {
-            if (/^\[[a-zA-Z]+\]$/.test(part)) { x.appendChild(text(el('span', 'k'), part.slice(1, -1))); }
+            if (/^\[[a-zA-Z]+\]$/.test(part)) { x.appendChild(text(el('span', 'vorpal-badge k'), part.slice(1, -1))); }
             else { x.appendChild(document.createTextNode(part)); }
           });
           row.appendChild(x);
@@ -297,11 +286,7 @@
       .catch(function (e) { text(box, e.message); });
   }
 
-  // Who is signed in, if the API says. A plain probe of today's listing tells us the session is alive.
-  var today = new Date().toISOString().slice(0, 10).replace(/-/g, '/');
-  fetch(api + '/' + today, { headers: { 'Accept': 'application/json' } }).then(function (r) {
-    if (r.ok) { document.getElementById('logout').hidden = false; }
-  });
+  // Who is signed in, and Sign out: the shared frame's account menu (shell.js).
 })();
 </script>
 </body>

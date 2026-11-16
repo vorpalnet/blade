@@ -11,9 +11,14 @@
  * light for readability. Replaces the stock mxGraph look (gray-gradient
  * GIFs, Arial 8pt, navy menu hover, yellow tooltips).
  *
- * Functional affordances are preserved — most importantly the selected-
+ * Functional affordances are preserved, most importantly the selected-
  * tool indicator (a purple ring + fill, distinct by border + background,
  * not by color alone).
+ *
+ * The controls inside the windows are not styled here. Buttons carry the
+ * shared .vorpal-btn classes where the scripts build them, and inputs take
+ * the shared default look the frame gives every bare control (shell.js marks
+ * the page .vorpal-shell). The windows themselves match .vorpal-panel.
  */
 
 /* --- Selection rubberband ------------------------------------------- */
@@ -48,8 +53,8 @@ div.mxRubberband {
 /* --- Floating windows (Tasks, State / Transition inspectors) -------- */
 div.mxWindow {
 	background: var(--vorpal-surface);
-	border: 1px solid var(--vorpal-slate-400);
-	border-radius: var(--vorpal-radius-lg);
+	border: 1px solid var(--vorpal-slate-300);
+	border-radius: 12px;
 	box-shadow: var(--vorpal-shadow-lg);
 	position: absolute;
 	overflow: hidden;
@@ -68,9 +73,8 @@ td.mxWindowTitle {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	text-align: left;
-	font-weight: 600;
-	font-size: 12.5px;
-	letter-spacing: 0.01em;
+	font-weight: 700;
+	font-size: 13px;
 	overflow: hidden;
 	height: 18px;
 	padding: 9px 12px;
@@ -86,46 +90,6 @@ div.mxWindowPane {
 td.mxWindowPane td {
 	font-family: var(--vorpal-font-sans);
 	font-size: 12px;
-}
-td.mxWindowPane input, td.mxWindowPane select, td.mxWindowPane textarea, td.mxWindowPane radio {
-	border: 1px solid var(--vorpal-slate-300);
-	border-radius: 0;
-	font-family: var(--vorpal-font-sans);
-	font-size: 12px;
-	padding: 4px 6px;
-}
-td.mxWindowPane input:focus, td.mxWindowPane select:focus, td.mxWindowPane textarea:focus {
-	border-color: var(--vorpal-purple);
-	outline: none;
-}
-td.mxWindowPane button {
-	background: var(--vorpal-surface);
-	color: var(--vorpal-ink-700);
-	border: 1px solid var(--vorpal-slate-300);
-	border-radius: 0;
-	font-family: var(--vorpal-font-sans);
-	font-size: 12px;
-	font-weight: 600;
-	padding: 5px 12px;
-	cursor: pointer;
-	float: left;
-}
-td.mxWindowPane button:hover {
-	background: var(--vorpal-purple-soft);
-	color: var(--vorpal-purple-700);
-	border-color: var(--vorpal-purple-100);
-}
-
-/* Route Simulator tabs (Simulate/Replay/Live) — render EXACTLY as Jeff's
-   flowSimulate.js styles them inline: flat, SEPARATE gray buttons, active =
-   white + bold. This rule's only job is to undo what the generic
-   window-button rule above would otherwise impose on his design — the rounded
-   corners and the 600 weight on inactive tabs. Nothing else: no segmenting
-   (margin-left), no hover recolor. Those were my additions and they're what
-   made the tabs look worse than his original. */
-td.mxWindowPane button.sim-tab {
-	border-radius: 0;
-	font-weight: normal;
 }
 
 /* --- Toolbar / palette ---------------------------------------------- */
@@ -143,7 +107,7 @@ img.mxToolbarItem {
 	margin: 0 2px 2px 0;
 	padding: 2px;
 	border: 1px solid transparent;
-	border-radius: 0;
+	border-radius: 7px;
 }
 img.mxToolbarItem:hover {
 	background: var(--vorpal-purple-soft);
@@ -151,11 +115,6 @@ img.mxToolbarItem:hover {
 }
 select.mxToolbarCombo {
 	vertical-align: top;
-	border: 1px solid var(--vorpal-slate-300);
-	border-radius: 0;
-	font-family: var(--vorpal-font-sans);
-	font-size: 12px;
-	padding: 2px 4px;
 }
 div.mxToolbarComboContainer {
 	padding: 2px;
@@ -164,7 +123,7 @@ img.mxToolbarMode {
 	margin: 1px 2px 2px 1px;
 	padding: 2px;
 	border: 1px solid transparent;
-	border-radius: 0;
+	border-radius: 7px;
 }
 img.mxToolbarMode:hover {
 	background: var(--vorpal-purple-soft);
@@ -175,14 +134,16 @@ img.mxToolbarModeSelected {
 	margin: 1px 2px 2px 1px;
 	padding: 2px;
 	border: 1px solid var(--vorpal-purple);
-	border-radius: 0;
+	border-radius: 7px;
 	background: var(--vorpal-purple-100);
 }
 
-/* --- Tooltips — dark, high-contrast, readable multi-line ------------ */
+/* --- Tooltips: inverted, high-contrast, readable multi-line --------- */
+/* Ink on surface swapped, so it inverts in either theme (a fixed white
+   text went unreadable on the dark theme's pale ink). */
 div.mxTooltip {
 	background: var(--vorpal-ink-900);
-	color: #fff;
+	color: var(--vorpal-surface);
 	border: 0;
 	border-radius: var(--vorpal-radius-md);
 	box-shadow: var(--vorpal-shadow-md);

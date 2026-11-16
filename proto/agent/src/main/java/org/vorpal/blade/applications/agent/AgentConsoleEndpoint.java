@@ -1,7 +1,9 @@
 package org.vorpal.blade.applications.agent;
 
 import java.security.Principal;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Level;
@@ -15,6 +17,8 @@ import javax.websocket.OnOpen;
 import javax.websocket.Session;
 import javax.websocket.server.ServerEndpoint;
 
+import org.vorpal.blade.framework.v3.access.Access;
+import org.vorpal.blade.framework.v3.access.Grant;
 import org.vorpal.blade.framework.v3.security.JwtIdentity;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -67,7 +71,9 @@ public class AgentConsoleEndpoint {
 		// registry's ping instead (AgentConsoleRegistry.ping), which also keeps a
 		// reverse proxy's idle cutoff from doing the same thing a minute later.
 		session.setMaxIdleTimeout(0);
-		AgentConsoleRegistry.add(session, principal.getName());
+		AgentSettings current = AgentServlet.settings();
+		AgentConsoleRegistry.add(session, principal.getName(),
+				scopeOf(principal, (current == null) ? null : current.getGrants()));
 		// Tell the page who it is and whether its report button should be live.
 		ObjectNode hello = MAPPER.createObjectNode();
 		hello.put("t", "hello");
@@ -220,6 +226,33 @@ public class AgentConsoleEndpoint {
 		}
 		// Container-login fallback: a real WebLogic account, not the OpenID path.
 		return mayReport(cfg, null, null, false);
+	}
+
+	/// Which calls a console signed in as `principal` sees beyond those popped to
+	/// it by name: null for every call, when no grants are configured. An
+	/// OpenID identity holds the grants naming one of its groups (or roles), and
+	/// sees no other call when it holds none. Under the container-login fallback
+	/// the caller is a WebLogic administrator, who sees every call as in every
+	/// other admin application.
+	static Access scopeOf(Principal principal, List<Grant> grants) {
+		if (grants == null || grants.isEmpty()) {
+			return null;
+		}
+		if (!(principal instanceof JwtIdentity)) {
+			return Access.all();
+		}
+		JwtIdentity id = (JwtIdentity) principal;
+		List<Grant> held = new ArrayList<>();
+		for (Grant g : grants) {
+			if (g != null && g.getGroup() != null && (in(g.getGroup(), id.groups()) || in(g.getGroup(), id.roles()))) {
+				held.add(g);
+			}
+		}
+		return Access.of(held);
+	}
+
+	private static boolean in(String group, Set<String> values) {
+		return values != null && values.contains(group);
 	}
 
 	/// The report gate, as a pure decision so it can be tested without a socket.

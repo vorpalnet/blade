@@ -30,8 +30,14 @@ import org.vorpal.blade.framework.v2.logging.LogMatch;
 import org.vorpal.blade.framework.v2.logging.LogSearchResult;
 import org.vorpal.blade.framework.v2.logging.LogSlice;
 import org.vorpal.blade.framework.v2.logging.VorpalLogReaderMXBean;
+import org.vorpal.blade.framework.v3.access.Access;
 import org.vorpal.blade.framework.v3.events.AccessEvent;
 import org.vorpal.blade.framework.v3.events.Events;
+import org.vorpal.blade.framework.v3.security.AccessDecision;
+import org.vorpal.blade.framework.v3.security.AccessEvaluator;
+import org.vorpal.blade.framework.v3.security.AccessPolicy;
+import org.vorpal.blade.framework.v3.security.DataPermission;
+import org.vorpal.blade.framework.v3.security.SubjectAttributes;
 
 @Path("/")
 @Tag(name = "Logs", description = "Cluster-wide log viewer")
@@ -47,6 +53,39 @@ public class LogQueryAPI {
 
 	@javax.ws.rs.core.Context
 	private javax.ws.rs.core.SecurityContext security;
+
+	@javax.ws.rs.core.Context
+	private javax.servlet.http.HttpServletRequest request;
+
+	/// Whether `subject` may read log lines. A log line can hold a caller's
+	/// number, an account id or a SIP message, so reading one is
+	/// `phi:transcript` under this app's `access` policy, asked with no record:
+	/// a log is every call at once, so only a rule with no `match` reaches it.
+	/// Before the settings load, the default policy answers, which lets the
+	/// WebLogic admin groups read as they always have.
+	static AccessDecision mayRead(SubjectAttributes subject, LogsSettings settings) {
+		AccessPolicy policy = (settings == null) ? Access.defaultPolicy() : settings.getAccess();
+		return new AccessEvaluator(policy).evaluate(subject, DataPermission.TRANSCRIPT, null);
+	}
+
+	/// Null if this viewer may read `file`; otherwise the `403` to answer with,
+	/// once the refusal is in the access log. The servers and the file names
+	/// stay open: they say where logs are, not what is in them.
+	private Response refused(String file) {
+		SubjectAttributes subject = (request == null) ? null : SubjectAttributes.of(request);
+		AccessDecision decision = mayRead(subject, LogsSettingsStartup.settings());
+		if (decision.isAllowed()) {
+			return null;
+		}
+		AccessEvent event = new AccessEvent(subject, decision, "log", file)
+				.from(request == null ? null : request.getRemoteAddr());
+		if (!Events.publish(event.toCloudEvent(Events.source()))) {
+			log.severe("logs: the access record for a refused read of " + file + " was not published");
+		}
+		return Response.status(Response.Status.FORBIDDEN).type(MediaType.TEXT_PLAIN)
+				.entity("Reading log lines needs phi:transcript, which the logs app's access policy does not give you")
+				.build();
+	}
 
 	/// Record a read of call content in the access log: a trace captures whole
 	/// SIP messages and a log can hold caller numbers, so who looked is worth
@@ -145,6 +184,10 @@ public class LogQueryAPI {
 			@PathParam("path") String relativePath,
 			@DefaultValue("-1") @QueryParam("offset") long offset,
 			@DefaultValue("65536") @QueryParam("max") int maxBytes) {
+		Response no = refused(serverName + "/" + relativePath);
+		if (no != null) {
+			return no;
+		}
 		if (offset == -1 && maxBytes == 0) {
 			// The size probe the viewer makes when a file is opened; the slices
 			// and the follow that come after it are the same read.
@@ -183,6 +226,10 @@ public class LogQueryAPI {
 			@PathParam("path") String relativePath,
 			@DefaultValue("0") @QueryParam("cursor") long cursor,
 			@DefaultValue("65536") @QueryParam("max") int maxBytes) {
+		Response no = refused(serverName + "/" + relativePath);
+		if (no != null) {
+			return no;
+		}
 		try {
 			LogSlice s = LogReaderClient.tail(serverName, relativePath, cursor, maxBytes);
 			String body = new String(s.getBytes(), StandardCharsets.UTF_8);
@@ -220,6 +267,10 @@ public class LogQueryAPI {
 	public Response download(
 			@PathParam("name") String serverName,
 			@PathParam("path") String relativePath) {
+		Response no = refused(serverName + "/" + relativePath + " (download)");
+		if (no != null) {
+			return no;
+		}
 		accessed("admin:logs", "log", serverName + "/" + relativePath + " (download)");
 		try {
 			VorpalLogReaderMXBean reader = LogReaderClient.forServer(serverName);
@@ -285,6 +336,10 @@ public class LogQueryAPI {
 			@DefaultValue("0") @QueryParam("from") long fromOffset,
 			@DefaultValue("500") @QueryParam("maxMatches") int maxMatches,
 			@DefaultValue("33554432") @QueryParam("maxScan") long maxBytesScanned) {
+		Response no = refused(serverName + "/" + relativePath + " search: " + pattern);
+		if (no != null) {
+			return no;
+		}
 		accessed("admin:logs", "log", serverName + "/" + relativePath + " search: " + pattern);
 		try {
 			ObjectNode n = mapper.createObjectNode();

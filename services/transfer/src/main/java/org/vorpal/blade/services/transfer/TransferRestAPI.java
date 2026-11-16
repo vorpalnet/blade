@@ -20,12 +20,12 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
 
 import org.vorpal.blade.framework.Callflow;
-import org.vorpal.blade.framework.v2.transfer.TransferSettings.TransferStyle;
+import org.vorpal.blade.framework.v3.transfer.TransferSettings.TransferStyle;
 import org.vorpal.blade.framework.v3.transfer.AttendedTransfer;
 import org.vorpal.blade.framework.v3.transfer.TransferObserver;
 import org.vorpal.blade.services.transfer.notify.TransferNotices;
-import org.vorpal.blade.framework.v2.transfer.api.TransferAPI;
-import org.vorpal.blade.framework.v2.transfer.api.TransferRequest;
+import org.vorpal.blade.framework.v3.transfer.api.TransferAPI;
+import org.vorpal.blade.framework.v3.transfer.api.TransferRequest;
 
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.Operation;

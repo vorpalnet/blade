@@ -26,7 +26,7 @@
 /// uses {@code @Suspended AsyncResponse} for asynchronous HTTP response handling,
 /// allowing the SIP call setup to complete before returning the HTTP result.
 ///
-/// @see org.vorpal.blade.framework.v2.callflow.Callflow
+/// @see org.vorpal.blade.framework.v3.Callflow
 /// @see org.vorpal.blade.test.client.MessageRequest
 /// @see org.vorpal.blade.test.client.MessageResponse
 package org.vorpal.blade.framework.tpcc;

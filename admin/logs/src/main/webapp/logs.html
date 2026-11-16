@@ -3,9 +3,10 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Viewer · BLADE Logs</title>
+	<title>Logs · BLADE</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
 	<script src="/blade/portal/brand/theme.js"></script>
+	<script src="/blade/portal/brand/shell.js" data-context="/blade/logs" defer></script>
 	<link rel="stylesheet" href="logs.css">
 	<link rel="icon" type="image/svg+xml" href="/blade/logs/favicon.svg">
 	<!-- Embed mode (?embed=1): tightens the in-page heading when iframed
@@ -49,20 +50,20 @@
 	<div class="log-page">
 
 		<!-- Row A — what you are looking at, and what you can take away. -->
-		<div class="log-toolbar">
-			<label class="log-field">Server
-				<select id="server"></select>
+		<div class="log-toolbar vorpal-toolbar">
+			<label class="log-field vorpal-field"><span class="vorpal-label">Server</span>
+				<select id="server" class="vorpal-input"></select>
 			</label>
-			<label class="log-field">Log file
-				<select id="logFile"></select>
+			<label class="log-field vorpal-field"><span class="vorpal-label">Log file</span>
+				<select id="logFile" class="vorpal-input"></select>
 			</label>
-			<span id="fileMeta" class="log-meta">—</span>
+			<span id="fileMeta" class="log-meta vorpal-mono">—</span>
 			<span class="log-spacer"></span>
-			<button id="followBtn" class="vorpal-btn vorpal-btn-secondary" type="button"
+			<button id="followBtn" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button"
 			        aria-pressed="false">Follow</button>
-			<button id="reloadBtn" class="vorpal-btn vorpal-btn-secondary" type="button">Reload</button>
+			<button id="reloadBtn" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button">Reload</button>
 			<div class="log-menu">
-				<button id="downloadBtn" class="vorpal-btn vorpal-btn-secondary" type="button"
+				<button id="downloadBtn" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button"
 				        aria-haspopup="menu" aria-expanded="false">Download <span aria-hidden="true">▾</span></button>
 				<div class="log-menu-items" id="downloadMenu" role="menu" hidden>
 					<button type="button" role="menuitem" data-download="file">Whole file…</button>
@@ -74,33 +75,33 @@
 
 		<!-- Row B — where in the file you are. The pane's own scrollbar covers
 		     the loaded window; this slider covers the whole file. -->
-		<div class="log-toolbar">
-			<button id="topBtn" class="log-mini" type="button" title="Jump to the start of the file.">⇱ Top</button>
+		<div class="log-toolbar vorpal-toolbar">
+			<button id="topBtn" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" title="Jump to the start of the file.">⇱ Top</button>
 			<input id="scrubber" class="log-scrubber" type="range" min="0" max="1000" value="1000"
 			       aria-label="Position in file">
-			<button id="bottomBtn" class="log-mini" type="button" title="Jump to the end of the file.">⇲ End</button>
-			<label class="log-field log-field-wide">Go to
-				<input id="goto" type="text" placeholder="byte offset, 14:32:05, or 2026-08-04 14:32"
+			<button id="bottomBtn" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" title="Jump to the end of the file.">⇲ End</button>
+			<label class="log-field log-field-wide vorpal-field"><span class="vorpal-label">Go to</span>
+				<input id="goto" class="vorpal-input" type="text" placeholder="byte offset, 14:32:05, or 2026-08-04 14:32"
 				       autocomplete="off">
 			</label>
-			<button id="gotoBtn" class="log-mini" type="button">Go</button>
+			<button id="gotoBtn" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button">Go</button>
 		</div>
 
 		<!-- Row C — narrowing what you see. -->
-		<div class="log-toolbar">
-			<label class="log-field log-field-wide">Find
-				<input id="find" type="search" placeholder="text in the loaded window" autocomplete="off">
+		<div class="log-toolbar vorpal-toolbar">
+			<label class="log-field log-field-wide vorpal-field"><span class="vorpal-label">Find</span>
+				<input id="find" class="vorpal-input" type="search" placeholder="text in the loaded window" autocomplete="off">
 			</label>
-			<button id="findPrev" class="log-mini" type="button" title="Previous match (Shift+Enter)">▲</button>
-			<button id="findNext" class="log-mini" type="button" title="Next match (Enter)">▼</button>
+			<button id="findPrev" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" title="Previous match (Shift+Enter)">▲</button>
+			<button id="findNext" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" title="Next match (Enter)">▼</button>
 			<span id="findCount" class="log-meta">—</span>
-			<button id="searchFile" class="log-mini" type="button"
+			<button id="searchFile" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button"
 			        title="Scan the whole file on the server that holds it (Ctrl+Enter)">Search file</button>
 			<label class="log-toggle"><input type="checkbox" id="optRegex"> Regex</label>
 
 			<span class="log-sep" role="separator"></span>
 
-			<span class="log-chips" id="sevChips" role="group" aria-label="Severity filter">
+			<span class="log-chips vorpal-seg" id="sevChips" role="group" aria-label="Severity filter">
 				<button type="button" class="log-chip" data-sev="error"   aria-pressed="true">Errors</button>
 				<button type="button" class="log-chip" data-sev="warning" aria-pressed="true">Warnings</button>
 				<button type="button" class="log-chip" data-sev="info"    aria-pressed="true">Info</button>
@@ -113,8 +114,8 @@
 			<label class="log-toggle"><input type="checkbox" id="optWrap"> Wrap</label>
 			<label class="log-toggle"><input type="checkbox" id="optOffsets"> Offsets</label>
 			<label class="log-toggle"><input type="checkbox" id="optAnsi" checked> Colour</label>
-			<label class="log-field">Size
-				<select id="optFont">
+			<label class="log-field vorpal-field"><span class="vorpal-label">Size</span>
+				<select id="optFont" class="vorpal-input">
 					<option value="11">11</option>
 					<option value="12" selected>12</option>
 					<option value="13">13</option>
@@ -123,14 +124,14 @@
 			</label>
 		</div>
 
-		<div class="log-panel">
-			<header>
-				<span id="paneTitle">No file selected</span>
-				<span id="panePill" class="vorpal-pill">idle</span>
+		<div class="log-panel vorpal-panel">
+			<header class="vorpal-panel-head">
+				<span id="paneTitle" class="vorpal-panel-title vorpal-mono">No file selected</span>
+				<span id="panePill" class="vorpal-badge">idle</span>
 			</header>
 
-			<div id="notice" class="vorpal-callout vorpal-callout-warn" hidden>
-				<div class="vorpal-callout-title" id="noticeTitle"></div>
+			<div id="notice" class="log-notice vorpal-error" role="alert" hidden>
+				<div class="log-notice-title" id="noticeTitle"></div>
 				<div id="noticeBody"></div>
 			</div>
 
@@ -149,14 +150,14 @@
 				     so the list is an index into the pane rather than a second
 				     copy of the log. -->
 				<aside id="results" class="log-results" hidden aria-label="Search results">
-					<header>
-						<span>Matches in file</span>
-						<button id="resultsClose" class="log-mini" type="button" aria-label="Close results">✕</button>
+					<header class="vorpal-panel-head">
+						<span class="vorpal-panel-title">Matches in file</span>
+						<button id="resultsClose" class="vorpal-btn vorpal-btn-ghost vorpal-btn-sm" type="button" aria-label="Close results">✕</button>
 					</header>
-					<div id="resultsMeta" class="log-results-meta">—</div>
+					<div id="resultsMeta" class="log-results-meta vorpal-panel-sub">—</div>
 					<ol id="resultsList" class="log-results-list"></ol>
 					<div class="log-results-foot">
-						<button id="searchMore" class="log-mini" type="button" hidden>Scan further…</button>
+						<button id="searchMore" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" hidden>Scan further…</button>
 					</div>
 				</aside>
 			</div>

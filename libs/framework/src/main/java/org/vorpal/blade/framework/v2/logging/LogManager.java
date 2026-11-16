@@ -39,7 +39,7 @@ import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
 
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 
 import weblogic.kernel.KernelLogManager;

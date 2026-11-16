@@ -7,18 +7,19 @@ import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
 
 import org.vorpal.blade.framework.v3.security.OidcLoginFilter;
 
-/// The account menu's "Sign out", for either way in.
+/// The account menu's "Sign out", for either way in. Both end at the portal's
+/// `/logout` ([SignOut#EVERYWHERE]), which signs the browser out of every application
+/// on the AdminServer: they share one session cookie, so ending only this
+/// application's session would leave the others signed in.
 ///
-/// An identity-domain session goes to [OidcLoginFilter#LOGOUT_PATH], which
-/// also ends the session at the identity domain, so the next visit asks for a
-/// password again rather than signing straight back in. A WebLogic form
-/// login has no such endpoint: the filter passes a container-authenticated
-/// request through untouched. That session is ended here, and the board's
-/// next load shows the login form.
+/// An identity-domain session first goes to [OidcLoginFilter#LOGOUT_PATH],
+/// which ends the session at the identity domain with the ID token this
+/// application holds, so the next visit asks for a password again rather
+/// than signing straight back in; the identity domain then returns the
+/// browser to the portal. A WebLogic form login goes to the portal directly.
 ///
 /// URL: `/blade/dashboard/signout`.
 @WebServlet("/signout")
@@ -28,15 +29,6 @@ public class SignOutServlet extends HttpServlet {
 
 	@Override
 	protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-		if (OidcLoginFilter.AUTH_TYPE.equals(req.getAuthType())) {
-			resp.sendRedirect(req.getContextPath() + OidcLoginFilter.LOGOUT_PATH);
-			return;
-		}
-		req.logout();
-		HttpSession session = req.getSession(false);
-		if (session != null) {
-			session.invalidate();
-		}
-		resp.sendRedirect(req.getContextPath() + "/");
+		resp.sendRedirect(SignOut.target(req));
 	}
 }

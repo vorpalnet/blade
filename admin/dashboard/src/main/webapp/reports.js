@@ -373,7 +373,7 @@
 		var fam = FAMILIES[p.r];
 		var host = document.getElementById('sections');
 		if (!fam) { C.message(host, 'error', 'No report named "' + p.r + '".'); return; }
-		document.title = fam.title + ' · BLADE Dashboard';
+		document.title = fam.title + ' · Dashboard · BLADE';
 		document.getElementById('r-title').textContent = fam.title;
 		document.getElementById('r-lede').textContent = fam.lede;
 

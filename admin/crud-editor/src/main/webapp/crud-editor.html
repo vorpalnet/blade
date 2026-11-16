@@ -2,316 +2,122 @@
 <html lang="en">
 <head>
 	<meta charset="utf-8">
-	<title>CRUD rules</title>
+	<title>CRUD Editor · BLADE</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
 	<script src="/blade/portal/brand/theme.js"></script>
+	<script src="/blade/portal/brand/shell.js" data-context="/blade/crud-editor" defer></script>
 	<link rel="stylesheet" href="/blade/portal/lib/blade-editor.css">
 	<link rel="stylesheet" href="/blade/portal/lib/blade-chat.css">
 	<style>
-		:root {
-			/* Dark shell, light document: the page chrome (topbar) and the
-			   backdrop come from brand.css's .vorpal-glass layer; the tool's
-			   own surfaces stay LIGHT and readable. These local aliases map
-			   onto the shared --vorpal-* tokens. */
-			--bg: var(--vorpal-slate-100);   /* recessed surfaces (inputs, pre, diff body) */
-			--panel: var(--vorpal-surface);  /* panels / cards — white */
-			--text: var(--vorpal-ink-900);
-			--muted: var(--vorpal-slate-600);
-			--accent: var(--vorpal-purple);
-			--good: #1a7f37;                 /* readable on light */
-			--bad: #cf222e;
-			--border: var(--vorpal-divider);
-		}
-		* { box-sizing: border-box; }
-		body {
-			font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-			color: var(--text);
-			margin: 0;
-		}
+		/* Layout and the visuals no shared component has. The controls are
+		   brand.css components (.vorpal-btn, .vorpal-panel, .vorpal-field,
+		   .vorpal-input, .vorpal-table, .vorpal-badge...); the editor kit's own
+		   layout loads from /blade/portal/lib/blade-editor.css. */
 		.crud-content { max-width: 1400px; margin: 0 auto; padding: 24px; }
-		/* Page heading, on the page itself. */
-		.vorpal-glass .crud-content > h1 { color: var(--vorpal-ink-900); }
-		.vorpal-glass .crud-content > .subtitle { color: var(--vorpal-slate-600); }
-		.vorpal-glass .crud-content > .subtitle code { color: var(--vorpal-ink-900); }
-		h1 { margin: 0 0 8px; font-size: 20px; font-weight: 600; }
-		.subtitle { color: var(--muted); margin-bottom: 24px; }
+		.crud-content > h1 { margin: 0 0 8px; font-size: 20px; font-weight: 600; color: var(--vorpal-ink-900); }
+		.subtitle { color: var(--vorpal-slate-600); margin: 0 0 24px; }
+		.subtitle code { color: var(--vorpal-ink-900); }
+		.subtitle a.handoff { font-size: 12px; color: var(--vorpal-slate-600); margin-left: 6px; }
 		.grid {
 			display: grid;
 			grid-template-columns: 1fr 1fr;
 			gap: 16px;
 			max-width: 1400px;
 		}
+		.grid > .span { grid-column: 1 / -1; }
 		.controls {
 			grid-column: 1 / -1;
 			display: flex;
 			gap: 12px;
 			align-items: end;
 			flex-wrap: wrap;
-			background: var(--panel);
-			border: 1px solid var(--border);
-			border-radius: var(--vorpal-radius-md);
-			padding: 12px;
 		}
-		label {
-			display: block;
-			color: var(--muted);
-			font-size: 12px;
-			text-transform: uppercase;
-			letter-spacing: 0.5px;
-			margin-bottom: 4px;
-		}
-		input, select, textarea, button {
-			background: var(--panel);
-			color: var(--text);
-			border: 1px solid var(--border);
-			border-radius: 4px;
-			padding: 8px 10px;
-			font: inherit;
-		}
-		textarea {
+		.controls #autoSelect { margin-top: 4px; }
+		.check-toggle { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; color: var(--vorpal-ink-900); }
+		.check-toggle input { width: 15px; height: 15px; margin: 0; }
+		.toolbar-field { display: flex; align-items: center; gap: 6px; margin: 0; }
+		#input, #output {
 			width: 100%;
 			min-height: 320px;
-			font: 12px/1.45 "JetBrains Mono", Menlo, "Cascadia Code", "Consolas", monospace;
 			tab-size: 2;
 			resize: vertical;
 		}
-		button {
-			background: var(--accent);
-			color: #fff;
-			font-weight: 600;
-			border: none;
-			cursor: pointer;
-			padding: 8px 18px;
-		}
-		button:hover { filter: brightness(1.1); }
-		button:disabled { opacity: 0.5; cursor: not-allowed; }
-		.panel {
-			background: var(--panel);
-			border: 1px solid var(--border);
-			border-radius: 6px;
-			padding: 12px;
-		}
-		.panel h2 {
-			font-size: 13px;
-			color: var(--muted);
-			text-transform: uppercase;
-			letter-spacing: 0.5px;
-			margin: 0 0 8px;
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-		}
-		.fired {
-			margin-top: 12px;
-			padding: 8px 12px;
-			background: var(--panel);
-			border: 1px solid var(--border);
-			border-radius: 6px;
-			font-size: 13px;
-		}
-		.fired .label { color: var(--muted); margin-right: 8px; }
-		.postrun {
-			display: grid;
-			grid-template-columns: 1fr 1fr;
-			gap: 12px;
-			max-width: 1400px;
-			margin-top: 12px;
-		}
-		.postrun .fired { margin-top: 0; }
-		.vars-table {
-			width: 100%;
-			border-collapse: collapse;
-			margin-top: 6px;
-			font-family: "JetBrains Mono", Menlo, "Cascadia Code", "Consolas", monospace;
-			font-size: 12px;
-		}
-		.vars-table tr + tr td { border-top: 1px solid var(--border); }
-		.vars-table td {
-			padding: 4px 8px;
-			vertical-align: top;
-		}
-		.vars-table td.name { color: var(--accent); white-space: nowrap; }
-		.vars-table td.value { color: var(--text); word-break: break-all; }
+		.fired { margin-top: 12px; font-size: 13px; }
+		.fired .vorpal-label { margin-right: 8px; }
+		.chip { margin: 2px 4px 2px 0; font-family: var(--vorpal-font-mono); }
 		.cfg-vars { display: grid; grid-template-columns: minmax(140px, 220px) 1fr auto; gap: 6px 8px; margin-bottom: 8px; }
-		.cfg-vars input { font: 12px "JetBrains Mono", Menlo, monospace; }
-		.cfg-vars input.name { color: var(--accent); }
-		.cfg-vars input[readonly] { color: var(--muted); }
-		.vars-empty { color: var(--muted); font-style: italic; padding: 6px 0; }
+		.cfg-vars input.name, .vars-grid input.name { color: var(--vorpal-purple); }
+		.cfg-vars input[readonly] { color: var(--vorpal-slate-600); }
+		.vars-empty { color: var(--vorpal-slate-600); font-style: italic; padding: 6px 0; }
 		.vars-grid {
 			display: grid;
-			grid-template-columns: 220px 1fr 28px;
+			grid-template-columns: 220px 1fr 32px;
 			gap: 4px 8px;
 			margin-top: 6px;
 			align-items: center;
-			font-family: "JetBrains Mono", Menlo, "Cascadia Code", "Consolas", monospace;
-			font-size: 12px;
 		}
-		.vars-grid .header {
-			color: var(--muted);
-			text-transform: uppercase;
-			letter-spacing: 0.5px;
-			font-size: 11px;
-			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-			padding: 0 2px;
-		}
-		.vars-grid input {
-			background: var(--bg);
-			border: 1px solid var(--border);
-			border-radius: 3px;
-			padding: 4px 6px;
-			font: inherit;
-			color: var(--text);
-			width: 100%;
-		}
-		.vars-grid input.name { color: var(--accent); }
-		.vars-grid input:focus {
-			outline: none;
-			border-color: var(--accent);
-		}
-		.vars-grid .remove {
-			background: transparent;
-			color: var(--muted);
-			border: none;
-			cursor: pointer;
-			padding: 0;
-			font-size: 16px;
-			line-height: 1;
-		}
-		.vars-grid .remove:hover { color: var(--bad); }
-		.vars-toolbar {
-			display: flex;
-			gap: 8px;
-			align-items: center;
-			margin-top: 8px;
-		}
-		.vars-toolbar button {
-			background: var(--panel);
-			color: var(--text);
-			border: 1px solid var(--border);
-			font-size: 11px;
-			padding: 4px 10px;
-			cursor: pointer;
-			font-weight: 400;
-		}
-		.vars-toolbar button:hover { border-color: var(--accent); color: var(--accent); }
-		.vars-toolbar .clear-btn:hover { border-color: var(--bad); color: var(--bad); }
-		.run-state { font-size: 12px; cursor: help; }
-		.tests-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
-		.tests-bar input { width: 260px; font-size: 12px; }
-		.tests-bar select { width: auto; max-width: 520px; font-size: 12px; }
-		.tests-bar button { font-size: 11px; padding: 4px 10px; }
-		.tests-summary { font-size: 11px; font-weight: 400; text-transform: none; letter-spacing: 0; margin-left: 8px; }
-		.tests-list { font: 12px "JetBrains Mono", Menlo, monospace; }
-		.tests-list .row { display: flex; gap: 10px; align-items: center; padding: 3px 0; border-bottom: 1px solid var(--border); }
+		.vars-grid input { width: 100%; }
+		.vars-toolbar { margin-top: 8px; }
+		.run-state { cursor: help; }
+		.tests-bar { margin-bottom: 8px; }
+		.tests-bar input { width: 260px; }
+		.tests-bar select { width: auto; max-width: 520px; }
+		.tests-list { font: 12px var(--vorpal-font-mono); }
+		.tests-list .row { display: flex; gap: 6px; align-items: center; padding: 3px 0; border-bottom: 1px solid var(--vorpal-divider); }
 		.tests-list .row .what { flex: 1; overflow-wrap: anywhere; }
 		.tests-list .row.fail .what { font-weight: 600; }
-		.tests-list .row button { font-size: 11px; padding: 2px 8px; }
-		.rule-hits { font-size: 11px; color: var(--muted); margin-left: 8px; margin-right: auto; cursor: help; }
-		.run-state.behind { font-weight: 600; }
-		.rule-card.proposed { border-left: 4px double var(--brand); }
-		.inherit-note { font-size: 12px; color: var(--muted); margin: 0 0 8px; cursor: help; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-		.inherit-pick { font-size: 12px; padding: 2px 6px; width: auto; cursor: pointer; }
+		.rule-hits { font-size: 11px; color: var(--vorpal-slate-600); margin-left: 8px; margin-right: auto; cursor: help; }
+		.rule-card.proposed { border-left: 4px double var(--vorpal-purple); }
+		.inherit-note { margin: 0 0 8px; cursor: help; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+		.inherit-pick { width: auto; cursor: pointer; }
 		/* A rule switched off: the word "off" in its title and on its toggle, and faded. */
 		.rule-card.off .card-body { opacity: 0.5; }
-		.chip.undone { background: transparent; border: 1px solid var(--bad); color: inherit; }
-		.chip {
-			display: inline-block;
-			background: var(--vorpal-purple-100);
-			color: var(--vorpal-purple-700);
-			padding: 2px 8px;
-			border-radius: 12px;
-			margin: 2px 4px 2px 0;
-			font-size: 12px;
-			font-family: "JetBrains Mono", Menlo, monospace;
-		}
-		.error {
-			background: rgba(248, 81, 73, 0.12);
-			border-color: var(--bad);
-			color: var(--bad);
-		}
-		.status {
-			font-size: 13px;
-			color: var(--muted);
-		}
-		.status.ok { color: var(--good); }
-		.status.err { color: var(--bad); }
-		.diag {
-			margin-top: 12px;
-			padding: 12px;
-			background: var(--panel);
-			border: 1px solid var(--border);
-			border-radius: 6px;
-			font-size: 12px;
-		}
-		.diag.err { border-color: var(--bad); }
-		.draft-problems { border: 2px solid var(--bad); border-radius: 6px; padding: 8px 12px; margin: 8px 0; }
-		.draft-problems-title { font-weight: 600; font-size: 13px; }
-		.draft-problems ul { margin: 6px 0 0 18px; padding: 0; font-family: "JetBrains Mono", Menlo, monospace; font-size: 12px; }
-		.diag summary {
-			cursor: pointer;
-			color: var(--muted);
-			text-transform: uppercase;
-			letter-spacing: 0.5px;
-			font-size: 12px;
-			user-select: none;
-		}
-		.diag.err summary { color: var(--bad); }
+		.status { font-size: 13px; color: var(--vorpal-slate-600); }
+		.status.ok { color: var(--vorpal-success); }
+		.status.err { color: var(--vorpal-error); }
+		.draft-problems { margin: 8px 14px; }
+		.draft-problems-title { font-weight: 600; }
+		.draft-problems ul { margin: 6px 0 0 18px; padding: 0; font: 12px var(--vorpal-font-mono); }
+		.diag { margin-top: 12px; font-size: 12px; }
+		.diag.err { border-color: var(--vorpal-error); }
+		.diag summary { cursor: pointer; user-select: none; }
+		/* A failed request: a word in the summary, beside the border. */
+		.diag.err summary::after { content: " \00b7  failed"; color: var(--vorpal-error); }
 		.diag-grid {
 			display: grid;
 			grid-template-columns: 140px 1fr;
 			gap: 6px 12px;
 			margin-top: 10px;
-			font-family: "JetBrains Mono", Menlo, "Cascadia Code", "Consolas", monospace;
+			font-family: var(--vorpal-font-mono);
 		}
-		.diag-grid .k { color: var(--muted); }
-		.diag-grid .v { color: var(--text); word-break: break-all; }
-		.diag pre {
-			background: var(--bg);
-			border: 1px solid var(--border);
-			border-radius: 4px;
+		.diag-grid .k { color: var(--vorpal-slate-600); }
+		.diag-grid .v { word-break: break-all; }
+		.diag-part { margin-top: 10px; }
+		.diag pre, .warn-panel pre, .diff-body {
+			background: var(--vorpal-slate-100);
+			border: 1px solid var(--vorpal-divider);
+			border-radius: var(--vorpal-radius-sm);
+			color: var(--vorpal-ink-900);
+		}
+		.diag pre, .warn-panel pre {
 			padding: 8px 10px;
 			margin: 4px 0 0;
 			max-height: 240px;
 			overflow: auto;
-			font: 11px/1.4 "JetBrains Mono", Menlo, monospace;
+			font: 11px/1.4 var(--vorpal-font-mono);
 			white-space: pre-wrap;
 			word-break: break-all;
-			color: var(--text);
 		}
-		.diff-panel {
-			margin-top: 12px;
-			background: var(--panel);
-			border: 1px solid var(--border);
-			border-radius: 6px;
-			padding: 0;
-			overflow: hidden;
-		}
-		.diff-panel h2 {
-			font-size: 13px;
-			color: var(--muted);
-			text-transform: uppercase;
-			letter-spacing: 0.5px;
-			margin: 0;
-			padding: 10px 12px;
-			border-bottom: 1px solid var(--border);
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-		}
-		.diff-panel h2 .summary {
-			font-size: 11px;
-			color: var(--muted);
-			text-transform: none;
-			letter-spacing: 0;
-			font-weight: 400;
-		}
+		#diagStack, .warn-panel pre { border-color: var(--vorpal-error); }
+		.warn-panel { margin-top: 12px; }
+		.warn-panel-title { font-weight: 600; }
+		.diff-panel { margin-top: 12px; }
 		.diff-body {
 			margin: 0;
 			padding: 10px 0;
 			max-height: 480px;
 			overflow: auto;
-			font: 12px/1.5 "JetBrains Mono", Menlo, "Cascadia Code", "Consolas", monospace;
-			background: var(--bg);
+			font: 12px/1.5 var(--vorpal-font-mono);
 		}
 		.diff-line {
 			display: flex;
@@ -319,75 +125,51 @@
 			white-space: pre-wrap;
 			word-break: break-all;
 		}
-		.diff-line .marker {
-			flex: 0 0 16px;
-			user-select: none;
-			color: var(--muted);
-		}
-		.diff-line.add { background: rgba(86, 211, 100, 0.10); }
-		.diff-line.add .marker { color: var(--good); }
-		.diff-line.add .text { color: var(--good); }
-		.diff-line.del { background: rgba(248, 81, 73, 0.10); }
-		.diff-line.del .marker { color: var(--bad); }
-		.diff-line.del .text { color: var(--bad); }
-		.diff-line.ctx .text { color: var(--text); opacity: 0.55; }
-		.diff-empty {
-			color: var(--muted);
-			font-style: italic;
-			padding: 10px 12px;
-		}
+		/* An added or removed line: its + or - marker, then a tint. */
+		.diff-line .marker { flex: 0 0 16px; user-select: none; color: var(--vorpal-slate-600); }
+		.diff-line.add { background: color-mix(in srgb, var(--vorpal-success) 12%, transparent); }
+		.diff-line.add .marker, .diff-line.add .text { color: var(--vorpal-success); }
+		.diff-line.del { background: var(--vorpal-error-soft); }
+		.diff-line.del .marker, .diff-line.del .text { color: var(--vorpal-error); }
+		.diff-line.ctx .text { opacity: 0.55; }
+		.diff-empty { color: var(--vorpal-slate-600); font-style: italic; padding: 0 12px; }
 
-		/* ---- crud-editor page-specific editor styles (the shared kit
-		   styles load from /blade/portal/lib/blade-editor.css) ---- */
+		/* ---- crud-editor page-specific editor layout ---- */
 		.editor-body {
 			display: grid;
 			grid-template-columns: 230px 1fr;
-			gap: 0;
-			border-top: 1px solid var(--border);
+			border-top: 1px solid var(--vorpal-divider);
 			min-height: 200px;
 		}
 		.rs-list {
-			border-right: 1px solid var(--border);
+			border-right: 1px solid var(--vorpal-divider);
 			padding: 8px;
 			display: flex;
 			flex-direction: column;
 			gap: 4px;
 		}
+		/* A rule set: the file picker's look, the chosen one filled and bold
+		   with a bar at its edge. */
 		.rs-list .rs-item {
 			display: flex;
 			align-items: center;
 			justify-content: space-between;
 			gap: 6px;
-			text-align: left;
-			background: var(--panel);
-			color: var(--text);
-			border: 1px solid var(--border);
-			border-radius: 4px;
-			font-weight: 400;
-			padding: 6px 6px 6px 10px;
-			font-family: "JetBrains Mono", Menlo, monospace;
-			font-size: 12px;
+			border-radius: 6px;
+			padding: 4px 4px 4px 10px;
+			font: 12px var(--vorpal-font-mono);
+			color: var(--vorpal-ink-900);
 			word-break: break-all;
 			cursor: pointer;
 		}
+		.rs-list .rs-item:hover { background: var(--vorpal-slate-200); }
 		.rs-list .rs-item.active {
-			border-color: var(--accent);
-			color: var(--accent);
-			font-weight: 600;
+			background: var(--vorpal-slate-200);
+			box-shadow: inset 3px 0 0 var(--vorpal-purple);
+			font-weight: 700;
 		}
 		.rs-list .rs-item .rs-name { flex: 1; min-width: 0; }
-		.rs-list .rs-item .rs-del {
-			flex: 0 0 auto;
-			background: transparent;
-			color: var(--muted);
-			border: none;
-			padding: 0 4px;
-			font-size: 15px;
-			font-weight: 400;
-			line-height: 1;
-			cursor: pointer;
-		}
-		.rs-list .rs-item .rs-del:hover { color: var(--bad); }
+		.rs-list .rs-add { align-self: flex-start; margin-top: 4px; }
 		.rs-detail { padding: 12px; min-width: 0; }
 		.rs-head {
 			display: flex;
@@ -397,38 +179,24 @@
 			margin-bottom: 12px;
 		}
 		.op-list { margin: 4px 0 8px 18px; }
-		.subtitle a.handoff { font-size: 12px; color: var(--muted); margin-left: 6px; }
-		.live-toggle { display: flex; align-items: center; gap: 6px; margin: 0; text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--text); }
-		.live-toggle input { width: 15px; height: 15px; }
-
-		/* Field labels read as words ("Message type"), not property names
-		   in capitals; humanizeLabels writes the words. */
-		.editor-shell .field label { text-transform: none; letter-spacing: 0; font-size: 12px; }
 
 		/* A rule folds to one line: its id, what it matches, what it does.
 		   The arrow and the summary say which state it is in. */
 		.rule-card > .card-head { cursor: pointer; }
-		.rule-card > .card-head .fold { flex: 0 0 auto; color: var(--muted); font-size: 11px; width: 12px; }
+		.rule-card > .card-head .fold { flex: 0 0 auto; color: var(--vorpal-slate-600); font-size: 11px; width: 12px; }
 		.rule-card > .card-head .card-title { flex: 0 1 auto; }
 		.rule-card > .card-head .rule-sum {
 			flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-			font: 12px "JetBrains Mono", Menlo, monospace; color: var(--muted);
+			font: 12px var(--vorpal-font-mono); color: var(--vorpal-slate-600);
 		}
-		.rule-card > .card-head .rule-tags { font-size: 12px; color: var(--muted); white-space: nowrap; }
+		.rule-card > .card-head .rule-tags { font-size: 12px; color: var(--vorpal-slate-600); white-space: nowrap; }
 		.rule-card.collapsed > .card-head { border-bottom: none; }
 		.rule-card.collapsed > .card-body { display: none; }
-		input.card-title-input {
-			flex: 0 1 220px; min-width: 80px; padding: 2px 6px;
-			font: 600 12px "JetBrains Mono", Menlo, monospace; color: var(--accent);
-		}
+		input.card-title-input { flex: 0 1 220px; min-width: 80px; font-weight: 600; color: var(--vorpal-purple); }
 		/* An empty field stays out of the way until asked for. */
 		.rule-card .field.unset { display: none; }
-		button.more-fields {
-			background: none; border: none; padding: 0; margin: 0 0 8px;
-			color: var(--accent); font-size: 12px; font-weight: 400; cursor: pointer;
-		}
+		button.more-fields { margin: 0 0 8px; }
 		.rs-tools { display: flex; gap: 8px; justify-content: flex-end; margin: 0 0 8px; }
-		.rs-tools button { font-size: 11px; padding: 3px 10px; background: var(--panel); color: var(--text); border: 1px solid var(--border); font-weight: 400; }
 
 		/* Wide screens: the preview beside the rules, held in view. */
 		@media (min-width: 1500px) {
@@ -441,8 +209,8 @@
 			}
 			.wb-preview .section-head { margin-top: 0; }
 			.wb-preview .grid { grid-template-columns: 1fr; }
-			.wb-preview textarea { min-height: 180px; }
-			.wb-preview .vars-grid { grid-template-columns: 140px 1fr 28px; }
+			.wb-preview #input, .wb-preview #output { min-height: 180px; }
+			.wb-preview .vars-grid { grid-template-columns: 140px 1fr 32px; }
 		}
 
 	</style>
@@ -470,7 +238,7 @@
 
 
 
-	<main class="crud-content">
+	<main class="crud-content" data-shell-main>
 	<h1>CRUD rules</h1>
 	<p class="subtitle" title="Rules for: the CRUD service, or any application with a crud section.">
 		Editing <code id="targetFile">crud.json</code>
@@ -481,73 +249,73 @@
 
 	<div class="workbench">
 	<div class="wb-edit">
-	<details class="editor-shell" id="editorShell" open>
+	<details class="editor-shell vorpal-panel" id="editorShell" open>
 		<summary>
-			<span>Rule sets</span>
-			<span class="src-badge" id="srcBadge">loading…</span>
-			<span class="dirty-badge" id="dirtyBadge" style="display:none;">unsaved changes</span>
+			<span class="vorpal-panel-title">Rule sets</span>
+			<span class="src-badge vorpal-badge" id="srcBadge">loading…</span>
+			<span class="dirty-badge vorpal-badge vorpal-badge-warn" id="dirtyBadge" style="display:none;">unsaved changes</span>
 		</summary>
 
 		<div class="editor-toolbar editor-actions">
-			<label for="target" style="display:flex;align-items:center;gap:6px;margin:0;text-transform:none;letter-spacing:0;font-size:12px;color:var(--text);">
-				Rules for
-				<select id="target" title="The CRUD service's crud.json, or the crud section of an application's own configuration">
+			<label for="target" class="toolbar-field">
+				<span class="vorpal-label">Rules for</span>
+				<select id="target" class="vorpal-input" title="The CRUD service's crud.json, or the crud section of an application's own configuration">
 					<option value="">CRUD service (crud.json)</option>
 				</select>
 			</label>
 			<div class="spacer"></div>
-			<button id="helpBtn" class="secondary" type="button" title="What is all this?">? Help</button>
-			<button id="showVersions" class="secondary" type="button" title="Earlier saves of this file; restore one">Versions</button>
-			<button id="showJson" class="secondary" type="button" title="Read-only view of the document Save would write">JSON</button>
-			<button id="reloadEditor" class="secondary" type="button" title="Discard the draft and reload from disk">Reload</button>
-			<button id="publishConfig" class="secondary" type="button"
+			<button id="helpBtn" class="vorpal-btn vorpal-btn-ghost vorpal-btn-sm" type="button" title="What is all this?">? Help</button>
+			<button id="showVersions" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" title="Earlier saves of this file; restore one">Versions</button>
+			<button id="showJson" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" title="Read-only view of the document Save would write">JSON</button>
+			<button id="reloadEditor" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" title="Discard the draft and reload from disk">Reload</button>
+			<button id="publishConfig" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button"
 				title="Not needed after a Save: a saved file reaches the running servers on its own. Publish makes them reload it now.">Publish</button>
-			<button id="saveConfig" type="button" title="Check the draft and write it. It goes live on the running servers.">Save</button>
-			<span id="runState" class="run-state" style="display:none;"></span>
+			<button id="saveConfig" class="vorpal-btn vorpal-btn-sm" type="button" title="Check the draft and write it. It goes live on the running servers.">Save</button>
+			<span id="runState" class="run-state vorpal-badge" style="display:none;"></span>
 		</div>
 
-		<div id="draftProblems" class="draft-problems" role="alert" style="display:none;">
+		<div id="draftProblems" class="draft-problems vorpal-error" role="alert" style="display:none;">
 			<div class="draft-problems-title" title="Each of these would fail only once a call reaches it.">&#x2715; Save refuses this draft</div>
 			<ul id="draftProblemsList"></ul>
 		</div>
 
 		<div class="versions-panel" id="versionsPanel" style="display:none;">
-			<h2 style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 8px;">Version history</h2>
+			<div class="vorpal-panel-head"><h2 class="vorpal-panel-title">Version history</h2></div>
 			<div id="versionsBody"></div>
 			<pre id="versionPreview" style="display:none;"></pre>
 		</div>
 
 		<div class="versions-panel" id="jsonPanel" style="display:none;">
-			<h2 style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 8px;display:flex;justify-content:space-between;align-items:center;">
-				<span id="jsonTitle">Draft crud.json — read-only, exactly what Save writes</span>
-				<button id="copyJson" type="button" class="mini">copy</button>
-			</h2>
+			<div class="vorpal-panel-head">
+				<h2 class="vorpal-panel-title" id="jsonTitle">Draft crud.json · read-only, exactly what Save writes</h2>
+				<div class="vorpal-toolbar"><button id="copyJson" type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm">copy</button></div>
+			</div>
 			<pre id="jsonBody"></pre>
 		</div>
 
 		<div class="section-head">
 			<span class="step">1</span>
-			<span class="section-title" title="Values every call starts with, read as ${name} by the pipeline, when and operations. Saved with the file; a cluster or server file sets its own by naming them.">Variables</span>
-			<button class="mini help-mini" type="button" data-help="variables">?</button>
+			<span class="vorpal-panel-title" title="Values every call starts with, read as ${name} by the pipeline, when and operations. Saved with the file; a cluster or server file sets its own by naming them.">Variables</span>
+			<button class="help-mini vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" data-help="variables">?</button>
 		</div>
 		<div id="configVarsPanel" class="pipeline-panel"></div>
 
 		<div class="section-head">
 			<span class="step">2</span>
-			<span class="section-title" title="Connectors run in order on each initial request, extracting values into variables; the one that writes ruleSet picks the rule set.">Pipeline</span>
-			<button class="mini help-mini" type="button" data-help="pipeline">?</button>
+			<span class="vorpal-panel-title" title="Connectors run in order on each initial request, extracting values into variables; the one that writes ruleSet picks the rule set.">Pipeline</span>
+			<button class="help-mini vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" data-help="pipeline">?</button>
 		</div>
 		<div id="pipelinePanel" class="pipeline-panel"></div>
 
 		<div class="section-head">
 			<span class="step">3</span>
-			<span class="section-title" title="Each rule filters by method, lifecycle event and when, then runs its operations in order.">Rule sets</span>
-			<button class="mini help-mini" type="button" data-help="rulesets">?</button>
+			<span class="vorpal-panel-title" title="Each rule filters by method, lifecycle event and when, then runs its operations in order.">Rule sets</span>
+			<button class="help-mini vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" data-help="rulesets">?</button>
 		</div>
 		<div class="editor-body">
 			<div class="rs-list" id="rsList"></div>
 			<div class="rs-detail" id="rsDetail">
-				<div class="vars-empty">loading configuration…</div>
+				<div class="vorpal-empty">loading configuration…</div>
 			</div>
 		</div>
 
@@ -558,129 +326,129 @@
 	<aside class="wb-preview">
 	<div class="section-head on-glass">
 		<span class="step">4</span>
-		<span class="section-title" title="Runs the unsaved draft in-process on the AdminServer; nothing touches the wire.">Preview</span>
-		<button class="mini help-mini" type="button" data-help="preview">?</button>
+		<span class="vorpal-panel-title" title="Runs the unsaved draft in-process on the AdminServer; nothing touches the wire.">Preview</span>
+		<button class="help-mini vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" data-help="preview">?</button>
 	</div>
 
 	<div class="grid">
-		<div class="controls">
-			<div>
+		<div class="controls vorpal-panel">
+			<div class="vorpal-field">
 				<label for="ruleSet">Rule set</label>
-				<select id="ruleSet"><option value="">(loading…)</option></select>
-				<button id="autoSelect" type="button" style="font-size:11px;padding:3px 8px;margin-top:4px;"
+				<select id="ruleSet" class="vorpal-input"><option value="">(loading…)</option></select>
+				<button id="autoSelect" type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm"
 					title="Run the enrichment pipeline against the input message and pick the rule set it selects">
 					Auto-select from message
 				</button>
 			</div>
-			<div>
+			<div class="vorpal-field">
 				<label for="event">Lifecycle event</label>
-				<select id="event"></select>
+				<select id="event" class="vorpal-input"></select>
 			</div>
-			<div>
+			<div class="vorpal-field">
 				<label for="leg">Leg</label>
-				<select id="leg" title="Which side of the call the message is on, for rules with a leg filter">
+				<select id="leg" class="vorpal-input" title="Which side of the call the message is on, for rules with a leg filter">
 					<option value="" selected>as a B2BUA would</option>
 					<option value="caller">caller</option>
 					<option value="callee">callee</option>
 				</select>
 			</div>
 			<div>
-				<label title="For a response: did its request carry SDP? Then SDP in the response is an answer; otherwise it is a late offer.">
+				<label class="check-toggle" title="For a response: did its request carry SDP? Then SDP in the response is an answer; otherwise it is a late offer.">
 					<input type="checkbox" id="requestSdp" checked> Request had SDP
 				</label>
 			</div>
-			<button id="run">Run</button>
-			<label class="live-toggle">
+			<button id="run" type="button" class="vorpal-btn">Run</button>
+			<label class="check-toggle">
 				<input type="checkbox" id="livePreview" checked> re-run on change
 			</label>
 			<span id="status" class="status"></span>
 		</div>
 
-		<div class="panel">
-			<h2>
-				<span>Input message</span>
-				<button id="loadSample" style="font-size:11px;padding:3px 8px;">Load sample INVITE</button>
-			</h2>
-			<textarea id="input" spellcheck="false" placeholder="INVITE sip:bob@example.com SIP/2.0&#10;From: ...&#10;To: ...&#10;..."></textarea>
+		<div class="vorpal-panel">
+			<div class="vorpal-panel-head">
+				<h2 class="vorpal-panel-title">Input message</h2>
+				<div class="vorpal-toolbar"><button id="loadSample" type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm">Load sample INVITE</button></div>
+			</div>
+			<textarea id="input" class="vorpal-input vorpal-mono" spellcheck="false" placeholder="INVITE sip:bob@example.com SIP/2.0&#10;From: ...&#10;To: ...&#10;..."></textarea>
 		</div>
 
-		<div class="panel">
-			<h2>Output message</h2>
-			<textarea id="output" readonly spellcheck="false" placeholder="(run to see output)"></textarea>
+		<div class="vorpal-panel">
+			<div class="vorpal-panel-head"><h2 class="vorpal-panel-title">Output message</h2></div>
+			<textarea id="output" class="vorpal-input vorpal-mono" readonly spellcheck="false" placeholder="(run to see output)"></textarea>
 		</div>
 
-		<div class="panel" style="grid-column: 1 / -1;">
-			<h2><span title="Set before this run, over the file's variables: stand in for what the pipeline extracts, or for an earlier message in the call. Never saved.">Inputs</span></h2>
+		<div class="vorpal-panel span">
+			<div class="vorpal-panel-head"><h2 class="vorpal-panel-title" title="Set before this run, over the file's variables: stand in for what the pipeline extracts, or for an earlier message in the call. Never saved.">Inputs</h2></div>
 			<div id="varsGrid" class="vars-grid">
-				<div class="header">Name</div>
-				<div class="header">Value</div>
+				<div class="vorpal-label">Name</div>
+				<div class="vorpal-label">Value</div>
 				<div></div>
 			</div>
 			<div id="varsEmpty" class="vars-empty">none</div>
-			<div class="vars-toolbar">
-				<button id="addVar" type="button">+ Add</button>
-				<button id="clearVars" type="button" class="clear-btn">Clear</button>
+			<div class="vars-toolbar vorpal-toolbar">
+				<button id="addVar" type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm">+ Add</button>
+				<button id="clearVars" type="button" class="clear-btn vorpal-btn vorpal-btn-danger vorpal-btn-sm">Clear</button>
 			</div>
 		</div>
 
-		<div class="panel" style="grid-column: 1 / -1;">
-			<h2><span title="Saved runs of this file: these inputs must still give this result. Saving the domain file runs its tests and refuses on a failure; a cluster or server file's tests run here, against what that file runs.">Tests</span>
-				<button class="mini help-mini" type="button" data-help="tests">?</button>
-				<span id="testsSummary" class="tests-summary"></span></h2>
-			<div class="tests-bar">
-				<input id="testName" placeholder="name for the last run" spellcheck="false">
-				<button id="saveTest" type="button" title="Save the last run's inputs and its result (refusal and output) as a test">Save as test</button>
-				<button id="runTests" type="button">Run tests</button>
+		<div class="vorpal-panel span">
+			<div class="vorpal-panel-head"><h2 class="vorpal-panel-title" title="Saved runs of this file: these inputs must still give this result. Saving the domain file runs its tests and refuses on a failure; a cluster or server file's tests run here, against what that file runs.">Tests</h2>
+				<button class="help-mini vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" data-help="tests">?</button>
+				<span id="testsSummary" class="vorpal-panel-sub"></span></div>
+			<div class="tests-bar vorpal-toolbar">
+				<input id="testName" class="vorpal-input" placeholder="name for the last run" spellcheck="false">
+				<button id="saveTest" type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" title="Save the last run's inputs and its result (refusal and output) as a test">Save as test</button>
+				<button id="runTests" type="button" class="vorpal-btn vorpal-btn-sm">Run tests</button>
 			</div>
 			<div id="testsList" class="tests-list"></div>
 		</div>
 
-		<div class="panel" style="grid-column: 1 / -1;">
-			<h2><span title="Calls the Callflow trace caught for this application, with every message as it went over the wire. Arm a trace in Callflow, make the call, then pick it here.">A traced call</span>
-				<button class="mini help-mini" type="button" data-help="tests">?</button></h2>
-			<div class="tests-bar">
-				<select id="tracedCall"><option value="">pick a traced call…</option></select>
-				<button id="refreshTraces" type="button" title="Read the trace buffers again">↻</button>
-				<button id="replayCall" type="button" title="Run every message of the call in order, carrying what each run sets to the next" disabled>Run whole call</button>
+		<div class="vorpal-panel span">
+			<div class="vorpal-panel-head"><h2 class="vorpal-panel-title" title="Calls the Callflow trace caught for this application, with every message as it went over the wire. Arm a trace in Callflow, make the call, then pick it here.">A traced call</h2>
+				<button class="help-mini vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" data-help="tests">?</button></div>
+			<div class="tests-bar vorpal-toolbar">
+				<select id="tracedCall" class="vorpal-input"><option value="">pick a traced call…</option></select>
+				<button id="refreshTraces" type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" title="Read the trace buffers again">↻</button>
+				<button id="replayCall" type="button" class="vorpal-btn vorpal-btn-sm" title="Run every message of the call in order, carrying what each run sets to the next" disabled>Run whole call</button>
 			</div>
 			<div id="tracedSteps" class="tests-list"></div>
 		</div>
 	</div>
 
-	<div id="diffPanel" class="diff-panel" style="display:none;">
-		<h2>
-			<span>Diff (input → output)</span>
-			<span class="summary" id="diffSummary"></span>
-		</h2>
+	<div id="diffPanel" class="diff-panel vorpal-panel" style="display:none;">
+		<div class="vorpal-panel-head">
+			<h2 class="vorpal-panel-title">Diff (input → output)</h2>
+			<span class="vorpal-panel-sub" id="diffSummary"></span>
+		</div>
 		<div id="diffBody" class="diff-body"></div>
 	</div>
 
-	<div id="firedPanel" class="fired" style="display:none; margin-top:12px;">
+	<div id="firedPanel" class="fired vorpal-panel" style="display:none;">
 		<div id="outcome"></div>
-		<div><span class="label">Rules applied:</span><span id="firedList"></span></div>
-		<div id="undoneRow" style="display:none;"><span class="label">Rules undone:</span><span id="undoneList"></span></div>
+		<div><span class="vorpal-label">Rules applied:</span><span id="firedList"></span></div>
+		<div id="undoneRow" style="display:none;"><span class="vorpal-label">Rules undone:</span><span id="undoneList"></span></div>
 	</div>
 
-	<div id="capturedPanel" class="fired" style="display:none; margin-top:12px;">
-		<span class="label">Set by this run:</span><span id="capturedList"></span>
-		<button id="carryVars" type="button" class="mini" style="margin-left:8px;"
+	<div id="capturedPanel" class="fired vorpal-panel" style="display:none;">
+		<span class="vorpal-label">Set by this run:</span><span id="capturedList"></span>
+		<button id="carryVars" type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" style="margin-left:8px;"
 			title="Copy these into the variables above, to preview the next message in the same call (the 200 OK after the INVITE)">
 			Carry to the next message</button>
 	</div>
 
-	<div id="warnPanel" class="diag err" style="display:none; margin-top:12px;">
-		<div style="color:var(--bad);text-transform:uppercase;letter-spacing:0.5px;font-size:12px;font-weight:600;">
+	<div id="warnPanel" class="warn-panel vorpal-error" style="display:none;">
+		<div class="warn-panel-title">
 			Engine log for this run (warnings and skipped operations)
 		</div>
-		<pre id="warnBody" style="border-color:var(--bad);"></pre>
+		<pre id="warnBody"></pre>
 	</div>
 	</aside>
 	</div>
 
 	<dialog id="helpDialog" class="help-dialog">
 		<div class="help-head">
-			<span>How the CRUD service works</span>
-			<button type="button" id="helpClose" class="mini">close</button>
+			<h2 class="vorpal-panel-title">How the CRUD service works</h2>
+			<button type="button" id="helpClose" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm">close</button>
 		</div>
 		<div class="help-body">
 			<section id="help-pipeline">
@@ -861,24 +629,24 @@
 		</div>
 	</dialog>
 
-	<details id="diagPanel" class="diag" style="display:none;">
-		<summary id="diagSummary">Diagnostics</summary>
+	<details id="diagPanel" class="diag vorpal-panel" style="display:none;">
+		<summary id="diagSummary" class="vorpal-label">Diagnostics</summary>
 		<div class="diag-grid">
 			<div class="k">Request URL</div><div class="v" id="diagUrl">—</div>
 			<div class="k">HTTP status</div><div class="v" id="diagStatus">—</div>
 			<div class="k">Content-Type</div><div class="v" id="diagCt">—</div>
 		</div>
-		<div style="margin-top:10px;">
-			<div class="k" style="font-family:'JetBrains Mono',Menlo,monospace;color:var(--muted);">Request body</div>
+		<div class="diag-part">
+			<div class="vorpal-label">Request body</div>
 			<pre id="diagReq"></pre>
 		</div>
-		<div style="margin-top:10px;">
-			<div class="k" style="font-family:'JetBrains Mono',Menlo,monospace;color:var(--muted);">Response body (raw)</div>
+		<div class="diag-part">
+			<div class="vorpal-label">Response body (raw)</div>
 			<pre id="diagResp"></pre>
 		</div>
-		<div id="diagStackWrap" style="margin-top:10px; display:none;">
-			<div class="k" style="font-family:'JetBrains Mono',Menlo,monospace;color:var(--bad);">Server stack trace</div>
-			<pre id="diagStack" style="border-color:var(--bad);"></pre>
+		<div id="diagStackWrap" class="diag-part" style="display:none;">
+			<div class="vorpal-label">Server stack trace</div>
+			<pre id="diagStack"></pre>
 		</div>
 	</details>
 	</main>
@@ -988,20 +756,20 @@ a=sendrecv
 			const rowId = 'r' + addVarRow._next;
 
 			const nameInput = document.createElement('input');
-			nameInput.className = 'name';
+			nameInput.className = 'name vorpal-input vorpal-mono';
 			nameInput.placeholder = 'name';
 			nameInput.value = name || '';
 			nameInput.dataset.rowId = rowId;
 
 			const valueInput = document.createElement('input');
-			valueInput.className = 'value';
+			valueInput.className = 'value vorpal-input vorpal-mono';
 			valueInput.placeholder = 'value';
 			valueInput.value = value || '';
 			valueInput.dataset.rowId = rowId;
 
 			const removeBtn = document.createElement('button');
 			removeBtn.type = 'button';
-			removeBtn.className = 'remove';
+			removeBtn.className = 'remove vorpal-btn vorpal-btn-ghost vorpal-btn-sm';
 			removeBtn.title = 'Remove this variable';
 			removeBtn.textContent = '×';
 			removeBtn.dataset.rowId = rowId;
@@ -1393,17 +1161,17 @@ a=sendrecv
 			const undone = data.rulesUndone || [];
 			firedPanel.style.display = '';
 			document.getElementById('outcome').innerHTML =
-				'<span class="label">Taken as:</span>' +
+				'<span class="vorpal-label">Taken as:</span>' +
 				escapeHtml((data.leg || '?') + ' leg' + (data.sdp ? ' · SDP ' + data.sdp : ' · no SDP')) +
 				(data.rejected
 					? ' · <strong>refused: the caller would get ' + escapeHtml(data.rejected) + '</strong>'
 					: '');
 			firedList.innerHTML = fired.length === 0
-				? '<span class="label" style="font-style:italic;">none</span>'
-				: fired.map(id => `<span class="chip">${escapeHtml(id)}</span>`).join('');
+				? '<span class="vars-empty">none</span>'
+				: fired.map(id => `<span class="chip vorpal-badge vorpal-badge-brand">${escapeHtml(id)}</span>`).join('');
 			document.getElementById('undoneRow').style.display = undone.length ? '' : 'none';
 			document.getElementById('undoneList').innerHTML = undone
-				.map(id => `<span class="chip undone">&#x2715; ${escapeHtml(id)} (undone)</span>`).join('');
+				.map(id => `<span class="chip vorpal-badge vorpal-badge-bad">&#x2715; ${escapeHtml(id)} (undone)</span>`).join('');
 
 			// Only what the rules read or changed: the inputs echoed back
 			// would make "Carry" look like it does something.
@@ -1415,7 +1183,7 @@ a=sendrecv
 			lastCaptured = vars;
 			document.getElementById('capturedPanel').style.display = varNames.length ? '' : 'none';
 			document.getElementById('capturedList').innerHTML = varNames
-				.map(n => `<span class="chip">${escapeHtml(n)} = ${escapeHtml(vars[n])}</span>`).join('');
+				.map(n => `<span class="chip vorpal-badge vorpal-badge-brand">${escapeHtml(n)} = ${escapeHtml(vars[n])}</span>`).join('');
 
 			const problems = undone.length + warnings.filter(w => !w.startsWith('NOTE')).length;
 			status.textContent = (problems ? 'Ran with problems · ' : 'OK · ') + fired.length + ' applied' +
@@ -1775,7 +1543,7 @@ a=sendrecv
 				renderAll();
 				refreshRunState(ed.mergedData);
 			} catch (e) {
-				detail.innerHTML = '<div class="vars-empty">failed to load configuration — '
+				detail.innerHTML = '<div class="vorpal-error">failed to load configuration: '
 					+ escapeHtml(e.message) + '</div>';
 			}
 		}
@@ -1857,14 +1625,14 @@ a=sendrecv
 				what.className = 'what';
 				what.textContent = (r ? (r.pass ? '✓ ' : '✕ ') : '· ') + name + (r && !r.pass ? ': ' + r.why : '');
 				row.appendChild(what);
-				row.appendChild(Object.assign(document.createElement('button'), { type: 'button', textContent: 'load',
+				row.appendChild(Object.assign(document.createElement('button'), { type: 'button', className: 'vorpal-btn vorpal-btn-secondary vorpal-btn-sm', textContent: 'load',
 					title: 'Put this test\'s inputs in the preview', onclick: () => loadTestInputs(ed.tests[name]) }));
-				row.appendChild(Object.assign(document.createElement('button'), { type: 'button', textContent: 'update',
+				row.appendChild(Object.assign(document.createElement('button'), { type: 'button', className: 'vorpal-btn vorpal-btn-secondary vorpal-btn-sm', textContent: 'update',
 					title: 'Replace the expected result with the last run\'s', onclick: async () => {
 						if (!ed.lastRun) return;
 						ed.tests[name] = testFromLastRun(); await storeOrSay(); delete ed.testResults[name]; renderTests();
 					} }));
-				row.appendChild(Object.assign(document.createElement('button'), { type: 'button', textContent: '×',
+				row.appendChild(Object.assign(document.createElement('button'), { type: 'button', className: 'vorpal-btn vorpal-btn-danger vorpal-btn-icon', textContent: '×',
 					title: 'Delete this test', onclick: async () => {
 						delete ed.tests[name]; delete ed.testResults[name]; await storeOrSay(); renderTests();
 					} }));
@@ -1985,7 +1753,7 @@ a=sendrecv
 					+ (r ? '   ' + (r.error ? '✕ ' + r.error : (r.rejected ? 'refused ' + r.rejected + ' · ' : '')
 						+ (r.rulesFired || []).join(', ') + ((r.rulesUndone || []).length ? ' · undone ' + r.rulesUndone.join(', ') : '')) : '');
 				row.appendChild(what);
-				row.appendChild(Object.assign(document.createElement('button'), { type: 'button', textContent: 'load',
+				row.appendChild(Object.assign(document.createElement('button'), { type: 'button', className: 'vorpal-btn vorpal-btn-secondary vorpal-btn-sm', textContent: 'load',
 					title: 'Put this message in the preview', onclick: () => {
 						document.getElementById('input').value = replayInput(steps, i).message.replace(/\r?\n/g, '\r\n');
 						const ev = document.getElementById('event');
@@ -2027,7 +1795,7 @@ a=sendrecv
 			const panel = document.getElementById('configVarsPanel');
 			panel.innerHTML = '';
 			if (!ed.form.variables) {
-				panel.innerHTML = '<div class="inherit-note" title="Its schema has no variables: it runs an older framework.">not supported by this application</div>';
+				panel.innerHTML = '<div class="inherit-note vorpal-note" title="Its schema has no variables: it runs an older framework.">not supported by this application</div>';
 				return;
 			}
 			const own = ed.doc.variables;
@@ -2037,11 +1805,12 @@ a=sendrecv
 			grid.className = 'cfg-vars';
 			for (const name of names) {
 				const k = document.createElement('input');
-				k.className = 'name';
+				k.className = 'name vorpal-input vorpal-mono';
 				k.value = name;
 				k.readOnly = name in inherited;
 				k.title = name in inherited ? 'Inherited from ' + belowText() : 'Name';
 				const v = document.createElement('input');
+				v.className = 'vorpal-input vorpal-mono';
 				v.value = own[name] != null ? own[name] : '';
 				if (name in inherited) {
 					v.placeholder = inherited[name];
@@ -2126,7 +1895,7 @@ a=sendrecv
 				item.appendChild(name);
 				const del = document.createElement('button');
 				del.type = 'button';
-				del.className = 'rs-del';
+				del.className = 'rs-del vorpal-btn vorpal-btn-danger vorpal-btn-icon';
 				del.title = 'Delete rule set "' + id + '"';
 				del.textContent = '×';
 				del.addEventListener('click', (e) => {
@@ -2142,7 +1911,7 @@ a=sendrecv
 			}
 			const add = document.createElement('button');
 			add.type = 'button';
-			add.className = 'rs-item';
+			add.className = 'rs-add vorpal-btn vorpal-btn-secondary vorpal-btn-sm';
 			add.textContent = '+ new rule set';
 			add.addEventListener('click', () => {
 				let n = 1, id;
@@ -2160,7 +1929,7 @@ a=sendrecv
 			detail.innerHTML = '';
 			const rs = ed.current ? ed.doc.ruleSets[ed.current] : null;
 			if (!rs) {
-				detail.innerHTML = '<div class="vars-empty">no rule set selected — add one on the left</div>';
+				detail.innerHTML = '<div class="vorpal-empty">no rule set selected: add one on the left</div>';
 				return;
 			}
 
@@ -2190,7 +1959,7 @@ a=sendrecv
 			const listForm = ed.form && ed.form.rules === 'list';
 			if (inherited.length) {
 				const row = document.createElement('div');
-				row.className = 'inherit-note';
+				row.className = 'inherit-note vorpal-note';
 				row.textContent = 'inherits ' + inherited.map(r => r.id).join(', ')
 					+ (removedHere.length ? ' · removes ' + removedHere.join(', ') : '');
 				row.title = listForm
@@ -2201,7 +1970,7 @@ a=sendrecv
 				const free = inherited.filter(r => !mine.has(r.id));
 				if (free.length && !listForm) {
 					const pick = document.createElement('select');
-					pick.className = 'inherit-pick';
+					pick.className = 'inherit-pick vorpal-input';
 					pick.innerHTML = '<option value="">change inherited…</option>'
 						+ free.map(r => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.id)}</option>`).join('');
 					pick.addEventListener('change', () => {
@@ -2218,10 +1987,12 @@ a=sendrecv
 				tools.className = 'rs-tools';
 				const openAll = document.createElement('button');
 				openAll.type = 'button';
+				openAll.className = 'vorpal-btn vorpal-btn-secondary vorpal-btn-sm';
 				openAll.textContent = 'Open all';
 				openAll.addEventListener('click', () => { rs.rules.forEach(r => ed.openRules.add(r)); renderRuleSetDetail(); });
 				const foldAll = document.createElement('button');
 				foldAll.type = 'button';
+				foldAll.className = 'vorpal-btn vorpal-btn-secondary vorpal-btn-sm';
 				foldAll.textContent = 'Fold all';
 				foldAll.addEventListener('click', () => { rs.rules.forEach(r => ed.openRules.delete(r)); renderRuleSetDetail(); });
 				tools.append(openAll, foldAll);
@@ -2232,7 +2003,7 @@ a=sendrecv
 			const addRule = document.createElement('button');
 			addRule.type = 'button';
 			addRule.textContent = '+ add rule';
-			addRule.style.cssText = 'font-size:12px;padding:5px 12px;';
+			addRule.className = 'vorpal-btn vorpal-btn-secondary vorpal-btn-sm';
 			addRule.addEventListener('click', () => {
 				const added = { id: uniqueRuleId(rs, 'rule'), operations: [] };
 				rs.rules.push(added);
@@ -2455,7 +2226,7 @@ a=sendrecv
 
 		function ruleCard(rs, rule, idx) {
 			const card = document.createElement('div');
-			card.className = 'rule-card';
+			card.className = 'rule-card vorpal-panel';
 
 			const head = document.createElement('div');
 			head.className = 'card-head';
@@ -2480,7 +2251,7 @@ a=sendrecv
 			// The id once: plain text folded, the rename box open.
 			if (open) {
 				const idIn = document.createElement('input');
-				idIn.className = 'card-title-input';
+				idIn.className = 'card-title-input vorpal-input vorpal-mono';
 				idIn.value = rule.id || '';
 				idIn.title = 'The rule\'s key. In a cluster or server file, an inherited id changes that rule.';
 				idIn.setAttribute('aria-label', 'Rule ID');
@@ -2571,7 +2342,7 @@ a=sendrecv
 			const addOp = document.createElement('button');
 			addOp.type = 'button';
 			addOp.textContent = '+ add operation';
-			addOp.style.cssText = 'font-size:11px;padding:4px 10px;background:var(--panel);color:var(--text);border:1px solid var(--border);font-weight:400;';
+			addOp.className = 'vorpal-btn vorpal-btn-secondary vorpal-btn-sm';
 			addOp.addEventListener('click', () => {
 				rule.operations.push({ type: (ed.opVariants ? ed.opVariants[0].type : 'create') });
 				markDirty(); renderRuleSetDetail();
@@ -2599,7 +2370,7 @@ a=sendrecv
 			if (!hidden.length) return;
 			const more = document.createElement('button');
 			more.type = 'button';
-			more.className = 'more-fields';
+			more.className = 'more-fields vorpal-btn vorpal-btn-ghost vorpal-btn-sm';
 			more.textContent = '+ ' + hidden.map(humanLabel).join(', ').toLowerCase();
 			more.title = 'Fields this rule leaves empty';
 			more.addEventListener('click', () => { ed.allFields.add(rule); renderRuleSetDetail(); });
@@ -2608,14 +2379,14 @@ a=sendrecv
 
 		function opCard(rule, op, oi) {
 			const card = document.createElement('div');
-			card.className = 'op-card';
+			card.className = 'op-card vorpal-panel';
 
 			const head = document.createElement('div');
 			head.className = 'card-head';
 
 			// Type dropdown — switching resets the operation to the new shape.
 			const typeSel = document.createElement('select');
-			typeSel.style.cssText = 'font-family:"JetBrains Mono",Menlo,monospace;font-size:12px;padding:3px 6px;';
+			typeSel.className = 'type-select vorpal-input vorpal-mono';
 			const types = ed.opVariants ? ed.opVariants.map(v => v.type)
 				: ['read', 'create', 'update', 'delete', 'xmlRead', 'xmlCreate', 'xmlUpdate', 'xmlDelete',
 					'jsonRead', 'jsonCreate', 'jsonUpdate', 'jsonDelete', 'keepPart',
@@ -2857,7 +2628,7 @@ a=sendrecv
 				if (!running.length) { el.style.display = 'none'; return; }
 				const behind = running.filter(r => !r.matches);
 				el.style.display = '';
-				el.className = 'run-state' + (behind.length ? ' behind' : '');
+				el.className = 'run-state vorpal-badge ' + (behind.length ? 'behind vorpal-badge-bad' : 'vorpal-badge-ok');
 				el.textContent = behind.length ? '✕ not running: ' + behind.map(r => r.server).join(', ')
 					: '✓ running';
 				el.title = behind.length
@@ -2895,17 +2666,18 @@ a=sendrecv
 			if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
 			panel.style.display = '';
 			preview.style.display = 'none';
-			body.innerHTML = '<div class="vars-empty">loading…</div>';
+			body.innerHTML = '<div class="vorpal-empty">loading…</div>';
 			try {
 				const resp = await fetch(cfgUrl('/versions'));
 				const data = await resp.json();
 				if (data.error) throw new Error(data.error);
 				const versions = data.versions || [];
 				if (versions.length === 0) {
-					body.innerHTML = '<div class="vars-empty">no saved versions yet</div>';
+					body.innerHTML = '<div class="vorpal-empty">no saved versions yet</div>';
 					return;
 				}
 				const table = document.createElement('table');
+				table.className = 'vorpal-table';
 				for (const v of versions) {
 					const tr = document.createElement('tr');
 					const when = document.createElement('td');
@@ -2956,7 +2728,7 @@ a=sendrecv
 				body.innerHTML = '';
 				body.appendChild(table);
 			} catch (e) {
-				body.innerHTML = '<div class="vars-empty">failed to load versions — ' + escapeHtml(e.message) + '</div>';
+				body.innerHTML = '<div class="vorpal-error">failed to load versions: ' + escapeHtml(e.message) + '</div>';
 			}
 		}
 
@@ -3011,7 +2783,7 @@ a=sendrecv
 				// A cluster or server file adds to the domain file's pipeline: the
 				// loader appends a list here to the list below it.
 				const guide = document.createElement('div');
-				guide.className = 'inherit-note';
+				guide.className = 'inherit-note vorpal-note';
 				guide.textContent = inheritedN + ' connector' + (inheritedN === 1 ? '' : 's') + ' inherited from ' + belowText();
 				guide.title = 'Inherited: ' + Object.keys(ed.belowDoc.pipeline || {}).join(', ') + '. A connector here with an inherited id changes that connector; a new id runs after them.';
 				panel.appendChild(guide);
@@ -3021,7 +2793,7 @@ a=sendrecv
 				}));
 			} else if (pipe.length === 0) {
 				const guide = document.createElement('div');
-				guide.className = 'inherit-note';
+				guide.className = 'inherit-note vorpal-note';
 				guide.textContent = 'No pipeline: every call gets the default rule set.';
 				guide.title = 'The usual shape: a sip connector extracts a value (the dialed number), then a table connector maps it to a rule set. The buttons add exactly that.';
 				panel.appendChild(guide);
@@ -3051,7 +2823,7 @@ a=sendrecv
 			} else {
 				if (ed.belowDoc && inheritedN) {
 					const guide = document.createElement('div');
-					guide.className = 'inherit-note';
+					guide.className = 'inherit-note vorpal-note';
 					guide.textContent = 'after ' + inheritedN + ' inherited from ' + belowText();
 					guide.title = 'Inherited: ' + Object.keys(ed.belowDoc.pipeline || {}).join(', ') + '. A connector here with an inherited id changes that connector; a new id runs after them.';
 					panel.appendChild(guide);
@@ -3067,12 +2839,13 @@ a=sendrecv
 			const dfltRow = document.createElement('div');
 			dfltRow.style.cssText = 'display:flex;gap:10px;align-items:end;margin-top:12px;flex-wrap:wrap;';
 			const dfltWrap = document.createElement('div');
-			dfltWrap.className = 'field';
+			dfltWrap.className = 'field vorpal-field';
 			const dl = document.createElement('label');
 			dl.textContent = 'default rule set';
 			dl.title = 'Applied when the pipeline writes no ruleSet variable. None means unmatched calls pass through untransformed.';
 			const sel = document.createElement('select');
 			sel.id = 'defaultRuleSetSel';
+			sel.className = 'vorpal-input vorpal-mono';
 			sel.addEventListener('change', () => {
 				// The overlay's "(none · passthrough here)" writes "defaultRuleSet": null.
 				const off = !!(sel.selectedOptions[0] && sel.selectedOptions[0].dataset.off);
@@ -3088,12 +2861,12 @@ a=sendrecv
 
 		function connectorCard(pipe, conn, idx) {
 			const card = document.createElement('div');
-			card.className = 'conn-card';
+			card.className = 'conn-card vorpal-panel';
 			const head = document.createElement('div');
 			head.className = 'card-head';
 
 			const typeSel = document.createElement('select');
-			typeSel.style.cssText = 'font-family:"JetBrains Mono",Menlo,monospace;font-size:12px;padding:3px 6px;';
+			typeSel.className = 'type-select vorpal-input vorpal-mono';
 			const types = ed.connVariants ? ed.connVariants.map(v => v.type)
 				: ['sip', 'rest', 'jdbc', 'ldap', 'table'];
 			typeSel.innerHTML = types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');

@@ -22,7 +22,15 @@ public class LogsSettingsStartup implements ServletContextListener {
 
 	private static final Logger logger = Logger.getLogger(LogsSettingsStartup.class.getName());
 
-	private SettingsManager<LogsSettings> settingsManager;
+	private static SettingsManager<LogsSettings> settingsManager;
+
+	/// The live settings, or null before startup completes. [LogQueryAPI]
+	/// reads `access` from here on every request, so a Configurator save
+	/// takes effect without a redeploy.
+	static LogsSettings settings() {
+		SettingsManager<LogsSettings> sm = settingsManager;
+		return sm != null ? sm.getCurrent() : null;
+	}
 
 	@Override
 	public void contextInitialized(ServletContextEvent sce) {

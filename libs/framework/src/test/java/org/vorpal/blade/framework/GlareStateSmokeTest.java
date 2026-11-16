@@ -20,7 +20,7 @@ import org.vorpal.blade.framework.sip.DetachedSipSession;
 import org.vorpal.blade.framework.sip.DetachedSipSessionsUtil;
 
 /// Guards the glare contract that both `AsyncSipServlet.doRequest` and the REST
-/// [org.vorpal.blade.framework.v2.transfer.api.TransferAPI] depend on:
+/// [org.vorpal.blade.framework.v3.transfer.api.TransferAPI] depend on:
 /// `PROTECT` means a transaction is outstanding on that dialog, and a second
 /// request against it is answered `491 Request Pending`.
 ///

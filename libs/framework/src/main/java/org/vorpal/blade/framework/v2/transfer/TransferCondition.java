@@ -1,44 +1,16 @@
 package org.vorpal.blade.framework.v2.transfer;
 
-import java.io.Serializable;
-
-import org.vorpal.blade.framework.v2.config.Condition;
-import org.vorpal.blade.framework.v2.transfer.TransferSettings.TransferStyle;
-
-/**
- * Associates a transfer style with a matching condition.
- *
- * <p>Used to configure conditional transfer behavior based on request attributes.
- */
-public class TransferCondition implements Serializable {
+/// @deprecated Use [org.vorpal.blade.framework.v3.transfer.TransferCondition]. This type is the v3 one under its old
+///             name, kept so code that names it still compiles.
+@Deprecated
+public class TransferCondition extends org.vorpal.blade.framework.v3.transfer.TransferCondition {
 	private static final long serialVersionUID = 1L;
 
-	private TransferStyle style = TransferStyle.blind;
-	private Condition condition = new Condition();
-
 	public TransferCondition() {
-		// Default constructor
+		super();
 	}
 
-	public TransferCondition(TransferStyle style, Condition condition) {
-		this.style = style;
-		this.condition = condition;
+	public TransferCondition(org.vorpal.blade.framework.v3.transfer.TransferSettings.TransferStyle style, org.vorpal.blade.framework.v2.config.Condition condition) {
+		super(style, condition);
 	}
-
-	public TransferStyle getStyle() {
-		return style;
-	}
-
-	public void setStyle(TransferStyle style) {
-		this.style = style;
-	}
-
-	public Condition getCondition() {
-		return condition;
-	}
-
-	public void setCondition(Condition condition) {
-		this.condition = condition;
-	}
-
 }

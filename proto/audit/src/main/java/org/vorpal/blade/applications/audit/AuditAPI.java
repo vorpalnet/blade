@@ -22,10 +22,7 @@ import org.vorpal.blade.framework.v3.events.Events;
 import org.vorpal.blade.framework.v3.security.AccessDecision;
 import org.vorpal.blade.framework.v3.security.AccessEvaluator;
 import org.vorpal.blade.framework.v3.security.AuditArchive;
-import org.vorpal.blade.framework.v3.security.ContainerSubject;
 import org.vorpal.blade.framework.v3.security.DataPermission;
-import org.vorpal.blade.framework.v3.security.JwtIdentity;
-import org.vorpal.blade.framework.v3.security.RealmSubjectAttributes;
 import org.vorpal.blade.framework.v3.security.SubjectAttributes;
 
 /// Reading the access log, behind `phi:audit`.
@@ -118,11 +115,7 @@ public class AuditAPI {
 	}
 
 	private SubjectAttributes caller() {
-		if (request.getUserPrincipal() instanceof JwtIdentity) {
-			return SubjectAttributes.of((JwtIdentity) request.getUserPrincipal()); // signed in by OidcLoginFilter
-		}
-		String name = (request.getUserPrincipal() == null) ? null : request.getUserPrincipal().getName();
-		return RealmSubjectAttributes.of(ContainerSubject.current(), name);
+		return SubjectAttributes.of(request);
 	}
 
 	private AccessEvaluator evaluator() {

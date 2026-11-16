@@ -3,9 +3,10 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>BLADE Metrics</title>
+	<title>Metrics · BLADE</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
 	<script src="/blade/portal/brand/theme.js"></script>
+	<script src="/blade/portal/brand/shell.js" data-context="/blade/metrics" defer></script>
 	<link rel="stylesheet" href="metrics.css">
 	<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/vorpal_splotch.svg">
 </head>
@@ -51,14 +52,14 @@
 				</div>
 			</section>
 
-			<div id="error" class="ev-finding is-problem" hidden>
-				<div class="ev-kind">✕ Cannot read metrics</div>
-				<div class="ev-detail" id="error-detail"></div>
+			<div id="error" class="vorpal-error m-msg" hidden>
+				<div class="m-kind">✕ Cannot read metrics</div>
+				<div id="error-detail"></div>
 			</div>
 
 			<div id="apps"></div>
 
-			<div id="empty" class="ev-empty ev-muted" hidden>
+			<div id="empty" class="vorpal-empty" hidden>
 				<p><strong>No application is reporting metrics.</strong></p>
 				<p>
 					Every app registers a <code>Type=Metrics</code> MBean when it starts,

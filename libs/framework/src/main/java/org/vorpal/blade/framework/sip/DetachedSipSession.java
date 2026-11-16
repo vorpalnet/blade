@@ -24,7 +24,7 @@ import javax.servlet.sip.UAMode;
 import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingRegion;
 
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.Callflow;
 
 /**
  * A mock implementation of SipSession for unit testing.

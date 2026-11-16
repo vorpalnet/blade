@@ -114,10 +114,14 @@ minute samples; configuration changes from `v_config_changes`, and the operation
 
 **Who sees what.** Sign-in is the deployment's OpenID Connect provider when
 `blade-oidc.properties` is deployed with the WAR, the WebLogic login otherwise. The grants in
-the dashboard's settings then decide, per group, which domains' servers, which tenants' and
-departments' calls, and whether individual calls and what was said are shown at all. A
-department sees only its own parts of a call. Without grants, only the WebLogic admin roles
-see anything. Each look at individual calls is recorded as a `dashboard.viewed` event.
+the dashboard's settings then decide, per group, which domains' servers and which tenants' and
+departments' calls are shown. A department sees only its own parts of a call. Without grants,
+only the WebLogic admin roles see anything. Individual calls and what was said are a separate
+question, answered by the `access` policy: a rule granting `phi:transcript`, the same rules the
+Recordings app reads. It starts out granting it to the four WebLogic administrator groups,
+signed in through WebLogic (`signIn: weblogic`): an identity domain's own `Administrators`
+group is the cloud account's administrators, not these. Each
+look at individual calls is recorded as a `dashboard.viewed` event.
 
 **Reports** (`/blade/dashboard/report.html?r=<report>`): a panel's title opens its
 full report, queried live, with a date range, a domain selector, an account search and an "Include

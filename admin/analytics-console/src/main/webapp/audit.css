@@ -1,173 +1,78 @@
 /*
- * Audit page styles. Brand layer (topbar, page background, hero, typography,
- * the light and dark themes) lives in /blade/portal/brand/brand.css; this file
- * is just the audit-specific bits. Work content sits on brand sheets: solid
- * var(--vorpal-surface) panels, var(--vorpal-divider) borders and
- * var(--vorpal-ink-*) text, so it follows either theme.
+ * Audit page layout. The look (panels, buttons, badges, messages, the light
+ * and dark themes) comes from the shared components in
+ * /blade/portal/brand/brand.css; this file keeps only the audit's own layout.
  *
- * State distinction by shape + label, not color alone (a meaningful number of
- * operators are colorblind). The OK / MISSING / ERROR badges differ in glyph
- * and word, not just hue; the colored left-accent on a row is a secondary cue.
+ * State is shown by shape and word, not colour alone (a meaningful number of
+ * operators are colourblind): each finding's badge carries a glyph and the
+ * word OK or MISSING.
  */
 
-/* Refresh lives inside the hero (.vorpal-hero-meta). */
-.audit-refresh {
-	font: inherit;
-	padding: 0.45rem 1.1rem;
-	border: 1px solid var(--vorpal-divider);
-	border-radius: 9px;
-	background: var(--vorpal-surface);
-	color: var(--vorpal-ink-900);
-	cursor: pointer;
-}
-.audit-refresh:hover {
-	border-color: var(--vorpal-slate-300);
-}
-.audit-refresh:active {
-	transform: translateY(1px);
-}
-
-/* Expected bindings — a light sheet panel. */
-.audit-expected {
+.audit-expected,
+.audit-results {
 	margin-top: 2rem;
-	padding: 1.25rem 1.5rem;
-	background: var(--vorpal-surface);
-	border: 1px solid var(--vorpal-divider);
-	border-radius: var(--vorpal-radius-lg);
-	box-shadow: var(--vorpal-shadow-sm);
-	color: var(--vorpal-ink-900);
-}
-.audit-expected h2 {
-	margin-top: 0;
-	font-size: 1rem;
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
-	color: var(--vorpal-slate-600);
 }
 .audit-expected dl {
 	display: grid;
 	grid-template-columns: max-content 1fr;
-	gap: 0.35rem 1.5rem;
+	gap: 0.5rem 1.5rem;
+	align-items: baseline;
 	margin: 0;
-}
-.audit-expected dt {
-	color: var(--vorpal-slate-600);
 }
 .audit-expected dd {
 	margin: 0;
-	font-family: var(--vorpal-font-mono);
-	color: var(--vorpal-ink-900);
 }
 
-.audit-results {
-	margin-top: 2rem;
-}
-/* "Findings" is a section label on the page itself; the findings are the
-   sheets below it. */
-.vorpal-glass .audit-results h2 {
-	margin-top: 0;
-	font-size: 1rem;
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
-	color: var(--vorpal-slate-600);
-}
-
-/* Each finding is a light sheet; the colored left edge is a secondary cue on
-   top of the glyph+word badge. */
+/* One finding per row: the badge in a fixed column, the detail beside it. */
 .audit-row {
 	display: grid;
 	grid-template-columns: 9rem 1fr;
 	gap: 1rem;
-	padding: 1rem 1.25rem;
-	margin-bottom: 0.75rem;
-	background: var(--vorpal-surface);
-	border: 1px solid var(--vorpal-divider);
-	border-left-width: 4px;
-	border-radius: var(--vorpal-radius-lg);
-	box-shadow: var(--vorpal-shadow-sm);
-	color: var(--vorpal-ink-900);
 	align-items: start;
+	padding: 0.75rem 0;
+	border-bottom: 1px solid var(--vorpal-divider);
 }
-.audit-row.ok {
-	border-left-color: #1f9d57;
-}
-.audit-row.missing {
-	border-left-color: #c98a16;
-}
-.audit-row.error {
-	border-left-color: #c0392b;
+.audit-row:last-child {
+	border-bottom: 0;
 }
 
-.audit-badge {
-	display: inline-flex;
-	align-items: center;
-	gap: 0.4rem;
-	padding: 0.25rem 0.65rem;
-	font-size: 0.85rem;
-	font-weight: 600;
-	letter-spacing: 0.04em;
-	text-transform: uppercase;
-	border-radius: 0;
-	background: var(--vorpal-slate-100);
-	border: 1px solid var(--vorpal-slate-300);
-	color: var(--vorpal-ink-900);
-}
 .audit-badge.ok::before { content: "✓"; }
 .audit-badge.missing::before { content: "✕"; }
 .audit-badge.error::before { content: "!"; }
 
 .audit-row-body h3 {
 	margin: 0 0 0.3rem 0;
-	font-size: 1.05rem;
-	color: var(--vorpal-ink-900);
+	font-size: 14px;
 }
 .audit-row-body p {
 	margin: 0;
 	color: var(--vorpal-ink-700);
-	font-size: 0.95rem;
-	line-height: 1.45;
 }
 
-/* Error sheet — light red-tinted panel with dark, readable text. */
 .audit-error {
 	margin-top: 1rem;
-	padding: 1rem 1.25rem;
-	background: var(--vorpal-surface-alt);
-	border: 1px solid #e0b4ae;
-	border-left: 4px solid #c0392b;
-	border-radius: var(--vorpal-radius-lg);
-	box-shadow: var(--vorpal-shadow-sm);
 	font-family: var(--vorpal-font-mono);
-	font-size: 0.85rem;
-	color: var(--vorpal-ink-900);
 	white-space: pre-wrap;
 }
 
-/* "Fix" action — provision the missing JMS resources. Light sheet. */
+/* The "fix" action: provision the missing JMS resources. */
 .audit-fix {
 	margin-top: 1.25rem;
-	padding: 1rem 1.25rem;
-	background: var(--vorpal-surface);
-	border: 1px solid var(--vorpal-divider);
-	border-radius: var(--vorpal-radius-lg);
-	box-shadow: var(--vorpal-shadow-sm);
-	color: var(--vorpal-ink-900);
+	padding-top: 1rem;
+	border-top: 1px solid var(--vorpal-divider);
 }
 .audit-fix-note {
-	margin: 0.6rem 0 0;
-	font-size: 0.85rem;
-	color: var(--vorpal-slate-600);
+	margin: 0.75rem 0 0;
 }
+
+/* The step log of a provisioning run. No shared code block exists yet. */
 .audit-fix-log {
-	margin-top: 1rem;
-	padding: 1rem 1.25rem;
-	background: var(--vorpal-surface-alt);
+	margin: 1rem 0 0;
+	padding: 0.75rem 1rem;
+	background: var(--vorpal-slate-100);
 	border: 1px solid var(--vorpal-divider);
-	border-radius: var(--vorpal-radius-lg);
-	box-shadow: var(--vorpal-shadow-sm);
-	font-family: var(--vorpal-font-mono);
-	font-size: 0.85rem;
-	color: var(--vorpal-ink-900);
+	border-radius: var(--vorpal-radius-sm);
+	font-size: 12px;
 	white-space: pre-wrap;
 }
 

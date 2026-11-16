@@ -15,11 +15,8 @@ import javax.servlet.sip.SipURI;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.Callback;
-import org.vorpal.blade.framework.v2.callflow.Expectation;
+import org.vorpal.blade.framework.Expectation;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
-import org.vorpal.blade.framework.v2.transfer.BlindTransfer;
-import org.vorpal.blade.framework.v2.transfer.TransferListener;
-import org.vorpal.blade.framework.v2.transfer.TransferSettings;
 import org.vorpal.blade.framework.v3.media.CallflowHold;
 
 /// An attended (consultative) transfer. Alice is the customer, Bob the agent
@@ -628,7 +625,7 @@ public class AttendedTransfer extends BlindTransfer {
 	}
 
 	/// `transferDeclined` for a transfer that a request ended (Carol's BYE):
-	/// on the bus, and to an observer, since the v2 listener takes only a
+	/// on the bus, and to an observer, since the plain [TransferListener] takes only a
 	/// response.
 	private void declined(SipServletRequest request) throws ServletException, IOException {
 		SettingsManager.createEvent("transferDeclined", request);

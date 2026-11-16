@@ -585,14 +585,13 @@ class AnalyticsReportsTest {
 
 	// ── who sees what ─────────────────────────────────────────────────────
 
-	private static DashboardGrant grant(String platform, String tenants, String departments, boolean content) {
+	private static DashboardGrant grant(String platform, String tenants, String departments) {
 		DashboardGrant g = new DashboardGrant();
 		g.setPlatform(list(platform));
 		g.setTenants(list(tenants));
 		if (departments != null) {
 			g.setDepartments(list(departments));
 		}
-		g.setContent(content);
 		return g;
 	}
 
@@ -604,10 +603,21 @@ class AnalyticsReportsTest {
 		return filter(7, false, null).limitedTo(Access.of(Arrays.asList(grants)));
 	}
 
+	/// The same scope, for a viewer the policy lets read every call they see.
+	private static AnalyticsReports.Filter reading(DashboardGrant... grants) {
+		org.vorpal.blade.framework.v3.security.AccessPolicy policy = new org.vorpal.blade.framework.v3.security.AccessPolicy();
+		policy.getRules().add(new org.vorpal.blade.framework.v3.security.AccessRule("readers", Arrays.asList("readers"),
+				null, Arrays.asList("phi:transcript")));
+		return filter(7, false, null).limitedTo(Access.of(Arrays.asList(grants)).withContent(
+				org.vorpal.blade.framework.v3.security.SubjectAttributes.of("viewer",
+						new java.util.HashSet<>(Arrays.asList("readers"))),
+				new org.vorpal.blade.framework.v3.security.AccessEvaluator(policy)));
+	}
+
 	/// The operator sees the platform, never a tenant's calls.
 	@Test
 	void theOperatorSeesServersButNoCalls() {
-		AnalyticsReports.Filter matellio = as(grant("*", "", null, false));
+		AnalyticsReports.Filter matellio = as(grant("*", "", null));
 		assertEquals(0L, n(only(reports.run("calls.summary", matellio)).get(0)));
 		assertEquals(0L, n(only(reports.run("events.summary", matellio)).get(0)));
 		assertEquals(3, reports.run("platform.servers", matellio).rows.size(), "every domain's servers");
@@ -616,7 +626,7 @@ class AnalyticsReportsTest {
 	/// A tenant sees its own calls, wherever they ran, and not the platform.
 	@Test
 	void aTenantSeesItsCallsAndNotThePlatform() {
-		AnalyticsReports.Filter uhg = as(grant("", "uhg", null, false));
+		AnalyticsReports.Filter uhg = as(grant("", "uhg", null));
 		assertEquals(2L, n(only(reports.run("calls.summary", uhg)).get(0)), "c3 and c6, not the conference's");
 		assertEquals(6L, n(only(reports.run("events.summary", uhg)).get(0)), "e2..e7");
 		assertEquals(0, reports.run("platform.servers", uhg).rows.size(), "no other tenant's load");
@@ -630,12 +640,12 @@ class AnalyticsReportsTest {
 	/// c6 began in Sales and was answered in Radiology.
 	@Test
 	void aDepartmentSeesOnlyItsOwnPartOfACall() {
-		AnalyticsReports.Filter sales = as(grant("", "uhg", "sales", true));
+		AnalyticsReports.Filter sales = reading(grant("", "uhg", "sales"));
 		assertEquals(1L, n(only(reports.run("calls.summary", sales)).get(0)), "c6 only: Sales never touched c3");
 		assertEquals(1L, n(only(reports.run("events.summary", sales)).get(0)), "c6's start, not Radiology's answer");
 		assertEquals(0L, n(only(reports.run("conversation.summary", sales)).get(0)), "c3's words were Radiology's");
 
-		AnalyticsReports.Filter radiology = as(grant("", "uhg", "radiology", true));
+		AnalyticsReports.Filter radiology = reading(grant("", "uhg", "radiology"));
 		assertEquals(2L, n(only(reports.run("calls.summary", radiology)).get(0)), "c3, and c6 once transferred");
 		assertEquals(5L, n(only(reports.run("events.summary", radiology)).get(0)), "c3's four and c6's answer");
 	}
@@ -644,10 +654,10 @@ class AnalyticsReportsTest {
 	/// caller only on the calls it took part in, and searching takes content.
 	@Test
 	void aDepartmentFindsACallerOnlyOnItsOwnCalls() {
-		AnalyticsReports.Filter radiology = as(grant("", "uhg", "radiology", true));
+		AnalyticsReports.Filter radiology = reading(grant("", "uhg", "radiology"));
 		assertEquals(2L, n(only(reports.run("calls.summary", radiology.forAccount("jeff"))).get(0)), "c3 and c6");
 
-		AnalyticsReports.Filter sales = as(grant("", "uhg", "sales", true));
+		AnalyticsReports.Filter sales = reading(grant("", "uhg", "sales"));
 		assertEquals(1L, n(only(reports.run("calls.summary", sales.forAccount("jeff"))).get(0)),
 				"c6 only: Sales never learns jeff called Radiology on c3");
 		assertEquals(0L, n(only(reports.run("calls.summary", sales.forAccount("pat"))).get(0)),
@@ -655,7 +665,7 @@ class AnalyticsReportsTest {
 		assertEquals(1L, n(only(reports.run("events.summary", sales.forAccount("jeff"))).get(0)),
 				"and on c6, only Sales's own part");
 
-		AnalyticsReports.Filter counts = as(grant("", "uhg", "radiology", false));
+		AnalyticsReports.Filter counts = as(grant("", "uhg", "radiology"));
 		assertThrows(SecurityException.class, () -> reports.run("calls.summary", counts.forAccount("jeff")),
 				"looking up a caller takes content");
 	}
@@ -663,7 +673,7 @@ class AnalyticsReportsTest {
 	/// Grants add up: a person in two groups sees what either shows.
 	@Test
 	void grantsAddUp() {
-		AnalyticsReports.Filter both = as(grant("", "uhg", "sales", false), grant("east-1", "", null, false));
+		AnalyticsReports.Filter both = as(grant("", "uhg", "sales"), grant("east-1", "", null));
 		assertEquals(1L, n(only(reports.run("calls.summary", both)).get(0)));
 		assertEquals(2, reports.run("platform.servers", both).rows.size());
 		assertEquals(0L, n(only(reports.run("calls.summary", as())).get(0)), "no grant, nothing");

@@ -70,4 +70,16 @@
 		<role-name>Monitor</role-name>
 	</security-role>
 
+	<!-- Static files are re-checked (304 when unchanged), so a redeploy never
+	     pairs a new page with a cached old script. -->
+	<filter>
+		<filter-name>revalidate</filter-name>
+		<filter-class>org.vorpal.blade.framework.v3.web.RevalidateFilter</filter-class>
+		<async-supported>true</async-supported>
+	</filter>
+	<filter-mapping>
+		<filter-name>revalidate</filter-name>
+		<url-pattern>/*</url-pattern>
+	</filter-mapping>
+
 </web-app>

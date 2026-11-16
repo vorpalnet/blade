@@ -480,7 +480,7 @@ class GlareServletTest {
 		DetachedSipSession bob = new DetachedSipSession(app);
 		Callflow.linkSession(bob, dialog); // Alice's dialog -> Bob's
 		Callflow.setGlareState(bob, GlareState.QUEUE); // Bob's own re-INVITE awaits our ACK
-		new org.vorpal.blade.framework.v2.b2bua.Reinvite(null).process(inDialog("INVITE")); // Alice re-INVITEs
+		new org.vorpal.blade.framework.v3.b2bua.Reinvite(null).process(inDialog("INVITE")); // Alice re-INVITEs
 		assertEquals(List.of("INVITE 491"), answered, "Alice is told 491, and retries later");
 		assertEquals(GlareState.QUEUE, Callflow.getGlareState(bob));
 	}
@@ -526,7 +526,7 @@ class GlareServletTest {
 		DetachedSipSession bob = new DetachedSipSession(app);
 		Callflow.linkSession(bob, dialog); // Alice's dialog -> Bob's
 		Callflow.setGlareState(bob, GlareState.PROTECT); // Bob's own UPDATE is open on his leg
-		new org.vorpal.blade.framework.v2.b2bua.Passthru(null).process(inDialog("UPDATE")); // Alice's UPDATE
+		new org.vorpal.blade.framework.v3.b2bua.Passthru(null).process(inDialog("UPDATE")); // Alice's UPDATE
 		assertEquals(List.of("UPDATE 491"), answered);
 	}
 
@@ -635,7 +635,7 @@ class GlareServletTest {
 			@Override
 			protected Callflow chooseCallflow(SipServletRequest request) {
 				return "ACK".equals(request.getMethod()) ? null
-						: new org.vorpal.blade.framework.v2.b2bua.Passthru(null);
+						: new org.vorpal.blade.framework.v3.b2bua.Passthru(null);
 			}
 		};
 		AsyncSipServlet.replayer = b2bua;

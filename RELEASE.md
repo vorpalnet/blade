@@ -27,6 +27,91 @@ router) is listed at the end. See [UPGRADING.md](UPGRADING.md).
 - **`update.sh` is now `patch.sh`** (and `UPDATING.md` is `PATCHING.md`): it patches the
   OCCAS binaries, and "update" beside "upgrade" said the same thing twice.
 
+### Trace: who sees which calls
+
+Trace takes the dashboard's two access settings. Its `grants` say, per group, the domains,
+tenants and departments whose calls it sees. Its `access` policy says who may read what was
+said in them (SIP message text, a recorded call's parties, armed rules' patterns). The server
+applies both to live captures, recorded calls and saved calls before anything reaches the
+browser. A department sees only its own parts of a call. With no grants, the WebLogic admin
+roles see every call, as before. The grant model moved to the framework (`v3.access`), and
+the dashboard uses it from there.
+
+- **One access model, two jobs.** Grants decide which calls a viewer sees; the access policy
+  that Recordings and Audit already read (`v3.security.AccessPolicy`) decides what may be
+  read in them, as `phi:transcript`. A grant's `content` flag is gone, and a saved grant
+  that still has one loads with it ignored. The dashboard and Trace policies start out
+  granting `phi:transcript` to the WebLogic `Administrators`, `Operators`, `Deployers` and
+  `Monitors` groups, which is what those roles saw before. That rule says `signIn: weblogic`:
+  an identity domain has an `Administrators` group of its own, the cloud account's
+  administrators, and a group name alone does not say which one a sign-in carries. A rule
+  with no `signIn` admits either. A configuration that gave content
+  to another group needs a rule for it: a grant naming `radiology-supervisors` with `content: true`
+  becomes a rule with `groups: [radiology-supervisors]` and `permit: [phi:transcript]`. A rule may
+  match a call's `domain`, `tenant` and `department`; Trace applies that per message, and
+  the dashboard, which reads calls in bulk, honors only rules with no `match`.
+- **Grants also match a sign-in's groups,** not only its roles, so a grant and a policy rule
+  can name the same group the same way (`Administrators`, or an identity-domain group).
+- **Trace takes the identity-domain sign-in,** as the dashboard does: `deploy.sh` adds the
+  environment's `oidc.properties`, and the WebLogic login still works beside it. Trace no
+  longer has a container `auth-constraint`, so arming, disarming and clearing, saving or
+  deleting a call, the armed-rules list and the Source tab each check for a WebLogic admin
+  role on the server, and the page leaves them out for anyone else. Register
+  `<host>:443/blade/callflow/oidc/callback` on the identity-domain client
+  (`misc/oci-identity-domain.sh` now includes it).
+- **Logs reads the same policy.** A log line can hold a caller's number, so reading one is
+  `phi:transcript` under `blade-logs.json`'s new `access`, which starts out as the dashboard's
+  and Trace's default. Nothing changes until an operator narrows it: take `Monitors` out of
+  the rule and a Monitor still sees the servers and file names, but each read of the lines
+  is refused (`403`) and recorded in the access log.
+- **The agent console scopes supervisors by grant.** `agent.json` takes the dashboard's
+  `grants`: a supervisor's console shows the calls of the tenants and departments their
+  identity-provider groups are granted, and a call popped to an agent by name still reaches
+  that agent. With no grants every console sees every call, as before. Grants are read when a
+  console opens.
+- **One frame for every admin application.** Each page loads the portal's `brand/shell.js`:
+  the dashboard's rail of applications and services down the left (the current one marked
+  with a filled tile and a bar), and the account menu at the right of the top bar with who
+  is signed in, what they see, About and Sign out. Each application answers for itself
+  through the framework's `blade-shell/me` and `blade-shell/cards`, under its own sign-in;
+  the list goes to the WebLogic admin roles on the AdminServer only, as the dashboard's
+  does. Recordings, Audit and the agent console take the shared top bar and theme too,
+  without a rail. Page titles read "Page · App · BLADE", every application has an icon,
+  controls an application has not styled take the shared look, and a printed page drops
+  the frame. The dashboard's About moved from its pill into the account menu.
+- **One set of controls in every application.** `brand.css` now carries the dashboard's
+  controls at its scale (buttons in primary, secondary, danger, ghost and icon forms;
+  segmented controls and tabs, chosen ones filled and bold; fields, panels, toolbars, tables,
+  badges that state their word; empty, note, warning and error messages; a code block), and
+  every admin application, Recordings, Audit and the agent console use them in place of
+  their own. What each application keeps is its layout and the visuals only it has (Trace's
+  ladder, the phone's handset, Flow's canvas, the agent console's risk scale). Tuning keeps
+  Bootstrap only for its grid, switches and tooltips. Colours come from the theme tokens
+  throughout, so every page follows light and dark.
+- **Sign out of every admin application at once.** The dashboard's "Sign out" now ends at
+  the portal's `/logout`, which ends every session the browser holds on the AdminServer
+  (WebLogic's `ServletAuthentication.invalidateAll`): the admin applications share one
+  session cookie, so ending one application's session used to leave the rest signed in.
+  An identity-domain sign-in goes by way of `/oidc/logout?then=/blade/portal/logout`, which
+  ends the identity domain's session with the ID token first, so the next visit asks for a
+  password. `then` takes only a path on the same host. Engine-tier applications
+  (Recordings, Audit, the agent console) keep their own sign-out.
+- **The shared login page shows its mark again.** It linked the retired white VorpalBoy,
+  which every server answered with a 404; it now uses the light purple one. Each admin
+  application picks this up when it is next built and deployed.
+- **Pages revalidate after a redeploy.** Every admin and proto application that serves pages
+  declares `RevalidateFilter` (`Cache-Control: no-cache`), so a browser asks before reusing
+  a cached page or script and never pairs a new page with an old one.
+- **Traced messages carry their call's scope.** Each step records the call's tenant and
+  department, or the server's `blade.tenant`. Live steps need applications built on this
+  framework.
+- **The flight recorder keeps the call's parties.** From, To and P-Asserted-Identity, once,
+  from the first INVITE. `v_call_traced` gains `call_from`, `call_to` and `asserted` in all
+  three dialects; `upgrade.sh` replaces the views. Recorded calls can be searched by number,
+  by a viewer the policy lets read every call they see.
+- **Recorded calls are searched on the server,** by time, finding, fault, application, far
+  end, number or Vorpal-ID, 50 records a page.
+
 ### Telling one 503 from another
 
 A 503 now says why, as far as BLADE can know:

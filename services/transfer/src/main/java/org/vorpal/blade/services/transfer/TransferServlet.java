@@ -13,23 +13,23 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.URI;
 
-import org.vorpal.blade.framework.v2.b2bua.B2buaListener;
+import org.vorpal.blade.framework.v3.b2bua.B2buaListener;
 import org.vorpal.blade.framework.v3.B2buaServlet;
-import org.vorpal.blade.framework.v2.b2bua.Passthru;
+import org.vorpal.blade.framework.v3.b2bua.Passthru;
 import org.vorpal.blade.framework.Callflow;
-import org.vorpal.blade.framework.v2.callflow.CallflowResponseCode;
+import org.vorpal.blade.framework.v3.CallflowResponseCode;
 import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.framework.v2.config.Translation;
 import org.vorpal.blade.framework.v3.transfer.AttendedTransfer;
 import org.vorpal.blade.framework.v3.transfer.TransferObserver;
 import org.vorpal.blade.services.transfer.notify.TransferNotices;
-import org.vorpal.blade.framework.v2.transfer.BlindTransfer;
-import org.vorpal.blade.framework.v2.transfer.ConferenceTransfer;
-import org.vorpal.blade.framework.v2.transfer.Transfer;
-import org.vorpal.blade.framework.v2.transfer.TransferInitialInvite;
-import org.vorpal.blade.framework.v2.transfer.TransferListener;
+import org.vorpal.blade.framework.v3.transfer.BlindTransfer;
+import org.vorpal.blade.framework.v3.transfer.ConferenceTransfer;
+import org.vorpal.blade.framework.v3.transfer.Transfer;
+import org.vorpal.blade.framework.v3.transfer.TransferInitialInvite;
+import org.vorpal.blade.framework.v3.transfer.TransferListener;
 import org.vorpal.blade.framework.v3.transfer.TransferSettings;
-import org.vorpal.blade.framework.v2.transfer.api.TransferAPI;
+import org.vorpal.blade.framework.v3.transfer.api.TransferAPI;
 
 /**
  * This class implements an example B2BUA with transfer capabilities.

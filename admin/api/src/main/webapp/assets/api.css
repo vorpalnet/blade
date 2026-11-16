@@ -1,7 +1,7 @@
-/* Glue on top of the shared brand.css. The topbar, brand, and callout classes
-   come from /blade/portal/brand/brand.css; this file only makes the page a
-   full-height column so Scalar can fill everything under the topbar, and
-   styles the service pulldown that sits in the topbar nav slot. */
+/* Layout on top of the shared brand.css. The top bar, the label, input and
+   note components come from /blade/portal/brand/brand.css; this file only
+   makes the page a full-height column so Scalar can fill everything under the
+   top bar, and lays out the service pulldown in the top bar's nav slot. */
 
 html, body {
 	height: 100%;
@@ -14,11 +14,14 @@ html, body {
 	min-height: 100vh;
 }
 
+/* The document sheet: the Scalar reference and the fallback notice sit on
+   the theme's surface. */
 .api-main {
 	flex: 1 1 auto;
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
+	background: var(--vorpal-surface);
 }
 
 /* Scalar renders its own full reference UI (sidebar + content) in here. */
@@ -27,53 +30,32 @@ html, body {
 	min-height: 0;
 }
 
+#api-notice {
+	margin: 16px;
+}
+#api-notice p {
+	margin: 4px 0 0;
+}
+
+/* Service picker, in the top bar. */
 .api-picker {
 	display: flex;
 	align-items: center;
 	gap: 8px;
+	padding: 3px 3px 3px 10px;
 }
 
 .api-picker label {
-	font-weight: 600;
 	white-space: nowrap;
 }
 
+/* The shared input, drawn without the platform arrow so it matches on every
+   browser; a neutral chevron reads on both themes. */
 .api-picker select {
 	min-width: 220px;
 	max-width: 360px;
-	padding: 6px 10px;
-	border-radius: 6px;
-	font: inherit;
-}
-
-#api-notice {
-	margin: 16px;
-}
-
-/* ---------------------------------------------------------------------------
-   DARK-GLASS SHELL, LIGHT DOCUMENT
-   The body carries `vorpal-glass`, so the shared brand.css turns the topbar
-   into dark glass over a purple backdrop. brand.css relights its own topbar
-   pieces (brand, nav links, logout) but NOT this app's custom service picker,
-   and it leaves the .vorpal-topbar text color dark — so the picker would be
-   dark-on-dark. Relight it here. The Scalar reference itself stays LIGHT: it
-   is dense documentation/try-it content, so we frame .api-main as a solid
-   light sheet under the dark topbar and let Scalar paint its own light theme.
-   --------------------------------------------------------------------------- */
-
-/* Service picker, in the top bar: the theme's own surface and ink. */
-.vorpal-glass .api-picker label {
-	color: var(--vorpal-slate-600);
-}
-
-.vorpal-glass .api-picker select {
-	color: var(--vorpal-ink-900);
-	background-color: var(--vorpal-surface);
-	border: 1px solid var(--vorpal-divider);
-	border-radius: 9px;
 	-webkit-appearance: none;
 	appearance: none;
-	/* A neutral grey chevron reads on both themes. */
 	background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%238d8aa3' stroke-width='1.5'><path d='M1 1.5 6 6.5 11 1.5'/></svg>");
 	background-repeat: no-repeat;
 	background-position: right 10px center;
@@ -81,21 +63,6 @@ html, body {
 	padding-right: 28px;
 }
 
-.vorpal-glass .api-picker select:hover:not(:disabled) {
-	border-color: var(--vorpal-slate-300);
-}
-
-.vorpal-glass .api-picker select:focus-visible {
-	outline: 2px solid var(--vorpal-purple);
-	outline-offset: 1px;
-}
-
-.vorpal-glass .api-picker select:disabled {
+.api-picker select:disabled {
 	color: var(--vorpal-slate-400);
-}
-
-/* Document sheet: the Scalar reference (and the fallback notice) sit on the
-   theme's surface. */
-.vorpal-glass .api-main {
-	background: var(--vorpal-surface);
 }

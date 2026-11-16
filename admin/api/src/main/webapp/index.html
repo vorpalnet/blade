@@ -3,16 +3,17 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>BLADE API Explorer</title>
+	<title>API Explorer · BLADE</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
 	<script src="/blade/portal/brand/theme.js"></script>
+	<script src="/blade/portal/brand/shell.js" data-context="/blade/api" defer></script>
 	<link rel="stylesheet" href="assets/api.css">
 	<link rel="icon" type="image/svg+xml" href="/blade/api/favicon.svg">
 </head>
 <body class="vorpal-glass">
 <div class="vorpal-app">
 
-	<!-- Thin chrome: brand (back to portal) + service pulldown + logout.
+	<!-- Thin chrome: brand (back to the dashboard) + service pulldown.
 	     Scalar renders its own full reference UI in #scalar below. -->
 	<header class="vorpal-topbar">
 		<a class="vorpal-brand" href="/blade/dashboard/" title="Back to the dashboard">
@@ -25,20 +26,19 @@
 		<a class="vorpal-appmark" href="/blade/api/">API</a>
 
 		<div class="vorpal-nav api-picker">
-			<label for="svc-select">Service</label>
-			<select id="svc-select" aria-label="Select a service" disabled>
+			<label class="vorpal-label" for="svc-select">Service</label>
+			<select id="svc-select" class="vorpal-input" aria-label="Select a service" disabled>
 				<option>Loading…</option>
 			</select>
 		</div>
 
 		<div class="vorpal-topbar-right">
-			<a class="vorpal-topbar-link" href="logout" title="Sign out">Logout</a>
 		</div>
 	</header>
 
-	<main class="api-main">
+	<main class="api-main" data-shell-main>
 		<!-- Shown when discovery fails, returns nothing, or ?app is unknown. -->
-		<div id="api-notice" class="vorpal-callout vorpal-callout-note" hidden></div>
+		<div id="api-notice" class="vorpal-note" hidden></div>
 
 		<!-- Scalar mounts here. -->
 		<div id="scalar"></div>

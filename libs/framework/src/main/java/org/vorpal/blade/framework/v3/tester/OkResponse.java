@@ -5,7 +5,7 @@ import java.io.IOException;
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.Callflow;
 
 /// Answers `200 OK` to an in-dialog request (BYE, CANCEL, INFO) on an
 /// endpoint-mode dialog — requests that need no handling beyond

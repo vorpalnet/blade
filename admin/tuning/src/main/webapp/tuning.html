@@ -3,9 +3,10 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>BLADE Tuning</title>
+	<title>Tuning · BLADE</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
 	<script src="/blade/portal/brand/theme.js"></script>
+	<script src="/blade/portal/brand/shell.js" data-context="/blade/tuning" defer></script>
 
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.6.0/css/bootstrap.min.css">
@@ -13,95 +14,86 @@
 	<script src="recommendations.js"></script>
 
 	<style>
-		body { padding: 0; background: var(--vorpal-surface-alt); font-size: 14px; }
+		/* Controls are the shared components from brand.css (.vorpal-btn,
+		   .vorpal-panel, .vorpal-table, .vorpal-input, .vorpal-badge, messages).
+		   Bootstrap stays for its grid, spacing utilities, the custom-control
+		   checkboxes and the tooltip plugin; everything here is layout or a
+		   visual with no shared equivalent. */
 		.container-fluid { max-width: 1440px; margin: 0 auto; padding: 24px 24px 40px; }
-		h4 { margin-bottom: 20px; }
-		.card { margin-bottom: 16px; }
-		.card-header { font-size: 14px; padding: 10px 15px; }
-		.card-body { padding: 15px; }
-		.mono { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 13px; }
-		.form-control-sm { font-size: 13px; }
+		.container-fluid > .vorpal-page-title { margin: 0 0 20px; font-size: 22px; }
+		.container-fluid > .vorpal-panel { margin-bottom: 16px; }
+		.muted { color: var(--vorpal-slate-600); }
+		.vorpal-input { display: block; width: 100%; }
+		.vorpal-note, .vorpal-error, .vorpal-warn { margin-bottom: 12px; }
+		.container-fluid .vorpal-table td { vertical-align: middle; }
 
-		/* Setting rows */
-		.setting-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--vorpal-divider); }
-		.setting-row:last-child { border-bottom: none; }
-		.setting-label h6 { margin-bottom: 1px; font-size: 14px; }
-		.setting-label small { color: var(--vorpal-slate-600); font-size: 12px; }
-
-		/* Per-server cards */
-		.server-card { border-left: 3px solid #007bff; }
-		.wm-card { border-left: 3px solid #6f42c1; }
-		.cluster-card { border-left: 3px solid #fd7e14; }
-
-		/* Status badges */
-		.server-status { font-size: 13px; color: var(--vorpal-ink-700); margin-top: 6px; }
-
-		/* Warning box */
-		.info-box { background: var(--vorpal-surface-alt); border: 1px solid #b8daff; border-radius: 4px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; }
-		.warning-box { background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; }
-		.warning-box strong, .info-box strong { color: #856404; }
-		.info-box strong { color: #004085; }
+		/* Section labels: the shared label, a rule under a group's heading, and
+		   a parenthetical or a button inside one kept in its own case. */
+		.tuning-rule { border-bottom: 1px solid var(--vorpal-divider); padding-bottom: 2px; }
+		.vorpal-label .muted { text-transform: none; letter-spacing: 0; font-weight: 400; }
+		.vorpal-label .vorpal-btn { text-transform: none; letter-spacing: 0; }
 
 		/* Inline field groups */
 		.field-group { margin-bottom: 8px; }
-		.field-group label { font-weight: 600; font-size: 12px; margin-bottom: 1px; display: block; }
+		.field-group > label { margin-bottom: 0; }
 		.field-group .hint { font-size: 11px; color: var(--vorpal-slate-600); }
 
 		/* Default-vs-set distinction for JVM scalar fields. A field showing only
-		   its grayed default placeholder and one holding an explicit value were
-		   nearly indistinguishable. Cues here are colorblind-safe — they lead with
-		   weight and shape, not hue: an explicitly-set field gets BOLD text, a
-		   left accent bar (inset box-shadow, so no layout shift), and a faint fill;
-		   an unset field's placeholder is italic and literally reads "default …". */
-		.field-group input.mono.is-set,
-		.field-group select.is-set { font-weight: 700; box-shadow: inset 3px 0 0 #2f6fed; background-color: var(--vorpal-surface-alt); }
-		.field-group input.mono::placeholder { font-style: italic; color: #aab2bd; }
+		   its default placeholder and one holding an explicit value were nearly
+		   indistinguishable. The cues lead with weight and shape, not hue: an
+		   explicitly-set field gets bold text, a left accent bar (inset
+		   box-shadow, so no layout shift) and a faint fill; an unset field's
+		   placeholder is italic and literally reads "default ...". */
+		.field-group .vorpal-input.is-set,
+		.jvm-target-detail textarea.vorpal-input.is-set { font-weight: 700; box-shadow: inset 3px 0 0 var(--vorpal-purple); background-color: var(--vorpal-purple-soft); }
+		.field-group .vorpal-input::placeholder { font-style: italic; color: var(--vorpal-slate-400); }
 
-		/* About panel — three readout columns over a deployed-apps strip. The
+		/* Bootstrap's checkboxes and switches, on the brand tokens. Checked is
+		   the tick or the knob's position, not only the fill. */
+		.custom-control-label::before { background-color: var(--vorpal-surface); border-color: var(--vorpal-slate-400); }
+		.custom-control-input:checked ~ .custom-control-label::before { background-color: var(--vorpal-mark); border-color: var(--vorpal-mark); }
+		.custom-control-input:focus ~ .custom-control-label::before { box-shadow: 0 0 0 2px var(--vorpal-purple-100); }
+		.custom-control-input:focus:not(:checked) ~ .custom-control-label::before { border-color: var(--vorpal-purple); }
+		.custom-switch .custom-control-label::after { background-color: var(--vorpal-slate-400); }
+		.custom-switch .custom-control-input:checked ~ .custom-control-label::after { background-color: var(--vorpal-surface); }
+
+		/* About panel: three readout columns over a deployed-apps strip. The
 		   tier of each deployed app is shown by a text label + position (services
 		   group first), never by color alone. */
-		.about-card .card-header strong { font-size: 14px; }
 		.about-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 		@media (max-width: 900px) { .about-grid { grid-template-columns: 1fr; } }
-		.about-col h6 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--vorpal-slate-600); margin-bottom: 8px; }
 		.about-kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 13px; }
 		.about-kv dt { color: var(--vorpal-ink-700); font-weight: 600; white-space: nowrap; }
 		.about-kv dd { margin: 0; }
 		.about-version { font-size: 20px; font-weight: 700; line-height: 1.1; }
 		.about-patch { font-size: 12px; line-height: 1.35; margin-bottom: 4px; }
-		.about-patch .pid { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-weight: 700; }
+		.about-patch .pid { font-family: var(--vorpal-font-mono); font-weight: 700; }
 
-		/* Compact table */
-		.table-compact { font-size: 13px; margin-bottom: 0; }
-		.table-compact td, .table-compact th { padding: 6px 10px; vertical-align: middle; }
-		.table-compact .mono { font-size: 12px; }
+		/* Kernel table: a category row and the recommended column. */
+		.tuning-cat { font-weight: 600; color: var(--vorpal-slate-600); background: var(--vorpal-surface-alt); }
+		.tuning-rec { background: var(--vorpal-surface-alt); font-style: italic; }
 
-		/* Floating toast */
-		.alert-floating { position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 350px; max-width: 500px; }
+		/* Floating status: a shared message, laid over the page on an opaque
+		   surface so the tinted kinds stay legible over content. */
+		.alert-floating {
+			position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 350px; max-width: 500px;
+			display: flex; align-items: center; gap: 8px; box-shadow: var(--vorpal-shadow-lg);
+		}
+		.alert-floating > #status-message-text { flex: 1; }
+		.alert-floating.vorpal-error { background: linear-gradient(var(--vorpal-error-soft), var(--vorpal-error-soft)), var(--vorpal-surface); }
+		.alert-floating.vorpal-warn { background: linear-gradient(var(--vorpal-warn-soft), var(--vorpal-warn-soft)), var(--vorpal-surface); }
 
-		/* Restart-required banner — a calm, standing reminder, not a per-save nag.
+		/* Restart-required banner: a calm, standing reminder, not a per-save nag.
 		   Distinguished by the ⟳ glyph, the left border, and its text (not colour). */
-		.restart-banner { display: none; align-items: center; gap: 10px; margin: 0 0 12px;
-			padding: 8px 14px; border: 1px solid #d6b656; border-left: 4px solid #d6b656;
-			border-radius: 4px; background: #fcf6e3; font-size: 13px; color: #5c4a12; }
+		.restart-banner { display: none; align-items: center; gap: 10px; margin: 0 0 12px; }
 		.restart-banner .rb-icon { font-size: 18px; line-height: 1; }
 		.restart-banner .rb-text { flex: 1; }
-		.restart-banner .rb-close { cursor: pointer; border: 0; background: none; font-size: 18px;
-			line-height: 1; color: #5c4a12; opacity: .6; }
-		.restart-banner .rb-close:hover { opacity: 1; }
 
-		/* Section anchor nav — styled as a card surface (same background,
-		   border, radius, shadow, and horizontal padding as the cards below)
-		   so it reads as part of the same family instead of a bare strip. */
-		.section-nav { position: sticky; top: 0; z-index: 100;
-			background: var(--vorpal-surface, var(--vorpal-surface));
-			border: 1px solid rgba(0, 0, 0, .08); border-radius: 4px;
-			box-shadow: var(--vorpal-shadow-md, 0 6px 20px -8px rgba(0, 0, 0, .45));
-			padding: 10px 15px; margin-bottom: 16px; }
-		.section-nav a { font-size: 13px; margin-right: 16px; color: var(--vorpal-ink-700); }
-		.section-nav a:hover { color: #007bff; text-decoration: none; }
+		/* Section anchor nav: a panel that stays in view under the top bar. */
+		.section-nav { position: sticky; top: var(--vorpal-topbar-height); z-index: 5; margin-bottom: 16px; gap: 4px 16px; }
+		.section-nav a { font-size: 13px; }
 
-		/* Tooltips — dotted underline on labels with tips */
+		/* Tooltips: dotted underline on labels with tips */
 		[data-toggle="tooltip"], label[title], th[title], .tip { border-bottom: 1px dotted var(--vorpal-slate-300); cursor: help; }
 		.tooltip-inner { max-width: 320px; text-align: left; font-size: 12px; }
 
@@ -119,9 +111,9 @@
 		.jvm-argwrap textarea.jvm-argta {
 			margin: 0;
 			border: 1px solid var(--vorpal-slate-300);
-			border-radius: .2rem;
+			border-radius: 8px;
 			padding: .3rem .5rem;
-			font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+			font-family: var(--vorpal-font-mono);
 			font-size: 12px;
 			line-height: 1.45;
 			white-space: pre-wrap;
@@ -136,62 +128,48 @@
 		}
 		.jvm-argwrap textarea.jvm-argta {
 			position: relative;
-			background: transparent; color: transparent; caret-color: #212529;
+			background: transparent; color: transparent; caret-color: var(--vorpal-ink-900);
 			resize: vertical; z-index: 2;
 		}
 		/* Invalid token: the wavy underline is the real cue (color-independent);
-		   the red supplements it. */
-		.jvm-bad { color: #d6336c; text-decoration: underline wavy #d6336c; text-decoration-skip-ink: none; }
+		   the error colour supplements it. */
+		.jvm-bad { color: var(--vorpal-error); text-decoration: underline wavy var(--vorpal-error); text-decoration-skip-ink: none; }
 		/* Always-visible explanations for the flagged tokens. The Arguments textarea
 		   overlays the highlight layer, so a per-token hover tooltip never reaches
-		   the mouse — list the reasons here instead (also clearer at a glance). */
+		   the mouse; list the reasons here instead (also clearer at a glance). */
 		.jvm-argissues { margin-top: 6px; }
 		.jvm-argissues .issue { font-size: 11px; line-height: 1.4; display: flex; align-items: baseline; gap: 6px; margin-bottom: 2px; }
-		.jvm-argissues .issue::before { content: "\26A0"; color: #d6336c; flex: 0 0 auto; }
-		.jvm-argissues .issue .tok { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-weight: 700; text-decoration: underline wavy #d6336c; text-decoration-skip-ink: none; white-space: nowrap; }
+		.jvm-argissues .issue::before { content: "\26A0"; color: var(--vorpal-error); flex: 0 0 auto; }
+		.jvm-argissues .issue .tok { font-family: var(--vorpal-font-mono); font-weight: 700; text-decoration: underline wavy var(--vorpal-error); text-decoration-skip-ink: none; white-space: nowrap; }
 		.jvm-argissues .issue .why { color: var(--vorpal-ink-700); }
 
 		/* Targets table + preview diff. Every state cue leads with a glyph or a
 		   word (= baseline / ≠ baseline, + − ~ markers, "kept"), never colour
 		   alone. */
-		.jvm-targets td.mono { font-size: 12px; }
-		.jvm-targets .members { font-size: 11px; color: var(--vorpal-slate-600); font-family: 'SFMono-Regular', Consolas, Menlo, monospace; }
+		.jvm-targets .members { font-size: 11px; color: var(--vorpal-slate-600); font-family: var(--vorpal-font-mono); }
 		.jvm-targets .base-same { color: var(--vorpal-ink-700); }
 		.jvm-targets .base-diff { font-weight: 700; }
 		.jvm-targets .base-none { color: var(--vorpal-slate-600); font-style: italic; }
-		.jvm-target-detail { background: var(--vorpal-surface); }
-		.jvm-target-detail pre { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 11px; white-space: pre-wrap; word-break: break-all; background: var(--vorpal-surface); border: 1px solid var(--vorpal-divider); padding: 6px 8px; margin: 0 0 8px; max-height: 160px; overflow: auto; }
-		.jvm-target-detail textarea.mono { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 11px; }
-		.jvm-target-detail textarea.mono.is-set { font-weight: 700; box-shadow: inset 3px 0 0 #2f6fed; background-color: var(--vorpal-surface-alt); }
-		.jvm-diff-panel { border: 1px solid var(--vorpal-slate-300); border-radius: 4px; margin-top: 12px; overflow: hidden; }
+		.jvm-target-detail pre,
+		.jvm-history pre { font-family: var(--vorpal-font-mono); font-size: 11px; white-space: pre-wrap; word-break: break-all; background: var(--vorpal-surface); border: 1px solid var(--vorpal-divider); padding: 6px 8px; overflow: auto; }
+		.jvm-target-detail pre { margin: 0 0 8px; max-height: 160px; }
+		.jvm-history pre { margin: 4px 0 0; max-height: 200px; }
+		.jvm-history table td { vertical-align: top; }
+		.jvm-diff-panel { border: 1px solid var(--vorpal-slate-300); border-radius: 8px; margin-top: 12px; overflow: hidden; }
 		.jvm-diff-panel .hdr { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--vorpal-surface-alt); border-bottom: 1px solid var(--vorpal-slate-300); font-size: 13px; }
 		.jvm-diff-panel .hdr .summary { color: var(--vorpal-ink-700); font-size: 12px; }
 		.jvm-diff-target { padding: 8px 12px; border-bottom: 1px solid var(--vorpal-divider); }
 		.jvm-diff-target:last-child { border-bottom: 0; }
 		.jvm-diff-target .who { font-size: 13px; margin-bottom: 4px; }
 		.jvm-diff-target .who .kind { color: var(--vorpal-slate-600); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; margin-left: 4px; }
-		.jvm-diff-lines { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 12px; line-height: 1.5; }
+		.jvm-diff-lines { font-family: var(--vorpal-font-mono); font-size: 12px; line-height: 1.5; }
 		.jvm-diff-line { display: flex; white-space: pre-wrap; word-break: break-all; }
 		.jvm-diff-line .marker { flex: 0 0 18px; user-select: none; font-weight: 700; }
 		.jvm-diff-line.add { background: var(--vorpal-surface-alt); }
-		.jvm-diff-line.del { background: var(--vorpal-surface-alt); text-decoration: line-through; text-decoration-color: #999; }
-		.jvm-diff-line.chg { background: #fff8e5; }
+		.jvm-diff-line.del { background: var(--vorpal-surface-alt); text-decoration: line-through; text-decoration-color: var(--vorpal-slate-400); }
+		.jvm-diff-line.chg { background: var(--vorpal-warn-soft); }
 		.jvm-diff-line.kept { color: var(--vorpal-slate-600); }
 		.jvm-diff-target .warn { margin: 6px 0; }
-		.jvm-history table td { vertical-align: top; }
-		.jvm-history pre { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 11px; white-space: pre-wrap; word-break: break-all; background: var(--vorpal-surface); border: 1px solid var(--vorpal-divider); padding: 6px 8px; margin: 4px 0 0; max-height: 200px; overflow: auto; }
-
-		/* ---- Page sheets ---------------------------------------------
-		   The Bootstrap cards are brand sheets on the page; the H4 page
-		   heading sits on the page itself. Both follow the theme. */
-		.vorpal-glass > .container-fluid > h4 { color: var(--vorpal-ink-900); }
-		.vorpal-glass .card {
-			background: var(--vorpal-surface, var(--vorpal-surface));
-			border-color: rgba(0, 0, 0, .08);
-			box-shadow: var(--vorpal-shadow-md, 0 6px 20px -8px rgba(0, 0, 0, .45));
-		}
-		.vorpal-glass .card-header,
-		.vorpal-glass .card-body { color: var(--vorpal-ink-900, var(--vorpal-ink-900)); }
 	</style>
 
 	<!-- The light or dark admin theme (brand.css, set by theme.js): the
@@ -224,11 +202,11 @@
 		</div>
 	</header>
 
-	<div class="container-fluid">
-		<h4>OCCAS Performance Settings</h4>
+	<div class="container-fluid" data-shell-main>
+		<h4 class="vorpal-page-title">OCCAS Performance Settings</h4>
 
 		<!-- Quick nav -->
-		<div class="section-nav">
+		<div class="vorpal-panel vorpal-toolbar section-nav">
 			<a href="#section-about">About</a>
 			<a href="#section-domain-mode">Domain</a>
 			<a href="#section-health">Health Check</a>
@@ -247,38 +225,42 @@
 		<!-- ABOUT THIS DEPLOYMENT -->
 		<!-- ============================================================ -->
 		<div id="section-about"></div>
-		<div class="card about-card">
-			<div class="card-header">
-				<strong>About this deployment</strong>
-				<span class="text-muted" id="about-sub"></span>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadAbout()">Refresh</button>
+		<div class="vorpal-panel">
+			<div class="vorpal-panel-head">
+				<h2 class="vorpal-panel-title">About this deployment</h2>
+				<span class="vorpal-panel-sub" id="about-sub"></span>
+				<div class="vorpal-toolbar">
+					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="loadAbout()">Refresh</button>
+				</div>
 			</div>
-			<div class="card-body">
-				<div id="about-container"><span class="text-muted">Loading…</span></div>
+			<div>
+				<div id="about-container"><div class="vorpal-empty">Loading…</div></div>
 			</div>
 		</div>
 
 		<!-- Restart-required banner — raised by any save that returns
 		     requiresRestart; a single standing reminder for the whole page. -->
-		<div id="restart-banner" class="restart-banner" role="status">
+		<div id="restart-banner" class="vorpal-warn restart-banner" role="status">
 			<span class="rb-icon">&#x21bb;</span>
 			<span class="rb-text" id="restart-banner-text"></span>
-			<button type="button" class="rb-close" title="Dismiss" onclick="$('#restart-banner').hide()">&times;</button>
+			<button type="button" class="vorpal-btn vorpal-btn-ghost vorpal-btn-sm rb-close" title="Dismiss" onclick="$('#restart-banner').hide()">&times;</button>
 		</div>
 
 		<!-- ============================================================ -->
 		<!-- DOMAIN (mode, config archive, config audit) -->
 		<!-- ============================================================ -->
 		<div id="section-domain-mode"></div>
-		<div class="card">
-			<div class="card-header">
-				<strong>Domain</strong>
-				<span class="text-muted" id="domain-mode-sub"></span>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="recommendDomain()" title="Pre-fill Config Archive on with 20 archives kept, and Config Audit = Log. Does NOT touch the Production checkbox — the mode is a deliberate operator decision, not a tuning value. Review, then Save.">Recommended</button>
-				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="loadDomainMode()">Refresh</button>
+		<div class="vorpal-panel">
+			<div class="vorpal-panel-head">
+				<h2 class="vorpal-panel-title">Domain</h2>
+				<span class="vorpal-panel-sub" id="domain-mode-sub"></span>
+				<div class="vorpal-toolbar">
+					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="loadDomainMode()">Refresh</button>
+					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="recommendDomain()" title="Pre-fill Config Archive on with 20 archives kept, and Config Audit = Log. Does NOT touch the Production checkbox — the mode is a deliberate operator decision, not a tuning value. Review, then Save.">Recommended</button>
+				</div>
 			</div>
-			<div class="card-body">
-				<div id="domain-mode-container"><span class="text-muted">Loading…</span></div>
+			<div>
+				<div id="domain-mode-container"><div class="vorpal-empty">Loading…</div></div>
 			</div>
 		</div>
 
@@ -286,16 +268,18 @@
 		<!-- HEALTH CHECK -->
 		<!-- ============================================================ -->
 		<div id="section-health"></div>
-		<div class="card">
-			<div class="card-header">
-				<strong>Health Check</strong>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadHealthData()">Re-run</button>
+		<div class="vorpal-panel">
+			<div class="vorpal-panel-head">
+				<h2 class="vorpal-panel-title">Health Check</h2>
+				<div class="vorpal-toolbar">
+					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="loadHealthData()">Re-run</button>
+				</div>
 			</div>
-			<div class="card-body">
-				<div class="mb-1" style="font-size:12px;font-weight:600;color:#555;border-bottom:1px solid #eee;padding-bottom:2px">OS &amp; Limits <span class="text-muted" style="font-weight:400">(from the platform OperatingSystem MBean)</span></div>
-				<div id="os-container"><span class="text-muted">Loading...</span></div>
-				<div class="mt-3 mb-1" style="font-size:12px;font-weight:600;color:#555;border-bottom:1px solid #eee;padding-bottom:2px">Findings <span class="text-muted" style="font-weight:400">(static checks of the current JVM configuration; fixes are applied in the sections below)</span></div>
-				<div id="health-container"><span class="text-muted">Loading...</span></div>
+			<div>
+				<div class="mb-1 vorpal-label tuning-rule">OS &amp; Limits <span class="muted" style="font-weight:400">(from the platform OperatingSystem MBean)</span></div>
+				<div id="os-container"><div class="vorpal-empty">Loading...</div></div>
+				<div class="mt-3 mb-1 vorpal-label tuning-rule">Findings <span class="muted" style="font-weight:400">(static checks of the current JVM configuration; fixes are applied in the sections below)</span></div>
+				<div id="health-container"><div class="vorpal-empty">Loading...</div></div>
 			</div>
 		</div>
 
@@ -303,22 +287,24 @@
 		<!-- JVM SETTINGS -->
 		<!-- ============================================================ -->
 		<div id="section-jvm"></div>
-		<div class="card">
-			<div class="card-header">
-				<strong>JVM Profiles</strong>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="recommendJvmZgc()" title="Low-latency preset for JDK 21 applied to the selected profile: ZGC + Generational + AlwaysPreTouch + -Xms=-Xmx + Fast SecureRandom (urandom) + concurrent System.gc() (ExplicitGCInvokesConcurrent) + Exit on OOM + wlss.maddr.enable. (JDK 21/22; do not carry the Generational flag past JDK 23.)">Low-Latency (ZGC)</button>
-				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="recommendJvm()" title="Set -Xms = -Xmx on the selected profile so the heap is fully committed at startup (no runtime resize pauses), plus Fast SecureRandom (urandom), concurrent System.gc() (ExplicitGCInvokesConcurrent), Exit on OOM, and wlss.maddr.enable.">Deterministic (G1GC)</button>
-				<span class="float-right text-muted mr-2" style="font-size:12px; line-height:31px">Apply template to selected profile:</span>
-				<button class="btn btn-sm btn-outline-secondary float-right mr-3" onclick="loadJvmProfiles()">Refresh</button>
-				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="jvmToggleHistory()" title="Every write this page makes to a ServerStart first records the state it is about to replace. The baseline is what install.sh wrote. Any entry can be written back verbatim.">History &amp; baseline</button>
+		<div class="vorpal-panel">
+			<div class="vorpal-panel-head">
+				<h2 class="vorpal-panel-title">JVM Profiles</h2>
+				<div class="vorpal-toolbar">
+					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="jvmToggleHistory()" title="Every write this page makes to a ServerStart first records the state it is about to replace. The baseline is what install.sh wrote. Any entry can be written back verbatim.">History &amp; baseline</button>
+					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="loadJvmProfiles()">Refresh</button>
+					<span class=" muted" style="font-size:12px; line-height:31px">Apply template to selected profile:</span>
+					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="recommendJvm()" title="Set -Xms = -Xmx on the selected profile so the heap is fully committed at startup (no runtime resize pauses), plus Fast SecureRandom (urandom), concurrent System.gc() (ExplicitGCInvokesConcurrent), Exit on OOM, and wlss.maddr.enable.">Deterministic (G1GC)</button>
+					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="recommendJvmZgc()" title="Low-latency preset for JDK 21 applied to the selected profile: ZGC + Generational + AlwaysPreTouch + -Xms=-Xmx + Fast SecureRandom (urandom) + concurrent System.gc() (ExplicitGCInvokesConcurrent) + Exit on OOM + wlss.maddr.enable. (JDK 21/22; do not carry the Generational flag past JDK 23.)">Low-Latency (ZGC)</button>
+				</div>
 			</div>
-			<div class="card-body">
-				<div class="info-box">
+			<div>
+				<div class="vorpal-note">
 					<strong>Note:</strong> A profile is a set of JVM arguments. Assign one to each target, <strong>Preview</strong> to see what would change on each, then <strong>Apply</strong>. A profile is overlaid knob by knob: arguments it does not mention stay as they are. Every apply first records the state it replaces (see <strong>History &amp; baseline</strong>). Restart the affected servers to activate.
 					The <strong>Deterministic (G1GC)</strong> and <strong>Low-Latency (ZGC)</strong> buttons above are templates: each fills the selected profile with Vorpal's recommended values for that collector. Review the result, then <strong>Save</strong>.
 				</div>
 				<div id="jvm-history" class="jvm-history" style="display:none"></div>
-				<div id="jvm-container"><span class="text-muted">Loading...</span></div>
+				<div id="jvm-container"><div class="vorpal-empty">Loading...</div></div>
 			</div>
 		</div>
 
@@ -326,14 +312,16 @@
 		<!-- SERVER TUNING -->
 		<!-- ============================================================ -->
 		<div id="section-server"></div>
-		<div class="card">
-			<div class="card-header">
-				<strong>Server Tuning</strong>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="recommendServerTuning()" title="Pre-fill Max Message Size to 100,000,000 bytes (~100 MB), Socket Readers to 4, Thread Pool Min = Thread Pool Max, and Min Severity to Log = Warning, on every server. Review, then Save each server.">Recommended</button>
-				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="loadServerTuning()">Refresh</button>
+		<div class="vorpal-panel">
+			<div class="vorpal-panel-head">
+				<h2 class="vorpal-panel-title">Server Tuning</h2>
+				<div class="vorpal-toolbar">
+					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="loadServerTuning()">Refresh</button>
+					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="recommendServerTuning()" title="Pre-fill Max Message Size to 100,000,000 bytes (~100 MB), Socket Readers to 4, Thread Pool Min = Thread Pool Max, and Min Severity to Log = Warning, on every server. Review, then Save each server.">Recommended</button>
+				</div>
 			</div>
-			<div class="card-body">
-				<div id="server-tuning-container"><span class="text-muted">Loading...</span></div>
+			<div>
+				<div id="server-tuning-container"><div class="vorpal-empty">Loading...</div></div>
 			</div>
 		</div>
 
@@ -341,19 +329,21 @@
 		<!-- JDBC POOLS -->
 		<!-- ============================================================ -->
 		<div id="section-jdbc"></div>
-		<div class="card">
-			<div class="card-header">
-				<strong>JDBC Connection Pools</strong>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="recommendJdbc()" title="Pre-fill Initial = Min = Max (≥ 300) for every pool so it is fully allocated at startup. Review, then Save each pool.">Recommended</button>
-				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="loadJdbc()">Refresh</button>
+		<div class="vorpal-panel">
+			<div class="vorpal-panel-head">
+				<h2 class="vorpal-panel-title">JDBC Connection Pools</h2>
+				<div class="vorpal-toolbar">
+					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="loadJdbc()">Refresh</button>
+					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="recommendJdbc()" title="Pre-fill Initial = Min = Max (≥ 300) for every pool so it is fully allocated at startup. Review, then Save each pool.">Recommended</button>
+				</div>
 			</div>
-			<div class="card-body">
-				<div class="info-box">
+			<div>
+				<div class="vorpal-note">
 					<strong>Pool sizing.</strong> For a high-CPS deployment, set <b>Initial = Min = Max</b> so the pool
 					is fully allocated at startup and never pays connection create/teardown latency under load.
 					Min/Max resize on activate; Initial Capacity is restart-required.
 				</div>
-				<div id="jdbc-container"><span class="text-muted">Loading...</span></div>
+				<div id="jdbc-container"><div class="vorpal-empty">Loading...</div></div>
 			</div>
 		</div>
 
@@ -361,21 +351,23 @@
 		<!-- SNMP -->
 		<!-- ============================================================ -->
 		<div id="section-snmp"></div>
-		<div class="card">
-			<div class="card-header">
-				<strong>SNMP Traps</strong>
-				<button class="btn btn-sm btn-primary float-right ml-2" onclick="saveSnmp()">Save</button>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadSnmp()">Refresh</button>
+		<div class="vorpal-panel">
+			<div class="vorpal-panel-head">
+				<h2 class="vorpal-panel-title">SNMP Traps</h2>
+				<div class="vorpal-toolbar">
+					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="loadSnmp()">Refresh</button>
+					<button class="vorpal-btn vorpal-btn-sm" onclick="saveSnmp()">Save</button>
+				</div>
 			</div>
-			<div class="card-body">
-				<div class="info-box">
+			<div>
+				<div class="vorpal-note">
 					<strong>Domain SNMP agent.</strong> BLADE services emit SIP-application traps from their
 					logging config (set <b>SNMP Trap Level</b> per service in the Configurator). A trap only
 					leaves the box when the agent below is <b>Enabled</b>, <b>Send Automatic Traps</b> is on, and
 					at least one trap destination (your NMS host:port) is configured. Agent enable/port changes
 					take effect when the agent restarts; destination edits apply on activate.
 				</div>
-				<div id="snmp-container"><span class="text-muted">Loading...</span></div>
+				<div id="snmp-container"><div class="vorpal-empty">Loading...</div></div>
 			</div>
 		</div>
 
@@ -383,94 +375,96 @@
 		<!-- SIP TIMERS -->
 		<!-- ============================================================ -->
 		<div id="section-sip"></div>
-		<div class="card">
-			<div class="card-header">
-				<strong>SIP Protocol</strong>
-				<button class="btn btn-sm btn-primary float-right ml-2" onclick="saveSipTimers()">Save</button>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="recommendSipTimers()" title="Enable the Engine Call State Cache, and turn OFF Send 100 for Non-INVITE (the default-on RFC 4320 guard that produces BEA-331601 errors against fast-answering applications). Everything else here (timers, rport, DNS SRV, outbound, overload thresholds) is a protocol or per-site decision with no one-size-fits-all value. Review, then Save.">Recommended</button>
-				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="loadSipTimers()">Refresh</button>
+		<div class="vorpal-panel">
+			<div class="vorpal-panel-head">
+				<h2 class="vorpal-panel-title">SIP Protocol</h2>
+				<div class="vorpal-toolbar">
+					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="loadSipTimers()">Refresh</button>
+					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="recommendSipTimers()" title="Enable the Engine Call State Cache, and turn OFF Send 100 for Non-INVITE (the default-on RFC 4320 guard that produces BEA-331601 errors against fast-answering applications). Everything else here (timers, rport, DNS SRV, outbound, overload thresholds) is a protocol or per-site decision with no one-size-fits-all value. Review, then Save.">Recommended</button>
+					<button class="vorpal-btn vorpal-btn-sm" onclick="saveSipTimers()">Save</button>
+				</div>
 			</div>
-			<div class="card-body">
-				<div class="info-box">
+			<div>
+				<div class="vorpal-note">
 					<strong>RFC 3261 Timers</strong> control SIP retransmission and transaction timeout behavior.
 					Changes apply to the SIP engine cluster and take effect on reload.
 				</div>
 
 				<!-- Timers -->
-				<h6 class="text-muted mb-2" style="font-size:12px; text-transform:uppercase; letter-spacing:1px;">Transaction Timers</h6>
+				<h6 class="vorpal-label mb-2">Transaction Timers</h6>
 				<div class="row mb-3">
-					<div class="col-md-3 field-group">
+					<div class="col-md-3 field-group vorpal-field">
 						<label data-toggle="tooltip" title="RFC 3261 T1: Round-trip time estimate. Base interval for retransmitting SIP requests over unreliable transports (UDP). Retransmissions double from T1 up to T2. Lower values make retransmits more aggressive. Default: 500ms">T1 (ms)</label>
-						<input type="number" class="form-control form-control-sm mono" id="sip-t1" placeholder="500">
+						<input type="number" class="vorpal-input vorpal-mono" id="sip-t1" placeholder="500">
 					</div>
-					<div class="col-md-3 field-group">
+					<div class="col-md-3 field-group vorpal-field">
 						<label data-toggle="tooltip" title="RFC 3261 T2: Maximum retransmit interval. Retransmissions start at T1 and double each time, capping at T2. Applies to non-INVITE requests and INVITE responses. Default: 4000ms">T2 (ms)</label>
-						<input type="number" class="form-control form-control-sm mono" id="sip-t2" placeholder="4000">
+						<input type="number" class="vorpal-input vorpal-mono" id="sip-t2" placeholder="4000">
 					</div>
-					<div class="col-md-3 field-group">
+					<div class="col-md-3 field-group vorpal-field">
 						<label data-toggle="tooltip" title="RFC 3261 T4: Maximum duration a SIP message can remain in the network. After T4, the message is considered lost. Used for Timer K (UDP response absorption) and Timer I (ACK absorption). Default: 5000ms">T4 (ms)</label>
-						<input type="number" class="form-control form-control-sm mono" id="sip-t4" placeholder="5000">
+						<input type="number" class="vorpal-input vorpal-mono" id="sip-t4" placeholder="5000">
 					</div>
-					<div class="col-md-3 field-group">
+					<div class="col-md-3 field-group vorpal-field">
 						<label data-toggle="tooltip" title="Value (in seconds) included in the Retry-After header of 503 Service Unavailable responses. Tells the upstream to wait this long before retrying. Default: 180s">Retry-After (s)</label>
-						<input type="number" class="form-control form-control-sm mono" id="sip-retryAfterValue" placeholder="180">
+						<input type="number" class="vorpal-input vorpal-mono" id="sip-retryAfterValue" placeholder="180">
 					</div>
 				</div>
 
 				<div class="row mb-3">
-					<div class="col-md-2 field-group">
+					<div class="col-md-2 field-group vorpal-field">
 						<label data-toggle="tooltip" title="RFC 3261 Timer B: INVITE client transaction timeout. How long the UAC waits for a response to an INVITE before giving up. Should be >= 64*T1. Default: 32000ms">Timer B (ms)</label>
-						<input type="number" class="form-control form-control-sm mono" id="sip-timerB" placeholder="32000">
+						<input type="number" class="vorpal-input vorpal-mono" id="sip-timerB" placeholder="32000">
 					</div>
-					<div class="col-md-2 field-group">
+					<div class="col-md-2 field-group vorpal-field">
 						<label data-toggle="tooltip" title="RFC 3261 Timer F: Non-INVITE client transaction timeout. How long the UAC waits for a response to non-INVITE requests (REGISTER, OPTIONS, etc.) before giving up. Should be >= 64*T1. Default: 32000ms">Timer F (ms)</label>
-						<input type="number" class="form-control form-control-sm mono" id="sip-timerF" placeholder="32000">
+						<input type="number" class="vorpal-input vorpal-mono" id="sip-timerF" placeholder="32000">
 					</div>
-					<div class="col-md-2 field-group">
+					<div class="col-md-2 field-group vorpal-field">
 						<label data-toggle="tooltip" title="RFC 6026 Timer L: Time a UAS INVITE server transaction stays in the Accepted state to absorb retransmitted ACKs. Default: 32000ms">Timer L (ms)</label>
-						<input type="number" class="form-control form-control-sm mono" id="sip-timerL" placeholder="32000">
+						<input type="number" class="vorpal-input vorpal-mono" id="sip-timerL" placeholder="32000">
 					</div>
-					<div class="col-md-2 field-group">
+					<div class="col-md-2 field-group vorpal-field">
 						<label data-toggle="tooltip" title="RFC 6026 Timer M: Time a UAC INVITE client transaction stays in the Accepted state to absorb retransmitted 2xx responses. Default: 32000ms">Timer M (ms)</label>
-						<input type="number" class="form-control form-control-sm mono" id="sip-timerM" placeholder="32000">
+						<input type="number" class="vorpal-input vorpal-mono" id="sip-timerM" placeholder="32000">
 					</div>
-					<div class="col-md-2 field-group">
+					<div class="col-md-2 field-group vorpal-field">
 						<label data-toggle="tooltip" title="Timer N: Time a proxy waits after sending a CANCEL to receive a response before cleaning up the transaction. Default: 32000ms">Timer N (ms)</label>
-						<input type="number" class="form-control form-control-sm mono" id="sip-timerN" placeholder="32000">
+						<input type="number" class="vorpal-input vorpal-mono" id="sip-timerN" placeholder="32000">
 					</div>
-					<div class="col-md-2 field-group">
+					<div class="col-md-2 field-group vorpal-field">
 						<label data-toggle="tooltip" title="Maximum lifetime (in seconds) for a SIP application session. After this time the session is invalidated regardless of activity. Set to -1 for no limit. Default: -1">Max Session (s)</label>
-						<input type="number" class="form-control form-control-sm mono" id="sip-maxAppSessionLifetime" placeholder="-1">
+						<input type="number" class="vorpal-input vorpal-mono" id="sip-maxAppSessionLifetime" placeholder="-1">
 					</div>
 				</div>
 
 				<!-- Behavior -->
-				<h6 class="text-muted mb-2 mt-3" style="font-size:12px; text-transform:uppercase; letter-spacing:1px;">Protocol Behavior</h6>
+				<h6 class="vorpal-label mb-2 mt-3">Protocol Behavior</h6>
 				<div class="row mb-3">
-					<div class="col-md-3 field-group">
+					<div class="col-md-3 field-group vorpal-field">
 						<label data-toggle="tooltip" title="How the SIP container behaves when no application claims a request. 'Proxy' forwards the request; 'User Agent' terminates it locally.">Default Behavior</label>
-						<select class="form-control form-control-sm" id="sip-defaultBehavior">
+						<select class="vorpal-input" id="sip-defaultBehavior">
 							<option value="proxy">Proxy</option>
 							<option value="ua">User Agent</option>
 						</select>
 					</div>
-					<div class="col-md-3 field-group">
+					<div class="col-md-3 field-group vorpal-field">
 						<label data-toggle="tooltip" title="What happens when a SIP message arrives for a session that no longer exists. 'Error' returns a 481 Call/Transaction Does Not Exist. 'Drop' silently discards the message.">Stale Session Handling</label>
-						<select class="form-control form-control-sm" id="sip-staleSessionHandling">
+						<select class="vorpal-input" id="sip-staleSessionHandling">
 							<option value="error">Error</option>
 							<option value="drop">Drop</option>
 						</select>
 					</div>
-					<div class="col-md-3 field-group">
+					<div class="col-md-3 field-group vorpal-field">
 						<label data-toggle="tooltip" title="SIP header encoding format. 'Long' uses full header names (e.g. 'Content-Type'). 'Compact' uses single-letter abbreviations (e.g. 'c'). Compact reduces message size on the wire.">Header Form</label>
-						<select class="form-control form-control-sm" id="sip-useHeaderForm">
+						<select class="vorpal-input" id="sip-useHeaderForm">
 							<option value="long">Long</option>
 							<option value="compact">Compact</option>
 						</select>
 					</div>
-					<div class="col-md-3 field-group">
+					<div class="col-md-3 field-group vorpal-field">
 						<label data-toggle="tooltip" title="Whether to include a Server header in SIP responses identifying the OCCAS server software. 'None' omits it for security. 'Include Header' adds the server identification string.">Server Header</label>
-						<select class="form-control form-control-sm" id="sip-serverHeader">
+						<select class="vorpal-input" id="sip-serverHeader">
 							<option value="none">None</option>
 							<option value="header">Include Header</option>
 						</select>
@@ -478,7 +472,7 @@
 				</div>
 
 				<!-- Toggles -->
-				<h6 class="text-muted mb-2 mt-3" style="font-size:12px; text-transform:uppercase; letter-spacing:1px;">Features</h6>
+				<h6 class="vorpal-label mb-2 mt-3">Features</h6>
 				<div class="row">
 					<div class="col-md-4 mb-2"><div class="custom-control custom-checkbox">
 						<input type="checkbox" class="custom-control-input sip-check" id="sip-engineCallStateCache"><label class="custom-control-label" for="sip-engineCallStateCache" data-toggle="tooltip" title="Cache call state in the local engine's memory for faster access. Reduces Coherence lookups during SIP processing. Recommended for high-traffic deployments.">Engine Call State Cache</label>
@@ -503,27 +497,27 @@
 					</div></div>
 				</div>
 				<!-- Overload protection (classic <overload> element: OverloadBean) -->
-				<h6 class="text-muted mb-2 mt-3" style="font-size:12px; text-transform:uppercase; letter-spacing:1px;">Overload Protection</h6>
-				<div class="info-box">
+				<h6 class="vorpal-label mb-2 mt-3">Overload Protection</h6>
+				<div class="vorpal-note">
 					Throttles new SIP work when the engine is overloaded (the classic <code>&lt;overload&gt;</code> element). Leave the policy blank to keep it unconfigured.
 					<strong>Note:</strong> OCCAS also ships a separate, richer <code>&lt;overload-protection&gt;</code> framework that some domains scaffold instead &mdash; if your engine uses that, these fields are not the active control.
 				</div>
 				<div class="row mb-3">
-					<div class="col-md-4 field-group">
+					<div class="col-md-4 field-group vorpal-field">
 						<label data-toggle="tooltip" title="What the engine measures to decide it is overloaded. Session Rate = rate of new SIP requests over the last 5 seconds. Queue Length = combined size of the wlss.transport + wlss.timer capacity-constraint queues. Blank leaves overload protection unconfigured.">Threshold Policy</label>
-						<select class="form-control form-control-sm" id="sip-overloadPolicy">
+						<select class="vorpal-input" id="sip-overloadPolicy">
 							<option value="">(not configured)</option>
 							<option value="session-rate">Session Rate</option>
 							<option value="queue-length">Queue Length</option>
 						</select>
 					</div>
-					<div class="col-md-4 field-group">
+					<div class="col-md-4 field-group vorpal-field">
 						<label data-toggle="tooltip" title="When the measured value crosses this, the engine starts throttling — rejecting new SIP requests with 503 Service Unavailable. Units depend on the policy (new sessions/sec for session-rate, queue entries for queue-length).">Throttle Threshold</label>
-						<input type="number" class="form-control form-control-sm mono" id="sip-overloadThreshold" placeholder="0">
+						<input type="number" class="vorpal-input vorpal-mono" id="sip-overloadThreshold" placeholder="0">
 					</div>
-					<div class="col-md-4 field-group">
+					<div class="col-md-4 field-group vorpal-field">
 						<label data-toggle="tooltip" title="When the measured value falls back below this, the engine stops throttling and resumes accepting requests. Set it below the throttle threshold to create hysteresis and avoid flapping.">Release Threshold</label>
-						<input type="number" class="form-control form-control-sm mono" id="sip-overloadRelease" placeholder="0">
+						<input type="number" class="vorpal-input vorpal-mono" id="sip-overloadRelease" placeholder="0">
 					</div>
 				</div>
 			</div>
@@ -533,21 +527,23 @@
 		<!-- OCCAS THREAD TUNING (WLSS Work Managers) -->
 		<!-- ============================================================ -->
 		<div id="section-wm"></div>
-		<div class="card">
-			<div class="card-header">
-				<strong>OCCAS Thread Tuning</strong>
-				<button class="btn btn-sm btn-primary float-right ml-2" onclick="saveWorkManagers()">Save All</button>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="recommendWorkManagers()" title="Pre-fill the timer Max Threads to at least 32, the capacities (transport 4,000, timer 500), and set Min = Max for any work manager that defines both. Review, then Save All.">Recommended</button>
-				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="loadWorkManagers()">Refresh</button>
+		<div class="vorpal-panel">
+			<div class="vorpal-panel-head">
+				<h2 class="vorpal-panel-title">OCCAS Thread Tuning</h2>
+				<div class="vorpal-toolbar">
+					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="loadWorkManagers()">Refresh</button>
+					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="recommendWorkManagers()" title="Pre-fill the timer Max Threads to at least 32, the capacities (transport 4,000, timer 500), and set Min = Max for any work manager that defines both. Review, then Save All.">Recommended</button>
+					<button class="vorpal-btn vorpal-btn-sm" onclick="saveWorkManagers()">Save All</button>
+				</div>
 			</div>
-			<div class="card-body">
-				<div class="info-box">
+			<div>
+				<div class="vorpal-note">
 					<strong>WLSS Work Managers</strong> control how the SIP engine allocates threads to different processing functions.
 					<b>Fair Share</b> is a relative weight (higher = more CPU). <b>Min/Max Threads</b> set hard bounds.
 					<b>Capacity</b> is the max queued requests before the engine starts rejecting.
 					Changes take effect on server restart.
 				</div>
-				<div id="wm-container"><span class="text-muted">Loading...</span></div>
+				<div id="wm-container"><div class="vorpal-empty">Loading...</div></div>
 			</div>
 		</div>
 
@@ -555,13 +551,15 @@
 		<!-- CLUSTER -->
 		<!-- ============================================================ -->
 		<div id="section-cluster"></div>
-		<div class="card">
-			<div class="card-header">
-				<strong>Cluster</strong>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadCluster()">Refresh</button>
+		<div class="vorpal-panel">
+			<div class="vorpal-panel-head">
+				<h2 class="vorpal-panel-title">Cluster</h2>
+				<div class="vorpal-toolbar">
+					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="loadCluster()">Refresh</button>
+				</div>
 			</div>
-			<div class="card-body">
-				<div id="cluster-container"><span class="text-muted">Loading...</span></div>
+			<div>
+				<div id="cluster-container"><div class="vorpal-empty">Loading...</div></div>
 			</div>
 		</div>
 
@@ -569,16 +567,18 @@
 		<!-- COHERENCE -->
 		<!-- ============================================================ -->
 		<div id="section-coherence"></div>
-		<div class="card">
-			<div class="card-header">
-				<strong>Coherence</strong>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadCoherence()">Refresh</button>
+		<div class="vorpal-panel">
+			<div class="vorpal-panel-head">
+				<h2 class="vorpal-panel-title">Coherence</h2>
+				<div class="vorpal-toolbar">
+					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="loadCoherence()">Refresh</button>
+				</div>
 			</div>
-			<div class="card-body">
-				<div class="info-box">
+			<div>
+				<div class="vorpal-note">
 					Coherence cluster networking — clustering mode (unicast / multicast), listen addresses and ports, TTL — from each Coherence system resource descriptor (config.xml). <strong>Restart-required:</strong> saved to the domain config; the engine tier must restart to pick it up.
 				</div>
-				<div id="coherence-container"><span class="text-muted">Loading...</span></div>
+				<div id="coherence-container"><div class="vorpal-empty">Loading...</div></div>
 			</div>
 		</div>
 
@@ -586,25 +586,27 @@
 		<!-- KERNEL PARAMETERS -->
 		<!-- ============================================================ -->
 		<div id="section-kernel"></div>
-		<div class="card">
-			<div class="card-header">
-				<strong>Kernel Parameters</strong>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadKernel()">Refresh</button>
-			</div>
-			<div class="card-body">
-				<div class="info-box">
-					Read-only kernel tunables per node — sysctl values, transparent hugepages, CPU governor, process limits — read from <span class="mono">/proc/sys</span>, <span class="mono">/sys</span>, and <span class="mono">/proc/self/limits</span> on each node (no sudo). Guidance flags are SIP-oriented hints, not hard rules. Changing these is an OS task (Tier 2), not done here.
+		<div class="vorpal-panel">
+			<div class="vorpal-panel-head">
+				<h2 class="vorpal-panel-title">Kernel Parameters</h2>
+				<div class="vorpal-toolbar">
+					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="loadKernel()">Refresh</button>
 				</div>
-				<div id="kernel-container"><span class="text-muted">Loading...</span></div>
+			</div>
+			<div>
+				<div class="vorpal-note">
+					Read-only kernel tunables per node — sysctl values, transparent hugepages, CPU governor, process limits — read from <span class="vorpal-mono">/proc/sys</span>, <span class="vorpal-mono">/sys</span>, and <span class="vorpal-mono">/proc/self/limits</span> on each node (no sudo). Guidance flags are SIP-oriented hints, not hard rules. Changing these is an OS task (Tier 2), not done here.
+				</div>
+				<div id="kernel-container"><div class="vorpal-empty">Loading...</div></div>
 			</div>
 		</div>
 
 	</div>
 
 	<!-- Floating status message -->
-	<div id="status-message" class="alert alert-floating alert-dismissible" style="display:none;" role="alert">
+	<div id="status-message" class="vorpal-note alert-floating" style="display:none;" role="alert">
 		<span id="status-message-text"></span>
-		<button type="button" class="close" aria-label="Close" onclick="$('#status-message').fadeOut()"><span aria-hidden="true">&times;</span></button>
+		<button type="button" class="vorpal-btn vorpal-btn-ghost vorpal-btn-sm" aria-label="Close" onclick="$('#status-message').fadeOut()"><span aria-hidden="true">&times;</span></button>
 	</div>
 
 	<script>
@@ -794,9 +796,9 @@
 		// applied patches, and the deployed BLADE apps (federated JMX walk).
 		// ================================================================
 		function loadAbout() {
-			$('#about-container').html('<span class="text-muted">Loading…</span>');
+			$('#about-container').html('<div class="vorpal-empty">Loading…</div>');
 			$.getJSON('api/v1/about', renderAbout).fail(function (xhr) {
-				$('#about-container').html('<span class="text-danger">Unable to load deployment info. ' + parseError(xhr) + '</span>');
+				$('#about-container').html('<div class="vorpal-error">Unable to load deployment info. ' + parseError(xhr) + '</div>');
 			});
 		}
 
@@ -815,17 +817,17 @@
 			var h = '<div class="about-grid">';
 
 			// --- BLADE -------------------------------------------------
-			h += '<div class="about-col"><h6>BLADE Framework</h6>';
+			h += '<div class="about-col"><h6 class="vorpal-label mb-2">BLADE Framework</h6>';
 			h += '<div class="about-version">' + he(b.version || '—') + '</div>';
 			h += '<dl class="about-kv mt-2">';
-			if (b.built) h += '<dt>Built</dt><dd class="mono">' + he(fmtBuilt(b.built)) + '</dd>';
+			if (b.built) h += '<dt>Built</dt><dd class="vorpal-mono">' + he(fmtBuilt(b.built)) + '</dd>';
 			if (b.license) h += '<dt>License</dt><dd>' + he(b.license) + '</dd>';
 			h += '</dl>';
-			if (b.copyright) h += '<div class="text-muted" style="font-size:11px;margin-top:6px">' + he(b.copyright) + '</div>';
+			if (b.copyright) h += '<div class="muted" style="font-size:11px;margin-top:6px">' + he(b.copyright) + '</div>';
 			h += '</div>';
 
 			// --- Platform ---------------------------------------------
-			h += '<div class="about-col"><h6>Platform</h6><dl class="about-kv">';
+			h += '<div class="about-col"><h6 class="vorpal-label mb-2">Platform</h6><dl class="about-kv">';
 			h += kv('OCCAS', p.occas);
 			h += kv('WebLogic', p.weblogic);
 			h += kv('Coherence', p.coherence);
@@ -838,9 +840,9 @@
 			h += '</div>';
 
 			// --- Patches ----------------------------------------------
-			h += '<div class="about-col"><h6>Applied Patches (' + patches.length + ')</h6>';
+			h += '<div class="about-col"><h6 class="vorpal-label mb-2">Applied Patches (' + patches.length + ')</h6>';
 			if (!patches.length) {
-				h += '<div class="text-muted" style="font-size:12px">None reported by the OPatch inventory.</div>';
+				h += '<div class="muted" style="font-size:12px">None reported by the OPatch inventory.</div>';
 			} else {
 				$.each(patches, function (i, pt) {
 					h += '<div class="about-patch"><span class="pid">' + he(pt.id) + '</span> '
@@ -857,7 +859,7 @@
 
 		function kv(label, val) {
 			if (val == null || val === '') return '';
-			return '<dt>' + he(label) + '</dt><dd class="mono">' + he(val) + '</dd>';
+			return '<dt>' + he(label) + '</dt><dd class="vorpal-mono">' + he(val) + '</dd>';
 		}
 
 		// "2026-06-22T21:50:36Z" -> "2026-06-22 21:50 UTC"; pass anything else through.
@@ -886,7 +888,7 @@
 					showStatus('danger', 'Unable to load targets: ' + parseError(xhr));
 				});
 			}).fail(function (xhr) {
-				$('#jvm-container').html('<span class="text-danger">Unable to load profiles. ' + parseError(xhr) + '</span>');
+				$('#jvm-container').html('<div class="vorpal-error">Unable to load profiles. ' + parseError(xhr) + '</div>');
 			});
 		}
 
@@ -920,25 +922,25 @@
 		// fail over via the replicated state tier; throughput is what matters.
 		function drainCellHtml(r) {
 			var d = drainByServer[r.server];
-			if (!d) return '<td class="mono">&mdash;</td>';
+			if (!d) return '<td class="vorpal-mono">&mdash;</td>';
 			var counts = '';
 			if (d.activeSipSessions >= 0 || d.sipThroughput >= 0) {
-				counts = ' <span class="text-muted">(' +
+				counts = ' <span class="muted">(' +
 					(d.activeSipSessions >= 0 ? 'sessions ' + fmtNum(d.activeSipSessions) : '') +
 					(d.sipThroughput >= 0 ? (d.activeSipSessions >= 0 ? ' · ' : '') + 'work/period ' + fmtNum(d.sipThroughput) : '') +
 					')</span>';
 			}
-			var html = '<td class="mono">';
+			var html = '<td class="vorpal-mono">';
 			if (d.drained) {
 				var since = d.drainedSinceMillis > 0 ? new Date(d.drainedSinceMillis).toLocaleTimeString() : '';
 				html += '<strong>DRAINING</strong>' + (since ? ' since ' + since : '') + counts;
 				if (d.sipThroughput === 0) {
-					html += ' <span class="badge badge-success" data-toggle="tooltip" title="Drained and no SIP work measured this period — safe to restart. Established dialogs fail over via the replicated state tier.">quiet &mdash; safe to restart</span>';
+					html += ' <span class="vorpal-badge vorpal-badge-ok" data-toggle="tooltip" title="Drained and no SIP work measured this period — safe to restart. Established dialogs fail over via the replicated state tier.">quiet &mdash; safe to restart</span>';
 				}
-				html += ' <button class="btn btn-sm btn-outline-success ml-1" onclick="drainServer(\'' + he(r.server) + '\', false)">Resume</button>';
+				html += ' <button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm ml-1" onclick="drainServer(\'' + he(r.server) + '\', false)">Resume</button>';
 			} else {
 				html += 'in service' + counts;
-				html += ' <button class="btn btn-sm btn-outline-warning ml-1" onclick="drainServer(\'' + he(r.server) + '\', true)">Drain</button>';
+				html += ' <button class="vorpal-btn vorpal-btn-danger vorpal-btn-sm ml-1" onclick="drainServer(\'' + he(r.server) + '\', true)">Drain</button>';
 			}
 			return html + '</td>';
 		}
@@ -960,8 +962,8 @@
 
 		function loadOsTable() {
 			$.getJSON('api/v1/os', function (rows) {
-				if (!rows || !rows.length) { $('#os-container').html('<span class="text-muted">No OS info available.</span>'); return; }
-				var html = '<table class="table table-compact table-sm mb-0" style="font-size:12px"><thead class="thead-light"><tr>';
+				if (!rows || !rows.length) { $('#os-container').html('<span class="muted">No OS info available.</span>'); return; }
+				var html = '<table class="vorpal-table mb-0"><thead><tr>';
 				html += '<th>Server</th>';
 				html += '<th data-toggle="tooltip" title="Lifecycle state from ServerLifeCycleRuntime: RUNNING, STARTING, SHUTDOWN, FAILED, UNKNOWN…">State</th>';
 				html += '<th>Kernel</th><th>CPUs</th><th>Load</th>';
@@ -971,25 +973,25 @@
 				html += '<th></th></tr></thead><tbody>';
 				$.each(rows, function (i, r) {
 					var lowFd = r.maxFds > 0 && r.maxFds < 16384;
-					html += '<tr><td><strong>' + he(r.server) + '</strong> <span class="text-muted">' + he(r.arch || '') + '</span></td>';
-					html += '<td class="mono">' + he(r.state || '—') + '</td>';
-					html += '<td class="mono">' + he((r.name ? r.name + ' ' : '') + (r.kernel || '')) + '</td>';
-					html += '<td class="mono">' + fmtNum(r.processors) + '</td>';
-					html += '<td class="mono">' + fmtLoad(r.loadAverage) + '</td>';
-					html += '<td class="mono">' + fmtMB(r.ramFreeMB) + ' / ' + fmtMB(r.ramTotalMB) + '</td>';
-					html += '<td class="mono">' + fmtMB(r.swapFreeMB) + ' / ' + fmtMB(r.swapTotalMB) + '</td>';
-					html += '<td class="mono">' + fmtNum(r.openFds) + ' / ' + fmtNum(r.maxFds);
-					if (lowFd) html += ' <span class="badge badge-warning" data-toggle="tooltip" title="Open-file limit looks low for a high-CPS SIP engine — raise nofile (ulimit -n) toward 65536.">&#9650; low for SIP</span>';
+					html += '<tr><td><strong>' + he(r.server) + '</strong> <span class="muted">' + he(r.arch || '') + '</span></td>';
+					html += '<td class="vorpal-mono">' + he(r.state || '—') + '</td>';
+					html += '<td class="vorpal-mono">' + he((r.name ? r.name + ' ' : '') + (r.kernel || '')) + '</td>';
+					html += '<td class="vorpal-mono">' + fmtNum(r.processors) + '</td>';
+					html += '<td class="vorpal-mono">' + fmtLoad(r.loadAverage) + '</td>';
+					html += '<td class="vorpal-mono">' + fmtMB(r.ramFreeMB) + ' / ' + fmtMB(r.ramTotalMB) + '</td>';
+					html += '<td class="vorpal-mono">' + fmtMB(r.swapFreeMB) + ' / ' + fmtMB(r.swapTotalMB) + '</td>';
+					html += '<td class="vorpal-mono">' + fmtNum(r.openFds) + ' / ' + fmtNum(r.maxFds);
+					if (lowFd) html += ' <span class="vorpal-badge vorpal-badge-warn" data-toggle="tooltip" title="Open-file limit looks low for a high-CPS SIP engine — raise nofile (ulimit -n) toward 65536.">&#9650; low for SIP</span>';
 					html += '</td>';
 					html += drainCellHtml(r);
-					html += '<td><button class="btn btn-sm btn-outline-danger" onclick="restartServer(\'' + he(r.server) + '\',' + (r.adminServer ? 'true' : 'false') + ')">Restart</button></td>';
+					html += '<td><button class="vorpal-btn vorpal-btn-danger vorpal-btn-sm" onclick="restartServer(\'' + he(r.server) + '\',' + (r.adminServer ? 'true' : 'false') + ')">Restart</button></td>';
 					html += '</tr>';
 				});
 				html += '</tbody></table>';
 				$('#os-container').html(html);
 				$('body').tooltip({ selector: '[data-toggle="tooltip"]', html: true });
 			}).fail(function (xhr) {
-				$('#os-container').html('<span class="text-danger">Unable to load OS info. ' + parseError(xhr) + '</span>');
+				$('#os-container').html('<div class="vorpal-error">Unable to load OS info. ' + parseError(xhr) + '</div>');
 			});
 		}
 
@@ -1219,28 +1221,28 @@
 		function renderJvmPanel() {
 			var h = '';
 			h += '<div class="d-flex align-items-center mb-3" style="gap:6px">';
-			h += '<label class="mb-0" style="font-weight:600">Profile:</label>';
-			h += '<select id="jvm-prof-sel" class="form-control form-control-sm" style="width:auto;min-width:160px">';
+			h += '<label class="vorpal-label mb-0">Profile</label>';
+			h += '<select id="jvm-prof-sel" class="vorpal-input" style="width:auto;min-width:160px">';
 			if (!jvm.profiles.length) h += '<option value="-1">(no profiles)</option>';
 			jvm.profiles.forEach(function (p, i) { h += '<option value="' + i + '"' + (i === jvm.sel ? ' selected' : '') + '>' + he(p.name) + '</option>'; });
 			h += '</select>';
-			h += '<button class="btn btn-sm btn-outline-secondary" onclick="jvmNewProfile()">New</button>';
-			h += '<button class="btn btn-sm btn-outline-secondary" onclick="jvmRenameProfile()">Rename</button>';
-			h += '<button class="btn btn-sm btn-outline-secondary" onclick="jvmDeleteProfile()">Delete</button>';
-			h += '<button class="btn btn-sm btn-outline-primary ml-auto" onclick="jvmSaveProfiles()">Save</button>';
+			h += '<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="jvmNewProfile()">New</button>';
+			h += '<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="jvmRenameProfile()">Rename</button>';
+			h += '<button class="vorpal-btn vorpal-btn-danger vorpal-btn-sm" onclick="jvmDeleteProfile()">Delete</button>';
+			h += '<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm ml-auto" onclick="jvmSaveProfiles()">Save</button>';
 			h += '</div>';
 
 			if (jvm.sel >= 0 && jvm.profiles[jvm.sel]) {
-				h += '<div class="form-group mb-3"><label style="font-size:12px;font-weight:600" class="mb-1">About</label>';
-				h += '<textarea id="jvm-about" class="form-control form-control-sm" rows="2" placeholder="What this profile is for — the workload it targets and why these settings.">' + he(jvm.profiles[jvm.sel].about || '') + '</textarea></div>';
+				h += '<div class="form-group mb-3"><label class="vorpal-label d-block mb-1">About</label>';
+				h += '<textarea id="jvm-about" class="vorpal-input" rows="2" placeholder="What this profile is for — the workload it targets and why these settings.">' + he(jvm.profiles[jvm.sel].about || '') + '</textarea></div>';
 				h += '<div class="row"><div class="col-md-7" id="jvm-controls"></div>';
-				h += '<div class="col-md-5"><label style="font-size:12px;font-weight:600">Arguments</label>';
+				h += '<div class="col-md-5"><label class="vorpal-label d-block">Arguments</label>';
 				h += '<div class="jvm-argwrap"><div id="jvm-arghl" class="jvm-arghl"></div>';
 				h += '<textarea id="jvm-argbox" class="jvm-argta" rows="20" spellcheck="false"></textarea></div>';
-				h += '<div class="text-muted mt-1" style="font-size:11px">Edit fields or type here — they stay in sync. A <span class="jvm-bad">wavy-underlined</span> token is flagged invalid (see the reasons below); unmodeled args are preserved.</div>';
+				h += '<div class="muted mt-1" style="font-size:11px">Edit fields or type here — they stay in sync. A <span class="jvm-bad">wavy-underlined</span> token is flagged invalid (see the reasons below); unmodeled args are preserved.</div>';
 				h += '<div id="jvm-argissues" class="jvm-argissues"></div></div></div>';
 			} else {
-				h += '<div class="info-box">No profile selected. Click <strong>New</strong> to create one.</div>';
+				h += '<div class="vorpal-note">No profile selected. Click <strong>New</strong> to create one.</div>';
 			}
 
 			h += '<hr>' + renderJvmTargetsHtml();
@@ -1274,7 +1276,7 @@
 		}
 
 		function jvmPanelHeader(t) {
-			return '<div class="mt-3 mb-1" style="font-size:12px;font-weight:600;color:#555;border-bottom:1px solid #eee;padding-bottom:2px">' + he(t) + '</div>';
+			return '<div class="mt-3 mb-1 vorpal-label tuning-rule">' + he(t) + '</div>';
 		}
 
 		function renderJvmControls() {
@@ -1303,7 +1305,7 @@
 				gcFlags.forEach(function (f) { h += tipCb(id, f.flag, f.label, st.flags, f.tip); });
 				h += '</div>';
 			} else {
-				h += '<div class="text-muted" style="font-size:11px">' + (collector ? 'No extra tuning options modeled for this collector.' : 'Pick a collector to see its tuning options.') + '</div>';
+				h += '<div class="muted" style="font-size:11px">' + (collector ? 'No extra tuning options modeled for this collector.' : 'Pick a collector to see its tuning options.') + '</div>';
 			}
 
 			h += jvmPanelHeader('Performance');
@@ -1325,7 +1327,7 @@
 			h += '<div class="row">';
 			JFR_FIELDS.forEach(function (f) { h += renderJfrField(id, f, st.jfr.vals[f.key]); });
 			h += '</div>';
-			h += '<div class="mt-2 mb-1" style="font-size:12px;font-weight:600;color:#555">Global JFR options (-XX:FlightRecorderOptions)</div><div class="row">';
+			h += '<div class="mt-2 mb-1 vorpal-label">Global JFR options (-XX:FlightRecorderOptions)</div><div class="row">';
 			JFR_OPT_FIELDS.forEach(function (f) { h += renderJfrField(id, f, st.jfropts.vals[f.key]); });
 			h += '</div>';
 
@@ -1390,7 +1392,7 @@
 		// in sync as the user types or edits the raw Arguments box. Checkboxes are
 		// excluded (their checked state is already an unambiguous cue).
 		function jvmMarkSetFields() {
-			$('#jvm-controls').find('input.mono, select').each(function () {
+			$('#jvm-controls').find('input.vorpal-mono, select').each(function () {
 				$(this).toggleClass('is-set', $.trim($(this).val() || '') !== '');
 			});
 		}
@@ -1552,54 +1554,54 @@
 			var what = [];
 			if (t.argumentsDiffer) what.push('arguments');
 			if (t.classPathDiffers) what.push('classpath');
-			return '<span class="base-diff">&ne; baseline</span> <span class="text-muted" style="font-size:11px">(' + what.join(', ') + ')</span>';
+			return '<span class="base-diff">&ne; baseline</span> <span class="muted" style="font-size:11px">(' + what.join(', ') + ')</span>';
 		}
 		function renderJvmTargetsHtml() {
 			var h = '<div class="d-flex align-items-baseline mb-1" style="gap:8px;flex-wrap:wrap">';
 			h += '<span style="font-weight:600">Targets</span>';
-			h += '<span class="text-muted" style="font-size:12px">The ServerStart owners in config.xml. A dynamic engine has none of its own: it boots from its cluster\'s template.</span>';
-			h += '<span class="ml-auto text-muted" style="font-size:11px">' + (jvm.baselineCapturedAt
+			h += '<span class="muted" style="font-size:12px">The ServerStart owners in config.xml. A dynamic engine has none of its own: it boots from its cluster\'s template.</span>';
+			h += '<span class="ml-auto muted" style="font-size:11px">' + (jvm.baselineCapturedAt
 				? 'Baseline pinned ' + he(fmtBuilt(jvm.baselineCapturedAt)) + (jvm.baselineReason ? ' (' + he(jvm.baselineReason) + ')' : '')
 				: 'No baseline pinned yet') + '</span></div>';
 			if (jvm.orphaned.length) {
-				h += '<div class="warning-box"><strong>Ignored assignments:</strong> <span class="mono">' + jvm.orphaned.map(he).join('</span>, <span class="mono">') + '</span> ' + (jvm.orphaned.length === 1 ? 'is' : 'are') + ' not a ServerStart owner (a dynamic engine takes its settings from its cluster\'s template). Assign the profile to the template row instead; these entries are dropped on the next Save.</div>';
+				h += '<div class="vorpal-warn"><strong>Ignored assignments:</strong> <span class="vorpal-mono">' + jvm.orphaned.map(he).join('</span>, <span class="vorpal-mono">') + '</span> ' + (jvm.orphaned.length === 1 ? 'is' : 'are') + ' not a ServerStart owner (a dynamic engine takes its settings from its cluster\'s template). Assign the profile to the template row instead; these entries are dropped on the next Save.</div>';
 			}
-			h += '<table class="table table-compact table-bordered jvm-targets"><thead class="thead-light"><tr><th>Target</th><th>Kind</th><th>Profile</th><th>Baseline</th><th></th></tr></thead><tbody>';
+			h += '<table class="vorpal-table mb-3 jvm-targets"><thead><tr><th>Target</th><th>Kind</th><th>Profile</th><th>Baseline</th><th></th></tr></thead><tbody>';
 			jvm.targets.forEach(function (t) {
 				var id = esc(t.name), open = !!jvm.open[t.name];
-				h += '<tr><td class="mono">' + he(t.name);
+				h += '<tr><td class="vorpal-mono">' + he(t.name);
 				if (t.kind === 'template' && t.members && t.members.length) h += '<div class="members">&rarr; ' + t.members.map(he).join(', ') + '</div>';
 				if (t.name === jvm.adminServer) h += '<div class="members">admin server</div>';
 				h += '</td><td>' + he(t.kind) + '</td>';
-				h += '<td><select class="form-control form-control-sm jvm-assign" data-server="' + he(t.name) + '"' + (t.hasServerStart ? '' : ' disabled') + '><option value="">(none)</option>';
+				h += '<td><select class="vorpal-input jvm-assign" data-server="' + he(t.name) + '"' + (t.hasServerStart ? '' : ' disabled') + '><option value="">(none)</option>';
 				jvm.profiles.forEach(function (p) { h += '<option value="' + he(p.name) + '"' + (jvm.assignments[t.name] === p.name ? ' selected' : '') + '>' + he(p.name) + '</option>'; });
 				h += '</select></td>';
 				h += '<td>' + (t.hasServerStart ? jvmBaselineCell(t) : '<span class="base-none">no ServerStart</span>') + (t.classPathWarning ? '<div style="font-size:11px"><strong>&#9888; classpath</strong></div>' : '') + '</td>';
-				h += '<td style="white-space:nowrap"><button class="btn btn-sm btn-outline-secondary jvm-tgt-toggle" data-target="' + he(t.name) + '" title="Show this target\'s live arguments, JDK and classpath.">' + (open ? 'Hide' : 'Details') + '</button> ';
-				h += '<button class="btn btn-sm btn-outline-secondary" onclick="jvmRestoreTarget(' + JSON.stringify(t.name).replace(/"/g, '&quot;') + ')"' + (t.inBaseline && (t.argumentsDiffer || t.classPathDiffers) ? '' : ' disabled') + ' title="Write this target\'s baseline ClassPath and Arguments back verbatim (no merge). The current state is recorded in History first.">Restore baseline</button></td></tr>';
+				h += '<td style="white-space:nowrap"><button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm jvm-tgt-toggle" data-target="' + he(t.name) + '" title="Show this target\'s live arguments, JDK and classpath.">' + (open ? 'Hide' : 'Details') + '</button> ';
+				h += '<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="jvmRestoreTarget(' + JSON.stringify(t.name).replace(/"/g, '&quot;') + ')"' + (t.inBaseline && (t.argumentsDiffer || t.classPathDiffers) ? '' : ' disabled') + ' title="Write this target\'s baseline ClassPath and Arguments back verbatim (no merge). The current state is recorded in History first.">Restore baseline</button></td></tr>';
 				if (open) h += '<tr class="jvm-target-detail"><td colspan="5">' + renderJvmTargetDetail(t, id) + '</td></tr>';
 			});
-			if (!jvm.targets.length) h += '<tr><td colspan="5" class="text-muted">No targets found.</td></tr>';
+			if (!jvm.targets.length) h += '<tr><td colspan="5" class="muted">No targets found.</td></tr>';
 			h += '</tbody></table>';
-			h += '<button class="btn btn-sm btn-outline-primary" onclick="jvmPreview()" title="Saves the profiles, then shows what Apply would change on each assigned target. Nothing is written to the domain.">Preview</button> ';
-			h += '<button class="btn btn-sm btn-primary" onclick="jvmApply()" title="Saves the profiles, records the current ServerStart of every target in History, then overlays each assigned profile onto its target.">Apply to targets</button>';
-			h += ' <span class="text-muted" style="font-size:12px">Restart the affected servers to activate.</span>';
+			h += '<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="jvmPreview()" title="Saves the profiles, then shows what Apply would change on each assigned target. Nothing is written to the domain.">Preview</button> ';
+			h += '<button class="vorpal-btn vorpal-btn-sm" onclick="jvmApply()" title="Saves the profiles, records the current ServerStart of every target in History, then overlays each assigned profile onto its target.">Apply to targets</button>';
+			h += ' <span class="muted" style="font-size:12px">Restart the affected servers to activate.</span>';
 			return h;
 		}
 		function renderJvmTargetDetail(t, id) {
 			var h = '<div class="row"><div class="col-md-6">';
-			h += '<div class="field-group"><label>Arguments (live)</label><pre>' + he(t.arguments || '(empty)') + '</pre></div>';
-			h += '<div class="field-group"><label>JavaHome</label><div class="mono" style="font-size:12px">' + he(t.javaHome || 'default (Node Manager\'s JDK)') + '</div></div>';
-			if (t.javaVendor) h += '<div class="field-group"><label>JavaVendor</label><div class="mono" style="font-size:12px">' + he(t.javaVendor) + '</div></div>';
-			if (t.cluster) h += '<div class="field-group"><label>Cluster</label><div class="mono" style="font-size:12px">' + he(t.cluster) + '</div></div>';
-			if (t.machine) h += '<div class="field-group"><label>Machine</label><div class="mono" style="font-size:12px">' + he(t.machine) + '</div></div>';
+			h += '<div class="field-group vorpal-field"><label>Arguments (live)</label><pre>' + he(t.arguments || '(empty)') + '</pre></div>';
+			h += '<div class="field-group vorpal-field"><label>JavaHome</label><div class="vorpal-mono" style="font-size:12px">' + he(t.javaHome || 'default (Node Manager\'s JDK)') + '</div></div>';
+			if (t.javaVendor) h += '<div class="field-group vorpal-field"><label>JavaVendor</label><div class="vorpal-mono" style="font-size:12px">' + he(t.javaVendor) + '</div></div>';
+			if (t.cluster) h += '<div class="field-group vorpal-field"><label>Cluster</label><div class="vorpal-mono" style="font-size:12px">' + he(t.cluster) + '</div></div>';
+			if (t.machine) h += '<div class="field-group vorpal-field"><label>Machine</label><div class="vorpal-mono" style="font-size:12px">' + he(t.machine) + '</div></div>';
 			h += '</div><div class="col-md-6">';
-			h += '<div class="field-group"><label>ClassPath</label>';
-			h += '<textarea id="jvm-cp-' + id + '" class="form-control mono' + (t.classPathDiffers ? ' is-set' : '') + '" rows="6" spellcheck="false">' + he(t.classPath || '') + '</textarea>';
+			h += '<div class="field-group vorpal-field"><label>ClassPath</label>';
+			h += '<textarea id="jvm-cp-' + id + '" class="vorpal-input vorpal-mono' + (t.classPathDiffers ? ' is-set' : '') + '" rows="6" spellcheck="false">' + he(t.classPath || '') + '</textarea>';
 			h += '<div class="hint">What Node Manager puts on the java line. OCCAS needs weblogic.jar and the SIP jars (weblogic_sip.jar) here, or the server boots with no SIP container.' + (t.classPathDiffers ? ' Differs from the baseline.' : '') + '</div>';
-			if (t.classPathWarning) h += '<div class="warning-box mt-1"><strong>&#9888;</strong> ' + he(t.classPathWarning) + '</div>';
-			h += '<div class="mt-1"><button class="btn btn-sm btn-primary" onclick="jvmSaveClassPath(' + JSON.stringify(t.name).replace(/"/g, '&quot;') + ')">Save classpath</button> ';
-			h += '<button class="btn btn-sm btn-outline-secondary" onclick="jvmResetClassPath(' + JSON.stringify(t.name).replace(/"/g, '&quot;') + ')"' + (t.inBaseline ? '' : ' disabled') + ' title="Put the baseline classpath in the box (not saved until you click Save classpath).">Reset to baseline</button></div>';
+			if (t.classPathWarning) h += '<div class="vorpal-warn mt-1"><strong>&#9888;</strong> ' + he(t.classPathWarning) + '</div>';
+			h += '<div class="mt-1"><button class="vorpal-btn vorpal-btn-sm" onclick="jvmSaveClassPath(' + JSON.stringify(t.name).replace(/"/g, '&quot;') + ')">Save classpath</button> ';
+			h += '<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="jvmResetClassPath(' + JSON.stringify(t.name).replace(/"/g, '&quot;') + ')"' + (t.inBaseline ? '' : ' disabled') + ' title="Put the baseline classpath in the box (not saved until you click Save classpath).">Reset to baseline</button></div>';
 			h += '</div></div></div>';
 			return h;
 		}
@@ -1692,15 +1694,15 @@
 			var h = '<div class="jvm-diff-panel"><div class="hdr"><strong>' + (applied ? 'Applied' : 'Preview') + '</strong>';
 			var n = ch.filter(function (c) { return c.ok && !c.unchanged; }).length;
 			h += '<span class="summary">' + ch.length + ' target(s) assigned, ' + n + ' with changes' + (applied ? ', written to config.xml' : ', nothing written yet') + '</span>';
-			if (!applied && n) h += '<button class="btn btn-sm btn-primary ml-auto" onclick="jvmApply()">Apply these changes</button>';
-			h += '<button class="btn btn-sm btn-outline-secondary' + (applied || !n ? ' ml-auto' : ' ml-2') + '" onclick="$(\'#jvm-preview\').empty()">Close</button></div>';
-			if (!ch.length) h += '<div class="jvm-diff-target text-muted">No profile is assigned to any target.</div>';
+			if (!applied && n) h += '<button class="vorpal-btn vorpal-btn-sm ml-auto" onclick="jvmApply()">Apply these changes</button>';
+			h += '<button class="vorpal-btn vorpal-btn-ghost vorpal-btn-sm' + (applied || !n ? ' ml-auto' : ' ml-2') + '" onclick="$(\'#jvm-preview\').empty()">Close</button></div>';
+			if (!ch.length) h += '<div class="jvm-diff-target muted">No profile is assigned to any target.</div>';
 			ch.forEach(function (c) {
-				h += '<div class="jvm-diff-target"><div class="who"><strong class="mono">' + he(c.target) + '</strong><span class="kind">' + he(c.kind) + '</span>';
-				if (c.ok) h += ' &larr; ' + he(c.profile) + (c.unchanged ? ' <span class="text-muted">(already applied, nothing to write)</span>' : '');
+				h += '<div class="jvm-diff-target"><div class="who"><strong class="vorpal-mono">' + he(c.target) + '</strong><span class="kind">' + he(c.kind) + '</span>';
+				if (c.ok) h += ' &larr; ' + he(c.profile) + (c.unchanged ? ' <span class="muted">(already applied, nothing to write)</span>' : '');
 				else h += ' <strong>&#9888; skipped:</strong> ' + he(c.error || 'error');
 				h += '</div>';
-				(c.warnings || []).forEach(function (w) { h += '<div class="warning-box warn"><strong>&#9888;</strong> ' + he(w) + '</div>'; });
+				(c.warnings || []).forEach(function (w) { h += '<div class="vorpal-warn warn"><strong>&#9888;</strong> ' + he(w) + '</div>'; });
 				if (c.ok && !c.unchanged) {
 					h += '<div class="jvm-diff-lines">';
 					(c.removed || []).forEach(function (t) { h += jvmDiffLine('del', '&minus;', he(t)); });
@@ -1729,35 +1731,35 @@
 		}
 		function jvmLoadHistory() {
 			var el = $('#jvm-history');
-			el.html('<span class="text-muted">Loading history...</span>');
+			el.html('<div class="vorpal-empty">Loading history...</div>');
 			$.getJSON('api/v1/jvm/history', function (rows) {
 				var h = '<div class="d-flex align-items-center mb-1" style="gap:8px"><strong>History &amp; baseline</strong>';
-				h += '<span class="text-muted" style="font-size:12px">Each entry is the state of every target just before a write. Restore writes it back verbatim.</span>';
-				h += '<button class="btn btn-sm btn-outline-secondary ml-auto" onclick="jvmViewSnapshot(\'baseline\')" title="Show the pinned baseline: every target\'s ServerStart as install.sh left it.">View baseline</button> ';
-				h += '<button class="btn btn-sm btn-outline-secondary" onclick="jvmRestoreAll(\'baseline\')" title="Write the baseline ClassPath and Arguments back onto every target, verbatim. The current state is recorded first.">Restore baseline on all</button> ';
-				h += '<button class="btn btn-sm btn-outline-secondary" onclick="jvmRebaseline()" title="Pin the current live ServerStart of every target as the new baseline (the old baseline is kept as a version beside it). Do this after re-running install.sh or after a change you want treated as the new normal.">Re-baseline</button>';
-				h += '<button class="btn btn-sm btn-outline-secondary" onclick="$(\'#jvm-history\').hide()">Close</button></div>';
+				h += '<span class="muted" style="font-size:12px">Each entry is the state of every target just before a write. Restore writes it back verbatim.</span>';
+				h += '<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm ml-auto" onclick="jvmViewSnapshot(\'baseline\')" title="Show the pinned baseline: every target\'s ServerStart as install.sh left it.">View baseline</button> ';
+				h += '<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="jvmRestoreAll(\'baseline\')" title="Write the baseline ClassPath and Arguments back onto every target, verbatim. The current state is recorded first.">Restore baseline on all</button> ';
+				h += '<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="jvmRebaseline()" title="Pin the current live ServerStart of every target as the new baseline (the old baseline is kept as a version beside it). Do this after re-running install.sh or after a change you want treated as the new normal.">Re-baseline</button>';
+				h += '<button class="vorpal-btn vorpal-btn-ghost vorpal-btn-sm" onclick="$(\'#jvm-history\').hide()">Close</button></div>';
 				h += '<div id="jvm-snapshot"></div>';
 				rows = rows || [];
-				if (!rows.length) h += '<div class="text-muted" style="font-size:12px">No writes recorded yet.</div>';
+				if (!rows.length) h += '<div class="muted" style="font-size:12px">No writes recorded yet.</div>';
 				else {
-					h += '<table class="table table-compact table-bordered"><thead class="thead-light"><tr><th>When</th><th>Reason</th><th>Targets</th><th></th></tr></thead><tbody>';
+					h += '<table class="vorpal-table mb-3"><thead><tr><th>When</th><th>Reason</th><th>Targets</th><th></th></tr></thead><tbody>';
 					rows.forEach(function (r) {
-						h += '<tr><td class="mono">' + he(fmtBuilt(r.capturedAt)) + '</td><td>' + he(r.reason) + '</td><td class="mono">' + (r.targets || []).map(he).join(', ') + '</td>';
-						h += '<td style="white-space:nowrap"><button class="btn btn-sm btn-outline-secondary" onclick="jvmViewSnapshot(\'' + r.id + '\')">View</button> ';
-						h += '<button class="btn btn-sm btn-outline-secondary" onclick="jvmRestoreAll(\'' + r.id + '\')" title="Write this snapshot\'s ClassPath and Arguments back onto every target it holds.">Restore&hellip;</button></td></tr>';
+						h += '<tr><td class="vorpal-mono">' + he(fmtBuilt(r.capturedAt)) + '</td><td>' + he(r.reason) + '</td><td class="vorpal-mono">' + (r.targets || []).map(he).join(', ') + '</td>';
+						h += '<td style="white-space:nowrap"><button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="jvmViewSnapshot(\'' + r.id + '\')">View</button> ';
+						h += '<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="jvmRestoreAll(\'' + r.id + '\')" title="Write this snapshot\'s ClassPath and Arguments back onto every target it holds.">Restore&hellip;</button></td></tr>';
 					});
 					h += '</tbody></table>';
 				}
 				el.html(h);
-			}).fail(function (xhr) { el.html('<span class="text-danger">Unable to load history: ' + he(parseError(xhr)) + '</span>'); });
+			}).fail(function (xhr) { el.html('<div class="vorpal-error">Unable to load history: ' + he(parseError(xhr)) + '</div>'); });
 		}
 		function jvmViewSnapshot(id) {
 			$.getJSON(id === 'baseline' ? 'api/v1/jvm/baseline' : 'api/v1/jvm/history/' + id, function (s) {
-				var h = '<div class="info-box"><strong>' + (id === 'baseline' ? 'Baseline' : 'Snapshot') + '</strong> captured ' + he(fmtBuilt(s.capturedAt)) + ' (' + he(s.reason) + ') <a href="#" class="float-right" onclick="$(\'#jvm-snapshot\').empty();return false">close</a>';
+				var h = '<div class="vorpal-note"><strong>' + (id === 'baseline' ? 'Baseline' : 'Snapshot') + '</strong> captured ' + he(fmtBuilt(s.capturedAt)) + ' (' + he(s.reason) + ') <a href="#" class="float-right" onclick="$(\'#jvm-snapshot\').empty();return false">close</a>';
 				Object.keys(s.targets || {}).forEach(function (name) {
 					var e = s.targets[name];
-					h += '<div class="mt-2"><strong class="mono">' + he(name) + '</strong> <span class="text-muted" style="font-size:11px">' + he(e.kind) + (e.javaHome ? ' &middot; ' + he(e.javaHome) : '') + '</span>';
+					h += '<div class="mt-2"><strong class="vorpal-mono">' + he(name) + '</strong> <span class="muted" style="font-size:11px">' + he(e.kind) + (e.javaHome ? ' &middot; ' + he(e.javaHome) : '') + '</span>';
 					h += '<div style="font-size:11px;font-weight:600;margin-top:2px">Arguments</div><pre>' + he(e.arguments || '(empty)') + '</pre>';
 					h += '<div style="font-size:11px;font-weight:600;margin-top:2px">ClassPath</div><pre>' + he(e.classPath || '(empty)') + '</pre></div>';
 				});
@@ -1783,7 +1785,7 @@
 		var SEVERITY_LEVELS = ['Emergency', 'Alert', 'Critical', 'Error', 'Warning', 'Notice', 'Info', 'Debug', 'Trace'];
 
 		function severitySelect(id, value) {
-			var h = '<select class="form-control form-control-sm" id="' + id + '" style="width:110px">';
+			var h = '<select class="vorpal-input" id="' + id + '" style="width:110px">';
 			$.each(SEVERITY_LEVELS, function (i, level) {
 				h += '<option value="' + level + '"' + (level === value ? ' selected' : '') + '>' + level + '</option>';
 			});
@@ -1792,8 +1794,8 @@
 
 		function loadServerTuning() {
 			$.getJSON('api/v1/server-tuning', function (data) {
-				if (!data || data.length === 0) { $('#server-tuning-container').html('<span class="text-muted">No servers found.</span>'); return; }
-				var html = '<table class="table table-compact table-bordered"><thead class="thead-light"><tr>';
+				if (!data || data.length === 0) { $('#server-tuning-container').html('<span class="muted">No servers found.</span>'); return; }
+				var html = '<table class="vorpal-table mb-3"><thead><tr>';
 				html += '<th>Server</th><th>Port</th>';
 				html += '<th data-toggle="tooltip" title="Minimum size of the self-tuning thread pool. WebLogic dynamically adjusts thread count above this floor. Higher values guarantee more threads for SIP processing under load. Engine servers typically need 100+, AdminServer much less.">Thread Pool Min</th>';
 				html += '<th data-toggle="tooltip" title="Maximum size of the self-tuning thread pool (KernelMBean SelfTuningThreadPoolSizeMax). WebLogic default is 400; can be raised to 65534. Set Min = Max to pin the pool and avoid thread ramp-up under sudden load.">Thread Pool Max</th>';
@@ -1804,20 +1806,20 @@
 				$.each(data, function (i, s) {
 					var id = esc(s.server);
 					html += '<tr id="st-' + id + '">';
-					html += '<td><strong>' + s.server + '</strong><br><span class="text-muted" style="font-size:11px">' + (s.listenAddress || '*') + '</span></td>';
-					html += '<td class="mono">' + s.listenPort + '</td>';
-					html += '<td><input type="number" class="form-control form-control-sm mono" id="st-' + id + '-threadPoolMin" value="' + s.threadPoolMin + '" style="width:80px"></td>';
-					html += '<td><input type="number" class="form-control form-control-sm mono" id="st-' + id + '-threadPoolMax" value="' + s.threadPoolMax + '" style="width:80px"></td>';
-					html += '<td><input type="number" class="form-control form-control-sm mono" id="st-' + id + '-socketReaders" value="' + s.socketReaders + '" style="width:70px"></td>';
-					html += '<td><input type="number" class="form-control form-control-sm mono" id="st-' + id + '-maxMessageSize" value="' + s.maxMessageSize + '" style="width:120px"></td>';
+					html += '<td><strong>' + s.server + '</strong><br><span class="muted" style="font-size:11px">' + (s.listenAddress || '*') + '</span></td>';
+					html += '<td class="vorpal-mono">' + s.listenPort + '</td>';
+					html += '<td><input type="number" class="vorpal-input vorpal-mono" id="st-' + id + '-threadPoolMin" value="' + s.threadPoolMin + '" style="width:80px"></td>';
+					html += '<td><input type="number" class="vorpal-input vorpal-mono" id="st-' + id + '-threadPoolMax" value="' + s.threadPoolMax + '" style="width:80px"></td>';
+					html += '<td><input type="number" class="vorpal-input vorpal-mono" id="st-' + id + '-socketReaders" value="' + s.socketReaders + '" style="width:70px"></td>';
+					html += '<td><input type="number" class="vorpal-input vorpal-mono" id="st-' + id + '-maxMessageSize" value="' + s.maxMessageSize + '" style="width:120px"></td>';
 					html += '<td>' + severitySelect('st-' + id + '-minimumSeverityToLog', s.minimumSeverityToLog) + '</td>';
-					html += '<td><button class="btn btn-sm btn-outline-primary" onclick="saveServerTuning(\'' + s.server + '\',\'' + id + '\')">Save</button></td>';
+					html += '<td><button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="saveServerTuning(\'' + s.server + '\',\'' + id + '\')">Save</button></td>';
 					html += '</tr>';
 				});
 				html += '</tbody></table>';
 				$('#server-tuning-container').html(html);
 			}).fail(function (xhr) {
-				$('#server-tuning-container').html('<span class="text-danger">Unable to load. ' + parseError(xhr) + '</span>');
+				$('#server-tuning-container').html('<div class="vorpal-error">Unable to load. ' + parseError(xhr) + '</div>');
 			});
 		}
 
@@ -1930,10 +1932,10 @@
 		function loadWorkManagers() {
 			$.getJSON('api/v1/work-managers', function (data) {
 				wmData = data;
-				if (!data || data.length === 0) { $('#wm-container').html('<span class="text-muted">No WLSS work managers found.</span>'); return; }
+				if (!data || data.length === 0) { $('#wm-container').html('<span class="muted">No WLSS work managers found.</span>'); return; }
 
-				var html = '<table class="table table-compact table-bordered mb-0">';
-				html += '<thead class="thead-light"><tr>';
+				var html = '<table class="vorpal-table mb-0">';
+				html += '<thead><tr>';
 				html += '<th style="min-width:180px">Work Manager</th>';
 				html += '<th style="width:100px" title="Relative CPU weight — higher values get more scheduling priority">Fair Share</th>';
 				html += '<th style="width:100px" title="Guaranteed minimum threads for this work manager">Min Threads</th>';
@@ -1946,8 +1948,8 @@
 					var meta = wmMeta[wm.name] || { label: wm.name, desc: '' };
 
 					html += '<tr>';
-					html += '<td><strong>' + meta.label + '</strong><br><span class="text-muted" style="font-size:11px">' + wm.name + '</span>';
-					if (meta.desc) html += '<br><span style="font-size:11px;color:#999">' + meta.desc + '</span>';
+					html += '<td><strong>' + meta.label + '</strong><br><span class="muted" style="font-size:11px">' + wm.name + '</span>';
+					if (meta.desc) html += '<br><span class="muted" style="font-size:11px">' + meta.desc + '</span>';
 					html += '</td>';
 
 					// Fair share - always present for wlss
@@ -1968,15 +1970,15 @@
 				html += '</tbody></table>';
 				$('#wm-container').html(html);
 			}).fail(function (xhr) {
-				$('#wm-container').html('<span class="text-danger">Unable to load. ' + parseError(xhr) + '</span>');
+				$('#wm-container').html('<div class="vorpal-error">Unable to load. ' + parseError(xhr) + '</div>');
 			});
 		}
 
 		function wmInput(id, field, value, constraintName) {
 			if (constraintName === undefined || constraintName === null) {
-				return '<span class="text-muted mono" style="font-size:12px">—</span>';
+				return '<span class="muted vorpal-mono" style="font-size:12px">—</span>';
 			}
-			return '<input type="number" class="form-control form-control-sm mono" id="wm-' + id + '-' + field + '" value="' + (value || 0)
+			return '<input type="number" class="vorpal-input vorpal-mono" id="wm-' + id + '-' + field + '" value="' + (value || 0)
 				+ '" style="width:80px" title="' + constraintName + '">';
 		}
 
@@ -2024,8 +2026,8 @@
 		function loadJdbc() {
 			$.getJSON('api/v1/jdbc', function (data) {
 				jdbcData = data || [];
-				if (!jdbcData.length) { $('#jdbc-container').html('<span class="text-muted">No data sources found.</span>'); return; }
-				var html = '<table class="table table-compact table-bordered"><thead class="thead-light"><tr>';
+				if (!jdbcData.length) { $('#jdbc-container').html('<span class="muted">No data sources found.</span>'); return; }
+				var html = '<table class="vorpal-table mb-3"><thead><tr>';
 				html += '<th>Data Source</th>';
 				html += '<th data-toggle="tooltip" title="Connections created when the pool starts. Restart-required. Set equal to Max so the pool is fully allocated at startup.">Initial</th>';
 				html += '<th data-toggle="tooltip" title="Pool never shrinks below this. Resizes dynamically on activate. Set equal to Max to keep the pool pinned.">Min</th>';
@@ -2034,17 +2036,17 @@
 				$.each(jdbcData, function (i, p) {
 					var id = esc(p.name);
 					html += '<tr id="jdbc-row-' + id + '">';
-					html += '<td><strong>' + p.name + '</strong><br><span class="text-muted" style="font-size:11px">' + (p.jndiName || '') + '</span></td>';
-					html += '<td><input type="number" class="form-control form-control-sm mono" id="jdbc-' + id + '-initialCapacity" value="' + p.initialCapacity + '" style="width:90px"></td>';
-					html += '<td><input type="number" class="form-control form-control-sm mono" id="jdbc-' + id + '-minCapacity" value="' + p.minCapacity + '" style="width:90px"></td>';
-					html += '<td><input type="number" class="form-control form-control-sm mono" id="jdbc-' + id + '-maxCapacity" value="' + p.maxCapacity + '" style="width:90px"></td>';
-					html += '<td><button class="btn btn-sm btn-outline-primary" onclick="saveJdbc(\'' + p.name + '\',\'' + id + '\')">Save</button></td>';
+					html += '<td><strong>' + p.name + '</strong><br><span class="muted" style="font-size:11px">' + (p.jndiName || '') + '</span></td>';
+					html += '<td><input type="number" class="vorpal-input vorpal-mono" id="jdbc-' + id + '-initialCapacity" value="' + p.initialCapacity + '" style="width:90px"></td>';
+					html += '<td><input type="number" class="vorpal-input vorpal-mono" id="jdbc-' + id + '-minCapacity" value="' + p.minCapacity + '" style="width:90px"></td>';
+					html += '<td><input type="number" class="vorpal-input vorpal-mono" id="jdbc-' + id + '-maxCapacity" value="' + p.maxCapacity + '" style="width:90px"></td>';
+					html += '<td><button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="saveJdbc(\'' + p.name + '\',\'' + id + '\')">Save</button></td>';
 					html += '</tr>';
 				});
 				html += '</tbody></table>';
 				$('#jdbc-container').html(html);
 			}).fail(function (xhr) {
-				$('#jdbc-container').html('<span class="text-danger">Unable to load. ' + parseError(xhr) + '</span>');
+				$('#jdbc-container').html('<div class="vorpal-error">Unable to load. ' + parseError(xhr) + '</div>');
 			});
 		}
 
@@ -2108,7 +2110,7 @@
 			var el = $('#health-container');
 			if (!el.length) return;
 			if (!issues.length) {
-				el.html('<span class="text-muted">&#10003; No configuration issues detected across ' + ((jvmData || []).length) + ' server(s).</span>');
+				el.html('<span class="muted">&#10003; No configuration issues detected across ' + ((jvmData || []).length) + ' server(s).</span>');
 				return;
 			}
 			// Critical (boot-blocker) findings sort to the top, labeled — never
@@ -2118,7 +2120,7 @@
 			$.each(issues, function (i, it) {
 				html += '<li style="margin-bottom:4px"><strong>' + it.server + ':</strong> '
 					+ (it.sev === 'critical' ? '<strong>CRITICAL &mdash; </strong>' : '') + it.msg
-					+ ' <span class="text-muted">&mdash; ' + it.fix + '</span></li>';
+					+ ' <span class="muted">&mdash; ' + it.fix + '</span></li>';
 			});
 			html += '</ul>';
 			el.html(html);
@@ -2188,15 +2190,15 @@
 				// Clusters
 				if (data.clusters && data.clusters.length) {
 					$.each(data.clusters, function (i, c) {
-						html += '<div class="card cluster-card mb-2"><div class="card-header py-2">';
-						html += '<strong>' + c.name + '</strong>';
-						html += ' <span class="badge badge-info ml-2" data-toggle="tooltip" title="Time (in seconds) a new or restarted cluster member waits before accepting requests. Allows caches, sessions, and replication to stabilize before taking production traffic.">Warmup: ' + c.memberWarmupTimeout + 's</span>';
-						if (c.clusterMessagingMode) html += ' <span class="badge badge-secondary">' + c.clusterMessagingMode + '</span>';
+						html += '<div class="vorpal-panel mb-2"><div class="vorpal-panel-head">';
+						html += '<h3 class="vorpal-panel-title">' + c.name + '</h3>';
+						html += ' <span class="vorpal-badge vorpal-badge-brand ml-2" data-toggle="tooltip" title="Time (in seconds) a new or restarted cluster member waits before accepting requests. Allows caches, sessions, and replication to stabilize before taking production traffic.">Warmup: ' + c.memberWarmupTimeout + 's</span>';
+						if (c.clusterMessagingMode) html += ' <span class="vorpal-badge">' + c.clusterMessagingMode + '</span>';
 						html += '</div>';
 						if (c.members && c.members.length) {
-							html += '<div class="card-body py-2"><table class="table table-compact table-sm mb-0"><thead><tr><th>Server</th><th>Address</th><th>Port</th></tr></thead><tbody>';
+							html += '<div><table class="vorpal-table mb-0"><thead><tr><th>Server</th><th>Address</th><th>Port</th></tr></thead><tbody>';
 							$.each(c.members, function (j, m) {
-								html += '<tr><td>' + m.name + '</td><td class="mono">' + (m.listenAddress || '*') + '</td><td class="mono">' + m.listenPort + '</td></tr>';
+								html += '<tr><td>' + m.name + '</td><td class="vorpal-mono">' + (m.listenAddress || '*') + '</td><td class="vorpal-mono">' + m.listenPort + '</td></tr>';
 							});
 							html += '</tbody></table></div>';
 						}
@@ -2206,18 +2208,18 @@
 
 				// Migratable targets
 				if (data.migratableTargets && data.migratableTargets.length) {
-					html += '<h6 class="text-muted mt-3 mb-2" style="font-size:12px; text-transform:uppercase; letter-spacing:1px;">Migratable Targets</h6>';
-					html += '<table class="table table-compact table-bordered"><thead class="thead-light"><tr><th>Name</th><th data-toggle="tooltip" title="The server where this migratable service will run by default. If this server fails, the service can migrate to another cluster member.">Preferred Server</th><th>Cluster</th><th data-toggle="tooltip" title="How migration is triggered. Manual requires admin intervention. Automatic migrates on server failure detection. Failure-Recovery only migrates services whose host has crashed.">Policy</th></tr></thead><tbody>';
+					html += '<h6 class="vorpal-label mt-3 mb-2">Migratable Targets</h6>';
+					html += '<table class="vorpal-table mb-3"><thead><tr><th>Name</th><th data-toggle="tooltip" title="The server where this migratable service will run by default. If this server fails, the service can migrate to another cluster member.">Preferred Server</th><th>Cluster</th><th data-toggle="tooltip" title="How migration is triggered. Manual requires admin intervention. Automatic migrates on server failure detection. Failure-Recovery only migrates services whose host has crashed.">Policy</th></tr></thead><tbody>';
 					$.each(data.migratableTargets, function (i, m) {
 						html += '<tr><td>' + m.name + '</td><td>' + m.preferredServer + '</td><td>' + m.cluster + '</td>';
-						html += '<td><span class="badge badge-' + (m.migrationPolicy === 'manual' ? 'secondary' : 'success') + '">' + m.migrationPolicy + '</span></td></tr>';
+						html += '<td><span class="vorpal-badge' + (m.migrationPolicy === 'manual' ? '' : ' vorpal-badge-ok') + '">' + m.migrationPolicy + '</span></td></tr>';
 					});
 					html += '</tbody></table>';
 				}
 
-				$('#cluster-container').html(html || '<span class="text-muted">No clusters configured.</span>');
+				$('#cluster-container').html(html || '<span class="muted">No clusters configured.</span>');
 			}).fail(function (xhr) {
-				$('#cluster-container').html('<span class="text-danger">Unable to load. ' + parseError(xhr) + '</span>');
+				$('#cluster-container').html('<div class="vorpal-error">Unable to load. ' + parseError(xhr) + '</div>');
 			});
 		}
 
@@ -2225,30 +2227,30 @@
 		// Coherence cluster networking (unicast/multicast, address, port).
 		// ================================================================
 		function loadCoherence() {
-			$('#coherence-container').html('<span class="text-muted">Loading...</span>');
+			$('#coherence-container').html('<div class="vorpal-empty">Loading...</div>');
 			$.getJSON('api/v1/coherence', function (data) {
 				if (!data || !data.length) {
-					$('#coherence-container').html('<div class="info-box">No Coherence cluster system resources are configured in this domain.</div>');
+					$('#coherence-container').html('<div class="vorpal-note">No Coherence cluster system resources are configured in this domain.</div>');
 					return;
 				}
 				var html = '';
 				$.each(data, function (i, r) { html += renderCoherenceResource(r, i); });
 				$('#coherence-container').html(html);
 			}).fail(function (xhr) {
-				$('#coherence-container').html('<span class="text-danger">Unable to load. ' + parseError(xhr) + '</span>');
+				$('#coherence-container').html('<div class="vorpal-error">Unable to load. ' + parseError(xhr) + '</div>');
 			});
 		}
 
 		function renderCoherenceResource(r, i) {
 			var id = 'coh-' + esc(r.name);
-			var html = '<div class="card mb-2"><div class="card-header py-2 d-flex justify-content-between align-items-center">';
-			html += '<strong>' + he(r.name) + '</strong>';
-			html += '<button class="btn btn-sm btn-outline-primary" onclick="saveCoherence(\'' + esc(r.name) + '\',\'' + id + '\')">Save</button></div>';
+			var html = '<div class="vorpal-panel mb-2"><div class="vorpal-panel-head d-flex justify-content-between align-items-center">';
+			html += '<h3 class="vorpal-panel-title">' + he(r.name) + '</h3>';
+			html += '<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="saveCoherence(\'' + esc(r.name) + '\',\'' + id + '\')">Save</button></div>';
 			if (r.error || r.found === false) {
-				html += '<div class="card-body py-2 text-muted" style="font-size:12px">' + he(r.error || 'No cluster params available for this resource.') + '</div></div>';
+				html += '<div class="muted" style="font-size:12px">' + he(r.error || 'No cluster params available for this resource.') + '</div></div>';
 				return html;
 			}
-			html += '<div class="card-body py-2">';
+			html += '<div>';
 			// Clustering mode + TTL
 			html += '<div class="row">';
 			html += cohSelect(id, 'ClusteringMode', 'Clustering Mode', r.ClusteringMode, [{ value: 'unicast', label: 'unicast' }, { value: 'multicast', label: 'multicast' }], 3, 'How members discover each other: unicast (well-known addresses, routable) or multicast (single LAN segment).');
@@ -2256,22 +2258,22 @@
 			html += cohField(id, 'ClusterListenPort', 'Cluster Listen Port', r.ClusterListenPort, '', 3, 'The base cluster port members communicate on.');
 			html += '</div>';
 			// Unicast
-			html += '<div class="mt-2 mb-1" style="font-size:12px;font-weight:600;color:#555">Unicast</div><div class="row">';
+			html += '<div class="mt-2 mb-1 vorpal-label">Unicast</div><div class="row">';
 			html += cohField(id, 'UnicastListenAddress', 'Listen Address', r.UnicastListenAddress, '', 4, 'Address this member binds for unicast cluster traffic. Blank = all/auto.');
 			html += cohField(id, 'UnicastListenPort', 'Listen Port', r.UnicastListenPort, '', 3, 'Port for unicast cluster traffic.');
 			html += cohField(id, 'UnicastPortAutoAdjust', 'Port Auto-Adjust', r.UnicastPortAutoAdjust, '', 3, 'If the listen port is taken, try the next ones automatically.');
 			html += '</div>';
 			// Multicast
-			html += '<div class="mt-2 mb-1" style="font-size:12px;font-weight:600;color:#555">Multicast</div><div class="row">';
+			html += '<div class="mt-2 mb-1 vorpal-label">Multicast</div><div class="row">';
 			html += cohField(id, 'MulticastListenAddress', 'Listen Address', r.MulticastListenAddress, '', 4, 'Multicast group address (e.g. 231.x.x.x). Only used in multicast mode.');
 			html += cohField(id, 'MulticastListenPort', 'Listen Port', r.MulticastListenPort, '', 3, 'Multicast group port. Only used in multicast mode.');
 			html += cohField(id, 'SecurityFrameworkEnabled', 'Security Framework', r.SecurityFrameworkEnabled, '', 3, 'Whether the WebLogic security framework guards cluster membership.');
 			html += '</div>';
 			// WKA (read-only)
 			if (r.wellKnownAddresses && r.wellKnownAddresses.length) {
-				html += '<div class="mt-2 mb-1" style="font-size:12px;font-weight:600;color:#555">Well-Known Addresses (read-only)</div>';
-				html += '<table class="table table-sm mb-0" style="font-size:12px;max-width:360px"><tbody>';
-				$.each(r.wellKnownAddresses, function (j, w) { html += '<tr><td class="mono">' + he(w.address) + '</td><td class="mono">' + he(w.port) + '</td></tr>'; });
+				html += '<div class="mt-2 mb-1 vorpal-label">Well-Known Addresses (read-only)</div>';
+				html += '<table class="vorpal-table mb-0" style="max-width:360px"><tbody>';
+				$.each(r.wellKnownAddresses, function (j, w) { html += '<tr><td class="vorpal-mono">' + he(w.address) + '</td><td class="vorpal-mono">' + he(w.port) + '</td></tr>'; });
 				html += '</tbody></table>';
 			}
 			html += '</div></div>';
@@ -2279,11 +2281,11 @@
 		}
 
 		function cohField(id, name, label, value, ph, cols, tip) {
-			return '<div class="col-md-' + cols + ' field-group"><label data-toggle="tooltip" title="' + he(tip) + '">' + label + '</label>'
-				+ '<input type="text" class="form-control form-control-sm mono" id="' + id + '-' + name + '" value="' + he(value) + '" placeholder="' + he(ph) + '"></div>';
+			return '<div class="col-md-' + cols + ' field-group vorpal-field"><label data-toggle="tooltip" title="' + he(tip) + '">' + label + '</label>'
+				+ '<input type="text" class="vorpal-input vorpal-mono" id="' + id + '-' + name + '" value="' + he(value) + '" placeholder="' + he(ph) + '"></div>';
 		}
 		function cohSelect(id, name, label, value, opts, cols, tip) {
-			var h = '<div class="col-md-' + cols + ' field-group"><label data-toggle="tooltip" title="' + he(tip) + '">' + label + '</label><select class="form-control form-control-sm" id="' + id + '-' + name + '">';
+			var h = '<div class="col-md-' + cols + ' field-group vorpal-field"><label data-toggle="tooltip" title="' + he(tip) + '">' + label + '</label><select class="vorpal-input" id="' + id + '-' + name + '">';
 			$.each(opts, function (i, o) { h += '<option value="' + he(o.value) + '"' + (String(o.value) === String(value) ? ' selected' : '') + '>' + he(o.label) + '</option>'; });
 			return h + '</select></div>';
 		}
@@ -2383,33 +2385,33 @@
 		}
 
 		function loadKernel() {
-			$('#kernel-container').html('<span class="text-muted">Loading...</span>');
+			$('#kernel-container').html('<div class="vorpal-empty">Loading...</div>');
 			$.getJSON('api/v1/kernel', function (rows) {
 				if (!rows || !rows.length) {
-					$('#kernel-container').html('<div class="info-box">No KernelProbe MBeans reachable. The AdminServer should always appear; engine nodes show up once the BLADE shared library is deployed there and federates to the domain.</div>');
+					$('#kernel-container').html('<div class="vorpal-note">No KernelProbe MBeans reachable. The AdminServer should always appear; engine nodes show up once the BLADE shared library is deployed there and federates to the domain.</div>');
 					return;
 				}
 				var servers = rows.map(function (r) { return r.server || '?'; });
-				var html = '<div class="text-muted mb-1" style="font-size:11px">The <strong>Recommended (SIP)</strong> column is a baseline for a high-CPS OCCAS engine: the SIP-relevant network / file-descriptor values from the Oracle Linux 8 database preinstall, adjusted for a latency engine (THP <span class="mono">never</span>, low <span class="mono">swappiness</span>, conntrack untracked). Blank = no specific recommendation. Compare each node\'s live value against it; a <span class="badge badge-warning">&#9650;</span> marks a value worth a closer look.</div>';
-				html += '<table class="table table-compact table-sm mb-0" style="font-size:12px"><thead class="thead-light"><tr><th style="min-width:200px">Parameter</th>';
+				var html = '<div class="muted mb-1" style="font-size:11px">The <strong>Recommended (SIP)</strong> column is a baseline for a high-CPS OCCAS engine: the SIP-relevant network / file-descriptor values from the Oracle Linux 8 database preinstall, adjusted for a latency engine (THP <span class="vorpal-mono">never</span>, low <span class="vorpal-mono">swappiness</span>, conntrack untracked). Blank = no specific recommendation. Compare each node\'s live value against it; a <span class="vorpal-badge vorpal-badge-warn">&#9650;</span> marks a value worth a closer look.</div>';
+				html += '<table class="vorpal-table mb-0"><thead><tr><th style="min-width:200px">Parameter</th>';
 				html += '<th data-toggle="tooltip" title="Recommended SIP baseline (Oracle Linux 8 preinstall network/FD values + latency adjustments). Informational — not pushed to any node.">Recommended (SIP)</th>';
-				servers.forEach(function (s) { html += '<th class="mono">' + he(s) + '</th>'; });
+				servers.forEach(function (s) { html += '<th class="vorpal-mono">' + he(s) + '</th>'; });
 				html += '</tr></thead><tbody>';
 				var lastCat = null;
 				KERNEL_META.forEach(function (m) {
 					if (m.cat !== lastCat) {
-						html += '<tr><td colspan="' + (servers.length + 2) + '" style="font-weight:600;color:#555;background:#f8f9fa">' + he(m.cat) + '</td></tr>';
+						html += '<tr><td colspan="' + (servers.length + 2) + '" class="tuning-cat">' + he(m.cat) + '</td></tr>';
 						lastCat = m.cat;
 					}
-					html += '<tr><td data-toggle="tooltip" title="' + he(m.tip) + '">' + he(m.label) + ' <span class="text-muted mono" style="font-size:10px">' + he(m.key) + '</span></td>';
-					html += '<td class="mono" style="background:#f8f9fa;font-style:italic">' + (m.rec ? he(m.rec) : '<span class="text-muted">—</span>') + '</td>';
+					html += '<tr><td data-toggle="tooltip" title="' + he(m.tip) + '">' + he(m.label) + ' <span class="muted vorpal-mono" style="font-size:10px">' + he(m.key) + '</span></td>';
+					html += '<td class="vorpal-mono tuning-rec">' + (m.rec ? he(m.rec) : '<span class="muted">—</span>') + '</td>';
 					rows.forEach(function (r) {
 						var bag = r[m.src || 'readings'] || {};
 						var val = m.derive ? m.derive(bag, r) : bag[m.key];
 						if (val == null) val = '—';
 						var warn = (m.flag && val !== 'n/a' && val !== '—') ? m.flag(val) : null;
-						html += '<td class="mono">' + he(val);
-						if (warn) html += ' <span class="badge badge-warning" data-toggle="tooltip" title="' + he(warn) + '">&#9650;</span>';
+						html += '<td class="vorpal-mono">' + he(val);
+						if (warn) html += ' <span class="vorpal-badge vorpal-badge-warn" data-toggle="tooltip" title="' + he(warn) + '">&#9650; review</span>';
 						html += '</td>';
 					});
 					html += '</tr>';
@@ -2420,25 +2422,25 @@
 				var ifBlock = '';
 				rows.forEach(function (r) {
 					if (!r.interfaces || !r.interfaces.length) return;
-					ifBlock += '<div style="font-size:12px;margin-bottom:2px"><span class="mono" style="font-weight:600">' + he(r.server) + '</span>: ';
+					ifBlock += '<div style="font-size:12px;margin-bottom:2px"><span class="vorpal-mono" style="font-weight:600">' + he(r.server) + '</span>: ';
 					r.interfaces.forEach(function (ifc) {
 						var bad = num(ifc.rx_dropped) > 0 || num(ifc.rx_errors) > 0 || num(ifc.rx_missed_errors) > 0 || num(ifc.rx_fifo_errors) > 0 || num(ifc.tx_dropped) > 0;
 						var emu = /^(e1000|e1000e|pcnet32|8139|rtl8139|ne2k)/.test(ifc.driver || '');
-						ifBlock += '<span class="mono" style="margin-right:12px">' + he(ifc.name)
+						ifBlock += '<span class="vorpal-mono" style="margin-right:12px">' + he(ifc.name)
 							+ (ifc.driver ? ' [' + he(ifc.driver) + ']' : '')
 							+ ' rx_drop=' + he(ifc.rx_dropped) + ' rx_err=' + he(ifc.rx_errors) + ' rx_miss=' + he(ifc.rx_missed_errors) + ' tx_drop=' + he(ifc.tx_dropped);
-						if (emu) ifBlock += ' <span class="badge badge-warning" data-toggle="tooltip" title="emulated NIC driver — use a paravirtual vNIC (vmxnet3 / virtio-net) with multiqueue for high-CPS SIP">&#9650; emulated</span>';
-						if (bad) ifBlock += ' <span class="badge badge-warning" data-toggle="tooltip" title="non-zero NIC drops/errors — check ring buffers / IRQ affinity (Tier 2)">&#9650;</span>';
+						if (emu) ifBlock += ' <span class="vorpal-badge vorpal-badge-warn" data-toggle="tooltip" title="emulated NIC driver — use a paravirtual vNIC (vmxnet3 / virtio-net) with multiqueue for high-CPS SIP">&#9650; emulated</span>';
+						if (bad) ifBlock += ' <span class="vorpal-badge vorpal-badge-warn" data-toggle="tooltip" title="non-zero NIC drops/errors — check ring buffers / IRQ affinity (Tier 2)">&#9650; drops</span>';
 						ifBlock += '</span>';
 					});
 					ifBlock += '</div>';
 				});
-				if (ifBlock) html += '<div class="mt-2 mb-1" style="font-size:12px;font-weight:600;color:#555">Interface drop counters</div>' + ifBlock;
+				if (ifBlock) html += '<div class="mt-2 mb-1 vorpal-label">Interface drop counters</div>' + ifBlock;
 
 				$('#kernel-container').html(html);
 				$('body').tooltip({ selector: '[data-toggle="tooltip"]', html: true });
 			}).fail(function (xhr) {
-				$('#kernel-container').html('<span class="text-danger">Unable to load. ' + parseError(xhr) + '</span>');
+				$('#kernel-container').html('<div class="vorpal-error">Unable to load. ' + parseError(xhr) + '</div>');
 			});
 		}
 
@@ -2446,13 +2448,13 @@
 		// Helpers
 		// ================================================================
 		function field(id, name, label, value, ph, cols) {
-			return '<div class="col-md-' + cols + ' field-group"><label>' + label + '</label>'
-				+ '<input type="text" class="form-control form-control-sm mono" id="' + id + '-' + name + '" value="' + he(value) + '" placeholder="' + he(ph) + '"></div>';
+			return '<div class="col-md-' + cols + ' field-group vorpal-field"><label>' + label + '</label>'
+				+ '<input type="text" class="vorpal-input vorpal-mono" id="' + id + '-' + name + '" value="' + he(value) + '" placeholder="' + he(ph) + '"></div>';
 		}
 		function tipField(id, name, label, value, ph, cols, tip) {
 			var set = $.trim((value == null ? '' : value).toString()) !== '';
-			return '<div class="col-md-' + cols + ' field-group"><label data-toggle="tooltip" title="' + he(tip) + '">' + label + '</label>'
-				+ '<input type="text" class="form-control form-control-sm mono' + (set ? ' is-set' : '') + '" id="' + id + '-' + name + '" value="' + he(value) + '" placeholder="' + he(defaultPh(ph)) + '"></div>';
+			return '<div class="col-md-' + cols + ' field-group vorpal-field"><label data-toggle="tooltip" title="' + he(tip) + '">' + label + '</label>'
+				+ '<input type="text" class="vorpal-input vorpal-mono' + (set ? ' is-set' : '') + '" id="' + id + '-' + name + '" value="' + he(value) + '" placeholder="' + he(defaultPh(ph)) + '"></div>';
 		}
 		// The placeholder shows a field's default value as-is. The bold + accent-bar
 		// styling on an explicitly-set field (.is-set) already makes default-vs-set
@@ -2461,21 +2463,21 @@
 			return (ph == null ? '' : ph).toString();
 		}
 		function selectField(id, name, label, value, opts, cols) {
-			var h = '<div class="col-md-' + cols + ' field-group"><label data-toggle="tooltip" title="Garbage collection algorithm. G1 is the recommended default for OCCAS. ZGC offers lower pause times but higher CPU overhead. Parallel GC maximizes throughput at the cost of longer pauses.">' + label + '</label><select class="form-control form-control-sm" id="' + id + '-' + name + '">';
+			var h = '<div class="col-md-' + cols + ' field-group vorpal-field"><label data-toggle="tooltip" title="Garbage collection algorithm. G1 is the recommended default for OCCAS. ZGC offers lower pause times but higher CPU overhead. Parallel GC maximizes throughput at the cost of longer pauses.">' + label + '</label><select class="vorpal-input" id="' + id + '-' + name + '">';
 			$.each(opts, function (i, o) { h += '<option value="' + o.value + '"' + (o.value === value ? ' selected' : '') + '>' + o.label + '</option>'; });
 			return h + '</select></div>';
 		}
 		// A key=value enum property (dropdown). Value is the option string; "" = unset.
 		function enumField(id, name, label, value, opts, cols, tip) {
 			var set = $.trim((value == null ? '' : value).toString()) !== '';
-			var h = '<div class="col-md-' + cols + ' field-group"><label data-toggle="tooltip" title="' + he(tip) + '">' + label + '</label><select class="form-control form-control-sm' + (set ? ' is-set' : '') + '" id="' + id + '-' + name + '">';
+			var h = '<div class="col-md-' + cols + ' field-group vorpal-field"><label data-toggle="tooltip" title="' + he(tip) + '">' + label + '</label><select class="vorpal-input' + (set ? ' is-set' : '') + '" id="' + id + '-' + name + '">';
 			$.each(opts, function (i, o) { h += '<option value="' + he(o.value) + '"' + (o.value === value ? ' selected' : '') + '>' + he(o.label) + '</option>'; });
 			return h + '</select></div>';
 		}
 		// A key=true|false property rendered as a checkbox (default-aware).
 		function boolField(id, name, label, checked, cols, tip) {
 			var cid = id + '-' + name;
-			return '<div class="col-md-' + cols + ' field-group"><label style="visibility:hidden">.</label>'
+			return '<div class="col-md-' + cols + ' field-group vorpal-field"><label style="visibility:hidden">.</label>'
 				+ '<div class="custom-control custom-checkbox"><input type="checkbox" class="custom-control-input jvm-bool" id="' + cid + '" data-name="' + name + '"' + (checked ? ' checked' : '') + '>'
 				+ '<label class="custom-control-label" for="' + cid + '" style="font-size:12px" data-toggle="tooltip" title="' + he(tip) + '">' + label + '</label></div></div>';
 		}
@@ -2489,13 +2491,13 @@
 		function renderJfrField(id, f, val) {
 			if (f.type === 'bool') {
 				var cid = id + '-' + f.name;
-				return '<div class="col-md-' + f.cols + ' field-group"><label style="visibility:hidden">.</label><div class="custom-control custom-checkbox">'
+				return '<div class="col-md-' + f.cols + ' field-group vorpal-field"><label style="visibility:hidden">.</label><div class="custom-control custom-checkbox">'
 					+ '<input type="checkbox" class="custom-control-input jfr-bool" id="' + cid + '" data-name="' + f.name + '"' + (val ? ' checked' : '') + '>'
 					+ '<label class="custom-control-label" for="' + cid + '" style="font-size:12px" data-toggle="tooltip" title="' + he(f.tip) + '">' + he(f.label) + '</label></div></div>';
 			}
 			var set = $.trim((val == null ? '' : val).toString()) !== '';
-			return '<div class="col-md-' + f.cols + ' field-group"><label data-toggle="tooltip" title="' + he(f.tip) + '">' + he(f.label) + '</label>'
-				+ '<input type="text" class="form-control form-control-sm mono' + (set ? ' is-set' : '') + '" id="' + id + '-' + f.name + '" value="' + he(val) + '" placeholder="' + he(defaultPh(f.ph)) + '"></div>';
+			return '<div class="col-md-' + f.cols + ' field-group vorpal-field"><label data-toggle="tooltip" title="' + he(f.tip) + '">' + he(f.label) + '</label>'
+				+ '<input type="text" class="vorpal-input vorpal-mono' + (set ? ' is-set' : '') + '" id="' + id + '-' + f.name + '" value="' + he(val) + '" placeholder="' + he(defaultPh(f.ph)) + '"></div>';
 		}
 		function cb(id, flag, label, flags) {
 			var cbId = id + '-flag-' + flag.replace(/[^a-zA-Z0-9]/g, '_');
@@ -2520,8 +2522,8 @@
 		// dismissed, since an error you didn't see is an error you'll repeat.
 		var statusTimer = null;
 		function showStatus(type, msg) {
-			$('#status-message').removeClass('alert-info alert-success alert-danger alert-warning')
-				.addClass('alert-' + type).show();
+			$('#status-message').removeClass('vorpal-note vorpal-error vorpal-warn')
+				.addClass(type === 'danger' ? 'vorpal-error' : type === 'warning' ? 'vorpal-warn' : 'vorpal-note').show();
 			$('#status-message-text').text(msg);
 			if (statusTimer) { clearTimeout(statusTimer); statusTimer = null; }
 			if (type !== 'danger') {
@@ -2543,28 +2545,28 @@
 		// ================================================================
 		var domainModeData = {};
 		function loadDomainMode() {
-			$('#domain-mode-container').html('<span class="text-muted">Loading…</span>');
+			$('#domain-mode-container').html('<div class="vorpal-empty">Loading…</div>');
 			$.getJSON('api/v1/domain-mode', function (data) {
 				domainModeData = data || {};
 				var prod = !!data.productionMode;
 				$('#domain-mode-sub').text(data.domain ? '— ' + data.domain : '');
 				var h = '<div class="row">';
-				h += '<div class="col-md-3 field-group">'
+				h += '<div class="col-md-3 field-group vorpal-field">'
 					+ '<label data-toggle="tooltip" title="Whether this WebLogic domain runs in production or development mode. WebLogic reads this at server boot — the config is written immediately, but the mode only takes effect after the AdminServer and every engine node restart. The mode also drives WebLogic defaults (auto-deployment, demo-certificate handling, default log levels), so flip it deliberately.">Mode *</label>'
 					+ '<div class="custom-control custom-checkbox"><input type="checkbox" class="custom-control-input" id="dm-prod"' + (prod ? ' checked' : '') + '><label class="custom-control-label" for="dm-prod">Production</label></div>'
 					+ '</div>';
-				h += '<div class="col-md-3 field-group">'
+				h += '<div class="col-md-3 field-group vorpal-field">'
 					+ '<label data-toggle="tooltip" title="Archive the previous domain configuration under DOMAIN_HOME/configArchive each time a configuration change is activated — cheap insurance against a bad config push.">Config Archive</label>'
 					+ '<div class="custom-control custom-checkbox"><input type="checkbox" class="custom-control-input" id="dm-backup"' + (data.configBackupEnabled ? ' checked' : '') + '><label class="custom-control-label" for="dm-backup">Archive on activation</label></div>'
 					+ '</div>';
-				h += '<div class="col-md-3 field-group">'
+				h += '<div class="col-md-3 field-group vorpal-field">'
 					+ '<label data-toggle="tooltip" title="How many archived configurations to keep in DOMAIN_HOME/configArchive before the oldest is discarded. 0 keeps every archive forever (unbounded disk growth on the AdminServer); around 20 is a sensible operating value.">Archive Count</label>'
-					+ '<input type="number" class="form-control form-control-sm mono" id="dm-archcount" value="' + (data.archiveConfigurationCount || 0) + '" style="width:90px">'
-					+ '<div class="text-muted" style="font-size:11px;margin-top:2px">0 = keep all (unbounded)</div>'
+					+ '<input type="number" class="vorpal-input vorpal-mono" id="dm-archcount" value="' + (data.archiveConfigurationCount || 0) + '" style="width:90px">'
+					+ '<div class="muted" style="font-size:11px;margin-top:2px">0 = keep all (unbounded)</div>'
 					+ '</div>';
-				h += '<div class="col-md-3 field-group">'
+				h += '<div class="col-md-3 field-group vorpal-field">'
 					+ '<label data-toggle="tooltip" title="Record every configuration change: Log writes it to the server log, Audit sends it to the security audit provider (one must be configured), Log + Audit does both.">Config Audit</label>'
-					+ '<select class="form-control form-control-sm" id="dm-audit">'
+					+ '<select class="vorpal-input" id="dm-audit">'
 					+ '<option value="none"' + (data.configurationAuditType === 'none' || !data.configurationAuditType ? ' selected' : '') + '>(none)</option>'
 					+ '<option value="log"' + (data.configurationAuditType === 'log' ? ' selected' : '') + '>Log</option>'
 					+ '<option value="audit"' + (data.configurationAuditType === 'audit' ? ' selected' : '') + '>Audit</option>'
@@ -2572,11 +2574,11 @@
 					+ '</select>'
 					+ '</div>';
 				h += '</div>';
-				h += '<div id="dm-audit-warning" style="display:none;font-size:12px;margin-top:4px" class="text-danger">'
+				h += '<div id="dm-audit-warning" style="display:none;font-size:12px;margin-top:4px" class="vorpal-error">'
 					+ 'Warning: no Auditing provider is configured in the security realm, so audit records have nowhere to go. '
 					+ 'Add one under Security Realms &rarr; myrealm &rarr; Providers &rarr; Auditing (restart required), or use Log instead.</div>';
-				h += '<div class="mt-2"><button class="btn btn-sm btn-primary" onclick="saveDomainMode()">Save</button>'
-					+ '<span class="text-muted ml-3" style="font-size:12px">* Requires restart of the AdminServer and every engine node.</span></div>';
+				h += '<div class="mt-2"><button class="vorpal-btn vorpal-btn-sm" onclick="saveDomainMode()">Save</button>'
+					+ '<span class="muted ml-3" style="font-size:12px">* Requires restart of the AdminServer and every engine node.</span></div>';
 				$('#domain-mode-container').html(h);
 
 				// Enabling the archive with count 0 would silently mean "keep
@@ -2588,7 +2590,7 @@
 				$('#dm-audit').on('change', dmAuditWarn);
 				dmAuditWarn();
 			}).fail(function (xhr) {
-				$('#domain-mode-container').html('<span class="text-danger">Unable to load domain settings. ' + parseError(xhr) + '</span>');
+				$('#domain-mode-container').html('<div class="vorpal-error">Unable to load domain settings. ' + parseError(xhr) + '</div>');
 			});
 		}
 		// Recommended domain settings: archive every activation (bounded), log
@@ -2644,37 +2646,37 @@
 			$.getJSON('api/v1/snmp', function (data) {
 				snmpData = data || {};
 				if (data && data.present === false) {
-					$('#snmp-container').html('<span class="text-muted">This domain has no SNMP agent bean to configure.</span>');
+					$('#snmp-container').html('<span class="muted">This domain has no SNMP agent bean to configure.</span>');
 					return;
 				}
 				var h = '';
-				h += '<h6 class="text-muted mb-2" style="font-size:12px;text-transform:uppercase;letter-spacing:1px;">Agent</h6>';
+				h += '<h6 class="vorpal-label mb-2">Agent</h6>';
 				h += '<div class="row mb-3">';
-				h += '<div class="col-md-3 field-group"><label>Enabled</label><div class="custom-control custom-switch"><input type="checkbox" class="custom-control-input" id="snmp-enabled"' + (data.enabled ? ' checked' : '') + '><label class="custom-control-label" for="snmp-enabled">Agent on</label></div></div>';
-				h += '<div class="col-md-3 field-group"><label data-toggle="tooltip" title="OCCAS sendSipAppTrap() only fires when automatic traps are enabled on the agent.">Send Automatic Traps</label><div class="custom-control custom-switch"><input type="checkbox" class="custom-control-input" id="snmp-auto"' + (data.sendAutomaticTrapsEnabled ? ' checked' : '') + '><label class="custom-control-label" for="snmp-auto">Traps on</label></div></div>';
-				h += '<div class="col-md-2 field-group"><label>Agent Port</label><input type="number" class="form-control form-control-sm mono" id="snmp-port" value="' + (data.port || 161) + '"></div>';
-				h += '<div class="col-md-2 field-group"><label>Trap Version</label><select class="form-control form-control-sm" id="snmp-version"><option value="1"' + (data.trapVersion == 1 ? ' selected' : '') + '>v1</option><option value="2"' + (data.trapVersion == 2 ? ' selected' : '') + '>v2c</option></select></div>';
-				h += '<div class="col-md-2 field-group"><label>Community Prefix</label><input type="text" class="form-control form-control-sm mono" id="snmp-community" value="' + he(data.communityPrefix || 'public') + '"></div>';
+				h += '<div class="col-md-3 field-group vorpal-field"><label>Enabled</label><div class="custom-control custom-switch"><input type="checkbox" class="custom-control-input" id="snmp-enabled"' + (data.enabled ? ' checked' : '') + '><label class="custom-control-label" for="snmp-enabled">Agent on</label></div></div>';
+				h += '<div class="col-md-3 field-group vorpal-field"><label data-toggle="tooltip" title="OCCAS sendSipAppTrap() only fires when automatic traps are enabled on the agent.">Send Automatic Traps</label><div class="custom-control custom-switch"><input type="checkbox" class="custom-control-input" id="snmp-auto"' + (data.sendAutomaticTrapsEnabled ? ' checked' : '') + '><label class="custom-control-label" for="snmp-auto">Traps on</label></div></div>';
+				h += '<div class="col-md-2 field-group vorpal-field"><label>Agent Port</label><input type="number" class="vorpal-input vorpal-mono" id="snmp-port" value="' + (data.port || 161) + '"></div>';
+				h += '<div class="col-md-2 field-group vorpal-field"><label>Trap Version</label><select class="vorpal-input" id="snmp-version"><option value="1"' + (data.trapVersion == 1 ? ' selected' : '') + '>v1</option><option value="2"' + (data.trapVersion == 2 ? ' selected' : '') + '>v2c</option></select></div>';
+				h += '<div class="col-md-2 field-group vorpal-field"><label>Community Prefix</label><input type="text" class="vorpal-input vorpal-mono" id="snmp-community" value="' + he(data.communityPrefix || 'public') + '"></div>';
 				h += '</div>';
-				h += '<h6 class="text-muted mb-2" style="font-size:12px;text-transform:uppercase;letter-spacing:1px;">Trap Destinations <button class="btn btn-sm btn-outline-secondary ml-2" onclick="addSnmpDest()">+ Add</button></h6>';
-				h += '<table class="table table-compact table-bordered"><thead class="thead-light"><tr><th>Name</th><th>Host</th><th>Port</th><th>Community</th><th></th></tr></thead><tbody id="snmp-dest-body"></tbody></table>';
+				h += '<h6 class="vorpal-label mb-2">Trap Destinations <button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm ml-2" onclick="addSnmpDest()">+ Add</button></h6>';
+				h += '<table class="vorpal-table mb-3"><thead><tr><th>Name</th><th>Host</th><th>Port</th><th>Community</th><th></th></tr></thead><tbody id="snmp-dest-body"></tbody></table>';
 				$('#snmp-container').html(h);
 				var dests = data.destinations || [];
 				dests.forEach(function (d) { addSnmpDest(d); });
 				if (!dests.length) { addSnmpDest(); }
 			}).fail(function (xhr) {
-				$('#snmp-container').html('<span class="text-danger">Unable to load. ' + parseError(xhr) + '</span>');
+				$('#snmp-container').html('<div class="vorpal-error">Unable to load. ' + parseError(xhr) + '</div>');
 			});
 		}
 
 		function addSnmpDest(d) {
 			d = d || {};
 			var row = '<tr>'
-				+ '<td><input type="text" class="form-control form-control-sm mono snmp-dest-name" value="' + he(d.name || '') + '" placeholder="nms1"></td>'
-				+ '<td><input type="text" class="form-control form-control-sm mono snmp-dest-host" value="' + he(d.host || '') + '" placeholder="10.0.0.5"></td>'
-				+ '<td><input type="number" class="form-control form-control-sm mono snmp-dest-port" value="' + (d.port || 162) + '" style="width:90px"></td>'
-				+ '<td><input type="text" class="form-control form-control-sm mono snmp-dest-community" value="' + he(d.community || 'public') + '"></td>'
-				+ '<td><button class="btn btn-sm btn-outline-danger" onclick="$(this).closest(\'tr\').remove()">Remove</button></td>'
+				+ '<td><input type="text" class="vorpal-input vorpal-mono snmp-dest-name" value="' + he(d.name || '') + '" placeholder="nms1"></td>'
+				+ '<td><input type="text" class="vorpal-input vorpal-mono snmp-dest-host" value="' + he(d.host || '') + '" placeholder="10.0.0.5"></td>'
+				+ '<td><input type="number" class="vorpal-input vorpal-mono snmp-dest-port" value="' + (d.port || 162) + '" style="width:90px"></td>'
+				+ '<td><input type="text" class="vorpal-input vorpal-mono snmp-dest-community" value="' + he(d.community || 'public') + '"></td>'
+				+ '<td><button class="vorpal-btn vorpal-btn-danger vorpal-btn-sm" onclick="$(this).closest(\'tr\').remove()">Remove</button></td>'
 				+ '</tr>';
 			$('#snmp-dest-body').append(row);
 		}

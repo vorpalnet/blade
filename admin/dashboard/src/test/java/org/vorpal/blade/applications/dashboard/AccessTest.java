@@ -38,9 +38,12 @@ class AccessTest {
 	@Test
 	void withoutGrantsOnlyTheAdminRolesSeeAnything() {
 		DashboardSettings none = new DashboardSettings();
-		assertNull(Access.forRequest(inGroups("Monitor"), none), "an admin role: no limit");
+		Access monitor = Access.forRequest(inGroups("Monitor"), none);
+		assertTrue(monitor.seesAllCalls(), "an admin role: every call");
+		assertTrue(monitor.seesPlatform("ashburn"));
+		assertFalse(monitor.seesContent(), "but a role alone reads nothing: the policy names groups");
 		Access stranger = Access.forRequest(inGroups("Reviewer"), none);
-		assertTrue(stranger.rules.isEmpty(), "signed in, but no calls");
+		assertTrue(stranger.rules().isEmpty(), "signed in, but no calls");
 		assertFalse(stranger.seesAnyPlatform());
 		assertFalse(stranger.seesContent());
 	}
@@ -52,11 +55,11 @@ class AccessTest {
 				grant("uhg-sales", Arrays.asList(), Arrays.asList("uhg"))));
 
 		Access operator = Access.forRequest(inGroups("operators"), s);
-		assertTrue(operator.rules.isEmpty(), "the operator sees no calls");
+		assertTrue(operator.rules().isEmpty(), "the operator sees no calls");
 		assertTrue(operator.seesPlatform("ashburn"));
 
 		Access sales = Access.forRequest(inGroups("uhg-sales", "Admin"), s);
-		assertEquals(1, sales.rules.size(), "grants exist, so Admin alone grants nothing extra");
+		assertEquals(1, sales.rules().size(), "grants exist, so Admin alone grants nothing extra");
 		assertFalse(sales.seesPlatform("ashburn"));
 	}
 
@@ -75,6 +78,7 @@ class AccessTest {
 				"Transcripts and callers: no"), Access.describe(Access.of(Arrays.asList(radiology))));
 		assertEquals(Arrays.asList("Calls: none", "Servers: none", "Transcripts and callers: no"),
 				Access.describe(Access.of(Arrays.<DashboardGrant>asList())));
-		assertEquals("Calls: all", Access.describe(null).get(0), "the no-grants administrator");
+		assertEquals("Calls: all", Access.describe(Access.forRequest(inGroups("Admin"), new DashboardSettings())).get(0),
+				"the no-grants administrator");
 	}
 }

@@ -1,6 +1,13 @@
 /// The heart of BLADE: Java Lambda Expression based callflows that
 /// simplifies SIP Servlet development for telecommunication services.
 ///
+/// **Deprecated as a package to build on.** New callflows extend
+/// [org.vorpal.blade.framework.v3.Callflow], whose sends the Trace app records.
+/// [ClientCallflow], [CallflowAckBye], [CallflowCallConnectedError] and
+/// [CallflowResponseCode] moved to `v3`, and [Expectation] to the baseline
+/// [org.vorpal.blade.framework] package; the names here are empty subclasses
+/// kept so existing code compiles. The lambda pattern below is the same in v3.
+///
 /// ## The Lambda Callflow Pattern
 ///
 /// Traditional SIP servlet development scatters call logic across disconnected
@@ -108,7 +115,7 @@
 ///
 /// ### Re-INVITE (mid-dialog)
 ///
-/// The {@link org.vorpal.blade.framework.v2.b2bua.Reinvite Reinvite} callflow
+/// The {@link org.vorpal.blade.framework.v3.b2bua.Reinvite Reinvite} callflow
 /// demonstrates the canonical three-step lambda pattern. When Alice sends a
 /// re-INVITE (e.g. to change media), the B2BUA forwards it to Bob:
 ///
@@ -134,7 +141,7 @@
 /// ### Passthru (INFO, OPTIONS, MESSAGE)
 ///
 /// For mid-dialog methods that don't require an ACK, the
-/// {@link org.vorpal.blade.framework.v2.b2bua.Passthru Passthru} callflow uses a
+/// {@link org.vorpal.blade.framework.v3.b2bua.Passthru Passthru} callflow uses a
 /// simpler two-step pattern:
 ///
 /// {@snippet :
@@ -152,7 +159,7 @@
 ///
 /// ### Terminate (BYE, CANCEL)
 ///
-/// The {@link org.vorpal.blade.framework.v2.b2bua.Terminate Terminate} callflow
+/// The {@link org.vorpal.blade.framework.v3.b2bua.Terminate Terminate} callflow
 /// handles call teardown. When one party hangs up, the B2BUA must terminate the
 /// other dialog. The action depends on the dialog state of the linked session:
 ///

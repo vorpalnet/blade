@@ -197,7 +197,7 @@ public class AnalyticsReports {
 		}
 
 		/// This scope narrowed to one caller: the calls filed under `account`
-		/// ([KeyRow]). Seeing it needs a grant with content, and a department
+		/// ([KeyRow]). Seeing it needs phi:transcript in the access policy, and a department
 		/// sees the account only on the calls it took part in.
 		public Filter forAccount(String account) {
 			return with(domain, now, leakMs, splitMs, freshMs, access,
@@ -442,7 +442,7 @@ public class AnalyticsReports {
 	public Table run(String name, Filter f) {
 		if (f.access != null && !f.access.seesContent()
 				&& (f.account != null || f.number != null || CONTENT.contains(name))) {
-			throw new SecurityException("seeing individual calls and what was said needs a grant with content");
+			throw new SecurityException("seeing individual calls and what was said needs phi:transcript in the dashboard's access policy");
 		}
 		EntityManager em = factory.createEntityManager();
 		try {

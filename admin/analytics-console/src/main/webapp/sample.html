@@ -3,9 +3,10 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>BLADE Analytics · Sample Data</title>
+	<title>Sample Data · Analytics · BLADE</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
 	<script src="/blade/portal/brand/theme.js"></script>
+	<script src="/blade/portal/brand/shell.js" data-context="/blade/analytics" defer></script>
 	<link rel="stylesheet" href="sample.css">
 	<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/vorpal_splotch.svg">
 </head>
@@ -51,58 +52,58 @@
 
 			<form id="gen-form" class="sample-form">
 
-				<fieldset class="sample-fieldset">
-					<legend>Time window &amp; volume</legend>
+				<fieldset class="sample-fieldset vorpal-panel">
+					<legend class="vorpal-panel-title">Time window &amp; volume</legend>
 					<div class="sample-grid">
-						<label class="sample-field">Start date
-							<input type="date" id="startDate" name="startDate"></label>
-						<label class="sample-field">End date
-							<input type="date" id="endDate" name="endDate"></label>
-						<label class="sample-field">Number of calls
-							<input type="number" id="callCount" name="callCount" value="500" min="1"></label>
+						<label class="sample-field vorpal-field"><span class="vorpal-label">Start date</span>
+							<input class="vorpal-input" type="date" id="startDate" name="startDate"></label>
+						<label class="sample-field vorpal-field"><span class="vorpal-label">End date</span>
+							<input class="vorpal-input" type="date" id="endDate" name="endDate"></label>
+						<label class="sample-field vorpal-field"><span class="vorpal-label">Number of calls</span>
+							<input class="vorpal-input" type="number" id="callCount" name="callCount" value="500" min="1"></label>
 					</div>
 				</fieldset>
 
-				<fieldset class="sample-fieldset">
-					<legend>Call shape</legend>
+				<fieldset class="sample-fieldset vorpal-panel">
+					<legend class="vorpal-panel-title">Call shape</legend>
 					<div class="sample-grid">
-						<label class="sample-field">Cluster name <span class="sample-hint">(a run is removable by this)</span>
-							<input type="text" id="clusterName" name="clusterName" value="sample"></label>
-						<label class="sample-field">Tenant <span class="sample-hint">(customer code; blank = none)</span>
-							<input type="text" id="tenant" name="tenant" placeholder="(none)"></label>
-						<label class="sample-field">Engine servers <span class="sample-hint">(application rows)</span>
-							<input type="number" id="servers" name="servers" value="2" min="1"></label>
-						<label class="sample-field">Abandon probability <span class="sample-hint">(0–1, caller gives up ringing)</span>
-							<input type="number" id="abandonProbability" name="abandonProbability" value="0.10" min="0" max="1" step="0.05"></label>
-						<label class="sample-field">Decline probability <span class="sample-hint">(0–1, failure response)</span>
-							<input type="number" id="declineProbability" name="declineProbability" value="0.05" min="0" max="1" step="0.05"></label>
-						<label class="sample-field">Transfer probability <span class="sample-hint">(0–1, of answered)</span>
-							<input type="number" id="transferProbability" name="transferProbability" value="0.35" min="0" max="1" step="0.05"></label>
-						<label class="sample-field">Max transfers per call
-							<input type="number" id="maxTransfers" name="maxTransfers" value="3" min="1"></label>
-						<label class="sample-field">Transfer-fail probability <span class="sample-hint">(0–1, per attempt)</span>
-							<input type="number" id="transferFailProbability" name="transferFailProbability" value="0.10" min="0" max="1" step="0.05"></label>
-						<label class="sample-field">Risk probability <span class="sample-hint">(0–1, adds a callRiskAssessed event)</span>
-							<input type="number" id="riskProbability" name="riskProbability" value="0" min="0" max="1" step="0.05"></label>
-						<label class="sample-field">Min call duration (sec)
-							<input type="number" id="minDurationSec" name="minDurationSec" value="20" min="1"></label>
-						<label class="sample-field">Max call duration (sec)
-							<input type="number" id="maxDurationSec" name="maxDurationSec" value="1800" min="1"></label>
+						<label class="sample-field vorpal-field"><span class="vorpal-label">Cluster name <span class="sample-hint">(a run is removable by this)</span></span>
+							<input class="vorpal-input" type="text" id="clusterName" name="clusterName" value="sample"></label>
+						<label class="sample-field vorpal-field"><span class="vorpal-label">Tenant <span class="sample-hint">(customer code; blank = none)</span></span>
+							<input class="vorpal-input" type="text" id="tenant" name="tenant" placeholder="(none)"></label>
+						<label class="sample-field vorpal-field"><span class="vorpal-label">Engine servers <span class="sample-hint">(application rows)</span></span>
+							<input class="vorpal-input" type="number" id="servers" name="servers" value="2" min="1"></label>
+						<label class="sample-field vorpal-field"><span class="vorpal-label">Abandon probability <span class="sample-hint">(0–1, caller gives up ringing)</span></span>
+							<input class="vorpal-input" type="number" id="abandonProbability" name="abandonProbability" value="0.10" min="0" max="1" step="0.05"></label>
+						<label class="sample-field vorpal-field"><span class="vorpal-label">Decline probability <span class="sample-hint">(0–1, failure response)</span></span>
+							<input class="vorpal-input" type="number" id="declineProbability" name="declineProbability" value="0.05" min="0" max="1" step="0.05"></label>
+						<label class="sample-field vorpal-field"><span class="vorpal-label">Transfer probability <span class="sample-hint">(0–1, of answered)</span></span>
+							<input class="vorpal-input" type="number" id="transferProbability" name="transferProbability" value="0.35" min="0" max="1" step="0.05"></label>
+						<label class="sample-field vorpal-field"><span class="vorpal-label">Max transfers per call</span>
+							<input class="vorpal-input" type="number" id="maxTransfers" name="maxTransfers" value="3" min="1"></label>
+						<label class="sample-field vorpal-field"><span class="vorpal-label">Transfer-fail probability <span class="sample-hint">(0–1, per attempt)</span></span>
+							<input class="vorpal-input" type="number" id="transferFailProbability" name="transferFailProbability" value="0.10" min="0" max="1" step="0.05"></label>
+						<label class="sample-field vorpal-field"><span class="vorpal-label">Risk probability <span class="sample-hint">(0–1, adds a callRiskAssessed event)</span></span>
+							<input class="vorpal-input" type="number" id="riskProbability" name="riskProbability" value="0" min="0" max="1" step="0.05"></label>
+						<label class="sample-field vorpal-field"><span class="vorpal-label">Min call duration (sec)</span>
+							<input class="vorpal-input" type="number" id="minDurationSec" name="minDurationSec" value="20" min="1"></label>
+						<label class="sample-field vorpal-field"><span class="vorpal-label">Max call duration (sec)</span>
+							<input class="vorpal-input" type="number" id="maxDurationSec" name="maxDurationSec" value="1800" min="1"></label>
 					</div>
 				</fieldset>
 
 				<div class="sample-actions">
-					<button type="submit" id="generate-btn" class="vorpal-btn vorpal-btn-publish">Generate</button>
+					<button type="submit" id="generate-btn" class="vorpal-btn">Generate</button>
 					<span id="status" class="sample-status"></span>
 				</div>
 			</form>
 
-			<section class="sample-results" id="result-area" hidden>
-				<h2>Result</h2>
+			<section class="sample-results vorpal-panel" id="result-area" hidden>
+				<header class="vorpal-panel-head"><h2 class="vorpal-panel-title">Result</h2></header>
 				<div id="result-counts" class="sample-counts"></div>
 			</section>
 
-			<div id="error" class="sample-error" hidden></div>
+			<div id="error" class="sample-error vorpal-error" hidden></div>
 
 		</div>
 

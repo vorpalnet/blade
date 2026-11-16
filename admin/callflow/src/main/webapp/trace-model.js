@@ -51,7 +51,9 @@ function aggregate(sources) {
 				epochMillis: s.epochMillis, order: s.order,
 				direction: s.direction, kind: s.kind, label: s.label,
 				className: s.className, methodName: s.methodName, line: s.line,
-				message: s.message, peer: s.peer, leg: s.leg
+				message: s.message, peer: s.peer, leg: s.leg,
+				// the server withheld this step's text (Save needs none withheld)
+				contentHidden: !!s.contentHidden
 			});
 		});
 	});
@@ -94,6 +96,145 @@ function hasSdp(message) {
 	if (!type || sipHeader(message, 'content-length', 'l') === '0') { return false; }
 	return /application\/sdp/i.test(type)
 		|| (/^multipart\//i.test(type) && /content-type:\s*application\/sdp/i.test(message));
+}
+
+// A SIP or HTTP message as markup for reading. pretty === false gives the
+// message exactly as recorded (wrapped by the page's CSS, no other change).
+// Otherwise: one block per line, so a long header wraps under its own value
+// (hanging indent, from .tr-ml) instead of running off the right edge; header
+// names in a heavier weight; JSON and the XML family (XML, *+xml such as
+// PIDF or SIPREC metadata, XHTML, HTML) re-indented, so the body is no longer
+// byte for byte what was sent (the pretty-print toggle, off, shows that); and a
+// multipart body split into its parts, each laid out by its own Content-Type.
+// A body cut short by the capture cap is shown as recorded when it does not
+// parse. SDP and form bodies are one item per line already.
+function messageHtml(message, pretty) {
+	var text = String(message == null ? '' : message);
+	if (pretty === false) { return escapeHtml(text); }
+	return entityLines(text, true).join('');
+}
+
+// Header block, then body, as .tr-ml lines. startLine: the first line is a
+// request or status line, not a header (false for a multipart part).
+function entityLines(text, startLine) {
+	var split = text.search(/\r?\n\r?\n/);
+	var head = split < 0 ? text : text.slice(0, split);
+	var body = split < 0 ? '' : text.slice(split).replace(/^\r?\n\r?\n/, '');
+	var out = head.split(/\r?\n/).map(function (line, i) {
+		var c = line.indexOf(':');
+		if ((startLine && i === 0) || c < 1 || /\s/.test(line.slice(0, c))) {
+			return mlLine(escapeHtml(line));
+		}
+		return mlLine('<span class="tr-hn">' + escapeHtml(line.slice(0, c + 1)) + '</span>' + escapeHtml(line.slice(c + 1)));
+	});
+	if (split < 0) { return out; }
+	out.push(mlLine(''));
+	var type = (headerIn(head, 'content-type', 'c') || '').toLowerCase();
+	return out.concat(bodyLines(type, body));
+}
+
+function mlLine(html, cls) {
+	return '<span class="tr-ml' + (cls ? ' ' + cls : '') + '">' + (html || ' ') + '</span>';
+}
+
+// A header's value from a header block alone (sipHeader reads a whole message).
+function headerIn(head, name, compact) {
+	return sipHeader(head + '\n\n', name, compact);
+}
+
+function bodyLines(type, body) {
+	var out = [];
+	var boundary = /^multipart\//.test(type) && /boundary="?([^";]+)"?/i.exec(type);
+	if (boundary) {
+		var parts = multipartParts(body, boundary[1]);
+		if (parts) {
+			parts.forEach(function (p) {
+				if (p.delimiter) { out.push(mlLine(escapeHtml(p.delimiter), 'tr-ml-part')); }
+				if (p.text != null) { out = out.concat(entityLines(p.text, false)); }
+			});
+			return out;
+		}
+	}
+	var pretty = null;
+	if (/json/.test(type) || (!type && /^\s*[{[]/.test(body))) {
+		try { pretty = JSON.stringify(JSON.parse(body), null, 2); } catch (e) { pretty = null; }
+	} else if (/xml|html/.test(type) || (!type && /^\s*</.test(body))) {
+		pretty = prettyMarkup(body, /html/.test(type));
+	}
+	if (pretty != null) { body = pretty; }
+	body.replace(/\r?\n$/, '').split(/\r?\n/).forEach(function (line) { out.push(mlLine(escapeHtml(line))); });
+	return out;
+}
+
+// The parts of a multipart body, each with the delimiter line ahead of it;
+// null when the boundary never appears (a body cut short, a wrong header).
+function multipartParts(body, boundary) {
+	var lines = body.split(/\r?\n/), parts = [], cur = null, seen = false;
+	lines.forEach(function (line) {
+		var t = line.replace(/\s+$/, '');
+		if (t === '--' + boundary || t === '--' + boundary + '--') {
+			seen = true;
+			if (cur) { parts.push(cur); }
+			cur = { delimiter: line, lines: [] };
+		} else if (cur) {
+			cur.lines.push(line);
+		}
+	});
+	if (!seen) { return null; }
+	if (cur) { parts.push(cur); }
+	return parts.map(function (p) {
+		var lines = p.lines;
+		while (lines.length && lines[lines.length - 1] === '') { lines.pop(); }
+		return { delimiter: p.delimiter, text: lines.length ? lines.join('\n') : null };
+	});
+}
+
+// XML or HTML, one element per line, two spaces a level. Leaf elements stay on
+// one line (<a>text</a>); comments, CDATA, processing instructions, doctypes
+// and self-closing tags never open a level; nor, in HTML, do void elements
+// (<br>, <meta>, ...). script, style, pre and textarea keep their content as
+// written. Text between tags is trimmed. Null when the body does not look
+// like markup, or its tags do not balance (cut short by the capture cap).
+var HTML_VOID = /^(area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)$/i;
+function prettyMarkup(src, html) {
+	var s = src.trim();
+	if (!/^</.test(s) || !/>$/.test(s)) { return null; }
+	var re = /<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<(script|style|pre|textarea)\b(?:"[^"]*"|'[^']*'|[^'">])*>[\s\S]*?<\/\1\s*>|<(?:"[^"]*"|'[^']*'|[^'">])*>|[^<]+/gi;
+	var tokens = s.match(re) || [];
+	if (tokens.join('') !== s) { return null; }
+	function kind(t) {
+		if (t.charAt(0) !== '<') { return 'text'; }
+		if (/^<\//.test(t)) { return 'close'; }
+		if (/^<[!?]/.test(t) || /\/>$/.test(t)) { return 'single'; }
+		var name = (/^<([\w:.-]+)/.exec(t) || [])[1] || '';
+		if (html && HTML_VOID.test(name)) { return 'single'; }
+		if (/^<(script|style|pre|textarea)\b[\s\S]*<\//i.test(t)) { return 'single'; }
+		return 'open';
+	}
+	var out = [], depth = 0;
+	function emit(t) { out.push(new Array(depth + 1).join('  ') + t); }
+	for (var i = 0; i < tokens.length; i++) {
+		var t = tokens[i], k = kind(t);
+		if (k === 'text') {
+			var trimmed = t.trim();
+			if (trimmed) { emit(trimmed); }
+		} else if (k === 'close') {
+			if (depth === 0) { return null; }
+			depth--;
+			emit(t);
+		} else if (k === 'open') {
+			var next = tokens[i + 1], after = tokens[i + 2];
+			if (next && kind(next) === 'close') { emit(t + next); i += 1; continue; }
+			if (next && kind(next) === 'text' && after && kind(after) === 'close' && next.indexOf('\n') < 0) {
+				emit(t + next.trim() + after); i += 2; continue;
+			}
+			emit(t);
+			depth++;
+		} else {
+			emit(t);
+		}
+	}
+	return (depth === 0 || html) ? out.join('\n') : null;
 }
 
 // User part of a From/To/Contact value, falling back to the host — the same
@@ -146,6 +287,20 @@ function kindWord(s) {
 // The far end of each HTTP step, by index: "HTTP client" for whoever called
 // this app's API, and the host a callout went to. A callout's response does
 // not name its host, so it takes the one its app's last callout went to.
+// Where an HTTP step's code is, in words. A callout (a request this app
+// sent, or its answer) names the line that recorded it, then what made it
+// (`connector lookup`, `OAuth token`); the request that came in, and its
+// answer, name the resource method or the line that resumed the answer.
+// Steps from a framework older than this have no class: just what made it.
+function httpSource(s) {
+	var callout = (s.kind === 'http-request') === (s.direction === 'out');
+	if (!s.className) { return s.methodName || ''; }
+	var at = s.line > 0 ? ':' + s.line : '';
+	return callout
+		? simpleName(s.className) + at + (s.methodName ? '  ·  ' + s.methodName : '')
+		: simpleName(s.className) + '.' + s.methodName + at;
+}
+
 function httpParties(steps) {
 	var lastHost = {}, out = {};
 	steps.forEach(function (s, i) {
@@ -272,39 +427,55 @@ function buildLadder(call) {
 // carrying that step (pass -1 for none, e.g. the printable report). Styling
 // comes from the including page's .tr-ladder-svg / .tr-life / .tr-lane-* /
 // .tr-larrow-* rules, so screen and print skins share this geometry.
-function ladderSvg(call, selectedStep) {
+//
+// stickyHead splits the lane boxes into their own SVG inside a
+// .tr-ladder-head strip ahead of the arrows, so the page can pin the strip
+// while the arrows scroll under it. Both SVGs share one width, so the lanes
+// stay over their lifelines when the ladder scrolls sideways. The report
+// leaves it off and gets one image to scale for print.
+function ladderSvg(call, selectedStep, stickyHead) {
 	var model = buildLadder(call), lanes = model.lanes, arrows = model.arrows;
 	var padX = 74, colGap = 150, headH = 50, rowH = 46, footer = 16;
 	var laneX = lanes.map(function (_, i) { return padX + i * colGap; });
 	var width = padX * 2 + Math.max(1, lanes.length - 1) * colGap;
-	var height = headH + arrows.length * rowH + footer;
+	var top = stickyHead ? 0 : headH; // where the first arrow row starts
+	var height = top + arrows.length * rowH + footer;
 	var appSet = {};
 	(call.apps || []).forEach(function (a) { appSet[a] = true; });
 
-	var out = ['<svg class="tr-ladder-svg" viewBox="0 0 ' + width + ' ' + height + '" width="' + width
-		+ '" height="' + height + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Sequence diagram">'];
+	function svgOpen(h, label) {
+		return '<svg class="tr-ladder-svg" viewBox="0 0 ' + width + ' ' + h + '" width="' + width
+			+ '" height="' + h + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' + label + '">';
+	}
 
+	var head = [], out = [];
 	lanes.forEach(function (name, i) {
 		var x = laneX[i], isApp = !!appSet[name];
-		out.push('<line class="tr-life' + (isApp ? ' tr-life-app' : '') + '" x1="' + x + '" y1="' + (headH - 6)
-			+ '" x2="' + x + '" y2="' + (height - footer) + '"/>');
+		var life = 'class="tr-life' + (isApp ? ' tr-life-app' : '') + '" x1="' + x + '" x2="' + x + '"';
+		if (stickyHead) {
+			head.push('<line ' + life + ' y1="' + (headH - 6) + '" y2="' + headH + '"/>');
+			out.push('<line ' + life + ' y1="0" y2="' + (height - footer) + '"/>');
+		} else {
+			out.push('<line ' + life + ' y1="' + (headH - 6) + '" y2="' + (height - footer) + '"/>');
+		}
 		var short = name.length > 16 ? name.slice(0, 15) + '…' : name;
 		if (isApp) {
 			var boxW = Math.max(70, short.length * 7.5 + 16);
-			out.push('<rect class="tr-lane-box" x="' + (x - boxW / 2) + '" y="6" width="' + boxW + '" height="26" rx="3"/>');
+			head.push('<rect class="tr-lane-box" x="' + (x - boxW / 2) + '" y="6" width="' + boxW + '" height="26" rx="3"/>');
 		}
-		out.push('<text class="tr-lane-label' + (isApp ? ' tr-lane-app' : '') + '" x="' + x
+		head.push('<text class="tr-lane-label' + (isApp ? ' tr-lane-app' : '') + '" x="' + x
 			+ '" y="23" text-anchor="middle">' + escapeHtml(short) + '</text>');
 	});
+	if (!stickyHead) { out = head.concat(out); }
 
 	arrows.forEach(function (a, r) {
-		var y = headH + r * rowH + Math.round(rowH * 0.6);
+		var y = top + r * rowH + Math.round(rowH * 0.6);
 		var x1 = laneX[a.from], x2 = laneX[a.to];
 		var on = a.steps.indexOf(selectedStep) >= 0;
 		var label = escapeHtml(a.label);
 		out.push('<g class="tr-larrow' + (on ? ' tr-larrow-on' : '') + '" data-step="' + a.canonical
 			+ '" data-steps="' + a.steps.join(',') + '">');
-		out.push('<rect class="tr-larrow-hit" x="0" y="' + (headH + r * rowH) + '" width="' + width + '" height="' + rowH + '"/>');
+		out.push('<rect class="tr-larrow-hit" x="0" y="' + (top + r * rowH) + '" width="' + width + '" height="' + rowH + '"/>');
 		if (x1 === x2) { // self-message: a small loop on the right of the lane
 			out.push('<path class="tr-larrow-line" d="M' + x1 + ' ' + (y - 8) + ' h26 v16 h-26"/>');
 			out.push('<path class="tr-larrow-head" d="M' + (x1 + 8) + ' ' + (y + 3) + ' L' + x1 + ' ' + (y + 8) + ' L' + (x1 + 8) + ' ' + (y + 13) + '"/>');
@@ -318,6 +489,7 @@ function ladderSvg(call, selectedStep) {
 		out.push('</g>');
 	});
 
-	out.push('</svg>');
-	return out.join('');
+	var body = svgOpen(height, 'Sequence diagram') + out.join('') + '</svg>';
+	if (!stickyHead) { return body; }
+	return '<div class="tr-ladder-head">' + svgOpen(headH, 'Parties') + head.join('') + '</svg></div>' + body;
 }

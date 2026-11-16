@@ -43,7 +43,7 @@ import javax.servlet.sip.SipURI;
 import org.vorpal.blade.framework.AsyncSipServlet;
 import org.vorpal.blade.framework.v3.diagnostics.FlightRecorder;
 import org.vorpal.blade.framework.v3.events.AnalyticsEvent;
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.snmp.Snmp;
 

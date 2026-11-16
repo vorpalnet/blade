@@ -209,7 +209,7 @@ you; you override any of six lifecycle callbacks: `callStarted`,
 message changes what goes on the wire. To reject a call instead of connecting
 it, call `doNotProcess(outboundRequest, 403, "Forbidden")` from `callStarted`.
 
-*More:* [b2bua README](libs/framework/src/main/java/org/vorpal/blade/framework/v2/b2bua/README.md) ·
+*More:* [b2bua README](libs/framework/src/main/java/org/vorpal/blade/framework/v3/b2bua/README.md) ·
 [test/test-b2bua](test/test-b2bua/README.md), the template most services copy
 
 ## 5. SettingsManager

@@ -34,6 +34,8 @@ public class Trace implements TraceMXBean {
 					.append(",\"methodName\":").append(quote(s.getMethodName()))
 					.append(",\"line\":").append(s.getLine())
 					.append(",\"message\":").append(quote(s.getMessage()))
+					.append(",\"tenant\":").append(quote(s.getTenant()))
+					.append(",\"department\":").append(quote(s.getDepartment()))
 					.append('}');
 		}
 		json.append("]}");

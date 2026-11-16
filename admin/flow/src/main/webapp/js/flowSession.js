@@ -48,15 +48,18 @@
 	function showBanner() {
 		if (banner) { return; }
 		banner = document.createElement('div');
+		banner.className = 'vorpal-error';
 		banner.style.cssText = 'position:fixed; top:0; left:0; right:0; z-index:10000;'
-			+ ' background:#5a2a2a; color:#fff; padding:8px 14px;'
-			+ ' font:13px Arial, sans-serif; text-align:center;'
-			+ ' box-shadow:0 1px 4px rgba(0,0,0,0.4);';
+			+ ' border-radius:0; text-align:center; box-shadow:var(--vorpal-shadow-md);'
+			// The dark theme's error tint is translucent; lay it on the surface
+			// so the page under a fixed banner does not show through.
+			+ ' background:linear-gradient(var(--vorpal-error-soft), var(--vorpal-error-soft)), var(--vorpal-surface);';
 		banner.appendChild(document.createTextNode('Your admin session expired. '));
 		var btn = document.createElement('button');
 		btn.type = 'button';
 		btn.textContent = 'Log in';
-		btn.style.cssText = 'margin:0 8px; padding:2px 12px; cursor:pointer;';
+		btn.className = 'vorpal-btn vorpal-btn-sm';
+		btn.style.margin = '0 8px';
 		btn.onclick = reauth;
 		banner.appendChild(btn);
 		var note = document.createElement('span');

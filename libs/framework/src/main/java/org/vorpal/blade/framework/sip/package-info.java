@@ -10,7 +10,7 @@
 ///   has to handle both an exception path and an error-response path.
 /// - `v3.crud.SipMessageParser` turns SIP text into a detached request or response
 ///   for the CRUD preview, and `SipMessageSerializer` renders it back to RFC 3261.
-/// - `v2.transfer.api.TransferAPI` builds a request the REST caller asked for
+/// - `v3.transfer.api.TransferAPI` builds a request the REST caller asked for
 ///   rather than one the network delivered.
 ///
 /// They are also how you unit test a callflow. A `SipServlet` subclass cannot be

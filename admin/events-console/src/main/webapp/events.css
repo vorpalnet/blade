@@ -1,16 +1,11 @@
-/* Events console — layered after /blade/portal/brand/brand.css, which supplies
-   the shell (topbar, page, hero, cards, tables, pills). Only what is specific
-   to this app lives here.
+/* Events console layout, layered after /blade/portal/brand/brand.css. The
+   look of every control (panels, buttons, tabs, fields, tables, badges,
+   messages) is the shared component set there; only this app's layout and
+   its own pieces (code preview, help tips) live here.
 
-   State is signalled by glyph + word + border position, never by hue alone. */
+   State is signalled by glyph + word + border weight, never by hue alone. */
 
-.ev-toolbar {
-	display: flex;
-	gap: .5rem;
-	align-items: center;
-	flex-wrap: wrap;
-	margin-bottom: 1rem;
-}
+.ev-toolbar { margin-bottom: 1rem; }
 
 .ev-grid {
 	display: grid;
@@ -23,78 +18,53 @@
 	.ev-grid { grid-template-columns: 1fr; }
 }
 
-.ev-panel {
-	border: 1px solid var(--vorpal-slate-300, var(--vorpal-slate-300));
-	border-radius: 8px;
-	background: var(--vorpal-surface);
-	overflow: hidden;
-}
+/* A wide table scrolls inside its panel rather than past it. */
+.ev-body:has(> table) { overflow-x: auto; }
 
-/* Panel headers and subheads are bands, not bare text: a filled strip with
-   uppercase letterspacing reads as a heading even zoomed out, where a
-   slightly-bolder line of body text does not. */
-.ev-panel > header {
-	padding: .6rem .85rem;
-	border-bottom: 1px solid var(--vorpal-slate-300, var(--vorpal-slate-300));
-	background: var(--vorpal-slate-100, var(--vorpal-surface-alt));
-	font-weight: 700;
-	font-size: 14px;
-	text-transform: uppercase;
-	letter-spacing: .07em;
-	color: var(--vorpal-ink-900, #1a2434);
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
+/* A panel title that carries a help tip. */
+.ev-title { display: flex; align-items: center; gap: .4rem; }
+
+/* A labelled control: the label in a fixed column, the control, then a
+   fixed slot for its help tip so every row's right edge lines up. A note
+   takes its own line under the control. */
+.ev-form-row {
+	display: grid;
+	grid-template-columns: 9rem minmax(0, 1fr) 1.15rem;
 	gap: .5rem;
+	align-items: center;
+	margin-bottom: .5rem;
 }
+.ev-form-row input[type="checkbox"] { justify-self: start; }
+.ev-form-row > .ev-muted { grid-column: 2 / -1; }
 
+/* Subsections inside a panel: a label over a rule. */
 .ev-subhead {
 	margin: 1.25rem 0 .5rem;
 	padding-bottom: .3rem;
-	border-bottom: 1px solid var(--vorpal-slate-200, var(--vorpal-divider));
-	font-size: 13px;
-	font-weight: 700;
-	text-transform: uppercase;
-	letter-spacing: .07em;
-	color: var(--vorpal-ink-700, #2c374b);
+	border-bottom: 1px solid var(--vorpal-divider);
 	display: flex;
 	align-items: center;
 	gap: .4rem;
 }
 
-.ev-panel > .ev-body { padding: .85rem; }
-
 /* Read-only previews are a <pre>, not an embedded editor. The Configurator
    pulls Ace from a CDN and lazy-fetches themes at runtime, which breaks on an
-   air-gapped domain — no reason to inherit that for output nobody edits. */
+   air-gapped domain; no reason to inherit that for output nobody edits. No
+   shared code block exists yet. */
 .ev-code {
 	margin: 0;
 	padding: .85rem;
 	overflow: auto;
 	max-height: 30rem;
-	font-family: var(--vorpal-font-mono, ui-monospace, monospace);
 	font-size: 12px;
 	line-height: 1.5;
 	white-space: pre;
-	background: var(--vorpal-slate-100, var(--vorpal-surface-alt));
+	background: var(--vorpal-slate-100);
+	border: 1px solid var(--vorpal-divider);
+	border-radius: var(--vorpal-radius-sm);
 }
 
-.ev-tabs { display: flex; gap: .25rem; flex-wrap: wrap; }
-
-.ev-tab {
-	padding: .3rem .7rem;
-	border: 1px solid var(--vorpal-slate-300, var(--vorpal-slate-300));
-	border-radius: 6px 6px 0 0;
-	background: var(--vorpal-slate-100, var(--vorpal-surface-alt));
-	cursor: pointer;
-	font-size: 13px;
-}
-
-.ev-tab[aria-selected="true"] {
-	background: var(--vorpal-surface);
-	border-bottom-color: var(--vorpal-divider);
-	font-weight: 600;
-}
+.ev-tabs { margin-bottom: .5rem; }
 
 .ev-field-row {
 	display: grid;
@@ -103,34 +73,16 @@
 	align-items: center;
 	margin-bottom: .4rem;
 }
+.ev-field-row input[type="text"], .ev-field-row select { width: 100%; }
 
-.ev-field-row input, .ev-field-row select { width: 100%; padding: .3rem .4rem; }
-
-table.ev-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-table.ev-table th, table.ev-table td {
-	text-align: left;
-	padding: .45rem .6rem;
-	border-bottom: 1px solid var(--vorpal-slate-200, var(--vorpal-divider));
-	vertical-align: top;
-}
-table.ev-table th { font-weight: 600; white-space: nowrap; }
-table.ev-table td.ev-num { text-align: right; font-variant-numeric: tabular-nums; }
-
-/* Findings and status. The left border carries the state as position, the
-   glyph and word carry it as content — three independent signals, none of
-   which is colour alone. */
-.ev-finding {
-	border-left: 4px solid var(--vorpal-slate-400, #9aa5b1);
-	padding: .5rem .75rem;
-	margin-bottom: .5rem;
-	background: var(--vorpal-slate-100, var(--vorpal-surface-alt));
-}
-.ev-finding.is-problem { border-left-width: 8px; }
+/* Findings and status are shared notes (expected) and errors (a problem);
+   a problem also takes a heavier left edge, so it reads by shape as well as
+   by its glyph and word. */
+.ev-finding { margin-bottom: .5rem; }
+.ev-finding.is-problem { border-left-width: 6px; }
 .ev-finding .ev-kind { font-weight: 600; }
-.ev-finding .ev-detail { font-size: 13px; }
 
-.ev-muted { color: var(--vorpal-slate-600, #5b6672); font-size: 13px; }
-.ev-empty { padding: 1.25rem; text-align: center; }
+.ev-muted { color: var(--vorpal-slate-600); font-size: 13px; }
 
 /* The prose that used to sit inline now lives in tooltips and the Help
    dialog. The ? is a real button: hover OR keyboard focus shows the tip, and
@@ -142,10 +94,10 @@ table.ev-table td.ev-num { text-align: right; font-variant-numeric: tabular-nums
 	width: 1.15rem;
 	height: 1.15rem;
 	padding: 0;
-	border: 1px solid var(--vorpal-slate-400, #9aa5b1);
+	border: 1px solid var(--vorpal-slate-400);
 	border-radius: 50%;
 	background: var(--vorpal-surface);
-	color: var(--vorpal-slate-600, #5b6672);
+	color: var(--vorpal-slate-600);
 	font-size: 11px;
 	font-weight: 700;
 	line-height: 1;
@@ -162,8 +114,8 @@ table.ev-table td.ev-num { text-align: right; font-variant-numeric: tabular-nums
 	max-width: min(36ch, 70vw);
 	padding: .5rem .65rem;
 	border-radius: 6px;
-	background: var(--vorpal-ink-900, #1a2434);
-	color: #fff;
+	background: var(--vorpal-ink-900);
+	color: var(--vorpal-surface);
 	font-size: 12px;
 	font-weight: 400;
 	line-height: 1.45;
@@ -188,8 +140,10 @@ table.ev-table td.ev-num { text-align: right; font-variant-numeric: tabular-nums
 	max-width: 44rem;
 	width: calc(100vw - 3rem);
 	padding: 0;
-	border: 1px solid var(--vorpal-slate-300, var(--vorpal-slate-300));
-	border-radius: 10px;
+	border: 1px solid var(--vorpal-slate-300);
+	border-radius: var(--vorpal-radius-md);
+	background: var(--vorpal-surface);
+	color: var(--vorpal-ink-900);
 }
 
 .ev-help-dialog::backdrop { background: rgba(26, 36, 52, .45); }
@@ -199,8 +153,8 @@ table.ev-table td.ev-num { text-align: right; font-variant-numeric: tabular-nums
 	justify-content: space-between;
 	align-items: center;
 	padding: .75rem 1rem;
-	border-bottom: 1px solid var(--vorpal-slate-200, var(--vorpal-divider));
-	background: var(--vorpal-slate-100, var(--vorpal-surface-alt));
+	border-bottom: 1px solid var(--vorpal-divider);
+	background: var(--vorpal-surface-alt);
 	font-weight: 700;
 }
 
@@ -218,7 +172,7 @@ table.ev-table td.ev-num { text-align: right; font-variant-numeric: tabular-nums
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: .06em;
-	color: var(--vorpal-ink-700, #2c374b);
+	color: var(--vorpal-ink-700);
 }
 
 .ev-help-dialog h3:first-child { margin-top: 0; }

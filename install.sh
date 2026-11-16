@@ -3120,7 +3120,7 @@ if delname:
 PYEOF
     chmod 600 "${work}/resize.py"
     local out
-    out="$("${MWHOME}/oracle_common/common/bin/wlst.sh" "${work}/resize.py" 2>&1)"
+    out="$("${MWHOME}/oracle_common/common/bin/wlst.sh" "${work}/resize.py" 2>&1)" || true
     rm -rf "$work"
     printf '%s\n' "$out" | grep -E "MACHINE_COMMITTED|CLUSTER_RESIZED|MACHINE_DROPPED" | sed 's/^/  /'
     # Report the real result -- returning 0 unconditionally is how a failed
@@ -5106,7 +5106,7 @@ do_jms() {
     local aurl="${ADMINURL:-t3://${H_ADDR[0]:-localhost}:7001}"
     info "Provisioning the JMS event bus via ${aurl} ..."
     local out
-    out="$(WL_USER="$ADMIN_USER" WL_PASS="$pw" WL_ADMIN="$aurl"            BLADE_ENGINE_CLUSTER="BEA_ENGINE_TIER_CLUST"            BLADE_QUOTA_BYTES="$JMS_QUOTA_BYTES"            BLADE_EVENT_TTL_MILLIS="$JMS_EVENT_TTL"            BLADE_REDELIVERY_LIMIT="$JMS_REDELIVERY"            "${MWHOME}/oracle_common/common/bin/wlst.sh" "$script" 2>&1)"
+    out="$(WL_USER="$ADMIN_USER" WL_PASS="$pw" WL_ADMIN="$aurl"            BLADE_ENGINE_CLUSTER="BEA_ENGINE_TIER_CLUST"            BLADE_QUOTA_BYTES="$JMS_QUOTA_BYTES"            BLADE_EVENT_TTL_MILLIS="$JMS_EVENT_TTL"            BLADE_REDELIVERY_LIMIT="$JMS_REDELIVERY"            "${MWHOME}/oracle_common/common/bin/wlst.sh" "$script" 2>&1)" || true
     # The script prints its own receipt on success; anything else is a failure
     # (returning 0 unconditionally is how a failed resize once got masked).
     if printf '%s' "$out" | grep -q "BLADE messaging provisioned"; then
@@ -5206,7 +5206,7 @@ PYDS
     chmod 600 "${work}/datasource.py"
     info "Creating data source BladeAnalytics (${DB_DIALECT}) via ${aurl} ..."
     local out
-    out="$(WL_USER="$ADMIN_USER" WL_PASS="$pw" WL_ADMIN="$aurl"            DB_URL="$DB_URL" DB_USER="$DB_USER" DB_PASS="$dbpass"            DB_DRIVER="$driver" DB_PROTO="$proto" DB_TEST="$testsql"            BLADE_ENGINE_CLUSTER="BEA_ENGINE_TIER_CLUST"            "${MWHOME}/oracle_common/common/bin/wlst.sh" "${work}/datasource.py" 2>&1)"
+    out="$(WL_USER="$ADMIN_USER" WL_PASS="$pw" WL_ADMIN="$aurl"            DB_URL="$DB_URL" DB_USER="$DB_USER" DB_PASS="$dbpass"            DB_DRIVER="$driver" DB_PROTO="$proto" DB_TEST="$testsql"            BLADE_ENGINE_CLUSTER="BEA_ENGINE_TIER_CLUST"            "${MWHOME}/oracle_common/common/bin/wlst.sh" "${work}/datasource.py" 2>&1)" || true
     rm -rf "$work"
     if printf '%s' "$out" | grep -q "DATASOURCE_READY"; then
         printf '%s\n' "$out" | grep "DATASOURCE_READY" | sed 's/^/  /'

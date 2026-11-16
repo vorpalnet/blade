@@ -101,5 +101,17 @@
         <url-pattern>/*</url-pattern>
     </filter-mapping>
 
+    <!-- The frame every admin page shares (the portal's brand/shell.js) asks
+         each application who is signed in and what the rail lists. Behind the
+         application's own sign-in, like its pages. -->
+    <servlet>
+        <servlet-name>BladeShell</servlet-name>
+        <servlet-class>org.vorpal.blade.framework.v3.web.ShellServlet</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>BladeShell</servlet-name>
+        <url-pattern>/blade-shell/*</url-pattern>
+    </servlet-mapping>
+
     <distributable/>
 </web-fragment>

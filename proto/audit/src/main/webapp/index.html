@@ -3,57 +3,64 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Access log</title>
+<title>Access Log · Audit · BLADE</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+<script src="/blade/portal/brand/theme.js"></script>
+<script src="/blade/portal/brand/shell.js" data-context="/blade/audit" defer></script>
 <!--
   The examining half of the audit control: one UTC day of access records, newest first.
-  Served from this WAR with nothing fetched from outside it, like the recordings page. The API
+  Served from this WAR and the portal's shared styles on the same host, with nothing fetched
+  from another site, like the recordings page. The API
   decides whether this reader may see the log, and records that they asked either way, so the
   page carries no policy of its own.
 
   Colour never carries meaning here: a refusal says "Refused" and is marked with a cross.
 -->
 <style>
-  :root { --ink: #1f1f1f; --muted: #5a5a5a; --line: #d8d8d8; --panel: #f6f6f6; --brand: #602671; }
-  body { margin: 0; font: 14px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--ink); background: #fff; }
-  header { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; align-items: baseline; gap: 16px; }
-  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
-  header form { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; }
-  header label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; }
-  header input { font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: 4px; }
-  header button { font: inherit; padding: 5px 12px; border: 1px solid var(--brand); color: var(--brand); background: #fff; border-radius: 4px; cursor: pointer; }
-  .note { padding: 8px 20px; margin: 0; background: var(--panel); border-bottom: 1px solid var(--line); color: var(--muted); font-size: 13px; }
-  main { padding: 12px 20px 32px; overflow-x: auto; }
-  table { border-collapse: collapse; width: 100%; min-width: 760px; }
-  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .bar { padding: 12px 20px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; }
+  .bar h1 { font-size: 18px; margin: 0; }
+  .bar form { align-items: flex-end; }
+  .page .vorpal-note { margin: 0 20px; }
+  .page main { padding: 12px 20px 32px; }
+  .page main .vorpal-panel { overflow-x: auto; }
+  .page main table { min-width: 760px; }
   td.when { white-space: nowrap; font-variant-numeric: tabular-nums; }
-  tr.refused td { background: var(--panel); }
+  /* A refusal is a filled row AND the word "Refused" with a cross, in bold. */
+  tr.refused td { background: var(--vorpal-slate-200); }
   tr.refused td.decision { font-weight: 700; }
-  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; word-break: break-all; }
-  #status { color: var(--muted); }
-  @media (prefers-color-scheme: dark) {
-    :root { --ink: #ece7f2; --muted: #a99cbc; --line: #3a2c50; --panel: #211630; --brand: #b97cd0; }
-    body, header button, header input { background: #140e1d; color: var(--ink); }
-  }
+  .mono { word-break: break-all; }
+  #status { color: var(--vorpal-slate-600); font-size: 13px; }
 </style>
 </head>
 <body>
-<header>
+<div class="vorpal-app">
+<header class="vorpal-topbar">
+  <a class="vorpal-brand" href="./" title="Audit"><img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal"></a>
+  <a class="vorpal-appmark" href="./">Audit</a>
+  <div class="vorpal-topbar-right"></div>
+</header>
+<div class="page">
+<div class="bar">
   <h1>Access log</h1>
-  <form id="pick">
-    <label>Day (UTC)<input id="day" type="date" required></label>
-    <label>Who<input id="who" type="search" placeholder="any"></label>
-    <button type="submit">Show</button>
+  <form id="pick" class="vorpal-toolbar">
+    <label class="vorpal-field"><span class="vorpal-label">Day (UTC)</span><input id="day" class="vorpal-input" type="date" required></label>
+    <label class="vorpal-field"><span class="vorpal-label">Who</span><input id="who" class="vorpal-input" type="search" placeholder="any"></label>
+    <button type="submit" class="vorpal-btn">Show</button>
   </form>
   <span id="status" aria-live="polite"></span>
-</header>
-<p class="note">Every attempt to reach a recording or a transcript is here, permitted or refused. Reading this log is recorded too, and whoever reads it cannot remove that record.</p>
+</div>
+<p class="vorpal-note">Every attempt to reach a recording or a transcript is here, permitted or refused. Reading this log is recorded too, and whoever reads it cannot remove that record.</p>
 <main>
-  <table>
+  <div class="vorpal-panel">
+  <table class="vorpal-table">
     <thead><tr><th>When (UTC)</th><th>Who</th><th>Decision</th><th>Tried to</th><th>What</th><th>From</th><th>Rule</th></tr></thead>
     <tbody id="rows"></tbody>
   </table>
+  </div>
 </main>
+</div>
+</div>
 <script>
 (function () {
   'use strict';
@@ -86,8 +93,8 @@
         cell(d.decision === 'breakglass' ? '! Permitted, break glass'
           : permitted ? '✓ Permitted' : '✗ Refused', 'decision'),
         cell(d.action),
-        cell([d.resourceKind, d.resourceId].filter(Boolean).join(' '), 'mono'),
-        cell(d.sourceAddress, 'mono'),
+        cell([d.resourceKind, d.resourceId].filter(Boolean).join(' '), 'vorpal-mono mono'),
+        cell(d.sourceAddress, 'vorpal-mono mono'),
         cell(d.rule || d.reason));
       body.append(tr);
     }

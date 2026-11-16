@@ -10,7 +10,7 @@ import java.util.logging.Level;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.URI;
 
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;

@@ -9,8 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.Arrays;
 
 import org.junit.jupiter.api.Test;
-import org.vorpal.blade.framework.v2.transfer.api.Notification;
-import org.vorpal.blade.framework.v2.transfer.api.TransferRequest;
+import org.vorpal.blade.framework.v3.transfer.api.Notification;
+import org.vorpal.blade.framework.v3.transfer.api.TransferRequest;
 import org.vorpal.blade.framework.v3.transfer.TransferSettings;
 import org.vorpal.blade.framework.v3.transfer.Webhook;
 import org.vorpal.blade.services.transfer.TransferSettingsSample;

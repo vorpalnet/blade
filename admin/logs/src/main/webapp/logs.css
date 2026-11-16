@@ -1,18 +1,17 @@
-/* BLADE Logs viewer — layered after /blade/portal/brand/brand.css, which
-   supplies the shell (topbar, pills, buttons, callouts, footer). Only what is
-   specific to this app lives here, and every value comes from a --vorpal-*
-   token except inside the log pane itself (see below).
+/* BLADE Logs viewer, layered after /blade/portal/brand/brand.css, which
+   supplies the shell and the shared components (buttons, fields, segmented
+   tray, panel, badges, messages). Only this app's layout and the log pane
+   itself live here, and every value comes from a --vorpal-* token except
+   inside the log pane (see below).
 
-   State is signalled by glyph + word + border position, never by hue alone —
+   State is signalled by glyph + word + border position, never by hue alone,
    the same rule the events console states at the top of events.css. Severity
    here is a literal token in a fixed-width gutter plus a left-border weight
    step; the pane's colours are decoration layered on top of those two, and
    removing them loses nothing. */
 
-* { box-sizing: border-box; }
-
 /* The `hidden` attribute is only a UA-stylesheet `display: none`, so any class
-   rule that sets `display` silently outranks it — which .log-menu-items and
+   rule that sets `display` silently outranks it, which .log-menu-items and
    .log-results both do, leaving the download menu and the results drawer
    permanently on screen. Restore it once here rather than remembering to guard
    every such rule. */
@@ -23,8 +22,8 @@
    only scrollbar on the page, because the sliding window is driven by that
    scrollbar's position. So the shell must not scroll. brand.css sizes
    .vorpal-app at min-height:100vh and lets .vorpal-main scroll; both are
-   inverted here. The Configurator is the same shape — a work page rather
-   than a landing page — which is why there is no .vorpal-hero on this
+   inverted here. The Configurator is the same shape (a work page rather
+   than a landing page), which is why there is no .vorpal-hero on this
    page. The hero lives on index.html, where the explanatory prose belongs. */
 .vorpal-app {
 	height: 100vh;
@@ -55,10 +54,7 @@ body.embedded .log-page { padding-top: 8px; }
 /* ---- Toolbars ------------------------------------------------------------ */
 
 .log-toolbar {
-	display: flex;
-	gap: 10px;
 	align-items: flex-end;
-	flex-wrap: wrap;
 	flex: 0 0 auto;
 }
 
@@ -71,68 +67,21 @@ body.embedded .log-page { padding-top: 8px; }
 	margin: 2px 4px;
 }
 
-.log-field {
-	display: flex;
-	flex-direction: column;
-	gap: 3px;
-	font-size: 11px;
-	letter-spacing: 0.04em;
-	text-transform: uppercase;
-	color: var(--vorpal-slate-600);
-}
-
+.log-field .vorpal-input { min-width: 150px; }
 .log-field-wide { flex: 1 1 220px; min-width: 160px; }
+.log-field-wide .vorpal-input { min-width: 0; width: 100%; }
 
-.log-field select,
-.log-field input {
-	font: 13px/1.4 var(--vorpal-font-sans);
-	padding: 5px 8px;
-	min-width: 150px;
-	border: 1px solid var(--vorpal-slate-300);
-	border-radius: var(--vorpal-radius-sm);
-	background: var(--vorpal-surface);
-	color: var(--vorpal-ink-900);
-	text-transform: none;
-	letter-spacing: normal;
-}
+/* The buttons on a control strip line up with the inputs beside them. */
+.log-toolbar > .vorpal-btn,
+.log-menu > .vorpal-btn { height: 30px; }
 
-.log-field-wide input { min-width: 0; width: 100%; }
-
-.log-field select:focus,
-.log-field input:focus,
-.log-mini:focus-visible,
-.log-chip:focus-visible {
-	outline: none;
-	border-color: var(--vorpal-purple);
-	box-shadow: 0 0 0 2px var(--vorpal-purple-100);
-}
-
-/* Small square-ish buttons for navigation. The brand .vorpal-btn is sized for
-   page actions and is too tall to sit in a dense control strip. */
-.log-mini {
-	font: 12px/1.4 var(--vorpal-font-sans);
-	padding: 6px 10px;
-	height: 30px;
-	cursor: pointer;
-	border: 1px solid var(--vorpal-slate-300);
-	border-radius: var(--vorpal-radius-sm);
-	background: var(--vorpal-surface);
-	color: var(--vorpal-ink-700);
-	white-space: nowrap;
-}
-.log-mini:hover { background: var(--vorpal-slate-100); border-color: var(--vorpal-slate-400); }
-.log-mini[disabled] { opacity: .45; cursor: default; }
-
-.log-toolbar .vorpal-btn { padding: 6px 14px; height: 30px; font-size: 12px; }
-
-/* A pressed toggle reads as pressed by border weight and a filled ground, not
-   by hue — Follow is the one control whose state you must be able to see at a
-   glance from across a desk. */
+/* Follow is a toggle whose state must read from across a desk: pressed, it
+   is filled and bold, the same mark as a chosen tab. */
 .vorpal-btn[aria-pressed="true"] {
-	background: var(--vorpal-purple);
-	border-color: var(--vorpal-purple-700);
+	background: var(--vorpal-mark);
+	border-color: var(--vorpal-mark);
 	color: #fff;
-	box-shadow: inset 0 0 0 1px var(--vorpal-purple-700);
+	font-weight: 800;
 }
 
 .log-meta {
@@ -154,34 +103,13 @@ body.embedded .log-page { padding-top: 8px; }
 	white-space: nowrap;
 }
 
-/* ---- Severity chips ------------------------------------------------------ */
+/* ---- Severity chips ------------------------------------------------------
+   A segmented tray where each severity toggles on its own; a shown one is
+   filled and bold. Off is also struck through, so "excluded" reads without
+   comparing two fills. */
 
-.log-chips { display: flex; gap: 4px; padding-bottom: 4px; }
-
-.log-chip {
-	font: 12px/1 var(--vorpal-font-sans);
-	padding: 6px 10px;
-	cursor: pointer;
-	border: 1px solid var(--vorpal-slate-300);
-	border-radius: 999px;
-	background: var(--vorpal-surface);
-	color: var(--vorpal-slate-600);
-	white-space: nowrap;
-}
-
-/* Off is the marked state: struck through and faded, so "excluded" is legible
-   without comparing two greys. */
-.log-chip[aria-pressed="false"] {
-	text-decoration: line-through;
-	opacity: .5;
-	background: var(--vorpal-slate-100);
-}
-
-.log-chip[aria-pressed="true"] {
-	border-color: var(--vorpal-purple);
-	background: var(--vorpal-purple-100);
-	color: var(--vorpal-ink-900);
-}
+.log-chips { margin-bottom: 2px; }
+.log-chip[aria-pressed="false"] { text-decoration: line-through; }
 
 /* ---- Position slider ----------------------------------------------------- */
 
@@ -200,37 +128,31 @@ body.embedded .log-page { padding-top: 8px; }
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
-	border: 1px solid var(--vorpal-slate-300);
-	border-radius: var(--vorpal-radius-md);
-	background: var(--vorpal-surface);
+	padding: 0;
 	overflow: hidden;
-	box-shadow: var(--vorpal-shadow-sm);
 }
 
 .log-panel > header {
 	flex: 0 0 auto;
-	padding: .5rem .85rem;
-	border-bottom: 1px solid var(--vorpal-slate-300);
-	font-weight: 600;
-	font-size: 13px;
-	display: flex;
+	flex-wrap: nowrap;
 	justify-content: space-between;
-	align-items: center;
-	gap: .5rem;
+	margin: 0;
+	padding: 8px 14px;
+	border-bottom: 1px solid var(--vorpal-divider);
 }
 
 #paneTitle {
-	font-family: var(--vorpal-font-mono);
-	font-weight: 500;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.log-panel > .vorpal-callout {
-	margin: .6rem .85rem 0;
+.log-notice {
+	margin: 10px 14px 0;
 	flex: 0 0 auto;
 }
+
+.log-notice-title { font-weight: 700; }
 
 /* ---- The pane -----------------------------------------------------------
    A DELIBERATE dark console, kept from the original design: light text on a
@@ -334,7 +256,7 @@ body.embedded .log-page { padding-top: 8px; }
 .log-pane.hide-debug   .log-rec[data-sev="debug"],
 .log-pane.hide-plain   .log-rec[data-sev="plain"] { display: none; }
 
-/* Long records collapse to their first line. Open by default — a log viewer
+/* Long records collapse to their first line. Open by default: a log viewer
    must never hide content until asked. */
 .log-rec details > summary {
 	cursor: pointer;
@@ -366,7 +288,7 @@ body.embedded .log-page { padding-top: 8px; }
 
 /* ANSI SGR rendering. The framework writes real escape sequences into the
    file (Logger wraps SEVERE/WARNING message text via Color.*), so without
-   this the pane shows control characters. Bright variants only — the dim
+   this the pane shows control characters. Bright variants only: the dim
    half of the 3-bit palette is unreadable on #1e1e1e. */
 .a-bold { font-weight: 700; }
 .a-dim { opacity: .65; }
@@ -404,23 +326,15 @@ body.embedded .log-page { padding-top: 8px; }
 }
 
 .log-results > header {
-	display: flex;
-	align-items: center;
+	flex-wrap: nowrap;
 	justify-content: space-between;
-	gap: .5rem;
-	padding: .45rem .6rem;
+	margin: 0;
+	padding: 6px 10px;
 	border-bottom: 1px solid var(--vorpal-divider);
-	font-size: 12px;
-	font-weight: 600;
-	color: var(--vorpal-ink-900);
 }
 
-.log-results > header .log-mini { height: 24px; padding: 2px 8px; }
-
 .log-results-meta {
-	padding: .4rem .6rem;
-	font-size: 11.5px;
-	color: var(--vorpal-slate-600);
+	padding: 6px 10px;
 	border-bottom: 1px solid var(--vorpal-divider);
 	font-variant-numeric: tabular-nums;
 }
@@ -434,7 +348,7 @@ body.embedded .log-page { padding-top: 8px; }
 	list-style: none;
 }
 
-.log-results-list li {
+.log-results-list li[data-i] {
 	padding: .35rem .6rem;
 	border-bottom: 1px solid var(--vorpal-slate-100);
 	cursor: pointer;
@@ -442,7 +356,7 @@ body.embedded .log-page { padding-top: 8px; }
 	font-size: 11.5px;
 	line-height: 1.4;
 }
-.log-results-list li:hover { background: var(--vorpal-purple-100); }
+.log-results-list li[data-i]:hover { background: var(--vorpal-purple-100); }
 
 /* The current target is marked by an inset border on the leading edge, so it
    stays distinguishable from a hover and from plain rows without relying on
@@ -474,7 +388,6 @@ body.embedded .log-page { padding-top: 8px; }
 	border-top: 1px solid var(--vorpal-divider);
 }
 
-.log-results-empty { padding: 1rem .6rem; font-size: 12px; color: var(--vorpal-slate-600); }
 
 @media (max-width: 900px) {
 	.log-split.with-results { grid-template-columns: 1fr; grid-template-rows: 1fr 40%; }

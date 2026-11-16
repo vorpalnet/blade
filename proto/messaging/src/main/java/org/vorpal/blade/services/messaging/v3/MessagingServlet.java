@@ -47,7 +47,11 @@ public class MessagingServlet extends AsyncSipServlet {
 	@Override
 	protected void servletDestroyed(SipServletContextEvent event) throws ServletException, IOException {
 		membership.stop();
-		settings.unregister();
+		// Null when servletCreated failed before building it; the container
+		// still runs this on undeploy.
+		if (settings != null) {
+			settings.unregister();
+		}
 	}
 
 	@Override

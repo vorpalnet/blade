@@ -3,9 +3,10 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>BLADE Analytics · Audit</title>
+	<title>Audit · Analytics · BLADE</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
 	<script src="/blade/portal/brand/theme.js"></script>
+	<script src="/blade/portal/brand/shell.js" data-context="/blade/analytics" defer></script>
 	<link rel="stylesheet" href="audit.css">
 	<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/vorpal_splotch.svg">
 </head>
@@ -46,30 +47,30 @@
 					</p>
 				</div>
 				<div class="vorpal-hero-meta">
-					<button id="refresh-btn" class="audit-refresh" type="button">Refresh</button>
+					<button id="refresh-btn" class="vorpal-btn vorpal-btn-secondary" type="button">Refresh</button>
 				</div>
 			</section>
 
-			<section class="audit-expected">
-				<h2>Expected JNDI bindings</h2>
+			<section class="audit-expected vorpal-panel">
+				<header class="vorpal-panel-head"><h2 class="vorpal-panel-title">Expected JNDI bindings</h2></header>
 				<dl id="expected-list">
-					<dt>Connection Factory</dt><dd id="exp-cf">—</dd>
-					<dt>Distributed Topic</dt><dd id="exp-q">—</dd>
-					<dt>Data Source</dt><dd id="exp-ds">—</dd>
+					<dt class="vorpal-label">Connection Factory</dt><dd id="exp-cf" class="vorpal-mono">—</dd>
+					<dt class="vorpal-label">Distributed Topic</dt><dd id="exp-q" class="vorpal-mono">—</dd>
+					<dt class="vorpal-label">Data Source</dt><dd id="exp-ds" class="vorpal-mono">—</dd>
 				</dl>
 			</section>
 
-			<section class="audit-results">
-				<h2>Findings</h2>
+			<section class="audit-results vorpal-panel">
+				<header class="vorpal-panel-head"><h2 class="vorpal-panel-title">Findings</h2></header>
 				<div id="findings"></div>
-				<div id="error" class="audit-error" hidden></div>
+				<div id="error" class="audit-error vorpal-error" hidden></div>
 
 				<!-- Shown only when a JMS resource is missing. Creates the JMS
 				     stack on the engine cluster (idempotent). The JDBC data
 				     source is not created here — it needs DB credentials. -->
 				<div id="fix-area" class="audit-fix" hidden>
-					<button id="fix-jms-btn" type="button" class="vorpal-btn vorpal-btn-publish">Create missing JMS resources</button>
-					<p class="audit-fix-note">
+					<button id="fix-jms-btn" type="button" class="vorpal-btn">Create missing JMS resources</button>
+					<p class="audit-fix-note vorpal-note">
 						Provisions the file store, JMS server, system module, connection factory and
 						uniform distributed topic on the engine-tier cluster. Safe to re-run — anything
 						that already exists is left alone. Does <strong>not</strong> create the JDBC data

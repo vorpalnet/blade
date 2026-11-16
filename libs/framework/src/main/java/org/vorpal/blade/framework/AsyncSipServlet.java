@@ -55,11 +55,9 @@ import org.vorpal.blade.framework.v3.diagnostics.FlightRecorder;
 import org.vorpal.blade.framework.v3.deploy.ApplicationKey;
 import org.vorpal.blade.framework.v3.metrics.Histogram;
 import org.vorpal.blade.framework.v3.metrics.MetricsRegistry;
-import org.vorpal.blade.framework.v2.b2bua.Terminate;
-import org.vorpal.blade.framework.Callback;
-import org.vorpal.blade.framework.Callflow;
-import org.vorpal.blade.framework.v2.callflow.CallflowAckBye;
-import org.vorpal.blade.framework.v2.callflow.CallflowCallConnectedError;
+import org.vorpal.blade.framework.v3.b2bua.Terminate;
+import org.vorpal.blade.framework.v3.CallflowAckBye;
+import org.vorpal.blade.framework.v3.CallflowCallConnectedError;
 import org.vorpal.blade.framework.Callflow.GlareState;
 import org.vorpal.blade.framework.v2.config.AttributeSelector;
 import org.vorpal.blade.framework.v2.config.AttributeSelector.DialogType;
@@ -1803,7 +1801,8 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// Ends a leg of a call the far end never confirmed, through the framework's own send path so
 	/// the glare bookkeeping applies (a BYE answers the parked requests 487, see
 	/// [Callflow#rejectGlareQueue]). A confirmed dialog gets a BYE; one still ringing gets a CANCEL.
-	private static class Unconfirmed extends Callflow {
+	/// A v3 callflow, so a traced call records the BYE or CANCEL it sends.
+	private static class Unconfirmed extends org.vorpal.blade.framework.v3.Callflow {
 		private static final long serialVersionUID = 1L;
 
 		@Override

@@ -39,16 +39,16 @@ window.flowFsmar = (function() {
 		row.style.flexShrink = '0';
 
 		var label = document.createElement('span');
-		label.textContent = 'Configuration: ';
-		label.style.fontSize = '11px';
+		label.className = 'vorpal-label';
+		label.textContent = 'Configuration ';
 		row.appendChild(label);
 
 		var select = document.createElement('select');
-		select.style.fontSize = '11px';
+		select.className = 'vorpal-input';
 		row.appendChild(select);
 
 		var note = document.createElement('div');
-		note.style.fontSize = '10.5px';
+		note.className = 'vorpal-panel-sub';
 		note.style.marginTop = '3px';
 		note.style.display = 'none';
 		row.appendChild(note);
@@ -176,7 +176,6 @@ window.flowFsmar = (function() {
 		div.style.height = '100%';
 		div.style.boxSizing = 'border-box';
 		div.style.overflow = 'auto';
-		div.style.fontSize = '11px';
 
 		var head = document.createElement('div');
 		head.style.marginBottom = '6px';
@@ -201,9 +200,8 @@ window.flowFsmar = (function() {
 
 			if (diff.removedRootKeys && diff.removedRootKeys.length) {
 				var warn = document.createElement('div');
+				warn.className = 'vorpal-warn';
 				warn.style.margin = '0 0 8px';
-				warn.style.padding = '6px';
-				warn.style.border = '1px solid var(--vorpal-slate-200, #ccc)';
 				warn.innerHTML = '<b>Removes live top-level settings:</b> '
 					+ escapeHtml(diff.removedRootKeys.join(', '))
 					+ '. These are edited in the Configurator, not here — load the live'
@@ -212,26 +210,21 @@ window.flowFsmar = (function() {
 			}
 
 			var table = document.createElement('table');
-			table.style.borderCollapse = 'collapse';
-			table.style.width = '100%';
+			table.className = 'vorpal-table';
 			table.innerHTML = '<thead><tr>'
-				+ '<th style="text-align:left; padding:2px 6px 2px 0;">Change</th>'
-				+ '<th style="text-align:left; padding:2px 6px 2px 0;">Where</th>'
-				+ '<th style="text-align:left; padding:2px 6px 2px 0;">Live</th>'
-				+ '<th style="text-align:left; padding:2px 0;">After publish</th>'
+				+ '<th>Change</th><th>Where</th><th>Live</th><th>After publish</th>'
 				+ '</tr></thead>';
 			var tbody = document.createElement('tbody');
 			for (var i = 0; i < diff.entries.length; i++) {
 				var e = diff.entries[i];
 				var tr = document.createElement('tr');
 				tr.innerHTML =
-					'<td style="padding:2px 6px 2px 0; white-space:nowrap;"><b>'
+					'<td style="white-space:nowrap;"><b>'
 						+ escapeHtml(DIFF_LABEL[e.op] || e.op) + '</b></td>'
-					+ '<td style="padding:2px 6px 2px 0; font-family:monospace;">'
-						+ escapeHtml(e.path) + '</td>'
-					+ '<td style="padding:2px 6px 2px 0; font-family:monospace;">'
+					+ '<td class="vorpal-mono">' + escapeHtml(e.path) + '</td>'
+					+ '<td class="vorpal-mono">'
 						+ escapeHtml(e.from === undefined ? '—' : e.from) + '</td>'
-					+ '<td style="padding:2px 0; font-family:monospace;">'
+					+ '<td class="vorpal-mono">'
 						+ escapeHtml(e.to === undefined ? '—' : e.to) + '</td>';
 				tbody.appendChild(tr);
 			}
@@ -293,19 +286,18 @@ window.flowFsmar = (function() {
 		if (!findings) return '';
 		var rows = [];
 		(findings.errors || []).forEach(function(m) {
-			rows.push('<div style="color:#a00;"><b>ERROR:</b> ' + escapeHtml(m) + '</div>');
+			rows.push('<div style="color:var(--vorpal-error);"><b>ERROR:</b> ' + escapeHtml(m) + '</div>');
 		});
 		(findings.warnings || []).forEach(function(m) {
-			rows.push('<div style="color:#850;"><b>WARNING:</b> ' + escapeHtml(m) + '</div>');
+			rows.push('<div style="color:var(--vorpal-warn);"><b>WARNING:</b> ' + escapeHtml(m) + '</div>');
 		});
 		(findings.infos || []).forEach(function(m) {
-			rows.push('<div style="color:#446;"><b>INFO:</b> ' + escapeHtml(m) + '</div>');
+			rows.push('<div><b>INFO:</b> ' + escapeHtml(m) + '</div>');
 		});
 		if (rows.length === 0) {
 			return '<div style="margin-bottom:6px;"><b>Validation:</b> no findings.</div>';
 		}
-		return '<div style="margin-bottom:6px; max-height:140px; overflow-y:auto; ' +
-			'border:1px solid #ccc; padding:6px; background:#fffef5; font-size:11px;">' +
+		return '<div class="vorpal-note" style="margin-bottom:6px; max-height:140px; overflow-y:auto;">' +
 			'<b>Validation findings (' + rows.length + '):</b>' + rows.join('') + '</div>';
 	}
 
@@ -433,8 +425,8 @@ window.flowFsmar = (function() {
 		if (result.needsReview) {
 			var warn = document.createElement('div');
 			warn.style.flexShrink = '0';
+			warn.className = 'vorpal-warn';
 			warn.style.margin = '4px 0';
-			warn.style.color = '#a00';
 			warn.innerHTML = '<b>Some conditions could not be converted faithfully</b> and were set '
 				+ 'to never fire (fail closed). Review the items above and fix them before this '
 				+ 'goes live.';
@@ -453,11 +445,12 @@ window.flowFsmar = (function() {
 		div.appendChild(textarea);
 
 		var btnDiv = document.createElement('div');
+		btnDiv.className = 'vorpal-toolbar';
 		btnDiv.style.marginTop = '8px';
-		btnDiv.style.textAlign = 'right';
 		btnDiv.style.flexShrink = '0';
 
 		var loadBtn = document.createElement('button');
+		loadBtn.className = 'vorpal-btn';
 		loadBtn.textContent = 'Load into editor';
 		loadBtn.onclick = function() {
 			wnd.setVisible(false);
@@ -467,8 +460,8 @@ window.flowFsmar = (function() {
 		btnDiv.appendChild(loadBtn);
 
 		var cancelBtn = document.createElement('button');
+		cancelBtn.className = 'vorpal-btn vorpal-btn-secondary';
 		cancelBtn.textContent = 'Cancel';
-		cancelBtn.style.marginLeft = '6px';
 		cancelBtn.onclick = function() {
 			wnd.setVisible(false);
 			wnd.destroy();
@@ -848,18 +841,16 @@ window.flowFsmar = (function() {
 		div.style.height = '100%';
 		div.style.display = 'flex';
 		div.style.flexDirection = 'column';
-		div.style.fontFamily = 'monospace';
 		return div;
 	}
 
 	function dialogTextarea() {
 		var textarea = document.createElement('textarea');
+		textarea.className = 'vorpal-input vorpal-mono';
 		textarea.style.flex = '1 1 auto';
 		textarea.style.width = '100%';
 		textarea.style.boxSizing = 'border-box';
 		textarea.style.minHeight = '120px';
-		textarea.style.fontFamily = 'monospace';
-		textarea.style.fontSize = '11px';
 		textarea.style.resize = 'none';
 		return textarea;
 	}
@@ -922,13 +913,12 @@ window.flowFsmar = (function() {
 		nameRow.style.marginTop = '6px';
 		nameRow.style.flexShrink = '0';
 		var nameLabel = document.createElement('span');
-		nameLabel.textContent = 'Save as: ';
-		nameLabel.style.fontSize = '11px';
+		nameLabel.className = 'vorpal-label';
+		nameLabel.textContent = 'Save as ';
 		nameRow.appendChild(nameLabel);
 		var nameInput = document.createElement('input');
 		nameInput.type = 'text';
-		nameInput.style.fontSize = '11px';
-		nameInput.style.fontFamily = 'var(--vorpal-font-mono, monospace)';
+		nameInput.className = 'vorpal-input vorpal-mono';
 		nameInput.style.width = '260px';
 		nameInput.value = (editor && editor.filename) ? editor.filename : 'demo1.json';
 		nameRow.appendChild(nameInput);
@@ -942,8 +932,8 @@ window.flowFsmar = (function() {
 		div.appendChild(status);
 
 		var btnDiv = document.createElement('div');
+		btnDiv.className = 'vorpal-toolbar';
 		btnDiv.style.marginTop = '8px';
-		btnDiv.style.textAlign = 'right';
 		btnDiv.style.flexShrink = '0';
 
 		// Writes the fsmar.json of the selected target on AdminServer — the same
@@ -951,9 +941,8 @@ window.flowFsmar = (function() {
 		// it live. Overwrites the running config, hence the confirm(), which
 		// names the target so a cluster/server publish can't be a slip.
 		var saveBtn = document.createElement('button');
+		saveBtn.className = 'vorpal-btn';
 		saveBtn.textContent = 'Save';
-		saveBtn.style.cssFloat = 'left';
-		saveBtn.style.marginRight = '6px';
 		saveBtn.title = 'Save this configuration under the name above';
 		saveBtn.onclick = function() {
 			var name = (nameInput.value || '').trim();
@@ -976,13 +965,13 @@ window.flowFsmar = (function() {
 				if (resp.getStatus() >= 200 && resp.getStatus() < 300) {
 					var r = {};
 					try { r = JSON.parse(resp.getText()); } catch (e) { /* show without detail */ }
-					status.style.color = '#060';
+					status.style.color = 'var(--vorpal-success)';
 					status.textContent = 'SAVED ' + (r.name || name)
 						+ (r.bytes ? ' (' + r.bytes + ' bytes)' : '');
 					if (editor) editor.filename = r.name || name;
 					saveBrowser.refresh();
 				} else {
-					status.style.color = '#a00';
+					status.style.color = 'var(--vorpal-error)';
 					status.textContent = 'FAILED: ' + resp.getStatus() + ' ' + resp.getText();
 				}
 			});
@@ -990,8 +979,8 @@ window.flowFsmar = (function() {
 		btnDiv.appendChild(saveBtn);
 
 		var pubBtn = document.createElement('button');
+		pubBtn.className = 'vorpal-btn vorpal-btn-secondary';
 		pubBtn.textContent = 'Save to fsmar';
-		pubBtn.style.cssFloat = 'left';
 		pubBtn.title = 'Publish to the live fsmar configuration';
 		pubBtn.onclick = function() {
 			var info = picker.targetInfo();
@@ -1043,14 +1032,14 @@ window.flowFsmar = (function() {
 				if (resp.getStatus() >= 200 && resp.getStatus() < 300) {
 					var r = {};
 					try { r = JSON.parse(resp.getText()); } catch (e) { /* show without detail */ }
-					status.style.color = '#060';
+					status.style.color = 'var(--vorpal-success)';
 					status.textContent = 'PUBLISHED to ' + (r.displayName || 'fsmar') + ': '
 						+ (r.path || 'fsmar.json')
 						+ (r.bytes ? ' (' + r.bytes + ' bytes)' : '');
 					// Work is now saved to the live config — no unsaved edits.
 					if (window.flowDirty) window.flowDirty.clear();
 				} else {
-					status.style.color = '#a00';
+					status.style.color = 'var(--vorpal-error)';
 					status.textContent = 'FAILED: ' + resp.getStatus() + ' ' + resp.getText();
 				}
 			});
@@ -1060,9 +1049,8 @@ window.flowFsmar = (function() {
 		// The same comparison the publish prompt runs, on demand and in full —
 		// for when you want to read the change rather than be warned about it.
 		var diffBtn = document.createElement('button');
+		diffBtn.className = 'vorpal-btn vorpal-btn-secondary';
 		diffBtn.textContent = 'Compare with live';
-		diffBtn.style.cssFloat = 'left';
-		diffBtn.style.marginLeft = '6px';
 		diffBtn.title = 'Show what publishing would change at the selected target';
 		diffBtn.onclick = function() {
 			diffBtn.disabled = true;
@@ -1071,7 +1059,7 @@ window.flowFsmar = (function() {
 			fetchDiff(picker.target(), textarea.value, function(diff, error) {
 				diffBtn.disabled = false;
 				if (!diff) {
-					status.style.color = '#a00';
+					status.style.color = 'var(--vorpal-error)';
 					status.textContent = 'COMPARE FAILED: ' + error;
 					return;
 				}
@@ -1082,6 +1070,7 @@ window.flowFsmar = (function() {
 		btnDiv.appendChild(diffBtn);
 
 		var dlBtn = document.createElement('button');
+		dlBtn.className = 'vorpal-btn vorpal-btn-secondary';
 		dlBtn.textContent = 'Download FSMAR.json';
 		dlBtn.onclick = function() {
 			var blob = new Blob([textarea.value], { type: 'application/json' });
@@ -1095,8 +1084,8 @@ window.flowFsmar = (function() {
 		btnDiv.appendChild(dlBtn);
 
 		var copyBtn = document.createElement('button');
+		copyBtn.className = 'vorpal-btn vorpal-btn-secondary';
 		copyBtn.textContent = 'Copy';
-		copyBtn.style.marginLeft = '6px';
 		copyBtn.onclick = function() {
 			textarea.select();
 			document.execCommand('copy');
@@ -1227,7 +1216,8 @@ window.flowFsmar = (function() {
 		var graph = editor.graph;
 		var pre = document.createElement('pre');
 		pre.style.cssText = 'margin:0; padding:10px; height:100%; box-sizing:border-box;'
-			+ ' overflow:auto; font-size:11px; font-family:monospace; background:#fff;'
+			+ ' overflow:auto; font-size:11px; font-family:var(--vorpal-font-mono);'
+			+ ' background:var(--vorpal-surface); color:var(--vorpal-ink-900);'
 			+ ' position:relative;';
 
 		var w = Math.min(460, Math.max(320, Math.round(window.innerWidth * 0.3)));
@@ -1256,8 +1246,8 @@ window.flowFsmar = (function() {
 				if (spans[i].getAttribute('data-path') === selectedPath) {
 					highlighted = spans[i];
 					// Heavy outline + weight, not color alone.
-					highlighted.style.background = '#ffe28a';
-					highlighted.style.outline = '2px solid #444';
+					highlighted.style.background = 'var(--vorpal-purple-100)';
+					highlighted.style.outline = '2px solid var(--vorpal-ink-900)';
 					highlighted.style.fontWeight = 'bold';
 					if (scroll) {
 						pre.scrollTop = Math.max(0, highlighted.offsetTop - 60);
@@ -1346,10 +1336,10 @@ window.flowFsmar = (function() {
 		el.style.flex = '1 1 auto';
 		el.style.minHeight = '140px';
 		el.style.overflowY = 'auto';
-		el.style.border = '1px solid var(--vorpal-slate-300, #ccc)';
-		el.style.borderRadius = 'var(--vorpal-radius-sm, 4px)';
-		el.style.background = 'var(--vorpal-surface, #fff)';
-		el.style.fontSize = '11px';
+		el.style.border = '1px solid var(--vorpal-slate-300)';
+		el.style.borderRadius = '8px';
+		el.style.background = 'var(--vorpal-surface)';
+		el.style.fontSize = '12px';
 
 		var rows = [];
 		var chosen = null;
@@ -1359,8 +1349,8 @@ window.flowFsmar = (function() {
 			for (var i = 0; i < rows.length; i++) {
 				var on = (rows[i].data === row);
 				rows[i].el.style.borderLeft = on
-					? '4px solid var(--vorpal-purple, #602671)' : '4px solid transparent';
-				rows[i].el.style.background = on ? 'var(--vorpal-purple-100, #ece1f0)' : 'transparent';
+					? '4px solid var(--vorpal-purple)' : '4px solid transparent';
+				rows[i].el.style.background = on ? 'var(--vorpal-purple-soft)' : 'transparent';
 				rows[i].el.style.fontWeight = on ? '700' : '400';
 				rows[i].marker.innerHTML = on ? '&#9656;' : '&#160;';
 			}
@@ -1369,13 +1359,10 @@ window.flowFsmar = (function() {
 
 		function heading(text) {
 			var h = document.createElement('div');
+			h.className = 'vorpal-label';
 			h.textContent = text;
 			h.style.padding = '6px 8px 3px';
-			h.style.fontSize = '10px';
-			h.style.letterSpacing = '0.08em';
-			h.style.textTransform = 'uppercase';
-			h.style.color = 'var(--vorpal-slate-600, #5a6677)';
-			h.style.borderTop = rows.length ? '1px solid var(--vorpal-divider, #dde2ec)' : 'none';
+			h.style.borderTop = rows.length ? '1px solid var(--vorpal-divider)' : 'none';
 			el.appendChild(h);
 		}
 
@@ -1395,13 +1382,13 @@ window.flowFsmar = (function() {
 
 			var label = document.createElement('span');
 			label.textContent = name;
-			label.style.fontFamily = 'var(--vorpal-font-mono, monospace)';
+			label.className = 'vorpal-mono';
 			label.style.flex = '1 1 auto';
 			row.appendChild(label);
 
 			var detail = document.createElement('span');
 			detail.textContent = meta || '';
-			detail.style.color = 'var(--vorpal-slate-600, #5a6677)';
+			detail.style.color = 'var(--vorpal-slate-600)';
 			detail.style.flexShrink = '0';
 			row.appendChild(detail);
 
@@ -1512,13 +1499,13 @@ window.flowFsmar = (function() {
 		div.appendChild(browser.el);
 
 		var btnDiv = document.createElement('div');
+		btnDiv.className = 'vorpal-toolbar';
 		btnDiv.style.marginTop = '8px';
-		btnDiv.style.textAlign = 'right';
 		btnDiv.style.flexShrink = '0';
 
 		var fileBtn = document.createElement('button');
+		fileBtn.className = 'vorpal-btn vorpal-btn-secondary';
 		fileBtn.textContent = 'Choose file\u2026';
-		fileBtn.style.cssFloat = 'left';
 		fileBtn.title = 'Open a file from this computer (FSMAR 2 configs and legacy XML diagrams also open)';
 		fileBtn.onclick = function() {
 			wnd.setVisible(false);
@@ -1528,9 +1515,8 @@ window.flowFsmar = (function() {
 		btnDiv.appendChild(fileBtn);
 
 		var pasteBtn = document.createElement('button');
+		pasteBtn.className = 'vorpal-btn vorpal-btn-secondary';
 		pasteBtn.textContent = 'Paste JSON\u2026';
-		pasteBtn.style.cssFloat = 'left';
-		pasteBtn.style.marginLeft = '6px';
 		pasteBtn.title = 'Paste a configuration instead of opening a file';
 		pasteBtn.onclick = function() {
 			wnd.setVisible(false);
@@ -1540,9 +1526,8 @@ window.flowFsmar = (function() {
 		btnDiv.appendChild(pasteBtn);
 
 		var delBtn = document.createElement('button');
+		delBtn.className = 'vorpal-btn vorpal-btn-danger';
 		delBtn.textContent = 'Delete';
-		delBtn.style.cssFloat = 'left';
-		delBtn.style.marginLeft = '6px';
 		delBtn.title = 'Delete the selected saved flow. Live configurations are not deleted here.';
 		delBtn.onclick = function() {
 			var row = browser.selected();
@@ -1564,6 +1549,7 @@ window.flowFsmar = (function() {
 		btnDiv.appendChild(delBtn);
 
 		var openBtn = document.createElement('button');
+		openBtn.className = 'vorpal-btn';
 		openBtn.textContent = 'Open';
 		openBtn.onclick = function() {
 			openRow(browser.selected());
@@ -1571,8 +1557,8 @@ window.flowFsmar = (function() {
 		btnDiv.appendChild(openBtn);
 
 		var cancelBtn = document.createElement('button');
+		cancelBtn.className = 'vorpal-btn vorpal-btn-secondary';
 		cancelBtn.textContent = 'Cancel';
-		cancelBtn.style.marginLeft = '6px';
 		cancelBtn.onclick = function() {
 			wnd.setVisible(false);
 			wnd.destroy();
@@ -1607,16 +1593,16 @@ window.flowFsmar = (function() {
 		div.appendChild(picker.row);
 
 		var btnDiv = document.createElement('div');
+		btnDiv.className = 'vorpal-toolbar';
 		btnDiv.style.marginTop = '8px';
-		btnDiv.style.textAlign = 'right';
 		btnDiv.style.flexShrink = '0';
 
 		// Open a local file (FSMAR 3 JSON, a legacy FSMAR 2 config — converted on
 		// import — or a legacy mxGraph XML diagram). Loads straight into the editor
 		// and closes the dialog — the textarea path is for paste / live / sample.
 		var fileBtn = document.createElement('button');
+		fileBtn.className = 'vorpal-btn vorpal-btn-secondary';
 		fileBtn.textContent = 'Choose file…';
-		fileBtn.style.cssFloat = 'left';
 		fileBtn.title = 'Open an FSMAR 3 JSON file (FSMAR 2 configs and legacy XML diagrams also open)';
 		fileBtn.onclick = function() {
 			wnd.setVisible(false);
@@ -1629,8 +1615,8 @@ window.flowFsmar = (function() {
 		// textarea — the everyday loop is Load live fsmar → edit → Save to
 		// fsmar, no files involved.
 		var liveBtn = document.createElement('button');
+		liveBtn.className = 'vorpal-btn vorpal-btn-secondary';
 		liveBtn.textContent = 'Load live fsmar';
-		liveBtn.style.cssFloat = 'left';
 		liveBtn.title = 'Fill the textarea with the live fsmar configuration';
 		liveBtn.onclick = function() {
 			flowRequest('fsmarPublish?target=' + encodeURIComponent(picker.target()),
@@ -1648,9 +1634,8 @@ window.flowFsmar = (function() {
 		// AppRouterConfigurationSample) — single source of truth; no JS copy
 		// to drift from it.
 		var exampleBtn = document.createElement('button');
+		exampleBtn.className = 'vorpal-btn vorpal-btn-secondary';
 		exampleBtn.textContent = 'Load sample';
-		exampleBtn.style.cssFloat = 'left';
-		exampleBtn.style.marginLeft = '6px';
 		exampleBtn.title = 'Fill the textarea with the canonical fsmar sample (_samples/fsmar.json.SAMPLE)';
 		exampleBtn.onclick = function() {
 			flowRequest('fsmarPublish?sample=1', null, 'GET', function(resp) {
@@ -1664,6 +1649,7 @@ window.flowFsmar = (function() {
 		btnDiv.appendChild(exampleBtn);
 
 		var importBtn = document.createElement('button');
+		importBtn.className = 'vorpal-btn';
 		importBtn.textContent = 'Import';
 		importBtn.onclick = function() {
 			wnd.setVisible(false);
@@ -1673,8 +1659,8 @@ window.flowFsmar = (function() {
 		btnDiv.appendChild(importBtn);
 
 		var cancelBtn = document.createElement('button');
+		cancelBtn.className = 'vorpal-btn vorpal-btn-secondary';
 		cancelBtn.textContent = 'Cancel';
-		cancelBtn.style.marginLeft = '6px';
 		cancelBtn.onclick = function() {
 			wnd.setVisible(false);
 			wnd.destroy();

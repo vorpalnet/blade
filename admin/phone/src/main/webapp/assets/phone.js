@@ -24,7 +24,6 @@ const els = {
   layout: $('layout'), stage: $('stage'), stageLabel: $('stage-label'),
   remoteVideo: $('remote-video'), localVideo: $('local-video'),
   recent: $('recent'), recentList: $('recent-list'),
-  acct: $('acct'), acctBadge: $('acct-badge'), acctName: $('acct-name'),
   gateway: $('gateway'), aor: $('aor'), stun: $('stun'), authState: $('auth-state'), authShort: $('auth-short'),
   factPath: $('fact-path'), factIce: $('fact-ice'), factPair: $('fact-pair'), factCodec: $('fact-codec'),
   factVideo: $('fact-video'), details: $('details'),
@@ -110,23 +109,12 @@ async function mintToken(aor) {
   return response.json();
 }
 
-function showAccount(user) {
-  if (!user) return;
-  const initials = user.split(/[\s._@-]+/).filter(Boolean).slice(0, 2)
-    .map((w) => w.charAt(0).toUpperCase()).join('');
-  els.acctBadge.textContent = initials || '?';
-  els.acctName.textContent = user;
-  els.acct.title = `Signed in as ${user}`;
-  els.acct.hidden = false;
-}
-
 /*
  * Fill the form from the server's answer, then register. The address stays editable when the
  * deployment allows a chosen one and goes read-only when it does not, so the field itself tells
  * you which deployment you are on.
  */
 loadSession().then((s) => {
-  showAccount(s.user);
   els.aor.value = s.aor;
   if (s.stunServer) els.stun.value = s.stunServer;
 
@@ -412,6 +400,7 @@ function setState(state) {
 
   // One button: Call while ready, Hang up through the whole call.
   els.btn.call.dataset.mode = live ? 'hangup' : 'call';
+  els.btn.call.classList.toggle('vorpal-btn-danger', live);
   els.btn.callLabel.textContent = live ? 'Hang up' : 'Call';
   els.btn.call.disabled = !(live || state === 'registered');
   els.btn.mute.disabled = state !== 'established';

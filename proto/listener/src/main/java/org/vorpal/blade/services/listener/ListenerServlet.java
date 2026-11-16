@@ -15,8 +15,8 @@ import javax.servlet.sip.annotation.SipApplication;
 import javax.servlet.sip.annotation.SipListener;
 import javax.servlet.sip.annotation.SipServlet;
 
-import org.vorpal.blade.framework.v2.b2bua.B2buaListener;
-import org.vorpal.blade.framework.v2.b2bua.InitialInvite;
+import org.vorpal.blade.framework.v3.b2bua.B2buaListener;
+import org.vorpal.blade.framework.v3.b2bua.InitialInvite;
 import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.framework.v3.B2buaServlet;
 import org.vorpal.blade.framework.v3.media.CallAnalyzer;

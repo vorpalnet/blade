@@ -60,7 +60,6 @@ import javax.servlet.sip.URI;
 import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.v3.net.CallOrigin;
 import org.vorpal.blade.framework.v3.net.Legs;
-import org.vorpal.blade.framework.v2.callflow.Expectation;
 import org.vorpal.blade.framework.v2.config.KeepAliveParameters;
 import org.vorpal.blade.framework.v2.config.KeepAliveParameters.KeepAlive;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
@@ -1807,7 +1806,7 @@ public abstract class Callflow implements Serializable {
 	}
 
 	/// Set on a callee's SipSession once a CANCEL has gone out for its INVITE, by
-	/// [org.vorpal.blade.framework.v2.b2bua.Terminate] or by [#endIfAbandoned], so
+	/// [org.vorpal.blade.framework.v3.b2bua.Terminate] or by [#endIfAbandoned], so
 	/// that neither sends a second one.
 	public static final String ATTR_CANCEL_SENT = "cancel_sent";
 
@@ -1900,7 +1899,7 @@ public abstract class Callflow implements Serializable {
 	 * one it is — it hands over whatever arrived and this matches it.
 	 * <p>
 	 * When something must modify the outbound request before it is sent — a
-	 * {@link org.vorpal.blade.framework.v2.b2bua.B2buaListener} hook, typically —
+	 * {@link org.vorpal.blade.framework.v3.b2bua.B2buaListener} hook, typically —
 	 * build it with
 	 * {@link #createAcknowledgement(SipServletResponse, SipServletRequest)
 	 * createAcknowledgement} and send it yourself instead.
@@ -2342,7 +2341,7 @@ public abstract class Callflow implements Serializable {
 	 * returned, not sent.
 	 * <p>
 	 * Reach for this only when something has to touch the request before it goes
-	 * on the wire; a {@link org.vorpal.blade.framework.v2.b2bua.B2buaListener}
+	 * on the wire; a {@link org.vorpal.blade.framework.v3.b2bua.B2buaListener}
 	 * hook is the usual reason, since those are handed a modifiable outbound
 	 * request. Otherwise call
 	 * {@link #sendAcknowledgement(SipServletRequest, SipServletResponse)

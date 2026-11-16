@@ -483,6 +483,9 @@ SELECT
    CAST(JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."status"')) AS DECIMAL(12,0)) AS status_code,
    JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."peer"')) AS peer,
    JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."dropped"')) AS dropped,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."from"')) AS call_from,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."to"')) AS call_to,
+   JSON_UNQUOTE(JSON_EXTRACT(e.payload, '$."asserted"')) AS asserted,
    e.payload AS payload
 FROM events e
 JOIN applications a ON a.id = e.application_id

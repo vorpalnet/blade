@@ -33,7 +33,9 @@ Arming only catches calls you knew to watch. The framework's flight recorder kee
 messages in memory and writes out the ones that went wrong, with a verdict: which server, or which
 BLADE application, let the call down. **Recorded Calls** shows them, read from the analytics
 database, on the same timeline and sequence diagram. A recorded step has no SIP text and no
-source line: the time, direction, method or status, and the far end's address.
+source line: the time, direction, method or status, and the far end's address. The call keeps its
+From, To and P-Asserted-Identity once, from its first INVITE. The list is searched on the server
+by time, finding, fault, application, far end, number or Vorpal-ID, 50 records a page.
 
 `traces.html?call=<Vorpal-ID>` opens one recorded call; `traces.html?recorded=1&since=<epoch ms>`
 the calls recorded since then. The dashboard links its dropped calls and its Failed and Dropped
@@ -42,14 +44,24 @@ recorded call's address; `traces.html?arm=1&attribute=&pattern=&label=` fills on
 Either way you check the rule and press Arm: nothing is armed for you. What Trace opens is
 declared in `opens.json`, which the dashboard reads.
 
+## Sign-in
+
+The WebLogic login, or the identity domain when `~/.blade/<env>/oidc.properties` exists:
+`deploy.sh` adds it to the WAR, as for the dashboard. Anyone signed in reads what the
+grants and policy below allow. Arming, clearing, saving and the Source tab need a WebLogic
+admin role (Admin, Operator, Deployer or Monitor), checked on the server.
+
 ## Configuration
 
-`./config/custom/vorpal/callflow.json`:
+`./config/custom/vorpal/blade-callflow.json`:
 
 | Setting | Description |
 | --- | --- |
 | `sourceServer` | Which node serves source reads (e.g. an engine carrying no call traffic). Unset = first server. Re-read live on every request. |
 | `analyticsDataSource` | JNDI name of the analytics datasource holding recorded calls. Default `jdbc/BladeAnalytics`; it must be targeted at the AdminServer. |
+| `savedTracesDirectory` | Where saved calls are kept on the AdminServer's host. Default `~/.blade/traces`. |
+| `grants` | Who sees which calls. The dashboard's grant shape, per group; `platform` does not apply. Applied on the server to live, recorded and saved calls alike. None configured: the WebLogic admin roles see every call. |
+| `access` | Who may read what was said in those calls (message text, a recorded call's parties, rule patterns): rules granting `phi:transcript`, the policy shape the Recordings app reads. Starts out granting it to the four WebLogic administrator groups, for WebLogic sign-ins only (`signIn: weblogic`), since an identity domain has an `Administrators` group of its own. |
 
 ## Related modules
 

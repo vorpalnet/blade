@@ -1,6 +1,14 @@
 /// SIP proxy framework with multi-tier routing, parallel/serial forking,
 /// and automatic failover.
 ///
+/// **Deprecated.** v3 has no proxy servlet: write a v3
+/// [org.vorpal.blade.framework.v3.Callflow] and set `session.passthru`. Its
+/// `sendRequest`, `sendRequestsInSerial` and `sendRequestsInParallel` proxy the
+/// caller's INVITE without Record-Route, a tier at a time, and the same
+/// callflow runs as a B2BUA when passthru is off. The proxy-balancer service is
+/// the worked example. These classes stay for applications that still extend
+/// them.
+///
 ///
 /// ## What is a SIP Proxy?
 ///

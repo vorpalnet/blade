@@ -727,6 +727,11 @@ public final class BladeEventCatalog {
 				"Steps left out of a long call's middle; the first 16 and the last 48 are kept."));
 		fields.add(field("steps", EventFieldType.ARRAY, true,
 				"Each message: {t (epoch milliseconds), dir (in or out), leg, method, status (a response's), cseq, peer}."));
+		fields.add(field("from", EventFieldType.STRING, false, "The initial INVITE's From header."));
+		fields.add(field("to", EventFieldType.STRING, false, "The initial INVITE's To header."));
+		fields.add(field("asserted", EventFieldType.STRING, false,
+				"The initial INVITE's P-Asserted-Identity header, when it had one."));
+		declaration.setSensitiveFields(Arrays.asList("from", "to", "asserted"));
 		declaration.setFields(fields);
 		return declaration;
 	}

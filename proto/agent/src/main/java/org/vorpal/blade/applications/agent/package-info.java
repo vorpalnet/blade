@@ -67,9 +67,11 @@
 ///
 /// ## Deliberately deferred
 ///
-/// v1 broadcasts every pop to every open console: for a single agent that is
-/// their screen, for a supervisor it is the floor view. Routing a pop to the one
-/// agent an ACD assigned the call to, and diverting to voicemail as a live
-/// in-path action rather than a next-call block, are later steps (see the
-/// agent-app questions log).
+/// A pop that names no connected agent goes to every open console: for a single
+/// agent that is their screen, for a supervisor it is the floor view. The
+/// settings' `grants` narrow that view by the tenant and department each call
+/// carries, as the dashboard's and Trace's grants do ([AgentConsoleRegistry#sees]);
+/// a call popped to an agent by name always reaches that agent. Diverting to
+/// voicemail as a live in-path action rather than a next-call block is a later
+/// step (see the agent-app questions log).
 package org.vorpal.blade.applications.agent;

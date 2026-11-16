@@ -11,7 +11,7 @@ import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.framework.v2.config.AttributeSelector;
 import org.vorpal.blade.framework.v2.config.AttributeSelector.DialogType;
 import org.vorpal.blade.framework.v2.config.AttributesKey;

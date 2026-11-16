@@ -33,18 +33,18 @@
 
 	function renderNodes(cluster) {
 		if (!cluster.length) {
-			elNodes.innerHTML = '<p class="tc-empty">No tester nodes found. Deploy test-uac / test-uas to the ' +
+			elNodes.innerHTML = '<p class="tc-empty vorpal-empty">No tester nodes found. Deploy test-uac / test-uas to the ' +
 				'engine tier; each node registers a TesterControl MBean at startup.</p>';
 			return;
 		}
 		var html = cluster.map(function (node) {
 			var s = node.status || {};
 			var state = s.state || "UNKNOWN";
-			return '<div class="tc-node">' +
-				'<div class="tc-node-head">' +
-				'<span><span class="tc-node-title">' + esc(node.app) + '</span> ' +
-				'<span class="tc-node-server">@ ' + esc(node.server) + '</span></span>' +
-				'<span class="tc-state tc-state-' + esc(state) + '">' + esc(state) + '</span>' +
+			return '<div class="tc-node vorpal-panel">' +
+				'<div class="tc-node-head vorpal-panel-head">' +
+				'<span><span class="tc-node-title vorpal-panel-title">' + esc(node.app) + '</span> ' +
+				'<span class="tc-node-server vorpal-panel-sub">@ ' + esc(node.server) + '</span></span>' +
+				'<span class="tc-state tc-state-' + esc(state) + ' vorpal-badge' + stateBadge(state) + '">' + esc(state) + '</span>' +
 				'</div>' +
 				'<dl class="tc-counters">' +
 				'<dt>active</dt><dd>' + (s.activeCalls || 0) + '</dd>' +
@@ -57,6 +57,15 @@
 				'</div>';
 		}).join("");
 		elNodes.innerHTML = html;
+	}
+
+	// The state's word is the badge; its outline only repeats it.
+	function stateBadge(state) {
+		switch (state) {
+			case "RUNNING": return " vorpal-badge-ok";
+			case "STOPPING": return " vorpal-badge-warn";
+			default: return "";
+		}
 	}
 
 	function formatElapsed(ms) {
@@ -100,15 +109,15 @@
 	function renderScenarios(cluster) {
 		var rows = aggregate(cluster);
 		if (!rows.length) {
-			elScenarios.innerHTML = '<p class="tc-empty">No metrics yet — start a run, or place test calls ' +
+			elScenarios.innerHTML = '<p class="tc-empty vorpal-empty">No metrics yet — start a run, or place test calls ' +
 				'through a tester node.</p>';
 			return;
 		}
-		var html = '<table class="tc-table"><thead><tr>' +
-			'<th>scenario</th><th>started</th><th>completed</th><th>failed</th>' +
-			'<th>answered</th><th>forwarded</th><th>statuses</th>' +
-			'<th>p50</th><th>p90</th><th>p99</th><th>max</th>' +
-			'<th>expect ✗</th><th>assert ✓</th><th>assert ✗</th><th>assert ⚠</th>' +
+		var html = '<table class="tc-table vorpal-table"><thead><tr>' +
+			'<th>scenario</th><th class="num">started</th><th class="num">completed</th><th class="num">failed</th>' +
+			'<th class="num">answered</th><th class="num">forwarded</th><th>statuses</th>' +
+			'<th class="num">p50</th><th class="num">p90</th><th class="num">p99</th><th class="num">max</th>' +
+			'<th class="num">expect ✗</th><th class="num">assert ✓</th><th class="num">assert ✗</th><th class="num">assert ⚠</th>' +
 			'</tr></thead><tbody>';
 		rows.forEach(function (r) {
 			var statuses = Object.keys(r.statusCounts).sort().map(function (code) {
@@ -116,20 +125,20 @@
 			}).join(", ") || "—";
 			html += "<tr>" +
 				"<td>" + esc(r.scenario) + "</td>" +
-				"<td>" + r.started + "</td>" +
-				"<td>" + r.completed + "</td>" +
-				"<td>" + r.failed + "</td>" +
-				"<td>" + r.answered + "</td>" +
-				"<td>" + r.forwarded + "</td>" +
+				"<td class=\"num\">" + r.started + "</td>" +
+				"<td class=\"num\">" + r.completed + "</td>" +
+				"<td class=\"num\">" + r.failed + "</td>" +
+				"<td class=\"num\">" + r.answered + "</td>" +
+				"<td class=\"num\">" + r.forwarded + "</td>" +
 				"<td>" + esc(statuses) + "</td>" +
-				"<td>" + r.latencyP50Ms + "ms</td>" +
-				"<td>" + r.latencyP90Ms + "ms</td>" +
-				"<td>" + r.latencyP99Ms + "ms</td>" +
-				"<td>" + r.latencyMaxMs + "ms</td>" +
-				"<td>" + r.expectMismatched + "</td>" +
-				"<td>" + r.assertionsPassed + "</td>" +
-				"<td>" + r.assertionsFailed + "</td>" +
-				"<td>" + r.assertionsWarned + "</td>" +
+				"<td class=\"num\">" + r.latencyP50Ms + "ms</td>" +
+				"<td class=\"num\">" + r.latencyP90Ms + "ms</td>" +
+				"<td class=\"num\">" + r.latencyP99Ms + "ms</td>" +
+				"<td class=\"num\">" + r.latencyMaxMs + "ms</td>" +
+				"<td class=\"num\">" + r.expectMismatched + "</td>" +
+				"<td class=\"num\">" + r.assertionsPassed + "</td>" +
+				"<td class=\"num\">" + r.assertionsFailed + "</td>" +
+				"<td class=\"num\">" + r.assertionsWarned + "</td>" +
 				"</tr>";
 		});
 		html += "</tbody></table>";
@@ -163,7 +172,7 @@
 				renderScenarios(cluster);
 			})
 			.catch(function (e) {
-				elNodes.innerHTML = '<p class="tc-empty">Cluster query failed: ' + esc(e.message) + "</p>";
+				elNodes.innerHTML = '<p class="tc-empty vorpal-error">Cluster query failed: ' + esc(e.message) + "</p>";
 			});
 	}
 

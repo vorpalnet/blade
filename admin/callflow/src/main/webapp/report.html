@@ -10,6 +10,19 @@
 		   no bootstrap, no brand.css): the report must render identically on
 		   screen, on paper, and in print-to-PDF. Same skin as the Tuning
 		   report so the printed BLADE documents read as one family. */
+		/* The brand tokens these rules name, defined here because brand.css is
+		   not loaded. Without them every var() is undefined: a stroke falls
+		   back to none and the ladder loses its arrows. One ink-on-white set,
+		   no dark theme, since this page is for paper. */
+		:root {
+			--vorpal-ink-900: #1c1c22;
+			--vorpal-ink-700: #555;
+			--vorpal-slate-200: #e9e9ee;
+			--vorpal-slate-300: #d5d5da;
+			--vorpal-slate-600: #777;
+			--vorpal-surface: #fff;
+			--vorpal-surface-alt: #f2f2f5;
+		}
 		* { box-sizing: border-box; }
 		body { margin: 0; background: var(--vorpal-slate-200); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: var(--vorpal-ink-900); }
 		.page { max-width: 900px; margin: 0 auto; background: var(--vorpal-surface); padding: 40px 48px 56px; min-height: 100vh; }
@@ -58,6 +71,10 @@
 		.step-head strong { font-size: 13px; }
 		.step-src { padding: 4px 10px 0; color: var(--vorpal-ink-700); font-size: 11px; }
 		.step pre { margin: 4px 0 0; padding: 6px 10px 10px; font-size: 10.5px; line-height: 1.35; white-space: pre-wrap; word-break: break-all; }
+		/* messageHtml: one block per line, a long line wraps under its own value. */
+		.tr-ml { display: block; padding-left: 4ch; text-indent: -4ch; }
+		.tr-hn { font-weight: 700; }
+		.tr-ml-part { font-weight: 700; }
 
 		.rpt-foot { margin-top: 36px; border-top: 1px solid var(--vorpal-slate-300); padding-top: 8px; font-size: 11.5px; color: var(--vorpal-ink-700); display: flex; justify-content: space-between; }
 
@@ -189,7 +206,7 @@
 			h += '<h2>Message Detail</h2>';
 			steps.forEach(function (s, i) {
 				var dirWord = s.direction === 'in' ? 'received by' : 'sent by';
-				var src = isHttp(s) ? (s.methodName || '')
+				var src = isHttp(s) ? httpSource(s)
 					: s.direction === 'in'
 					? (isHandlerMethod(s.methodName) ? s.className + '.' + s.methodName + ' (handler)' : 'received by ' + s.className)
 					: s.className + '.' + s.methodName + (s.line > 0 ? ':' + s.line : '');
@@ -199,7 +216,7 @@
 					+ ' &middot; ' + he(hhmmss(s.epochMillis))
 					+ (s.server ? ' &middot; recorded on ' + he(s.server) : '') + '</div>'
 					+ (src ? '<div class="step-src mono">' + he(src) + '</div>' : '')
-					+ '<pre class="mono">' + he(s.message || '(no raw message was recorded for this step)') + '</pre>'
+					+ '<pre class="mono">' + (s.message ? messageHtml(s.message) : '(no raw message was recorded for this step)') + '</pre>'
 					+ '</div>';
 			});
 

@@ -18,7 +18,7 @@ import org.vorpal.blade.framework.sip.DetachedSipFactory;
 import org.vorpal.blade.framework.sip.DetachedSipSession;
 import org.vorpal.blade.framework.sip.DetachedSipSessionsUtil;
 import org.vorpal.blade.framework.sip.DetachedSipURI;
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.CapturingLogger;
 import org.vorpal.blade.framework.v3.configuration.MemoryContext;

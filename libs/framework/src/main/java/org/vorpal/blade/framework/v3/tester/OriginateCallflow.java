@@ -8,7 +8,7 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 
-import org.vorpal.blade.framework.v2.callflow.ClientCallflow;
+import org.vorpal.blade.framework.v3.ClientCallflow;
 import org.vorpal.blade.framework.v3.configuration.Context;
 import org.vorpal.blade.framework.v3.crud.Rule;
 import org.vorpal.blade.framework.v3.crud.RuleSet;

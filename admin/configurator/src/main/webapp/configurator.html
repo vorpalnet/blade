@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Editor · BLADE Configurator</title>
+    <title>Configurator · BLADE</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
 	<script src="/blade/portal/brand/theme.js"></script>
+	<script src="/blade/portal/brand/shell.js" data-context="/blade/configurator" defer></script>
     <link rel="stylesheet" href="configurator.css">
     <link rel="stylesheet" href="/blade/portal/lib/blade-chat.css">
     <script src="/blade/portal/lib/blade-chat.js"></script>
@@ -54,30 +55,30 @@
         </div>
     </header>
 
-    <div class="container">
+    <div class="container vorpal-panel" data-shell-main>
 
-        <h1 id="schema-title">Configurator</h1>
+        <h1 id="schema-title" class="vorpal-panel-title">Configurator</h1>
 
-        <div class="schema-selector-container">
-            <label for="target-directory-select">Target:</label>
-            <select id="target-directory-select" onchange="onTargetDirectoryChange(this.value)">
+        <div class="schema-selector-container vorpal-toolbar">
+            <label for="target-directory-select" class="vorpal-label">Target:</label>
+            <select id="target-directory-select" class="vorpal-input" onchange="onTargetDirectoryChange(this.value)">
                 <option value="">-- Select Target --</option>
             </select>
 
-            <label for="schema-select" style="margin-left: 20px;">Schema:</label>
-            <select id="schema-select" onchange="loadSchema(this.value)">
+            <label for="schema-select" class="vorpal-label" style="margin-left: 20px;">Schema:</label>
+            <select id="schema-select" class="vorpal-input" onchange="loadSchema(this.value)">
                 <option value="">-- Select a Schema --</option>
             </select>
-            <span id="websocket-status" class="sync-status warning" style="display: inline-flex;">WebSocket: Connecting...</span>
-            <span id="schema-load-status" class="sync-status" role="status" aria-live="polite" style="display: none;"></span>
+            <span id="websocket-status" class="sync-status vorpal-badge vorpal-badge-warn warning" style="display: inline-flex;">WebSocket: Connecting...</span>
+            <span id="schema-load-status" class="sync-status vorpal-badge" role="status" aria-live="polite" style="display: none;"></span>
             <!-- Save, Publish, refusals: here, in view on every tab (it once sat in
                  the JSON tab, so on the Form tab a conflict was never seen). -->
-            <span id="sync-status" class="sync-status" role="status" aria-live="polite" style="display: none;"></span>
+            <span id="sync-status" class="sync-status vorpal-badge" role="status" aria-live="polite" style="display: none;"></span>
             <!-- Feature: Dirty Indicator -->
-            <span id="dirty-indicator" class="dirty-indicator" style="display: none;">● Unsaved Changes</span>
-            <span id="view-mode-indicator" class="view-mode-indicator" style="display: none;">◉ View Mode: read-only</span>
+            <span id="dirty-indicator" class="dirty-indicator vorpal-badge vorpal-badge-warn" style="display: none;">● Unsaved Changes</span>
+            <span id="view-mode-indicator" class="view-mode-indicator vorpal-badge" style="display: none;">◉ View Mode: read-only</span>
             <!-- Saved to disk but not yet pushed live. Only appears when auto-publish is off. -->
-            <span id="unpublished-indicator" class="unpublished-indicator" style="display: none;"
+            <span id="unpublished-indicator" class="unpublished-indicator vorpal-badge vorpal-badge-brand" style="display: none;"
                   title="These changes are saved to disk but not live yet. Click Publish to push them to running services.">▲ Not Published</span>
             <!-- Auto-publish toggle. Global Configurator behavior, not tied to the
                  currently-loaded app or to one editor, so it lives in the bar every
@@ -91,7 +92,7 @@
             </label>
         </div>
 
-        <div class="tabs">
+        <div class="tabs vorpal-tabs">
             <button class="tab active" data-tab="form">Form Editor</button>
             <button class="tab" data-tab="json">JSON Editor</button>
             <button class="tab" data-tab="schema">JSON Schema</button>
@@ -99,18 +100,18 @@
         </div>
         
         <div id="form-tab" class="tab-content active no-schema">
-            <div class="form-toolbar">
-                <button type="button" class="btn btn-primary" onclick="saveData()">Save</button>
-                <button type="button" class="btn btn-secondary" onclick="loadConfig()">Load</button>
-                <button type="button" class="btn btn-secondary" onclick="loadSample()">Load Sample</button>
-                <button type="button" class="btn btn-publish" onclick="publishConfig()">Publish</button>
+            <div class="form-toolbar vorpal-toolbar">
+                <button type="button" class="vorpal-btn vorpal-btn-sm" onclick="saveData()">Save</button>
+                <button type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="loadConfig()">Load</button>
+                <button type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="loadSample()">Load Sample</button>
+                <button type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm btn-publish" onclick="publishConfig()">Publish</button>
 
-                <input id="form-filter" class="form-filter-input" type="search"
+                <input id="form-filter" class="form-filter-input vorpal-input" type="search"
                        placeholder="Filter fields..." aria-label="Filter form fields"
                        oninput="filterForm(this.value)">
 
                 <div class="toolbar-menu">
-                    <button type="button" class="btn btn-secondary toolbar-menu-trigger">File <span class="toolbar-chev">▾</span></button>
+                    <button type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm toolbar-menu-trigger">File <span class="toolbar-chev">▾</span></button>
                     <div class="toolbar-menu-items" role="menu">
                         <button type="button" onclick="showTemplateLibrary()">New from Template…</button>
                         <hr>
@@ -122,7 +123,7 @@
                 </div>
 
                 <div class="toolbar-menu">
-                    <button type="button" class="btn btn-secondary toolbar-menu-trigger">History <span class="toolbar-chev">▾</span></button>
+                    <button type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm toolbar-menu-trigger">History <span class="toolbar-chev">▾</span></button>
                     <div class="toolbar-menu-items" role="menu">
                         <button type="button" onclick="showVersionHistory()">Version History</button>
                         <button type="button" onclick="showDiff()">Diff…</button>
@@ -132,7 +133,7 @@
                 </div>
 
                 <div class="toolbar-menu">
-                    <button type="button" class="btn btn-secondary toolbar-menu-trigger">View <span class="toolbar-chev">▾</span></button>
+                    <button type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm toolbar-menu-trigger">View <span class="toolbar-chev">▾</span></button>
                     <div class="toolbar-menu-items" role="menu">
                         <button type="button" onclick="expandAll()">Expand All</button>
                         <button type="button" onclick="collapseAll()">Collapse All</button>
@@ -151,9 +152,9 @@
             <!-- Welcome / empty state — shown until the first schema is loaded.
                  finalizeSchemaLoad() hides it and removes .no-schema from #form-tab. -->
             <div id="welcome-panel" class="welcome-panel">
-                <div class="welcome-card">
+                <div class="welcome-card vorpal-panel">
                     <div class="welcome-icon" aria-hidden="true">⚙</div>
-                    <h2>No configuration loaded</h2>
+                    <h2 class="vorpal-panel-title">No configuration loaded</h2>
                     <p>Pick a target and a schema above to begin editing.</p>
                     <ol class="welcome-steps">
                         <li><strong>Target</strong>: the scope to edit, Domain, Cluster or Server.</li>
@@ -165,17 +166,17 @@
             </div>
 
             <!-- Auto-save draft banner — appears when a localStorage draft is newer than the server copy. -->
-            <div id="draft-banner" class="draft-banner" style="display:none">
+            <div id="draft-banner" class="draft-banner vorpal-note" style="display:none">
                 <span id="draft-banner-text"></span>
-                <button type="button" class="btn btn-primary" onclick="restoreDraft()">Restore</button>
-                <button type="button" class="btn btn-secondary" onclick="discardDraft()">Discard</button>
+                <button type="button" class="vorpal-btn vorpal-btn-sm" onclick="restoreDraft()">Restore</button>
+                <button type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="discardDraft()">Discard</button>
             </div>
 
             <!-- Breadcrumb: shows the data-path of the currently-focused field, click to copy. -->
-            <div id="field-breadcrumb" class="field-breadcrumb" title="Click to copy" style="display:none"></div>
+            <div id="field-breadcrumb" class="field-breadcrumb vorpal-mono" title="Click to copy" style="display:none"></div>
 
             <!-- Feature: Validation Summary -->
-            <div id="validation-summary" class="validation-summary">
+            <div id="validation-summary" class="validation-summary vorpal-error">
                 <div class="validation-summary-header">⚠ Validation Errors</div>
                 <ul id="validation-summary-list" class="validation-summary-list">
                     <!-- Validation errors will be listed here -->
@@ -188,24 +189,24 @@
         </div>
         
         <div id="json-tab" class="tab-content">
-            <div class="json-controls">
-                <button type="button" class="btn btn-primary" onclick="saveData()">Save</button>
-                <button type="button" class="btn btn-secondary" onclick="loadConfig()">Load</button>
-                <button type="button" class="btn btn-publish" onclick="publishConfig()">Publish</button>
-                <button type="button" class="clone-button" onclick="showCloneDialog()">Clone to Another Target</button>
-                <button type="button" class="btn btn-secondary" onclick="showVersionHistory()">Version History</button>
-                <button type="button" class="btn btn-secondary" onclick="formatJson()">Format JSON</button>
-                <button type="button" class="btn btn-secondary" onclick="validateJson()">Validate</button>
-                <button type="button" class="btn btn-secondary" onclick="loadSample()">Load Sample</button>
-                <button type="button" class="btn btn-secondary" onclick="resetJson()">Reset JSON</button>
+            <div class="json-controls vorpal-toolbar">
+                <button type="button" class="vorpal-btn vorpal-btn-sm" onclick="saveData()">Save</button>
+                <button type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="loadConfig()">Load</button>
+                <button type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm btn-publish" onclick="publishConfig()">Publish</button>
+                <button type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="showCloneDialog()">Clone to Another Target</button>
+                <button type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="showVersionHistory()">Version History</button>
+                <button type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="formatJson()">Format JSON</button>
+                <button type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="validateJson()">Validate</button>
+                <button type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="loadSample()">Load Sample</button>
+                <button type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="resetJson()">Reset JSON</button>
             </div>
 
             <div id="json-editor" class="json-editor-container"></div>
         </div>
 
         <div id="schema-tab" class="tab-content">
-            <div class="json-controls">
-                <span class="sync-status success" style="display: inline-flex;">Read-only view of the JSON Schema</span>
+            <div class="json-controls vorpal-toolbar">
+                <span class="vorpal-badge">Read-only view of the JSON Schema</span>
             </div>
             <div id="schema-editor" class="json-editor-container"></div>
         </div>
@@ -215,15 +216,15 @@
              queries, JDBC SQL, etc.). Left rail lists files; right pane is
              an Ace editor. -->
         <div id="files-tab" class="tab-content">
-            <div class="json-controls">
-                <button type="button" class="btn btn-primary" onclick="saveTextFile()" id="save-text-file-btn" disabled>Save</button>
-                <button type="button" class="btn btn-secondary" onclick="reloadTextFile()" id="reload-text-file-btn" disabled>Revert</button>
-                <button type="button" class="btn btn-secondary" onclick="showTextVersionHistory()" id="text-history-btn" disabled>Version History</button>
-                <span id="text-file-status" class="sync-status" role="status" aria-live="polite" style="display:none"></span>
+            <div class="json-controls vorpal-toolbar">
+                <button type="button" class="vorpal-btn vorpal-btn-sm" onclick="saveTextFile()" id="save-text-file-btn" disabled>Save</button>
+                <button type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="reloadTextFile()" id="reload-text-file-btn" disabled>Revert</button>
+                <button type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="showTextVersionHistory()" id="text-history-btn" disabled>Version History</button>
+                <span id="text-file-status" class="sync-status vorpal-badge" role="status" aria-live="polite" style="display:none"></span>
             </div>
             <div class="files-layout">
-                <aside class="files-rail">
-                    <div class="files-rail-title">Template files</div>
+                <aside class="files-rail vorpal-panel">
+                    <div class="files-rail-title vorpal-label">Template files</div>
                     <div id="files-rail-body" class="files-rail-body"><em>Loading…</em></div>
                 </aside>
                 <div id="text-editor" class="json-editor-container"></div>
@@ -232,15 +233,15 @@
     </div>
 
     <!-- Inspector side panel: schema docs + ${var} palette for the focused field. -->
-    <aside id="inspector-panel" class="inspector-panel" aria-hidden="true">
+    <aside id="inspector-panel" class="inspector-panel vorpal-panel" aria-hidden="true">
         <div class="inspector-section">
-            <div class="inspector-title">Schema</div>
+            <div class="inspector-title vorpal-label">Schema</div>
             <div id="inspector-schema-body" class="inspector-body">
                 <em>Focus a field to see its schema.</em>
             </div>
         </div>
         <div class="inspector-section">
-            <div class="inspector-title">Variables <span id="inspector-vars-count" class="inspector-count"></span></div>
+            <div class="inspector-title vorpal-label">Variables <span id="inspector-vars-count" class="inspector-count"></span></div>
             <div id="inspector-vars-body" class="inspector-body">
                 <em>No variables defined yet. Add selectors with an <code>id</code>.</em>
             </div>
@@ -249,105 +250,105 @@
 
     <!-- Template library modal — "New from Template…" picker. -->
     <div id="templateModal" class="modal">
-        <div class="modal-content template-modal">
+        <div class="modal-content vorpal-panel template-modal">
             <div class="modal-header">
-                <h2>New from Template</h2>
-                <button class="modal-close" onclick="closeTemplateLibrary()">&times;</button>
+                <h2 class="vorpal-panel-title">New from Template</h2>
+                <button type="button" class="modal-close vorpal-btn vorpal-btn-ghost vorpal-btn-sm" aria-label="Close" onclick="closeTemplateLibrary()">&times;</button>
             </div>
             <div class="modal-body">
-                <p class="template-modal-intro">Pick a starter config to load into the form. You'll review and Save to keep it.</p>
+                <p class="template-modal-intro vorpal-panel-sub">Pick a starter config to load into the form. You'll review and Save to keep it.</p>
                 <div id="template-list" class="template-list"></div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeTemplateLibrary()">Close</button>
+                <button type="button" class="vorpal-btn vorpal-btn-secondary" onclick="closeTemplateLibrary()">Close</button>
             </div>
         </div>
     </div>
 
     <!-- Diff modal — shows per-path changes vs. the last-loaded server copy. -->
     <div id="diffModal" class="modal">
-        <div class="modal-content diff-modal">
+        <div class="modal-content vorpal-panel diff-modal">
             <div class="modal-header">
-                <h2>Diff · unsaved changes</h2>
-                <button class="modal-close" onclick="closeDiffModal()">&times;</button>
+                <h2 class="vorpal-panel-title">Diff · unsaved changes</h2>
+                <button type="button" class="modal-close vorpal-btn vorpal-btn-ghost vorpal-btn-sm" aria-label="Close" onclick="closeDiffModal()">&times;</button>
             </div>
             <div class="modal-body">
                 <div id="diff-summary" class="diff-summary"></div>
                 <div id="diff-body" class="diff-body"></div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeDiffModal()">Close</button>
+                <button type="button" class="vorpal-btn vorpal-btn-secondary" onclick="closeDiffModal()">Close</button>
             </div>
         </div>
     </div>
 
     <!-- Regex tester modal — opened by the "test" button next to RegexSelector.pattern. -->
     <div id="regexTestModal" class="modal">
-        <div class="modal-content regex-test-modal">
+        <div class="modal-content vorpal-panel regex-test-modal">
             <div class="modal-header">
-                <h2>Regex Tester</h2>
-                <button class="modal-close" onclick="closeRegexTest()">&times;</button>
+                <h2 class="vorpal-panel-title">Regex Tester</h2>
+                <button type="button" class="modal-close vorpal-btn vorpal-btn-ghost vorpal-btn-sm" aria-label="Close" onclick="closeRegexTest()">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="regex-test-row">
-                    <label>Pattern</label>
-                    <code id="regex-test-pattern" class="regex-test-pattern"></code>
+                    <label class="vorpal-label">Pattern</label>
+                    <code id="regex-test-pattern" class="regex-test-pattern vorpal-mono"></code>
                 </div>
                 <div class="regex-test-row">
-                    <label for="regex-test-sample">Sample text</label>
-                    <textarea id="regex-test-sample" rows="5" spellcheck="false"
+                    <label for="regex-test-sample" class="vorpal-label">Sample text</label>
+                    <textarea id="regex-test-sample" class="vorpal-input vorpal-mono" rows="5" spellcheck="false"
                               placeholder="Paste a sample value that the regex should match..."></textarea>
                 </div>
                 <div class="regex-test-row">
-                    <button type="button" class="btn btn-primary" onclick="runRegexTest()">Test</button>
+                    <button type="button" class="vorpal-btn" onclick="runRegexTest()">Test</button>
                 </div>
                 <div id="regex-test-result" class="regex-test-result"></div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeRegexTest()">Close</button>
+                <button type="button" class="vorpal-btn vorpal-btn-secondary" onclick="closeRegexTest()">Close</button>
             </div>
         </div>
     </div>
 
     <!-- Version History Modal -->
     <div id="versionModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content vorpal-panel">
             <div class="modal-header">
-                <h2>Version History</h2>
-                <button class="modal-close" onclick="closeVersionHistory()">&times;</button>
+                <h2 class="vorpal-panel-title">Version History</h2>
+                <button type="button" class="modal-close vorpal-btn vorpal-btn-ghost vorpal-btn-sm" aria-label="Close" onclick="closeVersionHistory()">&times;</button>
             </div>
             <div class="modal-body">
                 <div id="versionListContainer"></div>
-                <pre id="versionPreview" class="version-preview" style="display:none"></pre>
+                <pre id="versionPreview" class="version-preview vorpal-mono" style="display:none"></pre>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeVersionHistory()">Close</button>
+                <button type="button" class="vorpal-btn vorpal-btn-secondary" onclick="closeVersionHistory()">Close</button>
             </div>
         </div>
     </div>
 
     <!-- Clone Configuration Modal -->
     <div id="cloneModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content vorpal-panel">
             <div class="modal-header">
-                <h2>Clone Configuration</h2>
-                <button class="modal-close" onclick="closeCloneDialog()">&times;</button>
+                <h2 class="vorpal-panel-title">Clone Configuration</h2>
+                <button type="button" class="modal-close vorpal-btn vorpal-btn-ghost vorpal-btn-sm" aria-label="Close" onclick="closeCloneDialog()">&times;</button>
             </div>
             <div class="modal-body">
                 <p>Clone the current configuration to another target directory:</p>
                 <div class="form-group">
-                    <label for="clone-target-select">Destination Target:</label>
-                    <select id="clone-target-select" class="clone-target-select">
+                    <label for="clone-target-select" class="vorpal-label">Destination Target:</label>
+                    <select id="clone-target-select" class="clone-target-select vorpal-input">
                         <option value="">-- Select Target --</option>
                     </select>
                 </div>
-                <div class="clone-warning-note">
+                <div class="clone-warning-note vorpal-note">
                     <strong>Note:</strong> This will save the current configuration to the selected target directory.
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-primary" onclick="executeClone()">Clone</button>
-                <button type="button" class="btn btn-secondary" onclick="closeCloneDialog()">Cancel</button>
+                <button type="button" class="vorpal-btn" onclick="executeClone()">Clone</button>
+                <button type="button" class="vorpal-btn vorpal-btn-secondary" onclick="closeCloneDialog()">Cancel</button>
             </div>
         </div>
     </div>

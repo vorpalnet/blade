@@ -66,7 +66,11 @@
 	function $(id) { return document.getElementById(id); }
 
 	function pill(text) { $("status-pill").textContent = text; }
-	function panePill(text) { $("panePill").textContent = text; }
+	function panePill(text) {
+		var el = $("panePill");
+		el.textContent = text;
+		el.classList.toggle("vorpal-badge-bad", text === "failed");
+	}
 
 	function notice(title, body) {
 		$("noticeTitle").textContent = title;
@@ -588,7 +592,7 @@
 	function renderResults() {
 		var list = $("resultsList");
 		if (!state.fileMatches.length) {
-			list.innerHTML = '<li class="log-results-empty">No matches found'
+			list.innerHTML = '<li class="log-results-empty vorpal-empty">No matches found'
 				+ (state.searchComplete ? " in this file." : " so far.") + "</li>";
 			return;
 		}

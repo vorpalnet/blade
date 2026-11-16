@@ -7,6 +7,11 @@
  * coloured slab: on the dark theme a filled purple handset was the brightest
  * thing on screen and its pale text was the hardest to read.
  *
+ * Buttons, inputs, labels, panels and messages are the shared components
+ * (.vorpal-btn, .vorpal-input, .vorpal-field, .vorpal-panel, .vorpal-note); this
+ * file sizes them for a handset and draws what has no shared equivalent: the
+ * display, meters, dial pad, video stage, recent list, tooltips and log.
+ *
  * Call state is never signalled by colour alone. Every state carries a word, a
  * live call changes the display's border weight and pulses its marker, a
  * disabled button is dashed as well as faded, and the button that hangs up says
@@ -37,35 +42,6 @@
 
 .phone-layout[data-details="true"] { grid-template-columns: minmax(0, 400px) minmax(0, 420px); }
 
-/* ---------------------------------------------------------------- account */
-
-.phone-acct {
-	display: inline-flex;
-	align-items: center;
-	gap: 8px;
-	color: var(--vorpal-ink-700);
-	font-weight: 600;
-}
-
-.phone-acct-badge {
-	display: inline-grid;
-	place-items: center;
-	width: 26px;
-	height: 26px;
-	border-radius: 50%;
-	background: var(--vorpal-mark);
-	color: #fff;
-	font-size: 10.5px;
-	font-weight: 700;
-	letter-spacing: .02em;
-}
-
-.phone-acct-name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
-
-@media (max-width: 640px) {
-	.phone-acct-name { display: none; }
-}
-
 /* The status pill: an empty ring while offline, the filled dot once registered. */
 .vorpal-pill[data-state="idle"]::before {
 	background: transparent;
@@ -74,14 +50,7 @@
 
 /* ---------------------------------------------------------------- handset */
 
-.phone-handset {
-	background: var(--vorpal-surface);
-	border: 1px solid var(--vorpal-divider);
-	border-radius: var(--vorpal-radius-lg);
-	box-shadow: var(--vorpal-shadow-lg);
-	padding: 18px;
-	color: var(--vorpal-ink-900);
-}
+.phone-handset { padding: 18px; }
 
 .phone-display {
 	background: var(--vorpal-slate-100);
@@ -208,37 +177,10 @@
 	gap: 8px;
 }
 
-.phone-dial-field input {
-	flex: 1;
-	min-width: 0;
-	font-family: var(--vorpal-font-mono);
-	font-size: 1.15rem;
-	padding: 11px 13px;
-	border-radius: var(--vorpal-radius-md);
-	border: 1px solid var(--vorpal-slate-300);
-	background: var(--vorpal-surface);
-	color: var(--vorpal-ink-900);
-}
+/* The number being dialled is the handset's one large field. */
+.phone-dial-field .vorpal-input { flex: 1; font-size: 1.15rem; padding: 10px 13px; }
 
-.phone-dial-field input::placeholder { color: var(--vorpal-slate-400); }
-.phone-dial-field input:focus {
-	outline: none;
-	border-color: var(--vorpal-purple);
-	box-shadow: 0 0 0 3px var(--vorpal-purple-100);
-}
-
-.phone-backspace {
-	flex: 0 0 auto;
-	width: 48px;
-	border-radius: var(--vorpal-radius-md);
-	border: 1px solid var(--vorpal-slate-300);
-	background: transparent;
-	color: var(--vorpal-ink-700);
-	font-size: 1.1rem;
-	cursor: pointer;
-}
-
-.phone-backspace:hover { background: var(--vorpal-purple-soft); color: var(--vorpal-ink-900); }
+.phone-backspace { flex: 0 0 auto; width: 48px; padding: 0; font-size: 1.1rem; }
 
 /* ---------------------------------------------------------------- keypad */
 
@@ -287,50 +229,16 @@
 	gap: 8px;
 }
 
-.phone-btn {
-	font: inherit;
-	font-weight: 600;
-	padding: 11px 14px;
-	border-radius: var(--vorpal-radius-md);
-	border: 1px solid var(--vorpal-slate-300);
-	background: transparent;
-	color: var(--vorpal-ink-900);
-	cursor: pointer;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	gap: 8px;
-}
-
-.phone-btn:hover:not(:disabled) { background: var(--vorpal-purple-soft); border-color: var(--vorpal-purple); }
+/* Handset-sized: the shared button, taller, for a thumb. */
+.phone-btn { padding: 11px 14px; gap: 8px; }
 
 /* Disabled reads as disabled in shape too: a dashed outline, not just a paler fill. */
-.phone-btn:disabled {
-	opacity: .45;
-	border-style: dashed;
-	cursor: not-allowed;
-}
+.phone-btn:disabled, .phone-row .vorpal-btn:disabled { border-style: dashed; cursor: not-allowed; }
 
-/* Call: the one filled button, full width. */
-.phone-btn-call {
-	grid-column: 1 / -1;
-	background: var(--vorpal-mark);
-	border-color: var(--vorpal-mark);
-	color: #fff;
-	font-size: 1.05rem;
-	padding: 14px;
-}
-
-.phone-btn-call:hover:not(:disabled) { background: var(--vorpal-mark-hover); border-color: var(--vorpal-mark-hover); }
-.phone-btn-call:disabled { background: transparent; color: var(--vorpal-ink-700); border-color: var(--vorpal-slate-400); }
-
-/* The same button during a call hangs up: it says so, and its handset glyph turns down. */
-.phone-btn-call[data-mode="hangup"] {
-	background: var(--vorpal-error);
-	border-color: var(--vorpal-error);
-	color: var(--vorpal-surface);
-}
-.phone-btn-call[data-mode="hangup"]:hover:not(:disabled) { filter: brightness(1.08); background: var(--vorpal-error); }
+/* Call: the one primary button, full width. During a call the script adds
+   .vorpal-btn-danger: it hangs up, says so, and its handset glyph turns down. */
+.phone-btn-call { grid-column: 1 / -1; font-size: 15px; padding: 14px; }
+.phone-btn-call[data-mode="hangup"] { border-width: 2px; padding: 13px; }
 .phone-btn-call[data-mode="hangup"] .phone-btn-icon { transform: rotate(135deg); }
 
 .phone-btn-icon { font-size: 1.1rem; line-height: 1; display: inline-block; transition: transform .15s ease; }
@@ -358,14 +266,6 @@
 	50%      { box-shadow: 0 0 0 8px transparent; }
 }
 
-.phone-incoming-label {
-	font-size: .68rem;
-	letter-spacing: .14em;
-	text-transform: uppercase;
-	color: var(--vorpal-slate-600);
-	font-weight: 700;
-}
-
 .phone-incoming-from {
 	font-size: 1.2rem;
 	font-weight: 650;
@@ -374,20 +274,13 @@
 }
 
 .phone-incoming-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.phone-incoming-actions .phone-btn-call { grid-column: auto; font-size: inherit; padding: 11px 14px; }
+.phone-incoming-actions .phone-btn-call { grid-column: auto; font-size: 13px; padding: 11px 14px; }
 
 /* ---------------------------------------------------------------- recent */
 
 .phone-recent { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--vorpal-divider); }
 
-.phone-recent-head {
-	font-size: .68rem;
-	font-weight: 700;
-	letter-spacing: .12em;
-	text-transform: uppercase;
-	color: var(--vorpal-slate-600);
-	margin-bottom: 8px;
-}
+.phone-recent-head { display: block; margin-bottom: 8px; }
 
 .phone-recent-list { display: flex; flex-wrap: wrap; gap: 6px; }
 
@@ -473,23 +366,12 @@
    whether the gateway verified you. */
 .phone-details-toggle {
 	margin-top: 16px;
-	width: 100%;
-	display: flex;
-	align-items: center;
+	justify-content: flex-start;
 	gap: 10px;
 	padding: 10px 12px;
-	border: 1px solid var(--vorpal-divider);
-	border-radius: var(--vorpal-radius-md);
-	background: transparent;
-	color: var(--vorpal-ink-700);
-	font: inherit;
-	font-size: .82rem;
-	font-weight: 600;
-	cursor: pointer;
 	text-align: left;
 }
 
-.phone-details-toggle:hover { border-color: var(--vorpal-purple); background: var(--vorpal-purple-soft); }
 .phone-details-toggle[aria-expanded="true"] { border: 2px solid var(--vorpal-purple); padding: 9px 11px; }
 
 .phone-details-toggle-name { flex: 0 0 auto; }
@@ -499,7 +381,7 @@
 	min-width: 0;
 	text-align: right;
 	font-weight: 400;
-	font-size: .74rem;
+	font-size: 12px;
 	color: var(--vorpal-slate-600);
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -520,12 +402,7 @@
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
-	padding: 14px 16px 16px;
 	overflow-y: auto;
-	background: var(--vorpal-surface);
-	border: 1px solid var(--vorpal-divider);
-	border-radius: var(--vorpal-radius-lg);
-	box-shadow: var(--vorpal-shadow-lg);
 	animation: phone-slide-in .18s ease-out;
 }
 
@@ -534,20 +411,8 @@
 	to   { opacity: 1; transform: none; }
 }
 
-.phone-details-head { display: flex; align-items: center; gap: 8px; }
-.phone-details-head h2 { margin: 0; font-size: .95rem; font-weight: 650; flex: 1; }
-
-.phone-details-close {
-	width: 30px;
-	height: 30px;
-	border: 1px solid var(--vorpal-divider);
-	border-radius: var(--vorpal-radius-sm);
-	background: transparent;
-	color: var(--vorpal-slate-600);
-	cursor: pointer;
-	font-size: .85rem;
-}
-.phone-details-close:hover { color: var(--vorpal-ink-900); border-color: var(--vorpal-slate-300); }
+.phone-details-head { flex-wrap: nowrap; margin-bottom: 0; }
+.phone-details-head h2 { flex: 1; }
 
 /* No room beside the handset: the panel slides over from the window's right edge. */
 @media (max-width: 899px) {
@@ -648,66 +513,32 @@
 
 .phone-field { margin-bottom: 10px; }
 
-.phone-field label {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	font-size: .74rem;
-	font-weight: 600;
-	color: var(--vorpal-slate-600);
-	margin-bottom: 4px;
-}
-
-.phone-field input {
-	width: 100%;
-	padding: 8px 11px;
-	border: 1px solid var(--vorpal-slate-300);
-	border-radius: var(--vorpal-radius-sm);
-	font: inherit;
-	font-size: .88rem;
-	color: var(--vorpal-ink-900);
-	background: var(--vorpal-surface);
-}
-
-.phone-field input:focus {
-	outline: none;
-	border-color: var(--vorpal-purple);
-	box-shadow: 0 0 0 3px var(--vorpal-purple-100);
-}
+.phone-field label { display: flex; align-items: center; gap: 6px; }
 
 /* An address the server issued, not a field to fill in. */
 .phone-field input[readonly] { background: var(--vorpal-slate-100); cursor: default; }
 
-.phone-row { display: flex; gap: 8px; }
+.phone-row { flex-wrap: nowrap; }
 .phone-row > * { flex: 1; }
-.phone-row .vorpal-btn:disabled { opacity: .45; border-style: dashed; cursor: not-allowed; }
 
 /* ---------------------------------------------------------------- auth state */
 
-/* Whether the gateway checked this browser: a leading glyph and its own border, so
-   the three states differ in shape and words, not only in hue. */
-.phone-auth {
-	margin: 10px 0 0;
-	padding: 8px 10px 8px 26px;
-	position: relative;
-	border: 1px solid var(--vorpal-divider);
-	border-radius: var(--vorpal-radius-sm);
-	font-size: .74rem;
-	line-height: 1.45;
-	color: var(--vorpal-slate-600);
-}
+/* Whether the gateway checked this browser: a .vorpal-note with a leading glyph
+   and words per state; refused takes the shared error look and a heavier edge,
+   so the three states differ in shape and words, not only in hue. */
+.phone-auth { margin: 10px 0 0; padding-left: 28px; position: relative; font-size: 12px; line-height: 1.45; }
 
-.phone-auth::before { position: absolute; left: 9px; top: 8px; font-weight: 700; }
+.phone-auth::before { position: absolute; left: 11px; top: 8px; font-weight: 700; }
 .phone-auth[data-verified="unknown"]::before { content: "\2013"; }
 
-.phone-auth[data-verified="true"] { border-color: var(--vorpal-purple); color: var(--vorpal-ink-900); }
+.phone-auth[data-verified="true"] { border-left-color: var(--vorpal-purple); color: var(--vorpal-ink-900); }
 .phone-auth[data-verified="true"]::before { content: "\2713"; }
 
 .phone-auth[data-verified="false"] {
-	border-width: 3px;
-	border-style: dashed;
+	border-left: 6px solid var(--vorpal-error);
+	background: var(--vorpal-error-soft);
+	color: var(--vorpal-error);
 	font-weight: 600;
-	color: var(--vorpal-ink-900);
 }
 .phone-auth[data-verified="false"]::before { content: "\26A0"; }
 
@@ -835,10 +666,7 @@
 	gap: 8px;
 	margin-top: 8px;
 }
-.phone-agent input {
-	flex: 1;
-	min-width: 0;
-}
+.phone-agent input { flex: 1; }
 .phone-agent .phone-btn {
 	flex: none;
 }

@@ -213,7 +213,7 @@ public class AgentServlet extends B2buaServlet {
 				AgentConsoleRegistry.remember(pop.vorpalId, agentId);
 				how = "agent " + agentId + " (" + reached + ")";
 			} else {
-				int sent = AgentConsoleRegistry.broadcast(json);
+				int sent = AgentConsoleRegistry.broadcast(pop.vorpalId, json);
 				how = (agentId == null ? "broadcast" : "broadcast (agent " + agentId + " not connected)") + " to "
 						+ sent + " console(s)";
 			}

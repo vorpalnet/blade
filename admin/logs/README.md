@@ -58,8 +58,12 @@ has no node toolchain. Same convention as [admin/flow](../flow/README.md).
 
 ## Configuration
 
-`./config/custom/vorpal/logs.json` — metadata only today. The app appears on the
-[Portal](../portal/README.md) deck like every other admin app.
+`./config/custom/vorpal/blade-logs.json`. Its `access` policy decides who reads log lines,
+which can hold caller numbers: reading them is `phi:transcript`, and a viewer without it
+still sees the servers and the file names but is refused the lines (`403`, recorded in the
+access log). The default lets the four WebLogic admin groups read, as before; take
+`Monitors` out of its rule to keep read-only staff away from caller data. The app appears
+on the [Portal](../portal/README.md) deck like every other admin app.
 
 ## Related modules
 

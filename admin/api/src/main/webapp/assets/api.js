@@ -1,5 +1,5 @@
 /*
- * BLADE API Explorer — front-end glue.
+ * BLADE API Explorer: front-end glue.
  *
  *  1. GET api/v1/services  → { engineBaseUrl, services: [{app,title,version,specUrl,serverUrl}] }
  *  2. Populate the topbar pulldown.
@@ -16,50 +16,50 @@
 	var select = document.getElementById('svc-select');
 	var notice = document.getElementById('api-notice');
 
-	// Map Scalar's theming variables onto the shared brand tokens (defined at
-	// :root by /blade/portal/brand/brand.css). CSS custom properties inherit
-	// into Scalar's subtree, so the var(--vorpal-*) references resolve; the hex
-	// fallbacks cover any load-order gap. The BLADE admin tier is light-first —
-	// white surfaces, dark ink, purple as a sparing accent — so we force light
-	// mode and only restyle the chrome, leaving Scalar's conventional HTTP-method
-	// badge colors alone.
+	// Map Scalar's theming variables onto the shared brand tokens (defined by
+	// /blade/portal/brand/brand.css, linked before this script). CSS custom
+	// properties inherit into Scalar's subtree, so the var(--vorpal-*)
+	// references resolve and follow the page's light or dark theme. Scalar is
+	// held in its own light mode so it never switches palettes underneath the
+	// tokens; Scalar's conventional HTTP-method badge colours are left alone.
 	var BRAND_THEME_CSS = [
-		// Both selectors get the same light palette: Scalar hard-codes
-		// `dark-mode` on its request-example / code panels even in light mode,
-		// so theming only `.light-mode` left those panels stock-dark.
+		// Both selectors get the same palette: Scalar hard-codes `dark-mode` on
+		// its request-example / code panels even in light mode, so theming
+		// only `.light-mode` left those panels stock-dark.
 		'.light-mode, .dark-mode {',
-		'  --scalar-color-1: var(--vorpal-ink-900, #1a2434);',
-		'  --scalar-color-2: var(--vorpal-ink-700, #2c374b);',
-		'  --scalar-color-3: var(--vorpal-slate-600, #5a6677);',
-		'  --scalar-color-accent: var(--vorpal-purple, #602671);',
-		'  --scalar-background-1: var(--vorpal-surface, #ffffff);',
-		'  --scalar-background-2: var(--vorpal-surface-alt, #fafbfd);',
-		'  --scalar-background-3: var(--vorpal-slate-100, #f4f6fa);',
-		'  --scalar-background-accent: var(--vorpal-purple-soft, #f6f0f9);',
-		'  --scalar-border-color: var(--vorpal-divider, #dde2ec);',
-		'  --scalar-font: var(--vorpal-font-sans, "Inter", "Segoe UI", sans-serif);',
-		'  --scalar-font-code: var(--vorpal-font-mono, "JetBrains Mono", monospace);',
-		'  --scalar-radius: 6px;',
-		'  --scalar-radius-lg: 10px;',
-		'  --scalar-radius-xl: 10px;',
-		'  --scalar-sidebar-background-1: var(--vorpal-surface-alt, #fafbfd);',
-		'  --scalar-sidebar-color-1: var(--vorpal-ink-900, #1a2434);',
-		'  --scalar-sidebar-color-2: var(--vorpal-slate-600, #5a6677);',
-		'  --scalar-sidebar-border-color: var(--vorpal-slate-200, #e6eaf2);',
-		'  --scalar-sidebar-item-hover-color: var(--vorpal-purple, #602671);',
-		'  --scalar-sidebar-item-hover-background: var(--vorpal-purple-soft, #f6f0f9);',
-		'  --scalar-sidebar-item-active-background: var(--vorpal-purple-100, #ece1f0);',
-		'  --scalar-sidebar-color-active: var(--vorpal-purple, #602671);',
-		'  --scalar-sidebar-search-background: var(--vorpal-surface, #ffffff);',
-		'  --scalar-sidebar-search-border-color: var(--vorpal-slate-300, #d0d6e2);',
-		'  --scalar-sidebar-search-color: var(--vorpal-slate-600, #5a6677);',
+		'  --scalar-color-1: var(--vorpal-ink-900);',
+		'  --scalar-color-2: var(--vorpal-ink-700);',
+		'  --scalar-color-3: var(--vorpal-slate-600);',
+		'  --scalar-color-accent: var(--vorpal-purple);',
+		'  --scalar-background-1: var(--vorpal-surface);',
+		'  --scalar-background-2: var(--vorpal-surface-alt);',
+		'  --scalar-background-3: var(--vorpal-slate-100);',
+		'  --scalar-background-accent: var(--vorpal-purple-soft);',
+		'  --scalar-border-color: var(--vorpal-divider);',
+		'  --scalar-font: var(--vorpal-font-sans);',
+		'  --scalar-font-code: var(--vorpal-font-mono);',
+		'  --scalar-radius: var(--vorpal-radius-sm);',
+		'  --scalar-radius-lg: var(--vorpal-radius-md);',
+		'  --scalar-radius-xl: var(--vorpal-radius-md);',
+		'  --scalar-sidebar-background-1: var(--vorpal-surface-alt);',
+		'  --scalar-sidebar-color-1: var(--vorpal-ink-900);',
+		'  --scalar-sidebar-color-2: var(--vorpal-slate-600);',
+		'  --scalar-sidebar-border-color: var(--vorpal-slate-200);',
+		'  --scalar-sidebar-item-hover-color: var(--vorpal-purple);',
+		'  --scalar-sidebar-item-hover-background: var(--vorpal-purple-soft);',
+		'  --scalar-sidebar-item-active-background: var(--vorpal-purple-100);',
+		'  --scalar-sidebar-color-active: var(--vorpal-purple);',
+		'  --scalar-sidebar-search-background: var(--vorpal-surface);',
+		'  --scalar-sidebar-search-border-color: var(--vorpal-slate-300);',
+		'  --scalar-sidebar-search-color: var(--vorpal-slate-600);',
 		'}'
 	].join('\n');
 
-	function showNotice(title, body) {
+	/** A failure shows as the shared error message, anything else as a note. */
+	function showNotice(title, body, isError) {
 		notice.innerHTML = '';
-		var t = document.createElement('div');
-		t.className = 'vorpal-callout-title';
+		notice.className = isError ? 'vorpal-error' : 'vorpal-note';
+		var t = document.createElement('strong');
 		t.textContent = title;
 		notice.appendChild(t);
 		if (body) {
@@ -81,9 +81,9 @@
 		Scalar.createApiReference('#scalar', {
 			url: svc.specUrl,
 			baseServerURL: svc.serverUrl,
-			theme: 'none',            // no preset — BRAND_THEME_CSS maps brand.css instead
-			darkMode: false,          // BLADE admin tier is light-first
-			hideDarkModeToggle: true, // keep everyone on the brand light theme
+			theme: 'none',            // no preset: BRAND_THEME_CSS maps brand.css instead
+			darkMode: false,          // the brand tokens carry the theme, not Scalar
+			hideDarkModeToggle: true, // the top bar's theme switch is the one control
 			customCss: BRAND_THEME_CSS
 		});
 	}
@@ -98,7 +98,7 @@
 			var services = (res.body && res.body.services) || [];
 
 			if (!res.ok && res.body && res.body.error) {
-				showNotice('API discovery unavailable', res.body.error);
+				showNotice('API discovery unavailable', res.body.error, true);
 			}
 
 			if (services.length === 0) {
@@ -141,6 +141,6 @@
 		})
 		.catch(function (err) {
 			select.innerHTML = '<option>Error</option>';
-			showNotice('Could not load the service list', String(err));
+			showNotice('Could not load the service list', String(err), true);
 		});
 })();

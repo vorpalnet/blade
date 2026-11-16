@@ -3,7 +3,7 @@ package org.vorpal.blade.framework.v2.keepalive;
 import javax.servlet.sip.SessionKeepAlive;
 import javax.servlet.sip.SipSession;
 
-import org.vorpal.blade.framework.v2.callflow.ClientCallflow;
+import org.vorpal.blade.framework.v3.ClientCallflow;
 
 /* Visit https://plantuml.com/sequence-diagram for notes on how to draw.
 @startuml doc-files/keepalive_expiry.png

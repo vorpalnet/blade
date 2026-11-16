@@ -116,7 +116,36 @@ class FlightRecorderTest {
 		assertEquals("error", e.getData().path("finding").asText());
 		assertEquals("pbx.example.net:5070", e.getData().path("peer").asText(), "host and port, never the number");
 		assertEquals(4, e.getData().path("steps").size());
-		assertTrue(!e.getData().toString().contains("15550199"), "no phone number anywhere: " + e.getData());
+		assertTrue(!e.getData().path("steps").toString().contains("15550199"), "no number in the steps: " + e.getData());
+		assertEquals("sip:+15550100@example.com", e.getData().path("from").asText(), "the parties, once, from the first INVITE");
+		assertEquals("sip:+15550199@blade.example.net", e.getData().path("to").asText());
+		assertTrue(!e.getData().has("asserted"), "no P-Asserted-Identity on the INVITE, none kept");
+	}
+
+	/// iRouter sets the department after the INVITE arrives: the verdict is filed
+	/// under the scope the call ended with, not the one it came in with.
+	@Test
+	void theVerdictCarriesTheScopeTheCallEndedWith() throws Exception {
+		app.setAttribute("VORPAL_TENANT", "tenant_001");
+		app.setAttribute("VORPAL_DEPARTMENT", "cardiology");
+		DetachedRequest in = invite(caller, "sip:+15550199@blade.example.net");
+		FlightRecorder.record(false, in, null);
+		Callflow.setDepartment(app, "radiology");
+		DetachedRequest out = invite(callee, "sip:+15550199@pbx.example.net:5070");
+		FlightRecorder.record(true, out, null);
+		FlightRecorder.record(false, null, new DetachedResponse(out, 503));
+		FlightRecorder.record(true, null, new DetachedResponse(in, 503));
+		FlightRecorder.finish(app, false);
+		assertEquals(1, bus.sent.size());
+		assertEquals("radiology", bus.sent.get(0).getData().path("department").asText());
+		assertEquals("tenant_001", bus.sent.get(0).getData().path("tenant").asText());
+	}
+
+	@Test
+	void aLongPartyHeaderIsCapped() {
+		String longOne = new String(new char[400]).replace('\0', 'x');
+		assertEquals(CallLadder.PARTY_MAX, FlightRecorder.party(longOne).length());
+		assertEquals(null, FlightRecorder.party(""));
 	}
 
 	@Test

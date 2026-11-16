@@ -12,6 +12,8 @@ import java.util.logging.Logger;
 
 import javax.websocket.Session;
 
+import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.access.Access;
 import org.vorpal.blade.framework.v3.events.CallScope;
 
 /// The consoles currently watching, and how to push to them.
@@ -41,6 +43,11 @@ public final class AgentConsoleRegistry {
 
 	/// Open console sockets → the authenticated username behind each.
 	private static final Map<Session, String> CONSOLES = new ConcurrentHashMap<>();
+
+	/// Open console sockets → the calls each may see beyond its own, for a
+	/// viewer the settings' grants narrow ([AgentConsoleEndpoint#scopeOf]).
+	/// A socket missing here sees every call.
+	private static final Map<Session, Access> SCOPES = new ConcurrentHashMap<>();
 
 	/// Which agent's console received the pop for a call, by Vorpal-ID, so a
 	/// later update about that call (a risk verdict from the bus) lands on the
@@ -192,17 +199,19 @@ public final class AgentConsoleRegistry {
 		String user = AGENT_FOR_CALL.get(vorpalId);
 		int reached = (user == null) ? 0 : sendToUser(user, json);
 		if (reached == 0) {
-			broadcast(json);
+			broadcast(vorpalId, json);
 		}
 	}
 
 	/// Replay every kept call this user would have seen, oldest first, onto one
-	/// socket: their own targeted calls and every broadcast one.
+	/// socket: their own targeted calls and every broadcast one they [#sees].
 	public static int replayTo(Session session, String username) {
 		java.util.List<Replay> mine = new java.util.ArrayList<>();
 		synchronized (REPLAYS) {
-			for (Replay r : REPLAYS.values()) {
-				if (r.agent == null || (username != null && username.equalsIgnoreCase(r.agent))) {
+			for (Map.Entry<String, Replay> e : REPLAYS.entrySet()) {
+				Replay r = e.getValue();
+				if ((r.agent == null && sees(session, e.getKey()))
+						|| (username != null && username.equalsIgnoreCase(r.agent))) {
 					mine.add(r);
 				}
 			}
@@ -257,17 +266,37 @@ public final class AgentConsoleRegistry {
 		if (reached > 0) {
 			return "agent " + user + " (" + reached + ")";
 		}
-		int sent = broadcast(json);
+		int sent = broadcast(vorpalId, json);
 		return (user == null ? "broadcast" : "broadcast (agent " + user + " not connected)") + " to " + sent
 				+ " console(s)";
 	}
 
-	public static void add(Session session, String username) {
+	/// A console opened for `username`, seeing the calls `scope` shows, or
+	/// every call when `scope` is null.
+	public static void add(Session session, String username, Access scope) {
+		if (scope != null) {
+			SCOPES.put(session, scope);
+		}
 		CONSOLES.put(session, username == null ? "?" : username);
 		log("agent: console open for " + username + " (" + CONSOLES.size() + " open)");
 	}
 
+	/// True if `session` may see the call `vorpalId` when it is not that
+	/// console's own: always with no scope, otherwise when the scope shows the
+	/// call's tenant and department. A call whose scope was never recorded is
+	/// shown only to unscoped consoles.
+	static boolean sees(Session session, String vorpalId) {
+		Access scope = SCOPES.get(session);
+		if (scope == null) {
+			return true;
+		}
+		CallRef ref = (vorpalId == null) ? null : CALLS.get(vorpalId);
+		return ref != null && scope.seesCall(SettingsManager.getDomainName(), ref.scope.getTenant(),
+				ref.scope.getDepartment());
+	}
+
 	public static void remove(Session session) {
+		SCOPES.remove(session);
 		String user = CONSOLES.remove(session);
 		if (user != null) {
 			log("agent: console closed for " + user + " (" + CONSOLES.size() + " open)");
@@ -282,13 +311,15 @@ public final class AgentConsoleRegistry {
 		return CONSOLES.size();
 	}
 
-	/// Push a JSON message to every open console, dropping any that have closed.
-	/// Returns how many it was sent to.
-	public static int broadcast(String json) {
+	/// Push a JSON message about the call `vorpalId` to every open console that
+	/// [#sees] it, dropping any that have closed. Returns how many it was sent to.
+	public static int broadcast(String vorpalId, String json) {
 		int sent = 0;
 		for (Session s : CONSOLES.keySet()) {
-			send(s, json);
-			sent++;
+			if (sees(s, vorpalId)) {
+				send(s, json);
+				sent++;
+			}
 		}
 		return sent;
 	}

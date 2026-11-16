@@ -1,8 +1,8 @@
-# BLADE Framework B2BUA (v2)
+# BLADE Framework B2BUA
 
-Javadocs: package `org.vorpal.blade.framework.v2.b2bua` — browse at `/blade/javadoc/framework/` on the Admin Portal
+Javadocs: package `org.vorpal.blade.framework.v3.b2bua` — browse at `/blade/javadoc/framework/` on the Admin Portal
 
-The 'b2bua' package provides pre-built callflows for creating B2BUA applications.
+The 'b2bua' package provides the pre-built callflows a B2BUA application runs: `InitialInvite`, `Reinvite`, `Terminate` (with `Bye` and `Cancel`) and `Passthru`. [org.vorpal.blade.framework.v3.B2buaServlet](../B2buaServlet.java) dispatches to them.
 
 Take a look at the [test-b2bua](../../../../../../../../../../../test/test-b2bua/README.md) code for a complete example.
 
@@ -81,7 +81,7 @@ public class SampleB2buaServlet extends B2buaServlet {
 }
 ```
 
-To use the BLADE B2BUA framework, extend the class B2buaServlet and
+To use the BLADE B2BUA framework, extend `org.vorpal.blade.framework.v3.B2buaServlet` and
 override these methods:
 
 * callStarted
@@ -105,7 +105,6 @@ It's that simple!
 
 ## See also
 
-- [v2 API overview](../README.md)
-- [callflow](../callflow/README.md) — how the lambda model works underneath
-- [config](../config/README.md) — give your B2BUA a hot-reloadable config file
-- [v3 API](../../v3/README.md) — the v3 B2buaServlet adds call tracing and passthru drop-out
+- [v3 API](../README.md) — the B2buaServlet these callflows run under, with call tracing and passthru drop-out
+- [callflow](../../v2/callflow/README.md) — how the lambda model works underneath
+- [config](../../v2/config/README.md) — give your B2BUA a hot-reloadable config file

@@ -177,6 +177,84 @@
 						application records its HTTP steps once it is running a framework
 						build that has this feature.
 					</p>
+					<p>
+						The Source tab works for HTTP steps too. A request that came in
+						opens on its resource method, at the line that was running when
+						it sent the call's SIP. Its response opens on the line that
+						answered it: for tpcc, the callflow line that resumed the waiting
+						request when the call connected. A resource that answers before
+						it returns opens on the method itself. A callout opens on the
+						framework line that sent it, and the timeline names the
+						connector, token fetch or webhook behind it.
+					</p>
+
+					<h2>Recorded calls</h2>
+					<p>
+						<strong>Recorded Calls</strong> shows calls nobody armed a rule
+						for. Every BLADE SIP application keeps a small ladder of each call
+						in memory and writes it to the analytics database only when the
+						call goes wrong or is dropped, with a verdict saying whose fault
+						it was. A recorded call has no message text and no source lines:
+						the recorder keeps the time, direction, method or status and far
+						end of each message, and the call's From, To and
+						P-Asserted-Identity once, from its first INVITE, so a complaint
+						about a number finds its call.
+					</p>
+					<p>
+						Every call that went wrong is kept, so the list is searched on the
+						server and read 50 records at a time, newest first, with
+						<strong>Load older</strong> for the next page. Narrow it by when
+						it was recorded (the last 24 hours to start), what went wrong,
+						whose fault it was, the application, part of the far end's
+						address, or one call's Vorpal-ID, which finds that call however
+						old it is, or part of a number, for a viewer whose access includes
+						content. The search is kept in the page's address, so a filtered
+						view can be bookmarked or sent to someone.
+					</p>
+
+					<h2>Who sees what</h2>
+					<p>
+						Two settings decide it, the same two the dashboard takes. The
+						<code>grants</code> decide which calls a viewer sees: one entry per
+						group, naming the domains, tenants and departments whose calls the
+						group sees. The <code>access</code> policy decides what may be read
+						in them: an ordered list of rules, the same rules the Recordings app
+						reads, where a rule granting <code>phi:transcript</code> lets its
+						groups read the text. A rule may match a call's domain, tenant and
+						department, so a department can read its own parts of a call and
+						not the rest. The server applies both to everything it sends, live
+						captures, recorded calls and saved calls alike, so the browser
+						never receives what a viewer may not see. An HTTP step is shown
+						with the rest of its call, and its text with the call's.
+					</p>
+					<p>
+						Content is the SIP message text, a recorded call's parties, and the
+						patterns of armed rules. A viewer without it still sees every
+						arrow, its timing and the line that sent it; the Message tab says
+						the text is hidden. Searching recorded calls by number, and seeing
+						rule patterns, need a rule with no match: one that lets the viewer
+						read every call they see. Saving or deleting a call needs all of
+						it, text included, so a narrower viewer cannot replace a saved call
+						with the part they were shown. With no grants configured, the
+						WebLogic admin roles see every call; the policy starts out letting
+						the WebLogic administrator groups read them, as before. That rule
+						holds only for a WebLogic sign-in, because an identity domain's
+						own <code>Administrators</code> group is a different group with
+						the same name.
+						When a viewer's access is limited, the page says what it covers
+						under the toolbar.
+					</p>
+					<p>
+						Trace takes the dashboard's sign-in: with the identity domain
+						configured, a tenant's people sign in there and need no WebLogic
+						account, and the WebLogic login still works beside it. Reading is
+						for everyone the grants show calls to. Arming, disarming and
+						clearing, saving or deleting a call, seeing the armed rules, and
+						the Source tab need a WebLogic admin role, because a rule captures
+						calls on every server and the source is every application's
+						deployed code. The page leaves those controls out for anyone else,
+						and the server refuses them.
+					</p>
 
 					<h2>Snapshots — sharing what you saw</h2>
 					<p>

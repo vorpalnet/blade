@@ -11,8 +11,8 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 
-import org.vorpal.blade.framework.v2.callflow.Callback;
-import org.vorpal.blade.framework.v2.callflow.ClientCallflow;
+import org.vorpal.blade.framework.Callback;
+import org.vorpal.blade.framework.v3.ClientCallflow;
 
 /* Visit https://plantuml.com/sequence-diagram for notes on how to draw.
 @startuml doc-files/keepalive_reinvite.png

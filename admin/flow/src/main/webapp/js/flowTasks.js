@@ -502,7 +502,7 @@ window.flowTasks = (function() {
 		for (var p in ns) {
 			if (ns.hasOwnProperty(p)) rows += namespaceRowHtml(p, ns[p]);
 		}
-		return '<label>Namespaces <span class="hint">(prefix → URI; required for a namespaced XPath)</span></label>' +
+		return '<label class="vorpal-label">Namespaces <span class="hint">(prefix → URI; required for a namespaced XPath)</span></label>' +
 			'<div class="sel-ns-rows">' + rows + '</div>' +
 			'<span class="add-btn sel-ns-add" title="Add namespace">+ add namespace</span>';
 	}
@@ -579,15 +579,15 @@ window.flowTasks = (function() {
 
 		return '' +
 			'<div class="sel-field">' +
-				'<label>Key expression <span class="hint">(${} template producing the lookup key)</span></label>' +
+				'<label class="vorpal-label">Key expression <span class="hint">(${} template producing the lookup key)</span></label>' +
 				'<input class="tbl-keyexpr" type="text" value="' + escapeAttr(keyExpr) + '" placeholder="${From.user}" />' +
 			'</div>' +
 			'<div class="sel-field">' +
-				'<label>Match strategy <span class="hint">(hash = exact, prefix = longest-prefix, range = lo-hi)</span></label>' +
+				'<label class="vorpal-label">Match strategy <span class="hint">(hash = exact, prefix = longest-prefix, range = lo-hi)</span></label>' +
 				'<select class="tbl-match">' + matchOptions + '</select>' +
 			'</div>' +
 			'<div class="sel-field">' +
-				'<label>Translations <span class="hint">(lookup key → context variables)</span></label>' +
+				'<label class="vorpal-label">Translations <span class="hint">(lookup key → context variables)</span></label>' +
 				'<table class="tbl-grid"><thead>' + head + '</thead><tbody>' + body + '</tbody></table>' +
 				'<span class="add-btn tbl-add-row" title="Add row">+ add row</span>' +
 			'</div>';
@@ -684,23 +684,23 @@ window.flowTasks = (function() {
 		var hideExtra = (!isTable && extra) ? '' : ' style="display:none;"';
 
 		return '' +
-			'<fieldset class="selector-row" data-idx="' + idx + '">' +
-				'<legend>Selector ' + (idx + 1) +
+			'<fieldset class="selector-row vorpal-panel" data-idx="' + idx + '">' +
+				'<legend class="vorpal-label">Selector ' + (idx + 1) +
 					' <svg class="remove-btn remove-state-selector" title="Remove" viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4.5 8h7" stroke="currentColor" stroke-width="1.5"/></svg>' +
 				'</legend>' +
 
 				'<div class="sel-field">' +
-					'<label>Type</label>' +
+					'<label class="vorpal-label">Type</label>' +
 					'<select class="sel-type">' + typeOptions + '</select>' +
 				'</div>' +
 
 				'<div class="sel-field">' +
-					'<label>Id <span class="hint">(also the context variable name, e.g. ${id})</span></label>' +
+					'<label class="vorpal-label">Id <span class="hint">(also the context variable name, e.g. ${id})</span></label>' +
 					'<input class="sel-id" type="text" value="' + escapeAttr(id) + '" placeholder="e.g. To" />' +
 				'</div>' +
 
 				'<div class="sel-field sel-attribute-field"' + hideAttr + '>' +
-					'<label class="sel-attribute-label">' + (attrLabel || '') + '</label>' +
+					'<label class="vorpal-label sel-attribute-label">' + (attrLabel || '') + '</label>' +
 					'<input class="sel-attribute" type="text" value="' + escapeAttr(attribute) + '"' + attrList + ' />' +
 					((isAttribute || isRegex) ? pseudoHeaderDatalist(attrListId) : '') +
 				'</div>' +
@@ -719,13 +719,13 @@ window.flowTasks = (function() {
 				'<div class="sel-field sel-ns-field">' + namespaceEditorHtml(namespaces) + '</div>' : '') +
 
 				'<div class="sel-field sel-pattern-field"' + hideRegex + '>' +
-					'<label>Pattern <span class="hint">(regex; named groups become ${id.group} variables)</span></label>' +
+					'<label class="vorpal-label">Pattern <span class="hint">(regex; named groups become ${id.group} variables)</span></label>' +
 					'<input class="sel-pattern" type="text" value="' + escapeAttr(pattern) +
 						'" placeholder="sips?:(?&lt;user&gt;[^@]+)@(?&lt;host&gt;[^;&gt;]+)" />' +
 				'</div>' +
 
 				'<div class="sel-field sel-expression-field"' + hideRegex + '>' +
-					'<label>Expression <span class="hint">(optional ${} template; result stored under Id)</span></label>' +
+					'<label class="vorpal-label">Expression <span class="hint">(optional ${} template; result stored under Id)</span></label>' +
 					'<input class="sel-expression" type="text" value="' + escapeAttr(expression) +
 						'" placeholder="${user}@${host}" />' +
 				'</div>' +
@@ -733,8 +733,8 @@ window.flowTasks = (function() {
 				tableBlock +
 
 				'<div class="sel-field sel-extra-field"' + hideExtra + '>' +
-					'<label>Advanced <span class="hint">(raw JSON for fields the form does not show: namespaces, …)</span></label>' +
-					'<textarea class="sel-extra">' + escapeAttr(extra) + '</textarea>' +
+					'<label class="vorpal-label">Advanced <span class="hint">(raw JSON for fields the form does not show: namespaces, …)</span></label>' +
+					'<textarea class="sel-extra vorpal-mono">' + escapeAttr(extra) + '</textarea>' +
 				'</div>' +
 
 			'</fieldset>';
@@ -975,11 +975,12 @@ window.flowTasks = (function() {
 
 	function bindTransition() {
 		// Vanilla tab strip (replaces jQuery-UI tabs). Active state lives in
-		// the tab-active class on both the button and its page.
+		// the tab-active class on both the button and its page; aria-selected
+		// on the button is what the shared .vorpal-tabs look reads.
 		$(document).off('click.flowTx', '#transition-tabs .tab-btn').on('click.flowTx', '#transition-tabs .tab-btn', function() {
 			var target = $(this).attr('data-tab');
-			$('#transition-tabs .tab-btn').removeClass('tab-active');
-			$(this).addClass('tab-active');
+			$('#transition-tabs .tab-btn').removeClass('tab-active').attr('aria-selected', 'false');
+			$(this).addClass('tab-active').attr('aria-selected', 'true');
 			$('#transition-tabs .tab-page').removeClass('tab-active');
 			$('#' + target).addClass('tab-active');
 			return false;

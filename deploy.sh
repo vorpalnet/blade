@@ -780,6 +780,25 @@ collision_precheck
 
 # --- Do it ---
 rc=0
+
+# Copies a file into the domain. The domain's files belong to the user
+# WebLogic runs as (oracle), and deploy.sh usually runs as someone else (opc),
+# so a file already there cannot be overwritten in place. Then it goes in as
+# that owner, through sudo, staged in /tmp first: the owner need not be able
+# to read this user's home. Without sudo the error is the copy's own.
+copy_into_domain() {
+    local src="$1" dest="$2" owner tmp
+    if { [ -e "$dest" ] && [ -w "$dest" ]; } || { [ ! -e "$dest" ] && [ -w "$(dirname "$dest")" ]; }; then
+        cp "$src" "$dest"; return
+    fi
+    owner="$(ls -ld "$( [ -e "$dest" ] && echo "$dest" || dirname "$dest")" | awk '{print $3}')"
+    if [ -n "$owner" ] && [ "$owner" != "$(id -un)" ] && sudo -n -u "$owner" true 2>/dev/null; then
+        tmp="$(mktemp /tmp/blade-deploy.XXXXXX)"
+        cp "$src" "$tmp" && chmod 644 "$tmp" && sudo -n -u "$owner" cp "$tmp" "$dest"
+        local r=$?; rm -f "$tmp"; return $r
+    fi
+    cp "$src" "$dest"
+}
 case "$MODE" in
     approuter)
         [ -n "$APPROUTER_DIR" ] || die "${CONF_FILE}: missing approuter.dir (required for --approuter)"
@@ -788,7 +807,7 @@ case "$MODE" in
         case "$ACTION" in
             deploy)
                 if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] cp ${ART} ${dest}${C_RESET}"
-                else [ -d "$APPROUTER_DIR" ] || die "approuter.dir does not exist: ${APPROUTER_DIR}"; cp "$ART" "$dest" || rc=$?; fi
+                else [ -d "$APPROUTER_DIR" ] || die "approuter.dir does not exist: ${APPROUTER_DIR}"; copy_into_domain "$ART" "$dest" || rc=$?; fi
                 warn "Restart the engine tier so each engine re-fetches the App Router from the admin." ;;
             undeploy)
                 if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] rm -f ${dest}${C_RESET}"; else rm -f "$dest" || rc=$?; fi

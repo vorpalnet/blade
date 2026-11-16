@@ -3,7 +3,7 @@
 /// lifecycle.
 ///
 /// The WAR itself is deliberately thin: [CrudServlet] is a
-/// [B2buaServlet][org.vorpal.blade.framework.v2.b2bua.B2buaServlet] that
+/// [B2buaServlet][org.vorpal.blade.framework.v3.B2buaServlet] that
 /// applies a configured
 /// [RuleSet][org.vorpal.blade.framework.v3.crud.RuleSet] in the B2BUA
 /// lifecycle callbacks — the rule engine, configuration model and preview

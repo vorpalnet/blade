@@ -31,8 +31,8 @@ import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.tpcc.TestReinvite;
-import org.vorpal.blade.framework.AsyncSipServlet;
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v3.AsyncSipServlet;
+import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 
 /**

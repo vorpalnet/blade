@@ -63,14 +63,14 @@
 		const heard = el('div', { className: 'ai-sr-only' });
 		heard.setAttribute('aria-live', 'polite');
 		let heardCount = 0;
-		const input = el('textarea', { rows: 2, spellcheck: true,
+		const input = el('textarea', { className: 'vorpal-input', rows: 2, spellcheck: true,
 			placeholder: opts.placeholder || 'Ask a question or ask for a change. Enter sends; Shift+Enter starts a new line.' });
-		const send = el('button', { type: 'button', className: 'ai-send', textContent: 'Send' });
-		const clear = el('button', { type: 'button', textContent: 'New', title: 'Start a new conversation' });
+		const send = el('button', { type: 'button', className: 'ai-send vorpal-btn', textContent: 'Send' });
+		const clear = el('button', { type: 'button', className: 'vorpal-btn vorpal-btn-secondary vorpal-btn-sm', textContent: 'New', title: 'Start a new conversation' });
 		input.setAttribute('aria-label', 'Message to ' + (opts.title || 'Claude'));
-		const max = el('button', { type: 'button', textContent: '□', title: 'Make the chat larger' });
+		const max = el('button', { type: 'button', className: 'vorpal-btn vorpal-btn-secondary vorpal-btn-sm', textContent: '□', title: 'Make the chat larger' });
 		max.setAttribute('aria-label', 'Make the chat larger');
-		const fold = el('button', { type: 'button', textContent: '–', title: 'Fold the chat away (Esc)' });
+		const fold = el('button', { type: 'button', className: 'vorpal-btn vorpal-btn-secondary vorpal-btn-sm', textContent: '–', title: 'Fold the chat away (Esc)' });
 		fold.setAttribute('aria-label', 'Fold the chat away');
 		const panel = el('section', { className: 'ai-chat', hidden: true }, [
 			el('div', { className: 'ai-chat-head' }, [
@@ -99,7 +99,7 @@
 			if (m.meta || (m.actions && m.actions.length)) {
 				const row = el('div', { className: 'ai-meta' }, m.meta ? [m.meta] : []);
 				(m.actions || []).forEach(a => {
-					const b = el('button', { type: 'button', textContent: a.label, title: a.title || '' });
+					const b = el('button', { type: 'button', className: 'vorpal-btn vorpal-btn-secondary vorpal-btn-sm', textContent: a.label, title: a.title || '' });
 					b.addEventListener('click', a.run);
 					row.appendChild(b);
 				});

@@ -19,6 +19,13 @@
 		is visible in the admin tier instead of buried in the JARs.</description>
 
 	<dependencies>
+		<!-- A JAX-RS implementation for the tests that build a Response; the
+		     container supplies one at run time. -->
+		<dependency>
+			<groupId>org.glassfish.jersey.core</groupId>
+			<artifactId>jersey-common</artifactId>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter</artifactId>

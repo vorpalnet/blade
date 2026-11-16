@@ -40,6 +40,8 @@
 		els.message.hidden = false;
 		els.message.classList.toggle('files-error', !!isError);
 		els.message.classList.toggle('files-ok', !isError);
+		els.message.classList.toggle('vorpal-error', !!isError);
+		els.message.classList.toggle('vorpal-note', !isError);
 	}
 
 	function clearMessage() { els.message.hidden = true; }

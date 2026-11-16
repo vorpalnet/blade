@@ -7,7 +7,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.vorpal.blade.framework.v2.analytics.Analytics;
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.framework.v2.logging.LogParameters;
 import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 import org.vorpal.blade.framework.v3.configuration.Context;

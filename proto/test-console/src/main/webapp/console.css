@@ -1,123 +1,64 @@
-/* Test Console — app-specific styles layered on brand.css.
-   Status is always conveyed by TEXT (state names, counts, labels);
-   color only supplements. */
+/* Test Console: layout on top of brand.css's shared components. Status is
+   always a word (state names, counts, labels); colour only repeats it. */
 
-.tc-controls {
-	background: var(--vorpal-surface);
-	border: 1px solid var(--vorpal-divider);
-	border-radius: 10px;
-	padding: 1rem 1.25rem 1.25rem;
-	margin-bottom: 1.5rem;
+.tc-controls,
+.tc-section {
+	margin-bottom: 20px;
 }
 
 .tc-controls-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-	gap: 0.75rem 1rem;
+	gap: 12px 16px;
 }
 
 .tc-actions {
-	margin-top: 1rem;
-	display: flex;
-	align-items: center;
-	gap: 0.75rem;
-	flex-wrap: wrap;
+	margin-top: 14px;
 }
 
 .tc-feedback {
-	font-size: 0.85rem;
-	opacity: 0.85;
+	font-size: 13px;
+	color: var(--vorpal-slate-600);
 }
 
 .tc-node-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-	gap: 1rem;
-	margin-bottom: 1.5rem;
-}
-
-.tc-node {
-	background: var(--vorpal-surface);
-	border: 1px solid var(--vorpal-divider);
-	border-radius: 10px;
-	padding: 0.85rem 1rem;
+	gap: 14px;
 }
 
 .tc-node-head {
-	display: flex;
 	justify-content: space-between;
-	align-items: baseline;
-	gap: 0.5rem;
-	margin-bottom: 0.5rem;
+	flex-wrap: nowrap;
 }
 
-.tc-node-title {
-	font-weight: 600;
-}
-
-.tc-node-server {
-	font-size: 0.8rem;
-	opacity: 0.7;
-}
-
-.tc-state {
-	font-size: 0.75rem;
-	letter-spacing: 0.06em;
-	padding: 0.1rem 0.5rem;
-	border: 1px solid currentColor;
-	border-radius: 999px;
-	white-space: nowrap;
-}
-
-/* Shape + weight distinguish states; hue is secondary. */
-.tc-state-RUNNING { font-weight: 700; }
+/* Beside the state's word, weight and style tell the states apart. */
+.tc-state-RUNNING { font-weight: 800; }
 .tc-state-STOPPING { font-style: italic; }
-.tc-state-STOPPED { opacity: 0.65; }
 
 .tc-counters {
 	display: grid;
 	grid-template-columns: repeat(2, 1fr);
-	gap: 0.25rem 1rem;
-	font-size: 0.85rem;
+	gap: 4px 16px;
+	margin: 0;
+	font-size: 13px;
 }
 
-.tc-counters dt { opacity: 0.7; }
+.tc-counters dt { color: var(--vorpal-slate-600); }
 .tc-counters dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
 
-table.tc-table {
-	width: 100%;
-	border-collapse: collapse;
-	font-size: 0.85rem;
-	margin-bottom: 1.5rem;
+/* The metrics table is wider than a narrow window; it scrolls in place. */
+.tc-scroll {
+	overflow-x: auto;
 }
 
-table.tc-table th,
-table.tc-table td {
-	padding: 0.4rem 0.6rem;
-	border-bottom: 1px solid var(--vorpal-divider);
-	text-align: right;
-	font-variant-numeric: tabular-nums;
+.tc-table th,
+.tc-table td {
 	white-space: nowrap;
 }
 
-table.tc-table th:first-child,
-table.tc-table td:first-child {
-	text-align: left;
-}
-
-table.tc-table th {
-	opacity: 0.7;
-	font-weight: 600;
-	letter-spacing: 0.03em;
-}
-
-.tc-note {
-	font-size: 0.8rem;
-	font-weight: 400;
-	opacity: 0.65;
-}
-
-.tc-empty {
-	opacity: 0.65;
-	font-style: italic;
+/* The empty and error messages sit in the node grid; span all of it. */
+.tc-node-grid > .tc-empty {
+	grid-column: 1 / -1;
+	margin: 0;
 }

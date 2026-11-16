@@ -4,8 +4,8 @@
 /// Arm a rule (match a header pattern), place the call, and read the recording:
 /// every message each app sent and received, merged by `X-Vorpal-Session` into
 /// one timeline, drawn as a sequence (ladder) diagram, and shown against the real
-/// source — the lambda-based callflow ([org.vorpal.blade.framework.v2.callflow.Callflow])
-/// with response handlers as nested [org.vorpal.blade.framework.v2.callflow.Callback]
+/// source — the lambda-based callflow ([org.vorpal.blade.framework.v3.Callflow])
+/// with response handlers as nested [org.vorpal.blade.framework.Callback]
 /// lambdas, read top-to-bottom in one `process(...)` method instead of the scattered
 /// `doInvite`/`doResponse`/`doAck` handlers of the traditional JSR-289 model.
 ///

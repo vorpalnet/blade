@@ -9,24 +9,19 @@
  * Every rule is scoped under a panel id or a panel-only class: anything
  * global (body, label, input) would leak into the editor page itself.
  *
- * Built on the shared brand layer (brand.css, linked from flow.html), so
- * the inspector forms match the modernized editor chrome around them.
+ * Built on the shared brand layer (brand.css, linked from flow.html). The
+ * controls take its components: labels are .vorpal-label, the tab strip is
+ * .vorpal-tabs, buttons are .vorpal-btn, a selector is a .vorpal-panel, and
+ * inputs take the shared default look the frame gives every bare control
+ * (shell.js marks the page .vorpal-shell). This file keeps layout plus the
+ * panel-only pieces the shared layer has no equivalent for.
  */
 
 #transition-view,
 #state-view,
 #config-view {
 	padding: 10px 12px;
-	font-family: var(--vorpal-font-sans, Arial, sans-serif);
 	font-size: 12.5px;
-	color: var(--vorpal-ink-700);
-}
-
-#config-view h3 {
-	margin: 0 0 10px;
-	font-size: 14px;
-	font-weight: 600;
-	color: var(--vorpal-ink-900);
 }
 
 /* --- Labels & hints ------------------------------------------------- */
@@ -36,10 +31,12 @@
 #config-view label {
 	display: block;
 	margin: 12px 0 4px;
-	font-weight: 600;
-	font-size: 11px;
-	color: var(--vorpal-ink-900);
-	letter-spacing: 0.01em;
+}
+/* A hint left inline in a label (the plan dialog's) reads as a phrase, not
+   as more of the uppercase label. */
+.vorpal-label .hint {
+	text-transform: none;
+	letter-spacing: normal;
 }
 
 /* Hints render on their own line under the label text, never inline —
@@ -90,8 +87,8 @@
 	padding: 8px 10px;
 	background: var(--vorpal-surface);
 	border: 1px solid var(--vorpal-slate-300);
-	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
-	font-family: var(--vorpal-font-sans, Arial, sans-serif);
+	border-radius: var(--vorpal-radius-sm);
+	box-shadow: var(--vorpal-shadow-md);
 	font-size: 11.5px;
 	font-style: normal;
 	font-weight: normal;
@@ -107,6 +104,7 @@
 }
 
 /* --- Inputs ---------------------------------------------------------- */
+/* The look is the shared default; the panel only sets their width. */
 
 #transition-view input[type=text],
 #transition-view input[type=number],
@@ -118,27 +116,9 @@
 #config-view input[type=text] {
 	width: 100%;
 	box-sizing: border-box;
-	padding: 5px 8px;
-	border: 1px solid var(--vorpal-slate-300);
-	border-radius: 0;
-	background: var(--vorpal-surface);
-	color: var(--vorpal-ink-900);
-	font-size: 12.5px;
-	font-family: inherit;
 }
 
-#transition-view input:focus,
-#transition-view select:focus,
-#transition-view textarea:focus,
-#state-view input:focus,
-#state-view select:focus,
-#state-view textarea:focus,
-#config-view input:focus {
-	border-color: var(--vorpal-purple);
-	box-shadow: 0 0 0 2px rgba(96, 38, 113, 0.15);
-	outline: none;
-}
-
+/* Read-only: a recessed field, and the browser refuses the caret. */
 #transition-view input[readonly],
 #state-view input[readonly] {
 	background: var(--vorpal-slate-100);
@@ -146,80 +126,25 @@
 }
 
 #transition-when {
-	font-family: var(--vorpal-font-mono);
-	font-size: 11.5px;
 	min-height: 56px;
 	resize: vertical;
 }
 
 /* --- Tab strip (Basic / Routing) ------------------------------------- */
+/* .vorpal-tabs; the pages show and hide on the tab-active class. */
 
-/* Underline tabs — mirrors the brand topbar nav: plain text, the active
-   one carries a purple underline (distinguished by underline + weight +
-   color, not color alone). Cleaner against the panel than boxed tabs. */
 .tab-strip {
-	display: flex;
-	gap: 6px;
-	border-bottom: 1px solid var(--vorpal-slate-200);
 	margin: 0 0 10px;
-	padding: 0;
-	list-style: none;
-}
-.tab-strip button {
-	border: none;
-	background: none;
-	color: var(--vorpal-slate-600);
-	padding: 6px 10px;
-	margin-bottom: -1px;
-	border-bottom: 2px solid transparent;
-	font-family: var(--vorpal-font-sans);
-	font-size: 12.5px;
-	font-weight: 500;
-	cursor: pointer;
-}
-.tab-strip button:hover {
-	color: var(--vorpal-ink-900);
-}
-.tab-strip button.tab-active {
-	color: var(--vorpal-purple);
-	font-weight: 600;
-	border-bottom-color: var(--vorpal-purple);
 }
 .tab-page { display: none; }
 .tab-page.tab-active { display: block; }
 
-/* --- Plan-dispatch button (state panel) ------------------------------ */
-
-.add-plan-dispatch {
-	background: var(--vorpal-surface);
-	color: var(--vorpal-ink-700);
-	border: 1px solid var(--vorpal-slate-300);
-	border-radius: 0;
-	padding: 5px 12px;
-	font-family: var(--vorpal-font-sans);
-	font-size: 12px;
-	font-weight: 600;
-	cursor: pointer;
-}
-.add-plan-dispatch:hover {
-	background: var(--vorpal-purple-soft);
-	color: var(--vorpal-purple-700);
-	border-color: var(--vorpal-purple-100);
-}
-
-/* --- Grouped sections (state.html fieldsets, selector fields) -------- */
+/* --- Grouped sections (selector panels, selector fields) ------------- */
 
 #state-view fieldset {
 	margin: 12px 0;
-	border: 1px solid var(--vorpal-slate-300);
-	padding: 8px 10px 12px;
-	background: var(--vorpal-surface-alt);
-	border-radius: 0;
 }
 #state-view legend {
-	font-weight: 600;
-	font-size: 11px;
-	color: var(--vorpal-ink-900);
 	padding: 0 6px;
 }
 
@@ -228,12 +153,8 @@
 }
 .sel-field label {
 	margin: 0 0 3px;
-	font-size: 11px;
-	color: var(--vorpal-ink-700);
 }
 .sel-field textarea {
-	font-family: var(--vorpal-font-mono);
-	font-size: 11.5px;
 	min-height: 48px;
 }
 
@@ -430,7 +351,6 @@
 	padding: 5px;
 	margin-top: 4px;
 	background: var(--vorpal-surface-alt);
-	border-radius: 0;
 	display: flex;
 	gap: 4px;
 	align-items: center;

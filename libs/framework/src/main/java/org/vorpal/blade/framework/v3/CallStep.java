@@ -36,6 +36,12 @@ public final class CallStep implements Serializable {
 	private final String methodName; // method or lambda that called send* ("process"/"received" for in)
 	private final int line;          // source line of the send* call (-1 for in)
 	private final String message;    // raw SIP message text, or null if unavailable
+	// Who may see this step ([org.vorpal.blade.framework.v3.access.Access]):
+	// the call's tenant and department when it was recorded. Null for none, and
+	// for an HTTP step, which is recorded where the call's session is not in
+	// reach; the Trace app shows those with the call's other steps.
+	private String tenant;
+	private String department;
 
 	public CallStep(String sessionId, long epochMillis, int order, String direction, String kind,
 			String label, String className, String methodName, int line, String message) {
@@ -70,6 +76,20 @@ public final class CallStep implements Serializable {
 	public int getLine() { return line; }
 
 	public String getMessage() { return message; }
+
+	public String getTenant() { return tenant; }
+
+	public String getDepartment() { return department; }
+
+	/// Stamps the call's scope on this step, as it is recorded. A call with no
+	/// tenant of its own takes the server's `blade.tenant`, as the analytics
+	/// views do for its events.
+	public CallStep scoped(org.vorpal.blade.framework.v3.events.CallScope scope) {
+		this.tenant = (scope != null && scope.getTenant() != null) ? scope.getTenant()
+				: org.vorpal.blade.framework.v2.config.SettingsManager.getTenant();
+		this.department = (scope != null) ? scope.getDepartment() : null;
+		return this;
+	}
 
 	/// Short, unqualified callflow class name — the human-facing "which app/flow".
 	public String getSimpleClassName() {

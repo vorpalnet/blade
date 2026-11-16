@@ -32,8 +32,6 @@ import org.vorpal.blade.framework.v3.security.AccessDecision;
 import org.vorpal.blade.framework.v3.security.AccessEvaluator;
 import org.vorpal.blade.framework.v3.security.ContainerSubject;
 import org.vorpal.blade.framework.v3.security.DataPermission;
-import org.vorpal.blade.framework.v3.security.JwtIdentity;
-import org.vorpal.blade.framework.v3.security.RealmSubjectAttributes;
 import org.vorpal.blade.framework.v3.security.SubjectAttributes;
 
 /// The review API, and the one place a recording is handed over.
@@ -494,16 +492,7 @@ public class RecordingsAPI {
 	/// Who is asking: as the token named them when OidcLoginFilter signed them
 	/// in, otherwise as the container knows them.
 	private SubjectAttributes caller() {
-		if (request.getUserPrincipal() instanceof JwtIdentity) {
-			return SubjectAttributes.of((JwtIdentity) request.getUserPrincipal());
-		}
-		// ContainerSubject, not Subject.getSubject(AccessController.getContext()).
-		// The JAAS lookup returns null on a servlet thread, which reads as "no
-		// groups" and silently stops every group rule from matching. See that
-		// class for why.
-		javax.security.auth.Subject subject = ContainerSubject.current();
-		String name = (request.getUserPrincipal() == null) ? null : request.getUserPrincipal().getName();
-		SubjectAttributes attributes = RealmSubjectAttributes.of(subject, name);
+		SubjectAttributes attributes = SubjectAttributes.of(request);
 		Logger logger = SettingsManager.getSipLogger();
 		if (logger != null && logger.isLoggable(Level.FINE)) {
 			logger.fine("recordings: caller " + attributes + " via " + ContainerSubject.source());

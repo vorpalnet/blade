@@ -190,7 +190,7 @@ public final class TraceEventSmokeTest {
 		Callflow.enableTrace(app);
 
 		Callflow.traceEvent(Direction.RECEIVE, request(app, "INVITE", RAW_INVITE), null,
-				"org.vorpal.blade.framework.v2.transfer.BlindTransfer", "process", null);
+				"org.vorpal.blade.framework.v3.transfer.BlindTransfer", "process", null);
 
 		List<CallStep> ring = TraceLog.snapshot();
 		check("receive records one step", ring.size() == 1);
@@ -198,7 +198,7 @@ public final class TraceEventSmokeTest {
 		check("direction in, kind/label from the request",
 				CallStep.IN.equals(s.getDirection()) && "request".equals(s.getKind()) && "INVITE".equals(s.getLabel()));
 		check("handler FQN + process hint, no line pin",
-				"org.vorpal.blade.framework.v2.transfer.BlindTransfer".equals(s.getClassName())
+				"org.vorpal.blade.framework.v3.transfer.BlindTransfer".equals(s.getClassName())
 						&& "process".equals(s.getMethodName()) && s.getLine() == -1);
 		check("raw message captured", RAW_INVITE.equals(s.getMessage()));
 		check("session trace list also grew", Callflow.getTrace(app).size() == 1);

@@ -76,6 +76,8 @@
 	/* The brand mark's pill, the active tab and the primary button. */
 	--vorpal-mark:          #602671;
 	--vorpal-mark-hover:    #4a1c58;
+	--vorpal-success-soft:  #eaf6ef;
+	--vorpal-scrim:         rgba(26, 36, 52, 0.45);
 }
 
 /* ---- Light: the dashboard's geometry and type on pale surfaces ---- */
@@ -103,6 +105,8 @@ html[data-theme="light"] {
 	--vorpal-warn-soft:     #fbf2e8;
 	--vorpal-error:         #a8431f;
 	--vorpal-error-soft:    #fcf0ea;
+	--vorpal-success-soft:  #eaf6ef;
+	--vorpal-scrim:         rgba(27, 26, 51, 0.45);
 
 	--vorpal-radius-sm:     6px;
 	--vorpal-radius-md:     10px;
@@ -145,6 +149,8 @@ html[data-theme="light"] {
 		--vorpal-warn-soft:     rgba(220, 184, 119, 0.12);
 		--vorpal-error:         #e79ab0;
 		--vorpal-error-soft:    rgba(231, 154, 176, 0.12);
+		--vorpal-success-soft:  rgba(134, 201, 166, 0.12);
+		--vorpal-scrim:         rgba(0, 0, 0, 0.55);
 
 		--vorpal-radius-sm:     6px;
 		--vorpal-radius-md:     10px;
@@ -198,6 +204,7 @@ code, pre, kbd, samp { font-family: var(--vorpal-font-mono); }
    main area's rule is lowered with :where() so an app that makes its main
    area a sheet (Files, Flow) still wins. */
 html[data-theme] body {
+	color: var(--vorpal-ink-900);
 	background: var(--vorpal-backdrop), var(--vorpal-slate-100);
 	background-attachment: fixed;
 	min-height: 100vh;
@@ -863,40 +870,8 @@ html[data-theme] body {
    footer doesn't use it. */
 .vorpal-footer-meta { display: flex; gap: 18px; }
 
-/* ---- Buttons — PURPLE primary ------------------------------ */
-
-.vorpal-btn {
-	background: var(--vorpal-mark);
-	color: #fff;
-	border: 0;
-	border-radius: var(--vorpal-radius-md);
-	padding: 10px 18px;
-	font-size: 14px;
-	font-weight: 600;
-	font-family: inherit;
-	cursor: pointer;
-	transition: background 120ms ease, transform 80ms ease, box-shadow 120ms ease;
-	box-shadow: 0 1px 2px rgba(96, 38, 113, 0.25);
-}
-.vorpal-btn:hover {
-	background: var(--vorpal-mark-hover);
-	box-shadow: 0 2px 6px rgba(96, 38, 113, 0.32);
-}
-.vorpal-btn:active { transform: translateY(1px); }
-.vorpal-btn-block { width: 100%; padding: 12px 18px; }
-
-.vorpal-btn-secondary {
-	background: var(--vorpal-surface);
-	color: var(--vorpal-ink-700);
-	border: 1px solid var(--vorpal-slate-300);
-	box-shadow: none;
-}
-.vorpal-btn-secondary:hover {
-	background: var(--vorpal-purple-soft);
-	color: var(--vorpal-purple-700);
-	border-color: var(--vorpal-purple-100);
-	box-shadow: none;
-}
+/* ---- Buttons ------------------------------------------------- */
+/* Moved to section 5 (components): .vorpal-btn and its variants. */
 
 /* ============================================================
  * LOGIN — the dark-glass exception
@@ -1217,3 +1192,282 @@ html[data-theme] body {
  * that set dark panels over a blurred photograph. The themes replaced it:
  * the class now changes nothing, and the photograph stays only behind the
  * login page. */
+
+/* ============================================================
+ * 4. THE FRAME — shell.js's rail and account menu
+ * ============================================================
+ * The dashboard's rail and account menu, drawn here for every page that
+ * loads shell.js. Scoped under .vorpal-shell (shell.js adds it to <body>) so
+ * an application's own .rail or .acct is never touched; the dashboard draws
+ * the same class names from its own stylesheet. */
+
+.vorpal-shell .vorpal-shell-body { display: flex; min-height: 0; }
+.vorpal-shell .vorpal-shell-body > :not(.rail) { flex: 1 1 auto; min-width: 0; }
+
+/* Every application and service, the name always under its icon. It stays
+   in view under the top bar and scrolls on its own. */
+.vorpal-shell .rail {
+	flex: none; width: 112px; align-self: flex-start;
+	position: sticky; top: var(--vorpal-topbar-height); max-height: calc(100vh - var(--vorpal-topbar-height));
+	overflow-y: auto; overflow-x: hidden; padding: 10px 6px 14px 10px;
+	display: flex; flex-direction: column; gap: 2px; border-right: 1px solid var(--vorpal-divider);
+}
+.vorpal-shell .rail__head {
+	font-size: 9.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+	color: var(--vorpal-slate-400); margin: 6px 4px 4px;
+}
+.vorpal-shell .rail__item {
+	display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 4px; border-radius: 8px;
+	color: var(--vorpal-slate-600); text-decoration: none; text-align: center; font-size: 11px; line-height: 1.2;
+	border-bottom: 0;
+}
+.vorpal-shell .rail__item:hover { background: var(--vorpal-slate-200); color: var(--vorpal-ink-900); }
+.vorpal-shell .rail__item:hover .rail__name { text-decoration: underline; }
+.vorpal-shell .rail__icon {
+	width: 22px; height: 22px; background-color: var(--vorpal-slate-600);
+	-webkit-mask: center / contain no-repeat; mask: center / contain no-repeat;
+}
+.vorpal-shell .rail__item:hover .rail__icon { background-color: var(--vorpal-ink-900); }
+.vorpal-shell .rail__name { overflow-wrap: anywhere; }
+/* The application this page belongs to: a filled tile and a bar at its
+   left edge, so it reads without relying on colour. */
+.vorpal-shell .rail__item--here {
+	background: var(--vorpal-slate-200); color: var(--vorpal-ink-900); font-weight: 700;
+	box-shadow: inset 3px 0 0 var(--vorpal-purple);
+}
+.vorpal-shell .rail__item--here .rail__icon { background-color: var(--vorpal-ink-900); }
+.vorpal-shell .rail__item--first {
+	margin-bottom: 4px; border-bottom: 1px solid var(--vorpal-divider); border-radius: 8px 8px 0 0; padding-bottom: 10px;
+}
+.vorpal-shell .rail__note { font-size: 11px; color: var(--vorpal-slate-400); margin: 4px; }
+@media (max-width: 900px) {
+	.vorpal-shell .vorpal-shell-body { flex-direction: column; }
+	.vorpal-shell .rail {
+		position: static; width: auto; max-height: none; flex-direction: row; overflow-x: auto; overflow-y: hidden;
+		border-right: 0; border-bottom: 1px solid var(--vorpal-divider); padding: 6px 10px;
+	}
+	.vorpal-shell .rail__item { min-width: 76px; }
+}
+
+/* The account menu, far right of the top bar. */
+.vorpal-shell .acct { position: relative; }
+.vorpal-shell .acct__btn {
+	display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 13px; font-weight: 600;
+	color: var(--vorpal-slate-600); background: transparent; border: 1px solid transparent; border-radius: 9px;
+	padding: 4px 10px 4px 4px; cursor: pointer;
+}
+.vorpal-shell .acct__btn:hover,
+.vorpal-shell .acct__btn[aria-expanded="true"] { color: var(--vorpal-ink-900); border-color: var(--vorpal-slate-300); }
+.vorpal-shell .acct__badge {
+	display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+	background: var(--vorpal-mark); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .02em;
+}
+.vorpal-shell .acct__name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vorpal-shell .acct__menu {
+	position: absolute; right: 0; top: calc(100% + 8px); z-index: 20; min-width: 260px; max-width: 340px;
+	background: var(--vorpal-surface); border: 1px solid var(--vorpal-slate-300); border-radius: 12px; padding: 14px 16px;
+	box-shadow: var(--vorpal-shadow-lg); white-space: normal; text-align: left;
+}
+.vorpal-shell .acct__who { font-weight: 700; color: var(--vorpal-ink-900); font-size: 14px; }
+.vorpal-shell .acct__how { font-size: 12px; color: var(--vorpal-slate-400); margin-top: 2px; }
+.vorpal-shell .acct__h {
+	margin-top: 12px; font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+	color: var(--vorpal-slate-400); font-weight: 700;
+}
+.vorpal-shell .acct__sees { list-style: none; margin: 6px 0 0; padding: 0; font-size: 12.5px; color: var(--vorpal-slate-600); line-height: 1.6; }
+.vorpal-shell .acct__link {
+	display: block; margin-top: 12px; padding: 0; font: inherit; font-size: 12.5px; font-weight: 600;
+	color: var(--vorpal-purple); background: none; border: 0; cursor: pointer; text-align: left;
+}
+.vorpal-shell .acct__link:hover { text-decoration: underline; }
+.vorpal-shell .acct__about { margin-top: 8px; font-size: 12px; color: var(--vorpal-slate-600); }
+.vorpal-shell .acct__about-ver { font-weight: 700; color: var(--vorpal-ink-900); }
+.vorpal-shell .acct__about-rows { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 8px 0 0; }
+.vorpal-shell .acct__about-rows dt { color: var(--vorpal-slate-400); }
+.vorpal-shell .acct__about-rows dd { margin: 0; color: var(--vorpal-ink-900); overflow-wrap: anywhere; }
+.vorpal-shell .acct__about-legal { margin-top: 8px; font-size: 11px; color: var(--vorpal-slate-400); }
+.vorpal-shell .acct__out {
+	display: block; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--vorpal-divider);
+	font-size: 13px; font-weight: 700; color: var(--vorpal-purple);
+}
+@media (max-width: 760px) { .vorpal-shell .acct__name { display: none; } }
+/* Controls an application has not styled itself take the shared look:
+   :where() gives these rules no weight, so any rule of the application's own
+   wins and only the browser's bare defaults are replaced. */
+:where(.vorpal-shell) :where(button, select, textarea,
+		input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="hidden"])) {
+	font: inherit; font-size: 13px; color: var(--vorpal-ink-900); background: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-slate-300); border-radius: 8px; padding: 5px 10px;
+}
+:where(.vorpal-shell) :where(button) { font-weight: 600; cursor: pointer; }
+:where(.vorpal-shell) :where(button:hover) { border-color: var(--vorpal-slate-400); background: var(--vorpal-slate-200); }
+:where(.vorpal-shell) :where(button:disabled) { opacity: .5; cursor: default; }
+:where(.vorpal-shell) :where(input, select, textarea)::placeholder { color: var(--vorpal-slate-400); }
+:where(.vorpal-shell) :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+	outline: 2px solid var(--vorpal-purple); outline-offset: 2px;
+}
+
+/* Printed, a page is its content: no frame, top bar or switch. */
+@media print {
+	.vorpal-shell .rail, .vorpal-shell .acct, .vorpal-shell .vorpal-topbar, .theme-switch { display: none !important; }
+	.vorpal-shell .vorpal-shell-body { display: block; }
+}
+
+/* ============================================================
+ * 5. COMPONENTS — the controls every application uses
+ * ============================================================
+ * The dashboard's controls, at its scale, for every admin page. An
+ * application puts these classes on its elements and keeps only its own
+ * layout (grid, widths, positions); colour, border, radius, padding and type
+ * come from here, so every application's button, tab, table and panel is the
+ * same one. Selection is never colour alone: a chosen tab is filled AND bold;
+ * a badge says its state in a word. */
+
+/* Buttons: primary (the one action that matters), secondary, danger (an
+   action that removes or stops something), ghost (a quiet, text-only one).
+   -sm is the dense size used in toolbars and panel heads. */
+.vorpal-btn {
+	display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+	font: inherit; font-size: 13px; font-weight: 600; line-height: 1.2; white-space: nowrap;
+	padding: 6px 14px; border-radius: 8px; cursor: pointer; text-decoration: none;
+	background: var(--vorpal-mark); color: #fff; border: 1px solid var(--vorpal-mark);
+	transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.vorpal-btn:hover { background: var(--vorpal-mark-hover); border-color: var(--vorpal-mark-hover); color: #fff; border-bottom-color: var(--vorpal-mark-hover); }
+.vorpal-btn:disabled, .vorpal-btn[aria-disabled="true"] { opacity: .5; cursor: default; }
+.vorpal-btn-secondary { background: var(--vorpal-surface); color: var(--vorpal-ink-900); border-color: var(--vorpal-slate-300); }
+.vorpal-btn-secondary:hover { background: var(--vorpal-slate-200); color: var(--vorpal-ink-900); border-color: var(--vorpal-slate-400); }
+.vorpal-btn-danger { background: var(--vorpal-surface); color: var(--vorpal-error); border-color: var(--vorpal-error); }
+.vorpal-btn-danger:hover { background: var(--vorpal-error-soft); color: var(--vorpal-error); border-color: var(--vorpal-error); }
+.vorpal-btn-ghost { background: transparent; color: var(--vorpal-purple); border-color: transparent; }
+.vorpal-btn-ghost:hover { background: var(--vorpal-purple-soft); color: var(--vorpal-purple); border-color: transparent; }
+.vorpal-btn-sm { font-size: 12px; padding: 4px 10px; border-radius: 7px; }
+.vorpal-btn-block { width: 100%; }
+
+/* Segmented control (page-level views, ranges): a tray of buttons, the chosen
+   one filled and bold. Mark it .on, aria-selected="true" or aria-pressed="true". */
+.vorpal-seg { display: inline-flex; gap: 2px; padding: 3px; background: var(--vorpal-surface); border: 1px solid var(--vorpal-divider); border-radius: 11px; }
+.vorpal-seg > button, .vorpal-seg > a {
+	font: inherit; font-size: 12.5px; font-weight: 600; color: var(--vorpal-slate-600);
+	background: transparent; border: 0; padding: 5px 12px; border-radius: 8px; cursor: pointer; text-decoration: none;
+}
+.vorpal-seg > :hover { color: var(--vorpal-ink-900); border-bottom: 0; }
+.vorpal-seg > .on, .vorpal-seg > [aria-selected="true"], .vorpal-seg > [aria-pressed="true"] {
+	background: var(--vorpal-mark); color: #fff; font-weight: 800;
+}
+
+/* Tabs inside a panel or over a pane: lighter than the segmented tray. */
+.vorpal-tabs { display: flex; flex-wrap: wrap; gap: 2px; }
+.vorpal-tabs > button, .vorpal-tabs > a {
+	font: inherit; font-size: 12px; font-weight: 600; color: var(--vorpal-slate-600);
+	background: transparent; border: 1px solid transparent; padding: 4px 10px; border-radius: 7px; cursor: pointer; text-decoration: none;
+}
+.vorpal-tabs > :hover { color: var(--vorpal-ink-900); border-color: var(--vorpal-slate-300); }
+.vorpal-tabs > .on, .vorpal-tabs > .active, .vorpal-tabs > [aria-selected="true"] {
+	background: var(--vorpal-mark); color: #fff; font-weight: 800; border-color: var(--vorpal-mark);
+}
+
+/* Fields: a small label over its control. The controls themselves take the
+   shared look from the defaults above; .vorpal-input says so explicitly
+   where an application's own rules would otherwise win. */
+.vorpal-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.vorpal-label, .vorpal-field > label, .vorpal-field > .vorpal-field-label {
+	font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--vorpal-slate-400);
+}
+.vorpal-input {
+	font: inherit; font-size: 13px; color: var(--vorpal-ink-900); background: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-slate-300); border-radius: 8px; padding: 5px 10px; min-width: 0;
+}
+.vorpal-input:focus { outline: 2px solid var(--vorpal-purple); outline-offset: 1px; border-color: var(--vorpal-purple); }
+textarea.vorpal-input { line-height: 1.45; }
+.vorpal-mono, .vorpal-input.vorpal-mono { font-family: var(--vorpal-font-mono); font-size: 12px; }
+
+/* Panels: the dashboard's card, a titled box. */
+.vorpal-panel {
+	background: var(--vorpal-surface); border: 1px solid var(--vorpal-divider); border-radius: 12px;
+	padding: 10px 14px 12px; min-width: 0; box-shadow: var(--vorpal-shadow-sm);
+}
+.vorpal-panel-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 8px; min-width: 0; }
+.vorpal-panel-title { margin: 0; font-size: 14px; font-weight: 700; color: var(--vorpal-ink-900); }
+.vorpal-panel-sub { font-size: 11.5px; color: var(--vorpal-slate-400); }
+.vorpal-panel-head > .vorpal-toolbar { margin-left: auto; }
+
+/* A row of controls. */
+.vorpal-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* Tables: the dashboard's report table. */
+.vorpal-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.vorpal-table th {
+	text-align: left; font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+	color: var(--vorpal-slate-400); padding: 8px 10px; border-bottom: 1px solid var(--vorpal-slate-300);
+	background: var(--vorpal-surface); white-space: nowrap;
+}
+.vorpal-table td { padding: 7px 10px; border-bottom: 1px solid var(--vorpal-divider); vertical-align: top; }
+.vorpal-table tbody tr:hover td { background: var(--vorpal-slate-200); }
+.vorpal-table .num { text-align: right; font-family: var(--vorpal-font-mono); font-variant-numeric: tabular-nums; }
+.vorpal-table tr.selected td, .vorpal-table tr[aria-selected="true"] td { background: var(--vorpal-purple-soft); box-shadow: inset 3px 0 0 var(--vorpal-purple); }
+.vorpal-table-sticky th { position: sticky; top: 0; z-index: 1; }
+
+/* Badges: a state in a word, outlined; the colour only repeats the word. */
+.vorpal-badge {
+	display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 700; line-height: 1.4;
+	padding: 0 8px; border-radius: 999px; border: 1px solid var(--vorpal-slate-300); color: var(--vorpal-slate-600);
+	white-space: nowrap;
+}
+.vorpal-badge-ok   { border-color: var(--vorpal-success); color: var(--vorpal-success); }
+.vorpal-badge-warn { border-color: var(--vorpal-warn); color: var(--vorpal-warn); background: var(--vorpal-warn-soft); }
+.vorpal-badge-bad  { border-color: var(--vorpal-error); color: var(--vorpal-error); background: var(--vorpal-error-soft); }
+.vorpal-badge-brand { border-color: var(--vorpal-purple); color: var(--vorpal-purple); background: var(--vorpal-purple-soft); }
+
+/* Messages: nothing to show, working on it, and something went wrong. */
+.vorpal-empty { color: var(--vorpal-slate-400); font-size: 13px; padding: 24px 12px; text-align: center; }
+.vorpal-error {
+	color: var(--vorpal-error); background: var(--vorpal-error-soft); border-left: 3px solid var(--vorpal-error);
+	padding: 8px 12px; border-radius: 6px; font-size: 13px;
+}
+.vorpal-note {
+	color: var(--vorpal-slate-600); background: var(--vorpal-slate-200); border-left: 3px solid var(--vorpal-slate-400);
+	padding: 8px 12px; border-radius: 6px; font-size: 13px;
+}
+
+/* Hidden means hidden: the components above set a display, which would
+   otherwise beat the hidden attribute an application toggles. */
+.vorpal-shell [hidden] { display: none !important; }
+
+/* A toggle button that is on: filled and bold, as a chosen tab is. */
+.vorpal-btn-secondary[aria-pressed="true"], .vorpal-btn-ghost[aria-pressed="true"] {
+	background: var(--vorpal-mark); color: #fff; border-color: var(--vorpal-mark); font-weight: 800;
+}
+/* Disabled is dashed as well as faded, so it does not rest on fading alone. */
+.vorpal-btn:disabled, .vorpal-btn[aria-disabled="true"] { border-style: dashed; }
+
+/* A square button holding one glyph (×, +, ⧉, ▲). With -danger it stays
+   quiet until pointed at, so a long form of remove buttons reads calmly. */
+.vorpal-btn-icon { width: 24px; height: 24px; padding: 0; font-size: 13px; border-radius: 6px; flex: none; }
+.vorpal-btn-danger.vorpal-btn-icon { border-color: transparent; background: transparent; }
+.vorpal-btn-danger.vorpal-btn-icon:hover { border-color: var(--vorpal-error); background: var(--vorpal-error-soft); }
+
+/* A warning: the note's shape on the warn tokens, with the word in it. */
+.vorpal-warn {
+	color: var(--vorpal-ink-900); background: var(--vorpal-warn-soft); border-left: 3px solid var(--vorpal-warn);
+	padding: 8px 12px; border-radius: 6px; font-size: 13px;
+}
+/* Secondary text. */
+.vorpal-muted { color: var(--vorpal-slate-600); font-size: 13px; }
+/* A recessed block of code or log text on an application page. */
+.vorpal-code {
+	font-family: var(--vorpal-font-mono); font-size: 12px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere;
+	background: var(--vorpal-slate-100); border: 1px solid var(--vorpal-divider); border-radius: 8px; padding: 8px 10px; margin: 0;
+	color: var(--vorpal-ink-900);
+}
+
+/* An application page opens with its title and one line of what it is for,
+   not a landing card: inside the frame the hero is that plain intro, the
+   same as the pages that open with a heading. Its action stays at the right. */
+.vorpal-shell .vorpal-hero {
+	background: none; border: 0; border-radius: 0; box-shadow: none; padding: 0; margin: 0 0 16px;
+	gap: 12px; overflow: visible;
+}
+.vorpal-shell .vorpal-hero::after { content: none; }
+.vorpal-shell .vorpal-hero h1 { font-size: 20px; font-weight: 700; margin: 0 0 4px; }
+.vorpal-shell .vorpal-hero p { font-size: 13px; }

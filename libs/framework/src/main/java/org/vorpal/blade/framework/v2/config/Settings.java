@@ -37,7 +37,7 @@ import java.util.List;
 import org.vorpal.blade.framework.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.v2.analytics.AnalyticsB2buaSample;
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.framework.v2.logging.LogParameters;
 import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 import org.vorpal.blade.framework.v2.logging.Logger;

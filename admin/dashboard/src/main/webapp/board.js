@@ -1007,99 +1007,8 @@
 		});
 	}
 
-	/* ── the rail: every application and service ─────────────────────────── */
-
-	/* The applications and services deployed here, from the dashboard's own
-	   copy of the application list (cards, AppCards): apps open at their
-	   own address, services in the Configurator. Every one is listed whatever
-	   the viewer may open; an app that refuses the viewer shows its own page
-	   saying which roles open it (denied.jsp). The name is always shown: an
-	   icon alone says little. The dashboard itself is left out. */
-
-	/* Icons are drawn in the rail's own ink: each app's favicon is used as a
-	   mask, so a navy outline made for a light page reads on the dark rail,
-	   and no icon depends on its colour. An app without an icon of its own
-	   gets a plain window; a service, a plug: something running, set in the
-	   Configurator. */
-	function glyph(paths) {
-		return 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
-			+ '<g fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + paths + '</g></svg>');
-	}
-	var GLYPH_APP = glyph('<rect x="4" y="6" width="24" height="20" rx="2.5"/><path d="M4 11h24 M8 8.5h.01 M11 8.5h.01"/>');
-	var GLYPH_SERVICE = glyph('<path d="M12 4v6 M20 4v6 M8 10h16v5a8 8 0 0 1-16 0z M16 23v5"/>');
-	/* The deployment inventory: a clipboard with a list on it. */
-	var GLYPH_INVENTORY = glyph('<rect x="7" y="6" width="18" height="22" rx="2.5"/><path d="M12 4h8v4h-8z M11 14h.01 M15 14h6 M11 19h.01 M15 19h6 M11 24h.01 M15 24h6"/>');
-
-	function maskIcon(icon, url) {
-		var m = 'url("' + url + '")';
-		icon.style.webkitMaskImage = m;
-		icon.style.maskImage = m;
-	}
-
-	/* Where an application opens: here, unless every server it runs on is
-	   another one (an engine-tier app such as Audit or Recordings), which a
-	   browser reaches at the engine tier's own address. */
-	function appHref(card, where) {
-		var path = '/' + card.contextRoot + '/';
-		var elsewhere = where.server && card.servers && card.servers.length
-			&& card.servers.indexOf(where.server) < 0;
-		return elsewhere && where.engineBaseUrl ? where.engineBaseUrl + path : path;
-	}
-
-	function railItem(card, where) {
-		var service = card.kind === 'service';
-		var a = el('a', 'rail__item');
-		a.href = service ? '/blade/configurator/configurator.html?schema=' + encodeURIComponent(card.configuratorDomain || card.name)
-			: appHref(card, where);
-		a.target = service ? 'blade-configurator' : 'blade-' + card.contextRoot.replace(/^.*\//, '');
-		var icon = el('span', 'rail__icon');
-		icon.setAttribute('aria-hidden', 'true');
-		if (service) {
-			maskIcon(icon, GLYPH_SERVICE);
-		} else {
-			// Only an icon that loads becomes the mask; a missing one, the window.
-			var src = '/' + card.contextRoot + '/favicon.svg', probe = new Image();
-			probe.onload = function () { maskIcon(icon, src); };
-			probe.onerror = function () { maskIcon(icon, GLYPH_APP); };
-			probe.src = src;
-		}
-		a.appendChild(icon);
-		a.appendChild(el('span', 'rail__name', card.name));
-		a.title = [card.name + (card.tagline ? ': ' + card.tagline : ''), card.description]
-			.filter(Boolean).join('\n\n');
-		return a;
-	}
-
-	function loadRail(cfg) {
-		var where = { server: cfg && cfg.about && cfg.about.server, engineBaseUrl: cfg && cfg.engineBaseUrl };
-		var rail = document.getElementById('rail');
-		if (!rail) return;
-		getJson('cards').then(function (res) {
-			var cards = (res && res.cards) || [];
-			rail.textContent = '';
-			var inv = el('a', 'rail__item rail__item--first');
-			inv.href = '/blade/portal/report.html';
-			inv.target = 'blade-portal';
-			inv.title = 'Deployment Inventory\n\nEvery application and service, where each runs, in one printable page.';
-			var icon = el('span', 'rail__icon');
-			icon.setAttribute('aria-hidden', 'true');
-			maskIcon(icon, GLYPH_INVENTORY);
-			inv.appendChild(icon);
-			inv.appendChild(el('span', 'rail__name', 'Deployment Inventory'));
-			rail.appendChild(inv);
-			[['app', 'Apps'], ['service', 'Services']].forEach(function (g) {
-				var some = cards.filter(function (c) {
-					return (c.kind === 'service') === (g[0] === 'service') && c.contextRoot !== 'blade/dashboard';
-				});
-				if (!some.length) return;
-				rail.appendChild(el('div', 'rail__head', g[1]));
-				some.forEach(function (c) { rail.appendChild(railItem(c, where)); });
-			});
-		}).catch(function () {
-			rail.textContent = '';
-			rail.appendChild(el('p', 'rail__note', 'The application list is unavailable.'));
-		});
-	}
+	/* The rail and the account menu are the shared frame's (the portal's
+	   brand/shell.js), fed from this board's own settings and cards. */
 
 	/* ── headroom ──────────────────────────────────────────────────────── */
 
@@ -1987,7 +1896,7 @@
 		P.risk.setViews([
 			{ key: 'list', label: 'Calls', sub: 'click one for Trace', tip: 'Newest first. Click a call to open it in Trace', fetch: function () { loadGroup('calls'); },
 				draw: function (body) {
-					if (!RIGHTS.content) return C.message(body, 'empty', 'Individual calls are not in your grant.');
+					if (!RIGHTS.content) return C.message(body, 'empty', 'Reading individual calls is not in your access.');
 					/* The flight recorder keeps a trace of every failed and dropped call. */
 					if ((state.outcome === 'failed' || state.outcome === 'dropped') && L.has('recorded')) {
 						var rec = L.to('recorded', { since: rangeStart() });
@@ -2038,87 +1947,6 @@
 	   switch redraws them. */
 	new MutationObserver(function () { drawAll(); })
 		.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-
-	/* ── who is signed in ──────────────────────────────────────────────── */
-
-	/* The account menu: the person's initials and name; opened, what their
-	   grant shows them and Sign out. Built from /settings, so it says what the
-	   server will actually enforce. */
-	function buildAccount(cfg) {
-		var host = document.getElementById('acct');
-		var name = cfg && (cfg.displayName || cfg.user);
-		if (!name) return;
-		var initials = name.split(/[\s._@-]+/).filter(Boolean).slice(0, 2)
-			.map(function (w) { return w.charAt(0).toUpperCase(); }).join('');
-		var btn = el('button', 'acct__btn');
-		btn.type = 'button';
-		btn.setAttribute('aria-haspopup', 'true');
-		btn.setAttribute('aria-expanded', 'false');
-		btn.appendChild(el('span', 'acct__badge', initials || '?'));
-		btn.appendChild(el('span', 'acct__name', name));
-		var menu = el('div', 'acct__menu');
-		menu.hidden = true;
-		menu.appendChild(el('div', 'acct__who', name));
-		var how = (cfg.user && cfg.user !== name ? cfg.user + ' · ' : '') + 'signed in with ' + (cfg.signedInWith || 'WebLogic');
-		menu.appendChild(el('div', 'acct__how', how));
-		if (cfg.sees && cfg.sees.length) {
-			menu.appendChild(el('div', 'acct__h', 'What you see'));
-			var list = el('ul', 'acct__sees');
-			cfg.sees.forEach(function (line) { list.appendChild(el('li', '', line)); });
-			menu.appendChild(list);
-		}
-		var out = el('a', 'acct__out', 'Sign out');
-		out.href = 'signout';
-		menu.appendChild(out);
-		var open = function (yes) { menu.hidden = !yes; btn.setAttribute('aria-expanded', String(yes)); };
-		btn.addEventListener('click', function (e) { e.stopPropagation(); open(menu.hidden); });
-		document.addEventListener('click', function (e) { if (!host.contains(e.target)) open(false); });
-		document.addEventListener('keydown', function (e) { if (e.key === 'Escape') open(false); });
-		host.appendChild(btn);
-		host.appendChild(menu);
-		host.hidden = false;
-	}
-
-	/* ── about ─────────────────────────────────────────────────────────── */
-
-	/* The brand pill opens About: this build (from the WAR's manifest), what
-	   it runs on, the copyright and license. Built from /settings; without it
-	   the panel still names the product. */
-	function buildAbout(about) {
-		var host = document.getElementById('about');
-		var btn = host.querySelector('button');
-		var panel = el('div', 'about');
-		panel.hidden = true;
-		about = about || {};
-		panel.appendChild(el('div', 'about__name', 'BLADE Dashboard'));
-		if (about.version) {
-			var built = about.built ? about.built.replace('T', ' ').replace(/:\d\dZ$/, ' UTC') : '';
-			panel.appendChild(el('div', 'about__ver', 'Version ' + about.version
-				+ (about.mode === 'dev' ? ' · development build' : '') + (built ? ' · built ' + built : '')));
-		}
-		var rows = el('dl', 'about__rows');
-		function row(k, v) { if (!v) return; rows.appendChild(el('dt', '', k)); rows.appendChild(el('dd', '', v)); }
-		row('Server', about.server && about.domain ? about.server + ' · domain ' + about.domain : about.server);
-		var wls = about.weblogic && /WebLogic Server [\d.]+/.exec(about.weblogic);
-		row('WebLogic', wls ? wls[0].replace('WebLogic Server ', '') : about.weblogic);
-		row('Java', about.java);
-		if (rows.children.length) panel.appendChild(rows);
-		var links = el('div', 'about__links');
-		var docs = el('a', '', 'Documentation');
-		docs.href = '/blade/javadoc/'; docs.target = 'blade-javadoc';
-		var src = el('a', '', 'Source on GitHub');
-		src.href = 'https://github.com/vorpalnet/blade'; src.target = '_blank'; src.rel = 'noopener';
-		links.appendChild(docs); links.appendChild(src);
-		panel.appendChild(links);
-		if (about.copyright || about.license) {
-			panel.appendChild(el('div', 'about__legal', [about.copyright, about.license].filter(Boolean).join(' · ')));
-		}
-		host.appendChild(panel);
-		var open = function (yes) { panel.hidden = !yes; btn.setAttribute('aria-expanded', String(yes)); };
-		btn.addEventListener('click', function (e) { e.stopPropagation(); open(panel.hidden); });
-		document.addEventListener('click', function (e) { if (!host.contains(e.target)) open(false); });
-		document.addEventListener('keydown', function (e) { if (e.key === 'Escape') open(false); });
-	}
 
 	/* ── loading ───────────────────────────────────────────────────────── */
 
@@ -2324,10 +2152,7 @@
 				RANGES = cfg.ranges.map(String);
 				buildRange();
 			}
-			buildAccount(cfg);
 		}
-		buildAbout(cfg && cfg.about);
-		loadRail(cfg);
 		if (!RIGHTS.platform) {
 			live = function () { loadNow().catch(function () {}); };
 			hidePlatformKpis();

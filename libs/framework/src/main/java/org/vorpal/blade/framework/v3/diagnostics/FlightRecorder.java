@@ -77,6 +77,9 @@ public final class FlightRecorder {
 					return;
 				}
 				ladder = new CallLadder();
+				ladder.from = party(request.getHeader("From"));
+				ladder.to = party(request.getHeader("To"));
+				ladder.asserted = party(request.getHeader("P-Asserted-Identity"));
 				CALLS.put(id, ladder);
 			}
 			// Everything the step needs from the container is read before taking the ladder's
@@ -125,7 +128,15 @@ public final class FlightRecorder {
 			if (ladder == null) {
 				return;
 			}
+			// The call's scope as it ended, read before taking the ladder's monitor
+			// (see record). A routing hop sets the department after the first step,
+			// so the scope read then is the inbound one, or none, and a department
+			// viewer would never find the calls their department handled.
+			CallScope ended = CallScope.of(app);
 			synchronized (ladder) {
+				if (ended != CallScope.NONE) {
+					ladder.scope = ended;
+				}
 				CallLadder.Verdict verdict = ladder.verdict();
 				if (verdict == null && !dropped) {
 					return;
@@ -167,6 +178,15 @@ public final class FlightRecorder {
 			}
 			data.put("dropped", dropped);
 			data.put("omitted", ladder.omitted());
+			if (ladder.from != null) {
+				data.put("from", ladder.from);
+			}
+			if (ladder.to != null) {
+				data.put("to", ladder.to);
+			}
+			if (ladder.asserted != null) {
+				data.put("asserted", ladder.asserted);
+			}
 			ArrayNode steps = data.putArray("steps");
 			for (CallLadder.Step s : ladder.steps()) {
 				ObjectNode o = steps.addObject();
@@ -183,6 +203,14 @@ public final class FlightRecorder {
 				}
 			}
 		});
+	}
+
+	/// A party header as the call carried it, capped; null when absent.
+	static String party(String header) {
+		if (header == null || header.isEmpty()) {
+			return null;
+		}
+		return header.length() > CallLadder.PARTY_MAX ? header.substring(0, CallLadder.PARTY_MAX) : header;
 	}
 
 	private static long cseq(SipServletMessage message) {

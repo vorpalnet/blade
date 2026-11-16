@@ -13,6 +13,9 @@
  *
  * Pages call BladeEditor.init({defs, onDirty}) once the schema is loaded;
  * every model mutation made by kit-rendered controls flows through onDirty.
+ * The controls it builds carry brand.css's component classes (.vorpal-btn,
+ * .vorpal-field, .vorpal-input, .vorpal-panel...); blade-editor.css adds
+ * only the kit's layout.
  */
 window.BladeEditor = (function () {
 	'use strict';
@@ -103,7 +106,7 @@ window.BladeEditor = (function () {
 	function miniBtn(glyph, title, onClick, danger) {
 		const b = document.createElement('button');
 		b.type = 'button';
-		b.className = 'mini' + (danger ? ' danger' : '');
+		b.className = 'mini vorpal-btn vorpal-btn-icon ' + (danger ? 'danger vorpal-btn-danger' : 'vorpal-btn-secondary');
 		b.title = title;
 		b.textContent = glyph;
 		b.addEventListener('click', onClick);
@@ -113,7 +116,7 @@ window.BladeEditor = (function () {
 	function smallAddBtn(text, onClick) {
 		const b = document.createElement('button');
 		b.type = 'button';
-		b.className = 'small-add';
+		b.className = 'small-add vorpal-btn vorpal-btn-secondary vorpal-btn-sm';
 		b.textContent = text;
 		b.addEventListener('click', onClick);
 		return b;
@@ -129,11 +132,12 @@ window.BladeEditor = (function () {
 
 	function fieldEl(name, value, hint, onChange) {
 		const wrap = document.createElement('div');
-		wrap.className = 'field';
+		wrap.className = 'field vorpal-field';
 		const label = document.createElement('label');
 		label.textContent = name;
 		if (hint) label.title = hint;
 		const input = document.createElement('input');
+		input.className = 'vorpal-input vorpal-mono';
 		input.value = value;
 		if (hint) input.title = hint;
 		input.addEventListener('input', () => onChange(input.value));
@@ -146,11 +150,12 @@ window.BladeEditor = (function () {
 	// handler re-renders the panel and would otherwise steal focus.
 	function blurFieldEl(name, value, hint, onChange) {
 		const wrap = document.createElement('div');
-		wrap.className = 'field';
+		wrap.className = 'field vorpal-field';
 		const label = document.createElement('label');
 		label.textContent = name;
 		if (hint) label.title = hint;
 		const input = document.createElement('input');
+		input.className = 'vorpal-input vorpal-mono';
 		input.value = value;
 		if (hint) input.title = hint;
 		input.addEventListener('change', () => onChange(input.value));
@@ -172,11 +177,12 @@ window.BladeEditor = (function () {
 
 	function selectFieldEl(name, value, hint, options, onChange) {
 		const wrap = document.createElement('div');
-		wrap.className = 'field';
+		wrap.className = 'field vorpal-field';
 		const label = document.createElement('label');
 		label.textContent = name;
 		if (hint) label.title = hint;
 		const sel = document.createElement('select');
+		sel.className = 'vorpal-input vorpal-mono';
 		sel.innerHTML = options.map(o =>
 			`<option value="${escapeHtml(o)}">${o === '' ? '(any)' : escapeHtml(o)}</option>`).join('');
 		sel.value = value;
@@ -189,7 +195,7 @@ window.BladeEditor = (function () {
 
 	function checkboxFieldEl(name, checked, hint, onChange) {
 		const wrap = document.createElement('div');
-		wrap.className = 'field';
+		wrap.className = 'field vorpal-field';
 		const label = document.createElement('label');
 		label.textContent = name;
 		if (hint) label.title = hint;
@@ -206,7 +212,7 @@ window.BladeEditor = (function () {
 	// Map(String,String) editor — name → value grid bound to obj[name].
 	function kvFieldEl(name, obj, hint) {
 		const wrap = document.createElement('div');
-		wrap.className = 'field wide';
+		wrap.className = 'field wide vorpal-field';
 		const label = document.createElement('label');
 		label.textContent = name;
 		if (hint) label.title = hint;
@@ -227,14 +233,16 @@ window.BladeEditor = (function () {
 		}
 		function addRow(key, value) {
 			const kIn = document.createElement('input');
+			kIn.className = 'vorpal-input vorpal-mono';
 			kIn.placeholder = 'name';
 			kIn.value = key;
 			const vIn = document.createElement('input');
+			vIn.className = 'vorpal-input vorpal-mono';
 			vIn.placeholder = 'value';
 			vIn.value = value;
 			const rm = document.createElement('button');
 			rm.type = 'button';
-			rm.className = 'remove';
+			rm.className = 'remove vorpal-btn vorpal-btn-ghost vorpal-btn-sm';
 			rm.textContent = '×';
 			let currentKey = key;
 			kIn.addEventListener('input', () => {
@@ -343,7 +351,7 @@ window.BladeEditor = (function () {
 	/// Ordered list of polymorphic objects (selectors, nested lists).
 	function polyListField(name, anyOf, obj, hint) {
 		const wrap = document.createElement('div');
-		wrap.className = 'field wide';
+		wrap.className = 'field wide vorpal-field';
 		const label = document.createElement('label');
 		label.textContent = name;
 		if (hint) label.title = hint;
@@ -371,12 +379,12 @@ window.BladeEditor = (function () {
 	/// One polymorphic card: type dropdown + schema fields + reorder.
 	function polyCard(arr, item, idx, variants, rebuild) {
 		const card = document.createElement('div');
-		card.className = 'nested-card';
+		card.className = 'nested-card vorpal-panel';
 		const head = document.createElement('div');
 		head.className = 'card-head';
 
 		const typeSel = document.createElement('select');
-		typeSel.className = 'type-select';
+		typeSel.className = 'type-select vorpal-input vorpal-mono';
 		const types = variants ? variants.map(v => v.type) : [];
 		typeSel.innerHTML = types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
 		if (item.type && !types.includes(item.type)) {
@@ -417,7 +425,7 @@ window.BladeEditor = (function () {
 	/// connector's TranslationTable list.
 	function objListField(name, items, obj, hint) {
 		const wrap = document.createElement('div');
-		wrap.className = 'field wide';
+		wrap.className = 'field wide vorpal-field';
 		const label = document.createElement('label');
 		label.textContent = name;
 		if (hint) label.title = hint;
@@ -434,7 +442,7 @@ window.BladeEditor = (function () {
 			list.innerHTML = '';
 			arr.forEach((item, idx) => {
 				const card = document.createElement('div');
-				card.className = 'nested-card';
+				card.className = 'nested-card vorpal-panel';
 				const head = document.createElement('div');
 				head.className = 'card-head';
 				head.appendChild(titleEl(name.replace(/s$/, '') + ' ' + (idx + 1)));
@@ -469,7 +477,7 @@ window.BladeEditor = (function () {
 	/// (lookup key → row of variables).
 	function mapOfObjectsField(name, valueRef, obj, hint) {
 		const wrap = document.createElement('div');
-		wrap.className = 'field wide';
+		wrap.className = 'field wide vorpal-field';
 		const label = document.createElement('label');
 		label.textContent = name;
 		if (hint) label.title = hint;
@@ -490,7 +498,7 @@ window.BladeEditor = (function () {
 				const keyRow = document.createElement('div');
 				keyRow.className = 'map-key-row';
 				const keyIn = document.createElement('input');
-				keyIn.className = 'map-key';
+				keyIn.className = 'map-key vorpal-input vorpal-mono';
 				keyIn.value = key;
 				keyIn.title = 'Lookup key — commit with Enter or by leaving the field';
 				keyIn.addEventListener('change', () => {
@@ -540,7 +548,7 @@ window.BladeEditor = (function () {
 	/// Optional polymorphic single object — e.g. RestConnector.authentication.
 	function polyObjectField(name, anyOf, obj, hint) {
 		const wrap = document.createElement('div');
-		wrap.className = 'field wide';
+		wrap.className = 'field wide vorpal-field';
 		const label = document.createElement('label');
 		label.textContent = name;
 		if (hint) label.title = hint;
@@ -548,7 +556,7 @@ window.BladeEditor = (function () {
 
 		const variants = variantsFromAnyOf(anyOf);
 		const sel = document.createElement('select');
-		sel.className = 'type-select';
+		sel.className = 'type-select vorpal-input vorpal-mono';
 		sel.innerHTML = '<option value="">(none)</option>'
 			+ (variants || []).map(v => `<option value="${escapeHtml(v.type)}">${escapeHtml(v.type)}</option>`).join('');
 		sel.value = (obj[name] && obj[name].type) || '';
@@ -574,7 +582,7 @@ window.BladeEditor = (function () {
 
 	function nestedObjectField(name, def, obj, hint) {
 		const wrap = document.createElement('div');
-		wrap.className = 'field wide';
+		wrap.className = 'field wide vorpal-field';
 		const label = document.createElement('label');
 		label.textContent = name;
 		if (hint) label.title = hint;
@@ -589,7 +597,7 @@ window.BladeEditor = (function () {
 
 	function rawJsonField(name, obj, hint) {
 		const wrap = document.createElement('div');
-		wrap.className = 'field wide';
+		wrap.className = 'field wide vorpal-field';
 		const label = document.createElement('label');
 		label.textContent = name + ' (JSON)';
 		if (hint) label.title = hint;
@@ -607,10 +615,10 @@ window.BladeEditor = (function () {
 	function rawJsonBound(target) {
 		const box = document.createElement('div');
 		const ta = document.createElement('textarea');
-		ta.className = 'raw-op';
+		ta.className = 'raw-op vorpal-input vorpal-mono';
 		ta.value = JSON.stringify(target, null, 2);
 		const error = document.createElement('div');
-		error.className = 'raw-error';
+		error.className = 'raw-error vorpal-error';
 		error.setAttribute('role', 'alert');
 		error.hidden = true;
 		ta.addEventListener('change', () => {
@@ -623,7 +631,7 @@ window.BladeEditor = (function () {
 				invalidRaw.delete(ta);
 				dirty();
 			} catch (e) {
-				ta.style.borderColor = 'var(--bad)';
+				ta.style.borderColor = 'var(--vorpal-error)';
 				error.textContent = 'Not valid JSON, so not applied: ' + e.message;
 				error.hidden = false;
 				invalidRaw.add(ta);
@@ -646,7 +654,7 @@ window.BladeEditor = (function () {
 	function helpMini(topic) {
 		const b = document.createElement('button');
 		b.type = 'button';
-		b.className = 'mini help-mini';
+		b.className = 'mini help-mini vorpal-btn vorpal-btn-secondary vorpal-btn-sm';
 		b.textContent = '?';
 		b.title = 'What is this?';
 		b.addEventListener('click', () => openHelp(topic));
@@ -756,9 +764,9 @@ window.BladeEditor = (function () {
 	/// current file in its place, until picked again.
 	function filePicker(opts) {
 		const rail = document.createElement('nav');
-		rail.className = 'file-picker';
+		rail.className = 'file-picker vorpal-panel';
 		rail.setAttribute('aria-label', 'Configuration files');
-		rail.innerHTML = '<div class="file-picker-title">Files</div><div class="file-picker-body">loading…</div>';
+		rail.innerHTML = '<div class="file-picker-title vorpal-label">Files</div><div class="file-picker-body">loading…</div>';
 		const body = rail.querySelector('.file-picker-body');
 		const currentId = opts.current || 'domain';
 		let mergedPanel = null;
@@ -943,14 +951,14 @@ window.BladeEditor = (function () {
 	/// server's (Jackson's), and a difference is shown, not hidden.
 	function mergedView(opts) {
 		const panel = document.createElement('section');
-		panel.className = 'merged-view';
+		panel.className = 'merged-view vorpal-panel';
 		panel.innerHTML = '<div class="merged-head"><strong title="Read-only, saved files only. Each file merges over '
 			+ 'the ones before it: objects key by key, lists get items added on the end, other values replaced. '
 			+ 'Nothing can be removed.">Merged</strong><span class="merged-chain"></span></div>'
 			+ '<div class="merged-body">loading…</div>';
 		const close = document.createElement('button');
 		close.type = 'button';
-		close.className = 'merged-close';
+		close.className = 'merged-close vorpal-btn vorpal-btn-secondary vorpal-btn-sm';
 		close.textContent = '✕';
 		close.title = 'Back to editing';
 		close.addEventListener('click', opts.onClose);
@@ -1000,7 +1008,7 @@ window.BladeEditor = (function () {
 			}
 			if (canonical(unwrap(traced)) !== canonical(data.merged)) {
 				const warn = document.createElement('p');
-				warn.className = 'merged-warn';
+				warn.className = 'merged-warn vorpal-error';
 				warn.textContent = '✕ This page merged the files differently from the server. What the server builds '
 					+ 'is below, without the per-line file names.';
 				body.appendChild(warn);
@@ -1027,6 +1035,7 @@ window.BladeEditor = (function () {
 			bar.className = 'merged-bar';
 			const foldBtn = document.createElement('button');
 			foldBtn.type = 'button';
+			foldBtn.className = 'vorpal-btn vorpal-btn-secondary vorpal-btn-sm';
 			bar.appendChild(foldBtn);
 			body.appendChild(bar);
 			const table = document.createElement('div');

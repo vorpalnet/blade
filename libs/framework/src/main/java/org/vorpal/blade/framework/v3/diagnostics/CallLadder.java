@@ -14,10 +14,13 @@ import java.util.Set;
 /// down ([#verdict]).
 ///
 /// **Small on purpose.** A step is the time, the direction, the leg, the method
-/// or status, the CSeq number and the remote address: no headers, no body, no
-/// phone number. The first [#HEAD] steps and the last [#TAIL] are kept; a call
-/// with more (a long call refreshing its session) records how many were left
-/// out between them.
+/// or status, the CSeq number and the remote address: no headers, no body. The
+/// call's parties are kept once, from its initial INVITE: the From and To
+/// addresses and the P-Asserted-Identity, each capped at [#PARTY_MAX] characters,
+/// so a complaint about a number finds its call. They are content: the Trace
+/// app shows them only to a viewer whose grant includes content. The first
+/// [#HEAD] steps and the last [#TAIL] are kept; a call with more (a long call
+/// refreshing its session) records how many were left out between them.
 ///
 /// **The verdict is kept as the steps arrive,** not read back from them, so a
 /// step left out of the middle cannot hide a request that was never answered.
@@ -26,6 +29,7 @@ public final class CallLadder {
 
 	static final int HEAD = 16;
 	static final int TAIL = 48;
+	static final int PARTY_MAX = 256;
 
 	/// One message.
 	public static final class Step {
@@ -111,6 +115,10 @@ public final class CallLadder {
 	Long vorpalId;
 	java.util.Date startedAt;
 	org.vorpal.blade.framework.v3.events.CallScope scope;
+	/// The initial INVITE's From, To and P-Asserted-Identity; null when absent.
+	String from;
+	String to;
+	String asserted;
 
 	/// The leg number for a SIP session id: 1 for the first seen, then 2...
 	public int leg(String sessionId) {

@@ -58,7 +58,7 @@ import javax.servlet.sip.URI;
 import org.vorpal.blade.framework.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.v3.events.AnalyticsEvent;
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.LogParameters;
 import org.vorpal.blade.framework.v2.logging.LogParametersDefault;

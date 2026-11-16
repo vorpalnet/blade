@@ -55,7 +55,7 @@ var events = (function () {
 	}
 
 	function num(value) {
-		return '<td class="ev-num">' + esc(value === undefined ? 0 : value) + '</td>';
+		return '<td class="ev-num num">' + esc(value === undefined ? 0 : value) + '</td>';
 	}
 
 	// ─────────────────────────────────────────────────────────── Catalog page
@@ -141,14 +141,14 @@ var events = (function () {
 			body.innerHTML = '';
 
 			if (report.error) {
-				body.innerHTML = '<div class="ev-finding is-problem"><div class="ev-kind">✕ Cannot read JMS</div>' +
+				body.innerHTML = '<div class="ev-finding vorpal-error is-problem"><div class="ev-kind">✕ Cannot read JMS</div>' +
 					'<div class="ev-detail">' + esc(report.error) + '</div></div>';
 				el('drift-count').textContent = 'unavailable';
 				return;
 			}
 
 			if (!findings.length) {
-				body.innerHTML = '<div class="ev-finding"><div class="ev-kind">✓ Agreed</div>' +
+				body.innerHTML = '<div class="ev-finding vorpal-note"><div class="ev-kind">✓ Agreed</div>' +
 					'<div class="ev-detail">Every declared type has a destination, every declared ' +
 					'subscription has a live durable subscriber carrying the selector it derives, ' +
 					'and no subscription is live that the catalog does not name.</div></div>';
@@ -162,7 +162,7 @@ var events = (function () {
 				// yet a problem, so it is marked apart from the rest — by glyph and
 				// by border weight, never by colour alone.
 				var expected = f.kind === 'not-deployed';
-				div.className = 'ev-finding' + (expected ? '' : ' is-problem');
+				div.className = 'ev-finding' + (expected ? ' vorpal-note' : ' vorpal-error is-problem');
 				div.innerHTML = '<div class="ev-kind">' + (expected ? '○ ' : '✕ ') +
 					esc(f.kind) + ' — ' + esc(f.subject) + '</div>' +
 					'<div class="ev-detail">' + esc(f.detail) + '</div>';
@@ -283,10 +283,11 @@ var events = (function () {
 			}).catch(function (e) { el('browse-body').textContent = '✕ ' + e; });
 	}
 
-	/** Small inline button. */
+	/** Small inline button; purge and delete remove something, so they are danger. */
 	function action(label, title) {
-		return '<button type="button" class="vorpal-btn vorpal-btn-secondary" data-act="' + label
-			+ '" title="' + esc(title) + '" style="padding:.15rem .45rem;font-size:12px">' + label + '</button> ';
+		var variant = (label === 'purge' || label === 'delete') ? 'vorpal-btn-danger' : 'vorpal-btn-secondary';
+		return '<button type="button" class="vorpal-btn ' + variant + ' vorpal-btn-sm" data-act="' + label
+			+ '" title="' + esc(title) + '">' + label + '</button> ';
 	}
 
 	function loadInventory() {
@@ -452,15 +453,15 @@ var events = (function () {
 		var row = document.createElement('div');
 		row.className = 'ev-field-row';
 		row.innerHTML =
-			'<input type="text" placeholder="wire name, e.g. when_text" value="' + esc(name || '') + '">' +
-			'<select>' +
+			'<input type="text" class="vorpal-input" placeholder="wire name, e.g. when_text" value="' + esc(name || '') + '">' +
+			'<select class="vorpal-input">' +
 			['STRING', 'INTEGER', 'LONG', 'NUMBER', 'BOOLEAN', 'INSTANT', 'ENUM', 'OBJECT', 'ARRAY']
 				.map(function (t) {
 					return '<option' + (t === (type || 'STRING') ? ' selected' : '') + '>' + t + '</option>';
 				}).join('') +
 			'</select>' +
 			'<label class="ev-muted"><input type="checkbox"' + (required ? ' checked' : '') + '> required</label>' +
-			'<button type="button" class="vorpal-btn vorpal-btn-secondary">Remove</button>';
+			'<button type="button" class="vorpal-btn vorpal-btn-danger vorpal-btn-sm">Remove</button>';
 
 		row.querySelector('button').addEventListener('click', function () {
 			row.remove();
@@ -583,7 +584,7 @@ var events = (function () {
 		}
 		box.hidden = false;
 		box.innerHTML = findings.map(function (f) {
-			return '<div class="ev-finding">' + esc(f) + '</div>';
+			return '<div class="ev-finding vorpal-note">' + esc(f) + '</div>';
 		}).join('');
 	}
 

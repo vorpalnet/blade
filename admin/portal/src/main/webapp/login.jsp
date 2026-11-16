@@ -40,7 +40,7 @@
 			margin-top: 30px;
 		}
 
-		/* "BLADE Login" title with the white VorpalBoy splotch to its left,
+		/* "BLADE Login" title with the light purple VorpalBoy splotch to its left,
 		   centered above the panel. */
 		.container > header {
 			text-align: center;
@@ -99,7 +99,7 @@
 	<div class="container">
 
 		<header>
-			<img class="login-mark" src="/blade/portal/brand/VorpalBoy_white.svg" alt="">
+			<img class="login-mark" src="/blade/portal/brand/VorpalBoy_lightpurple.svg" alt="">
 			<h1>BLADE Login</h1>
 		</header>
 

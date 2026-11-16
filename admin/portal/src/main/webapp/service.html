@@ -6,6 +6,7 @@
 	<title>SIP Service · BLADE</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
 	<script src="/blade/portal/brand/theme.js"></script>
+	<script src="/blade/portal/brand/shell.js" data-context="/blade/portal" defer></script>
 	<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/favicon.svg">
 </head>
 <body class="vorpal-glass">
@@ -24,7 +25,6 @@
 			<a href="/blade/dashboard/">All Apps &amp; Services</a>
 		</nav>
 		<div class="vorpal-topbar-right">
-			<a class="vorpal-topbar-link" href="logout" title="Sign out">Logout</a>
 		</div>
 	</header>
 
@@ -47,9 +47,9 @@
 						live in the Configurator. This opens the Configurator with
 						this service's configuration already loaded.
 					</p>
-					<p style="margin-top:12px;">
+					<p class="vorpal-toolbar" style="margin-top:12px;">
 						<a class="vorpal-btn" id="svc-configure" href="#">Open in Configurator</a>
-						<a class="vorpal-btn" id="svc-report" href="#" style="display:none;">Printable Report</a>
+						<a class="vorpal-btn vorpal-btn-secondary" id="svc-report" href="#" style="display:none;">Printable Report</a>
 					</p>
 				</div>
 
@@ -130,7 +130,7 @@
 				return;
 			}
 
-			document.title = card.name + ' · BLADE SIP Service';
+			document.title = card.name + ' · SIP Service · BLADE';
 			els.name.textContent = card.name;
 			els.tagline.textContent = card.tagline || 'SIP Service';
 			els.description.textContent = card.description ||

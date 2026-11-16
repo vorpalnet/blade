@@ -1,44 +1,12 @@
 package org.vorpal.blade.framework.v2.transfer.api;
 
-import java.io.Serializable;
-
-import io.swagger.v3.oas.annotations.media.Schema;
-
-/**
- * Represents a SIP header name-value pair.
- *
- * <p>Used to specify additional headers for INVITE or REFER requests
- * in transfer operations.
- */
-public class Header implements Serializable {
+/// @deprecated Use [org.vorpal.blade.framework.v3.transfer.api.Header]. This type is the v3 one under its old
+///             name, kept so code that names it still compiles.
+@Deprecated
+public class Header extends org.vorpal.blade.framework.v3.transfer.api.Header {
 	private static final long serialVersionUID = 1L;
 
-	@Schema(description = "Name of SIP header", defaultValue = "X-Importance", nullable = false)
-	public String name;
-
-	@Schema(description = "Value of SIP header", defaultValue = "low", nullable = false)
-	public String value;
-
 	public Header() {
-		// Default constructor
+		super();
 	}
-
-	public String getName() {
-		return name;
-	}
-
-	public Header setName(String name) {
-		this.name = name;
-		return this;
-	}
-
-	public String getValue() {
-		return value;
-	}
-
-	public Header setValue(String value) {
-		this.value = value;
-		return this;
-	}
-
 }

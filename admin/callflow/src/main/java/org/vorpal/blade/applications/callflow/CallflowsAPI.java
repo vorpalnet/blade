@@ -53,6 +53,9 @@ public class CallflowsAPI {
 	private static final String JMX_DOMAIN_RUNTIME = "java:comp/env/jmx/domainRuntime";
 	private static final String SOURCE_PATTERN = "vorpal.blade:Name=*,Type=Source,*";
 
+	@javax.ws.rs.core.Context
+	private javax.ws.rs.core.SecurityContext security;
+
 	/// Every app's source inventory, one JMX read per app, all from the pinned
 	/// node: `{"apps":[{"app":"...","server":"...","sources":[...]}]}`.
 	@GET
@@ -60,6 +63,9 @@ public class CallflowsAPI {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(summary = "List every deployed app's source inventory.")
 	public Response apps() {
+		if (!Operators.is(security)) {
+			return Operators.refused("Reading the applications' source");
+		}
 		try (CloseableContext ctx = new CloseableContext()) {
 			MBeanServer mbs = (MBeanServer) ctx.lookup(JMX_DOMAIN_RUNTIME);
 			ObjectNode out = mapper.createObjectNode();
@@ -91,6 +97,9 @@ public class CallflowsAPI {
 	@Produces(MediaType.TEXT_PLAIN)
 	@Operation(summary = "Return one class's live source by app and class name.")
 	public Response source(@QueryParam("app") String app, @QueryParam("className") String className) {
+		if (!Operators.is(security)) {
+			return Operators.refused("Reading the applications' source");
+		}
 		if (isBlank(app) || isBlank(className)) {
 			return bad("Missing 'app' or 'className' parameter");
 		}

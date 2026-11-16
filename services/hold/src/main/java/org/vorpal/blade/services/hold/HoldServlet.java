@@ -8,7 +8,7 @@ import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.Callflow;
-import org.vorpal.blade.framework.v2.b2bua.Terminate;
+import org.vorpal.blade.framework.v3.b2bua.Terminate;
 import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.framework.v3.AsyncSipServlet;
 import org.vorpal.blade.framework.v3.events.BladeEventTypes;

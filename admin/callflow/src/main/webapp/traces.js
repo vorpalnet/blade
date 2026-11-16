@@ -47,6 +47,8 @@
 		msgDialog: document.getElementById('tr-msg-dialog'),
 		msgTitle: document.getElementById('tr-msg-title'),
 		msgClose: document.getElementById('tr-msg-close'),
+		prettyTab: document.getElementById('tr-pretty-tab'),
+		prettyPopup: document.getElementById('tr-pretty-popup'),
 		code: document.getElementById('tr-code'),
 		rules: document.getElementById('tr-rules'),
 		armForm: document.getElementById('tr-arm-form'),
@@ -64,6 +66,19 @@
 		file: document.getElementById('tr-file'),
 		report: document.getElementById('tr-report'),
 		recorded: document.getElementById('tr-recorded'),
+		rfilter: document.getElementById('tr-rfilter'),
+		rfWindow: document.getElementById('tr-rf-window'),
+		rfFinding: document.getElementById('tr-rf-finding'),
+		rfFault: document.getElementById('tr-rf-fault'),
+		rfApp: document.getElementById('tr-rf-app'),
+		rfApps: document.getElementById('tr-rf-apps'),
+		rfPeer: document.getElementById('tr-rf-peer'),
+		rfCall: document.getElementById('tr-rf-call'),
+		rfNumber: document.getElementById('tr-rf-number'),
+		rfNumberLabel: document.getElementById('tr-rf-number-label'),
+		access: document.getElementById('tr-access'),
+		rfClear: document.getElementById('tr-rf-clear'),
+		rfMore: document.getElementById('tr-rf-more'),
 		saved: document.getElementById('tr-saved'),
 		keep: document.getElementById('tr-keep'),
 		forget: document.getElementById('tr-forget'),
@@ -119,6 +134,18 @@
 		}
 	}
 
+	// Who a recorded call was between, from its initial INVITE: From, To and
+	// P-Asserted-Identity, as the first application to record it kept them.
+	// The server leaves them out for a viewer the access policy does not let
+	// read the call.
+	function partiesOf(sessionId) {
+		var p = (verdicts[sessionId] || []).map(function (x) { return x.parties; }).filter(Boolean)[0];
+		if (!p) { return []; }
+		return [['From', p.from], ['To', p.to], ['P-Asserted-Identity', p.asserted]]
+			.filter(function (x) { return x[1]; })
+			.map(function (x) { return x[0] + ' ' + x[1]; });
+	}
+
 	// One line per application that recorded the call: whose fault, then what.
 	function verdictsOf(sessionId) {
 		return (verdicts[sessionId] || []).map(function (x) {
@@ -140,7 +167,8 @@
 		lastSources.forEach(function (src) {
 			if (!src.recorded || !src.steps || !src.steps.length) { return; }
 			var id = src.steps[0].sessionId;
-			(verdicts[id] = verdicts[id] || []).push({ app: src.app, server: src.server, verdict: src.verdict || {} });
+			(verdicts[id] = verdicts[id] || []).push({ app: src.app, server: src.server, verdict: src.verdict || {},
+				parties: src.parties || null });
 		});
 		calls = aggregate(lastSources);
 		if (linkedCall && !selectedCall) {
@@ -161,8 +189,164 @@
 		callButtons();
 	}
 
+	// Whether the viewer reads every step of `call`: the server marks a step
+	// whose text it withheld, and saving or deleting a call needs all of it.
+	function callReadable(call) {
+		return (call.steps || []).every(function (s) { return !s.contentHidden; });
+	}
+
 	function currentCall() {
 		return calls.find(function (c) { return c.sessionId === selectedCall; }) || null;
+	}
+
+	// ---- what this viewer may see ----
+	// The server applies the viewer's grants to every call it sends
+	// (api/traces/access says which); the page only says so, and offers the
+	// number search to those who may use it.
+	var viewerContent = true;
+	// Whether they hold a WebLogic admin role: arming, clearing, saving and
+	// the applications' source are theirs alone (the server refuses the rest).
+	var viewerOperator = true;
+	if (!snapshot) {
+		fetch(API + '/traces/access', { headers: { Accept: 'application/json' } })
+			.then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
+			.then(function (a) {
+				viewerContent = a.content !== false;
+				viewerOperator = a.operator !== false;
+				[els.armForm, els.disarm, els.clear, els.rules].forEach(function (e) {
+					if (e) { e.hidden = !viewerOperator; }
+				});
+				callButtons();
+				if (els.rfNumberLabel) { els.rfNumberLabel.hidden = !viewerContent; }
+				if (!viewerContent && els.rfNumber) { els.rfNumber.value = ''; }
+				if (els.access && a.limited) {
+					els.access.textContent = 'Your access · ' + (a.sees || []).join(' · ');
+					els.access.hidden = false;
+				}
+			})
+			.catch(function () { /* the server still applies the grants */ });
+	}
+
+	// ---- recorded calls: the filter ----
+	// The flight recorder writes out every call that went wrong, so the list
+	// is narrowed on the server (api/traces/recorded) and read a page at a
+	// time, newest first: RECORDED_PAGE records, one per application per call.
+	// Load older asks for the page before the oldest record held. The filter
+	// lives in the address bar too, so a filtered view can be linked.
+	var RECORDED_PAGE = 50;
+	var recordedApps = {};
+
+	if (els.rfilter) {
+		var rfParams = { finding: els.rfFinding, fault: els.rfFault, app: els.rfApp, peer: els.rfPeer,
+			number: els.rfNumber };
+		Object.keys(rfParams).forEach(function (k) {
+			if (rfParams[k] && params.get(k)) { rfParams[k].value = params.get(k); }
+		});
+		if (linkedCall && els.rfCall) { els.rfCall.value = linkedCall; }
+		var win = params.get('window');
+		if (since && els.rfWindow) {
+			// A link's range: its start, as a choice of its own.
+			var opt = document.createElement('option');
+			opt.value = 'since:' + since;
+			opt.textContent = 'Since ' + new Date(Number(since)).toLocaleString();
+			els.rfWindow.insertBefore(opt, els.rfWindow.firstChild);
+			els.rfWindow.value = opt.value;
+		} else if (win != null && els.rfWindow) {
+			els.rfWindow.value = win;
+		}
+	}
+
+	// The query for one page: the filter as the form holds it, and `before`
+	// to page back. A Vorpal-ID names one call, whenever it was recorded.
+	function recordedQuery(before) {
+		var q = new URLSearchParams();
+		var call = els.rfCall ? els.rfCall.value.trim() : (linkedCall || '');
+		if (call) { q.set('call', call); }
+		if (els.rfilter) {
+			var w = els.rfWindow.value;
+			if (!call && /^since:\d+$/.test(w)) { q.set('since', w.slice(6)); }
+			else if (!call && w) { q.set('since', String(Date.now() - Number(w))); }
+			[['finding', els.rfFinding], ['fault', els.rfFault], ['app', els.rfApp], ['peer', els.rfPeer],
+				['number', els.rfNumber]]
+				.forEach(function (f) { if (f[1] && f[1].value.trim()) { q.set(f[0], f[1].value.trim()); } });
+		} else if (since) {
+			q.set('since', since);
+		}
+		if (before != null) { q.set('before', String(before)); }
+		q.set('limit', String(RECORDED_PAGE));
+		return '?' + q.toString();
+	}
+
+	// After a page arrives: offer the next one when this one was full, and add
+	// its applications to the Application choices.
+	function recordedPage(sources) {
+		(sources || []).forEach(function (src) {
+			if (src.app && !recordedApps[src.app] && els.rfApps) {
+				recordedApps[src.app] = true;
+				var o = document.createElement('option');
+				o.value = src.app;
+				els.rfApps.appendChild(o);
+			}
+		});
+		if (els.rfMore) { els.rfMore.hidden = !sources || sources.length < RECORDED_PAGE; }
+	}
+
+	// The oldest record held: where the next page starts.
+	function oldestRecorded() {
+		var t = null;
+		lastSources.forEach(function (src) {
+			if (src.tracedAt != null && (t == null || src.tracedAt < t)) { t = src.tracedAt; }
+		});
+		return t;
+	}
+
+	// The address bar carries the filter, so the view can be linked or reloaded.
+	function rememberFilter() {
+		var q = new URLSearchParams();
+		q.set('recorded', '1');
+		var call = els.rfCall.value.trim();
+		if (call) { q.set('call', call); }
+		var w = els.rfWindow.value;
+		if (/^since:\d+$/.test(w)) { q.set('since', w.slice(6)); } else { q.set('window', w); }
+		[['finding', els.rfFinding], ['fault', els.rfFault], ['app', els.rfApp], ['peer', els.rfPeer],
+			['number', els.rfNumber]]
+			.forEach(function (f) { if (f[1] && f[1].value.trim()) { q.set(f[0], f[1].value.trim()); } });
+		try { history.replaceState(null, '', location.pathname + '?' + q.toString()); } catch (e) { /* not linkable */ }
+	}
+
+	if (els.rfilter) {
+		els.rfilter.addEventListener('submit', function (ev) {
+			ev.preventDefault();
+			if (!els.rfilter.reportValidity()) { return; }
+			linkedCall = els.rfCall.value.trim() || null;
+			selectedCall = null;
+			selectedStep = null;
+			rememberFilter();
+			refresh();
+		});
+		els.rfClear.addEventListener('click', function () {
+			els.rfWindow.value = '86400000';
+			[els.rfFinding, els.rfFault, els.rfApp, els.rfPeer, els.rfNumber, els.rfCall]
+				.forEach(function (f) { if (f) { f.value = ''; } });
+			linkedCall = null;
+			selectedCall = null;
+			selectedStep = null;
+			rememberFilter();
+			refresh();
+		});
+		els.rfMore.addEventListener('click', function () {
+			var before = oldestRecorded();
+			if (before == null) { return; }
+			els.rfMore.disabled = true;
+			fetch(API + '/traces/recorded' + recordedQuery(before), { headers: { Accept: 'application/json' } })
+				.then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
+				.then(function (data) {
+					applyData(lastSources.concat(data.sources || []), 'recorded · ');
+					recordedPage(data.sources);
+				})
+				.catch(function (err) { setStatus('Could not load older calls: ' + err.message); })
+				.then(function () { els.rfMore.disabled = false; });
+		});
 	}
 
 	function refresh() {
@@ -177,22 +361,22 @@
 			refreshRules();
 			return;
 		}
-		var url = recordedMode
-			? API + '/traces/recorded' + (linkedCall ? '?call=' + encodeURIComponent(linkedCall)
-				: since ? '?since=' + since : '')
-			: API + '/traces';
+		if (els.rfilter) { els.rfilter.hidden = !recordedMode; }
+		if (els.rfMore) { els.rfMore.hidden = true; }
+		var url = recordedMode ? API + '/traces/recorded' + recordedQuery(null) : API + '/traces';
 		fetch(url, { headers: { Accept: 'application/json' } })
 			.then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
 			.then(function (data) {
 				applyData(data.sources, recordedMode ? (linkedCall ? 'call ' + linkedCall.toUpperCase() : 'recorded') + ' · ' : '');
+				if (recordedMode) { recordedPage(data.sources); }
 				if (recordedMode && linkedCall && !calls.length) {
-					els.calls.innerHTML = '<p class="cf-muted">No recording of call ' + escapeHtml(linkedCall)
+					els.calls.innerHTML = '<p class="cf-muted vorpal-empty">No recording of call ' + escapeHtml(linkedCall)
 						+ '. The flight recorder writes out only calls that went wrong.</p>';
 				}
 			})
 			.catch(function (err) {
 				setStatus('Error');
-				els.calls.innerHTML = '<p class="cf-muted">Could not load traces: ' + escapeHtml(err.message) + '</p>';
+				els.calls.innerHTML = '<p class="cf-muted vorpal-error">Could not load traces: ' + escapeHtml(err.message) + '</p>';
 			});
 		refreshRules();
 	}
@@ -214,7 +398,7 @@
 			})
 			.catch(function (err) {
 				setStatus('Error');
-				els.calls.innerHTML = '<p class="cf-muted">Could not list saved calls: ' + escapeHtml(err.message) + '</p>';
+				els.calls.innerHTML = '<p class="cf-muted vorpal-error">Could not list saved calls: ' + escapeHtml(err.message) + '</p>';
 			});
 	}
 
@@ -244,7 +428,7 @@
 
 	function renderSaved() {
 		if (!savedList.length) {
-			els.calls.innerHTML = '<p class="cf-muted">No saved calls. Pick a captured call and press Save Call.</p>';
+			els.calls.innerHTML = '<p class="cf-muted vorpal-empty">No saved calls. Pick a captured call and press Save Call.</p>';
 			return;
 		}
 		var frag = document.createDocumentFragment();
@@ -268,8 +452,11 @@
 	// saved one.
 	function callButtons() {
 		var call = currentCall();
-		if (els.keep) { els.keep.hidden = !call || savedMode || !!snapshot; }
-		if (els.forget) { els.forget.hidden = !call || !savedMode; }
+		// Saving and deleting need the viewer to read every call they see (the
+		// server checks the call itself: all of it shown, text included).
+		var readable = !!call && callReadable(call);
+		if (els.keep) { els.keep.hidden = !call || savedMode || !!snapshot || !readable || !viewerOperator; }
+		if (els.forget) { els.forget.hidden = !call || !savedMode || !readable || !viewerOperator; }
 	}
 
 	// Keep the selected call on the server: its steps from every app, and the
@@ -318,6 +505,7 @@
 	}
 
 	function refreshRules() {
+		if (!viewerOperator) { return; }
 		fetch(API + '/traces/rules', { headers: { Accept: 'application/json' } })
 			.then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
 			.then(function (data) {
@@ -356,10 +544,10 @@
 		}
 		if (!calls.length) {
 			els.calls.innerHTML = snapshot
-				? '<p class="cf-muted">This snapshot holds no captured calls.</p>'
+				? '<p class="cf-muted vorpal-empty">This snapshot holds no captured calls.</p>'
 				: recordedMode
-					? '<p class="cf-muted">No recorded calls. The flight recorder writes out only calls that went wrong.</p>'
-					: '<p class="cf-muted">Nothing captured yet. Arm a rule, then place a matching call.</p>';
+					? '<p class="cf-muted vorpal-empty">No recorded calls. The flight recorder writes out only calls that went wrong.</p>'
+					: '<p class="cf-muted vorpal-empty">Nothing captured yet. Arm a rule, then place a matching call.</p>';
 			return;
 		}
 		var frag = document.createDocumentFragment();
@@ -397,7 +585,7 @@
 	function renderTimeline() {
 		var call = calls.find(function (c) { return c.sessionId === selectedCall; });
 		if (!call) {
-			els.timeline.innerHTML = '<p class="cf-muted">Pick a call above.</p>';
+			els.timeline.innerHTML = '<p class="cf-muted vorpal-empty">Pick a call above.</p>';
 			return;
 		}
 		var frag = document.createDocumentFragment();
@@ -420,7 +608,7 @@
 			// fetch, a webhook).
 			btn.querySelector('.cf-item-cat').textContent = isHttp(s)
 				? (s.direction === 'in' ? 'from ' : 'to ') + httpPeer[i]
-					+ (s.methodName ? '  ·  ' + s.methodName : '') + '  ·  ' + hhmmss(s.epochMillis)
+					+ (httpSource(s) ? '  ·  ' + httpSource(s) : '') + '  ·  ' + hhmmss(s.epochMillis)
 				: !s.className
 				? (s.direction === 'in' ? 'from ' : 'to ') + (s.peer || 'the network') + '  ·  ' + hhmmss(s.epochMillis)
 				: (s.direction === 'in'
@@ -448,8 +636,11 @@
 		if (els.ladder) { els.ladder.hidden = name !== 'seq'; }
 		if (els.message) { els.message.hidden = name !== 'msg'; }
 		if (els.codePanel) { els.codePanel.hidden = name !== 'src'; }
+		if (els.prettyTab) { els.prettyTab.hidden = name !== 'msg'; }
 		[['seq', els.tabSeq], ['msg', els.tabMsg], ['src', els.tabSrc]].forEach(function (t) {
-			if (t[1]) { t[1].className = 'tr-tab' + (t[0] === name ? ' cf-active' : ''); }
+			if (!t[1]) { return; }
+			t[1].className = 'tr-tab' + (t[0] === name ? ' cf-active' : '');
+			t[1].setAttribute('aria-selected', t[0] === name ? 'true' : 'false');
 		});
 	}
 
@@ -472,10 +663,10 @@
 		if (!els.ladder) { return; }
 		ladderCall = call || null;
 		if (!call || !call.steps.length) {
-			els.ladder.innerHTML = '<p class="cf-muted">Pick a call to see its sequence diagram.</p>';
+			els.ladder.innerHTML = '<p class="cf-muted vorpal-empty">Pick a call to see its sequence diagram.</p>';
 			return;
 		}
-		els.ladder.innerHTML = ladderSvg(call, selectedStep == null ? -1 : selectedStep);
+		els.ladder.innerHTML = ladderSvg(call, selectedStep == null ? -1 : selectedStep, true);
 
 		var onEl = els.ladder.querySelector ? els.ladder.querySelector('.tr-larrow-on') : null;
 		if (onEl && onEl.scrollIntoView) { onEl.scrollIntoView({ block: 'nearest' }); }
@@ -492,7 +683,7 @@
 			return;
 		}
 		els.title.textContent = 'Call ' + call.sessionId;
-		els.stepInfo.textContent = found.join('  ·  ');
+		els.stepInfo.textContent = found.concat(partiesOf(call.sessionId)).join('  ·  ');
 		els.sourcePath.hidden = true;
 		showAround(call);
 	}
@@ -610,7 +801,7 @@
 		var rec = recs[0], server = rec.server, t = call.firstMillis;
 		var end = call.steps.length ? call.steps[call.steps.length - 1].epochMillis : t;
 		box.innerHTML = '';
-		box.appendChild(el('h2', 'Around this call', 'tr-around-title'));
+		box.appendChild(el('h2', 'Around this call', 'tr-around-title vorpal-panel-title'));
 		var list = el('dl', null, 'tr-around-list');
 		box.appendChild(list);
 		box.hidden = false;
@@ -722,16 +913,18 @@
 	}
 
 	function showStep(call, s, i) {
-		if (isHttp(s)) { // the message, but no callflow line sent it
+		if (isHttp(s)) {
 			els.title.textContent = 'Step #' + (i + 1) + ' — ' + kindWord(s) + ' ' + s.label
 				+ (s.direction === 'in' ? ' received by ' : ' sent by ') + s.app;
 			els.stepInfo.textContent = hhmmss(s.epochMillis) + '  ·  ' + (s.direction === 'in' ? 'from ' : 'to ')
 				+ httpParties(call.steps)[i] + '  ·  session ' + call.sessionId
 				+ (s.server ? '  ·  recorded on ' + s.server : '');
-			els.sourcePath.textContent = s.methodName || '';
-			els.sourcePath.hidden = !s.methodName;
-			if (els.message) { els.message.textContent = s.message || '(no message was recorded for this step)'; }
-			if (els.code) { els.code.innerHTML = '<li class="tr-line"><span class="tr-line-text">An HTTP step has no source line: it came in, or the framework sent it, not a line of callflow code.</span></li>'; }
+			els.sourcePath.textContent = httpSource(s);
+			els.sourcePath.hidden = !els.sourcePath.textContent;
+			showMessage(s.message, '(no message was recorded for this step)', s.contentHidden);
+			if (s.className) { loadSource(s); return; }
+			// Recorded by a framework older than the source pins.
+			if (els.code) { els.code.innerHTML = '<li class="tr-line"><span class="tr-line-text">This HTTP step was recorded without a source position.</span></li>'; }
 			return;
 		}
 		if (!s.className) { // recorded: no SIP text, no source position
@@ -741,7 +934,7 @@
 			els.stepInfo.textContent = hhmmss(s.epochMillis) + '  ·  ' + (s.direction === 'in' ? 'from ' : 'to ')
 				+ (s.peer || 'the network') + '  ·  leg ' + s.leg + (s.server ? '  ·  recorded on ' + s.server : '');
 			els.sourcePath.hidden = true;
-			if (els.message) { els.message.textContent = '(the flight recorder keeps no SIP text)'; }
+			showMessage(null, '(the flight recorder keeps no SIP text)');
 			if (els.code) { els.code.innerHTML = '<li class="tr-line"><span class="tr-line-text">The flight recorder keeps no source position.</span></li>'; }
 			return;
 		}
@@ -755,10 +948,13 @@
 				: 'received by ' + s.className + ' — no app-level handler (nothing processed this message)')
 			: s.className + '.' + s.methodName + (s.line > 0 ? ':' + s.line : '');
 		els.sourcePath.hidden = false;
-		if (els.message) {
-			els.message.textContent = s.message || '(no raw message was recorded for this step)';
-		}
+		showMessage(s.message, '(no raw message was recorded for this step)', s.contentHidden);
+		loadSource(s);
+	}
 
+	// The Source tab for a step with a class: from the cache, the snapshot, or
+	// the app, with its line marked.
+	function loadSource(s) {
 		var key = s.app + '|' + s.className;
 		if (sourceCache[key] != null) {
 			renderSource(sourceCache[key], markLineFor(sourceCache[key], s));
@@ -776,6 +972,10 @@
 				msg.textContent = 'Source was not included in this snapshot.';
 				els.code.appendChild(msg);
 			}
+			return;
+		}
+		if (!viewerOperator) {
+			els.code.innerHTML = '<li class="tr-line"><span class="tr-line-text">The source is shown to WebLogic admin roles only.</span></li>';
 			return;
 		}
 		els.code.innerHTML = '<li class="tr-line"><span class="tr-line-text">Loading source…</span></li>';
@@ -925,6 +1125,11 @@
 		// never spell the closing script tag literally — this file gets
 		// inlined into the snapshot's own <script> block
 		var SCRIPT_END = '<' + '/script>';
+		var PRETTY_TITLE = 'On: headers one per line, JSON and XML bodies indented. Off: the message exactly as recorded.';
+		var PRETTY_TAB_BUTTON = '<button id="tr-pretty-tab" type="button" class="tr-btn tr-pretty vorpal-btn vorpal-btn-secondary vorpal-btn-sm" aria-pressed="true" hidden title="'
+			+ PRETTY_TITLE + '">Pretty print: on</button>';
+		var PRETTY_POPUP_BUTTON = '<button id="tr-pretty-popup" type="button" class="tr-btn tr-pretty vorpal-btn vorpal-btn-secondary vorpal-btn-sm" aria-pressed="true" title="'
+			+ PRETTY_TITLE + '">Pretty print: on</button>';
 		var now = new Date();
 		var data = {
 			kind: 'blade-trace-snapshot',
@@ -965,22 +1170,25 @@
 			'<main class="vorpal-main">',
 			'<div class="tr-page">',
 			'<div class="tr-layout">',
-			'<aside class="tr-left" aria-label="Captured calls">',
-			'<div class="cf-group-label">Captured calls</div>',
+			'<aside class="tr-left vorpal-panel" aria-label="Captured calls">',
+			'<div class="cf-group-label vorpal-label">Captured calls</div>',
 			'<div id="tr-calls"></div>',
-			'<div class="cf-group-label">Timeline</div>',
-			'<div id="tr-timeline"><p class="cf-muted">Pick a call above.</p></div>',
+			'<div class="cf-group-label vorpal-label">Timeline</div>',
+			'<div id="tr-timeline"><p class="cf-muted vorpal-empty">Pick a call above.</p></div>',
 			'</aside>',
-			'<article class="cf-detail">',
+			'<article class="cf-detail vorpal-panel">',
 			'<div class="cf-detail-head">',
 			'<h1 id="tr-title">Call Traces</h1>',
 			'<p id="tr-step-info" class="cf-blurb">Each row on the left is one message an app sent or received. Pick a call to see its sequence diagram; pick a step to see the raw SIP message and, for sent steps, the source line that emitted it.</p>',
 			'<div id="tr-source-path" class="cf-source-path" hidden></div>',
 			'</div>',
-			'<div class="tr-tabs" role="tablist" aria-label="Detail views">',
-			'<button type="button" class="tr-tab cf-active" id="tr-tab-seq" data-tab="seq" role="tab">Sequence</button>',
-			'<button type="button" class="tr-tab" id="tr-tab-msg" data-tab="msg" role="tab">Message</button>',
-			'<button type="button" class="tr-tab" id="tr-tab-src" data-tab="src" role="tab">Source</button>',
+			'<div class="tr-tabbar">',
+			'<div class="tr-tabs vorpal-tabs" role="tablist" aria-label="Detail views">',
+			'<button type="button" class="tr-tab cf-active" id="tr-tab-seq" data-tab="seq" role="tab" aria-selected="true">Sequence</button>',
+			'<button type="button" class="tr-tab" id="tr-tab-msg" data-tab="msg" role="tab" aria-selected="false">Message</button>',
+			'<button type="button" class="tr-tab" id="tr-tab-src" data-tab="src" role="tab" aria-selected="false">Source</button>',
+			'</div>',
+			PRETTY_TAB_BUTTON,
 			'</div>',
 			'<div class="tr-panels">',
 			'<section id="tr-ladder" class="tr-ladder tr-panel" data-tab="seq" aria-label="Sequence diagram"></section>',
@@ -989,7 +1197,8 @@
 			'</div>',
 			'<dialog id="tr-msg-dialog" class="tr-msg-dialog" aria-labelledby="tr-msg-title">',
 			'<div class="tr-msg-head"><h2 id="tr-msg-title"></h2>',
-			'<button id="tr-msg-close" type="button" class="tr-btn" aria-label="Close">Close</button></div>',
+			PRETTY_POPUP_BUTTON,
+			'<button id="tr-msg-close" type="button" class="tr-btn vorpal-btn vorpal-btn-secondary vorpal-btn-sm" aria-label="Close">Close</button></div>',
 			'<pre id="tr-msg-popup" class="tr-sipmsg"></pre>',
 			'</dialog>',
 			'</article>',
@@ -1092,6 +1301,7 @@
 				recordedMode = !recordedMode;
 				if (savedMode) { savedMode = false; sourceCache = {}; }
 				linkedCall = null;
+				if (els.rfCall) { els.rfCall.value = ''; }
 				if (els.like) { els.like.hidden = true; }
 				if (els.copy) { els.copy.hidden = true; }
 				selectedCall = null;
@@ -1149,6 +1359,42 @@
 		});
 	}
 
+	// The Message tab: the message laid out by messageHtml, or a plain note
+	// when nothing was recorded. Kept so the pretty-print toggle can redraw it.
+	var shownMessage = null, shownNone = '', shownHidden = false;
+	function showMessage(message, none, hidden) {
+		shownMessage = message || null;
+		shownNone = none || '';
+		shownHidden = !!hidden;
+		if (!els.message) { return; }
+		if (message) { els.message.innerHTML = messageHtml(message, prettyPrint); }
+		else { els.message.textContent = shownHidden ? '(hidden: your access does not include message text)' : shownNone; }
+	}
+
+	// Pretty print: on, the message is laid out for reading (messageHtml);
+	// off, it is the text exactly as recorded. One setting for the Message tab
+	// and the popup, remembered in this browser. The button says which way it
+	// is in words, and aria-pressed carries the same state.
+	var PRETTY_KEY = 'blade-trace-pretty';
+	var prettyPrint = true;
+	try { prettyPrint = localStorage.getItem(PRETTY_KEY) !== 'off'; } catch (e) { /* storage blocked: default on */ }
+	function paintPretty() {
+		[els.prettyTab, els.prettyPopup].forEach(function (b) {
+			if (!b) { return; }
+			b.textContent = 'Pretty print: ' + (prettyPrint ? 'on' : 'off');
+			b.setAttribute('aria-pressed', prettyPrint ? 'true' : 'false');
+		});
+	}
+	function togglePretty() {
+		prettyPrint = !prettyPrint;
+		try { localStorage.setItem(PRETTY_KEY, prettyPrint ? 'on' : 'off'); } catch (e) { /* not remembered */ }
+		paintPretty();
+		showMessage(shownMessage, shownNone, shownHidden);
+		if (els.msgDialog && els.msgDialog.open && els.message) { els.msgPopup.innerHTML = els.message.innerHTML; }
+	}
+	[els.prettyTab, els.prettyPopup].forEach(function (b) { if (b) { b.addEventListener('click', togglePretty); } });
+	paintPretty();
+
 	// The raw SIP message of one arrow, in a dialog over the ladder. Titled the
 	// way the arrow reads: label, then who sent it to whom. The Message tab
 	// shows the same text, for stepping through the timeline without a dialog.
@@ -1159,7 +1405,7 @@
 		els.msgTitle.textContent = '#' + (i + 1) + '  ' + (a
 			? a.label + '  ·  ' + model.lanes[a.from] + ' → ' + model.lanes[a.to]
 			: call.steps[i].label + '  ·  ' + call.steps[i].app);
-		els.msgPopup.textContent = els.message ? els.message.textContent : (call.steps[i].message || '');
+		els.msgPopup.innerHTML = els.message ? els.message.innerHTML : messageHtml(call.steps[i].message || '', prettyPrint);
 		if (!els.msgDialog.open) { els.msgDialog.showModal(); }
 		els.msgPopup.scrollTop = 0;
 	}

@@ -7,8 +7,8 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.ws.rs.core.Response;
 
-import org.vorpal.blade.framework.v2.callflow.Callflow;
-import org.vorpal.blade.framework.v2.callflow.ClientCallflow;
+import org.vorpal.blade.framework.Callflow;
+import org.vorpal.blade.framework.v3.ClientCallflow;
 import org.vorpal.blade.framework.v3.events.BladeEventTypes;
 import org.vorpal.blade.framework.v3.events.Events;
 import org.vorpal.blade.framework.v3.media.CallflowHold;

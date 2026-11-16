@@ -16,7 +16,7 @@ import org.vorpal.blade.framework.v2.snmp.Snmp;
 /// chain + routing decision asynchronously by dispatching each initial INVITE
 /// to an [IRouterInvite] callflow.
 ///
-/// **Unannotated on purpose** (like [org.vorpal.blade.framework.v2.b2bua.B2buaServlet]).
+/// **Unannotated on purpose** (like [org.vorpal.blade.framework.v3.B2buaServlet]).
 /// Java class-level `@SipApplication` / `@SipServlet` / `@SipListener` are not
 /// `@Inherited`; if they lived here, every WAR that subclasses this base would
 /// register *two* SIP servlets (base + leaf) in one app — invalid. So each
@@ -49,7 +49,7 @@ import org.vorpal.blade.framework.v2.snmp.Snmp;
 /// is proxied without Record-Route and nothing after it comes back here. With
 /// it off, iRouter stays in the call as a B2BUA: this class extends
 /// [B2buaServlet], whose callflows relay the re-INVITE, ACK, BYE and CANCEL.
-/// The six [org.vorpal.blade.framework.v2.b2bua.B2buaListener] methods are
+/// The six [org.vorpal.blade.framework.v3.b2bua.B2buaListener] methods are
 /// empty; iRouter publishes its own routing events from [IRouterInvite].
 public class IRouterServlet extends B2buaServlet {
 	private static final long serialVersionUID = 1L;

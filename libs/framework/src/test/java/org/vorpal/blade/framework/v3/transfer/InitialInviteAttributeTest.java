@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.v2.transfer;
+package org.vorpal.blade.framework.v3.transfer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -35,11 +35,11 @@ class InitialInviteAttributeTest {
 	/// The declared literal, per class that declares one.
 	private static Map<String, String> declaredLiterals() throws IOException {
 		Map<String, String> found = new LinkedHashMap<>();
-		found.put("BlindTransfer", literal(read("v2/transfer/BlindTransfer.java"), "INITIAL_INVITE_ATTR"));
-		found.put("Dialog", literal(read("v2/transfer/api/Dialog.java"), "INITIAL_INVITE_ATTR"));
+		found.put("BlindTransfer", literal(read("v3/transfer/BlindTransfer.java"), "INITIAL_INVITE_ATTR"));
+		found.put("Dialog", literal(read("v3/transfer/api/Dialog.java"), "INITIAL_INVITE_ATTR"));
 		found.put("TransferInitialInvite",
-				literal(read("v2/transfer/TransferInitialInvite.java"), "INITIAL_INVITE_SESSION_ATTR"));
-		found.put("InitialInvite", literal(read("v2/b2bua/InitialInvite.java"), "ATTR_INITIAL_INVITE"));
+				literal(read("v3/transfer/TransferInitialInvite.java"), "INITIAL_INVITE_SESSION_ATTR"));
+		found.put("InitialInvite", literal(read("v3/b2bua/InitialInvite.java"), "ATTR_INITIAL_INVITE"));
 		return found;
 	}
 
@@ -63,7 +63,7 @@ class InitialInviteAttributeTest {
 	/// application session compiles and returns null forever.
 	@Test
 	void blindTransferReadsItFromTheSipSession() throws Exception {
-		String source = read("v2/transfer/BlindTransfer.java");
+		String source = read("v3/transfer/BlindTransfer.java");
 		int at = source.indexOf("INITIAL_INVITE_ATTR);");
 		assertTrue(at > 0, "BlindTransfer no longer reads INITIAL_INVITE_ATTR");
 		String statement = source.substring(Math.max(0, at - 220), at);
@@ -75,10 +75,10 @@ class InitialInviteAttributeTest {
 	/// Both writers put it on the SipSession.
 	@Test
 	void bothWritersUseTheSipSession() throws Exception {
-		assertTrue(read("v2/transfer/TransferInitialInvite.java")
+		assertTrue(read("v3/transfer/TransferInitialInvite.java")
 				.contains("request.getSession().setAttribute(INITIAL_INVITE_SESSION_ATTR"),
 				"TransferInitialInvite should store the initial INVITE on the SipSession");
-		assertTrue(read("v2/b2bua/InitialInvite.java")
+		assertTrue(read("v3/b2bua/InitialInvite.java")
 				.contains("bobRequest.getSession().setAttribute(ATTR_INITIAL_INVITE"),
 				"InitialInvite should store the initial INVITE on the SipSession");
 	}
@@ -88,7 +88,7 @@ class InitialInviteAttributeTest {
 	/// look plausible.
 	@Test
 	void theReferAttributeIsDeliberatelyDifferent() throws Exception {
-		assertEquals("INITIAL_REFER", literal(read("v2/transfer/BlindTransfer.java"), "INITIAL_REFER_ATTR"));
-		assertEquals("INITIAL_REFER", literal(read("v2/transfer/api/TransferAPI.java"), "INITIAL_REFER_ATTR"));
+		assertEquals("INITIAL_REFER", literal(read("v3/transfer/BlindTransfer.java"), "INITIAL_REFER_ATTR"));
+		assertEquals("INITIAL_REFER", literal(read("v3/transfer/api/TransferAPI.java"), "INITIAL_REFER_ATTR"));
 	}
 }

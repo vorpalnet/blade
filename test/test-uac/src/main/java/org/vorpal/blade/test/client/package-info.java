@@ -62,7 +62,7 @@
 /// Wraps the SIP session state along with the JAX-RS {@code AsyncResponse}, using
 /// a hash of the combined application and SIP session IDs as a unique key.
 ///
-/// @see org.vorpal.blade.framework.v2.AsyncSipServlet
-/// @see org.vorpal.blade.framework.v2.callflow.Callflow
+/// @see org.vorpal.blade.framework.v3.AsyncSipServlet
+/// @see org.vorpal.blade.framework.v3.Callflow
 /// @see org.vorpal.blade.framework.v3.configuration.SettingsManager
 package org.vorpal.blade.test.client;

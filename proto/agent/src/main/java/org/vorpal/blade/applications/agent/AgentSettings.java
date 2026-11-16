@@ -32,6 +32,7 @@ public class AgentSettings extends Configuration implements Serializable {
 	private int ringSeconds = 20;
 	private java.util.LinkedHashMap<String, String> people = new java.util.LinkedHashMap<>();
 	private java.util.List<String> watchedApplications = new java.util.ArrayList<>();
+	private java.util.List<org.vorpal.blade.framework.v3.access.Grant> grants = new java.util.ArrayList<>();
 
 	public AgentSettings() {
 	}
@@ -129,5 +130,18 @@ public class AgentSettings extends Configuration implements Serializable {
 
 	public void setWatchedApplications(java.util.List<String> watchedApplications) {
 		this.watchedApplications = watchedApplications;
+	}
+
+	@JsonPropertyDescription("Which calls each supervisor's console shows, by the tenant and department every call "
+			+ "carries: a grant names an identity-provider group and the domains, tenants and departments its members "
+			+ "see ('*' for all). A call popped to its own agent always reaches that agent; grants decide who else sees "
+			+ "it. Empty: every console sees every call. A WebLogic administrator sees every call. Read when a console "
+			+ "opens, so a change applies from the next sign-in or reload.")
+	public java.util.List<org.vorpal.blade.framework.v3.access.Grant> getGrants() {
+		return grants;
+	}
+
+	public void setGrants(java.util.List<org.vorpal.blade.framework.v3.access.Grant> grants) {
+		this.grants = (grants == null) ? new java.util.ArrayList<>() : grants;
 	}
 }

@@ -519,6 +519,9 @@ SELECT
    TRY_CAST(JSON_VALUE(e.payload, '$."status"') AS BIGINT) AS status_code,
    JSON_VALUE(e.payload, '$."peer"') AS peer,
    JSON_VALUE(e.payload, '$."dropped"') AS dropped,
+   JSON_VALUE(e.payload, '$."from"') AS call_from,
+   JSON_VALUE(e.payload, '$."to"') AS call_to,
+   JSON_VALUE(e.payload, '$."asserted"') AS asserted,
    e.payload AS payload
 FROM events e
 JOIN applications a ON a.id = e.application_id

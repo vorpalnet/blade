@@ -59,6 +59,41 @@ public class TracesAPI {
 	@javax.ws.rs.core.Context
 	private javax.ws.rs.core.SecurityContext security;
 
+	@javax.ws.rs.core.Context
+	private javax.servlet.http.HttpServletRequest request;
+
+	/// What the person making this request may see ([TraceAccess]).
+	private TraceAccess viewer() {
+		CallflowSettings settings = CallflowStartup.settings();
+		org.vorpal.blade.framework.v3.access.Access access = org.vorpal.blade.framework.v3.access.Access
+				.forRequest(request, (settings == null) ? null : settings.getGrants(),
+						(settings == null) ? null : settings.getAccess());
+		return new TraceAccess(access, org.vorpal.blade.framework.v2.config.SettingsManager.getDomainName());
+	}
+
+	/// What this viewer sees, in words, and whether they read every call they
+	/// see: for the page to say so, and to offer the number search only to
+	/// those who may use it. `{"sees":[...], "content":true|false}`.
+	@GET
+	@javax.ws.rs.Path("/access")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(summary = "Describe what the signed-in viewer may see.")
+	public Response access() {
+		TraceAccess viewer = viewer();
+		ObjectNode out = mapper.createObjectNode();
+		ArrayNode sees = out.putArray("sees");
+		for (String line : org.vorpal.blade.framework.v3.access.Access.describe(viewer.access())) {
+			// Servers are the dashboard's; Trace shows calls only.
+			if (!line.startsWith("Servers:")) {
+				sees.add(line.replace("Transcripts and callers:", "Message text and callers:"));
+			}
+		}
+		out.put("content", viewer.seesContent());
+		out.put("operator", Operators.is(security));
+		out.put("limited", !viewer.seesAllCalls() || !viewer.seesContent());
+		return Response.ok(out.toString()).build();
+	}
+
 	/// Record a read of call content in the access log: a trace captures whole
 	/// SIP messages and a log can hold caller numbers, so who looked is worth
 	/// the same record a recording gets. Explicit acts only: the page's own
@@ -97,6 +132,7 @@ public class TracesAPI {
 					log.log(Level.FINE, "steps read failed for " + on + ": " + ex.getMessage());
 				}
 			}
+			viewer().apply(out);
 			return Response.ok(out.toString()).build();
 		} catch (Exception e) {
 			return error(e);
@@ -106,15 +142,28 @@ public class TracesAPI {
 	/// Calls the framework's flight recorder wrote out because they went wrong,
 	/// in the shape [#traces] returns, newest first: one call's records with
 	/// `call` (its Vorpal-ID, as the dashboard links it), else the latest
-	/// `limit` (default 50), only those recorded since `since` (epoch millis)
-	/// when given. Each source adds `recorded` and the `verdict`. See
-	/// [RecordedCalls].
+	/// `limit` records (default 50, at most 500) that pass the filters. `since`
+	/// and `before` are epoch millis; `before` pages back from the oldest record
+	/// the page holds. `app`, `server`, `finding` (or `dropped`), `fault`,
+	/// `peer` and `number` narrow the rest ([RecordedCalls.Filter]); `number`
+	/// needs a grant with content. Each source adds `recorded`, the `verdict`,
+	/// `tracedAt` and, with content, the call's `parties`. Only the calls the
+	/// viewer's grants show are read ([TraceAccess]). See [RecordedCalls].
 	@GET
 	@javax.ws.rs.Path("/recorded")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(summary = "Read calls the flight recorder wrote out, from the analytics database.")
 	public Response recorded(@QueryParam("call") String call, @QueryParam("since") Long since,
+			@QueryParam("before") Long before, @QueryParam("app") String app, @QueryParam("server") String server,
+			@QueryParam("finding") String finding, @QueryParam("fault") String fault,
+			@QueryParam("peer") String peer, @QueryParam("number") String number,
 			@QueryParam("limit") Integer limit) {
+		TraceAccess viewer = viewer();
+		if (!isBlank(number) && !viewer.seesContent()) {
+			return Response.status(Response.Status.FORBIDDEN).type(MediaType.TEXT_PLAIN)
+					.entity("Searching by number needs phi:transcript for every call you see, in Trace's access policy")
+					.build();
+		}
 		String vorpalId = isBlank(call) ? null : call.trim();
 		if (vorpalId != null && !vorpalId.matches("[0-9A-Fa-f]{1,16}")) {
 			return bad("'call' is a Vorpal-ID: hexadecimal digits");
@@ -122,11 +171,30 @@ public class TracesAPI {
 		if (vorpalId != null) {
 			accessed("read:trace", "call", vorpalId.toUpperCase(java.util.Locale.ROOT));
 		}
+		if (!isBlank(finding) && !finding.trim().matches("(?i)silent|timeout|forgot|error|credentials|unanswered|unrelayed|dropped")) {
+			return bad("'finding' is one of silent, timeout, forgot, error, credentials, unanswered, unrelayed, dropped");
+		}
+		if (!isBlank(fault) && !fault.trim().matches("(?i)downstream|application")) {
+			return bad("'fault' is downstream or application");
+		}
+		RecordedCalls.Filter filter = new RecordedCalls.Filter();
+		filter.vorpalId = vorpalId;
+		filter.since = since;
+		filter.before = before;
+		filter.app = isBlank(app) ? null : app;
+		filter.server = isBlank(server) ? null : server;
+		filter.finding = isBlank(finding) ? null : finding;
+		filter.fault = isBlank(fault) ? null : fault;
+		filter.peer = isBlank(peer) ? null : peer;
+		filter.number = isBlank(number) ? null : number;
+		filter.access = viewer.seesAllCalls() ? null : viewer;
 		CallflowSettings settings = CallflowStartup.settings();
 		String ds = (settings != null) ? settings.getAnalyticsDataSource() : "jdbc/BladeAnalytics";
 		int max = (limit == null || limit < 1) ? 50 : Math.min(limit, 500);
 		try {
-			return Response.ok(RecordedCalls.read(ds, vorpalId, since, max).toString()).build();
+			ObjectNode out = RecordedCalls.read(ds, filter, max);
+			viewer.apply(out);
+			return Response.ok(out.toString()).build();
 		} catch (Exception e) {
 			return error(e);
 		}
@@ -140,7 +208,18 @@ public class TracesAPI {
 	@Operation(summary = "List the saved calls.")
 	public Response savedCalls() {
 		try {
-			return Response.ok(SavedCalls.list(savedDirectory()).toString()).build();
+			ObjectNode out = SavedCalls.list(savedDirectory());
+			TraceAccess viewer = viewer();
+			if (!viewer.seesAllCalls()) {
+				ArrayNode shown = mapper.createArrayNode();
+				for (JsonNode summary : out.path("calls")) {
+					if (viewer.seesAny(summary.get("scopes"))) {
+						shown.add(summary);
+					}
+				}
+				out.set("calls", shown);
+			}
+			return Response.ok(out.toString()).build();
 		} catch (Exception e) {
 			return error(e);
 		}
@@ -163,8 +242,15 @@ public class TracesAPI {
 				return Response.status(Response.Status.NOT_FOUND).type(MediaType.TEXT_PLAIN)
 						.entity("No saved call " + vorpalId).build();
 			}
+			TraceAccess viewer = viewer();
+			ObjectNode out = (ObjectNode) mapper.readTree(trace);
+			viewer.apply(out);
+			if (out.path("sources").size() == 0) {
+				return Response.status(Response.Status.NOT_FOUND).type(MediaType.TEXT_PLAIN)
+						.entity("No saved call " + vorpalId).build();
+			}
 			accessed("read:trace", "call", vorpalId);
-			return Response.ok(trace).build();
+			return Response.ok(out.toString()).build();
 		} catch (Exception e) {
 			return error(e);
 		}
@@ -178,14 +264,27 @@ public class TracesAPI {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(summary = "Save one captured call on this host.")
 	public Response saveCall(@PathParam("id") String id, String body) {
+		if (!Operators.is(security)) {
+			return Operators.refused("Saving a call");
+		}
 		String vorpalId = SavedCalls.vorpalId(id);
 		if (vorpalId == null) {
 			return bad("A saved call is named by its Vorpal-ID: hexadecimal digits");
 		}
 		try {
 			java.security.Principal user = (security == null) ? null : security.getUserPrincipal();
-			ObjectNode summary = SavedCalls.write(savedDirectory(), vorpalId, mapper.readTree(body),
-					(user == null) ? null : user.getName());
+			JsonNode posted = mapper.readTree(body);
+			TraceAccess viewer = viewer();
+			// Saving keeps message text, so it needs content; and a call already
+			// saved is replaced only by someone who sees all of it.
+			String existing = SavedCalls.read(savedDirectory(), vorpalId);
+			if (!viewer.seesAll(posted) || (existing != null && !viewer.seesAll(mapper.readTree(existing)))) {
+				return Response.status(Response.Status.FORBIDDEN).type(MediaType.TEXT_PLAIN)
+						.entity("Saving this call needs a grant that shows all of it, content included").build();
+			}
+			ObjectNode summary = SavedCalls.write(savedDirectory(), vorpalId, posted,
+					(user == null) ? null : user.getName(), TraceAccess.scopesOf(posted.path("sources"),
+							org.vorpal.blade.framework.v2.config.SettingsManager.getDomainName()));
 			accessed("admin:trace", "call", vorpalId);
 			return Response.ok(summary.toString()).build();
 		} catch (IllegalArgumentException | com.fasterxml.jackson.core.JsonProcessingException e) {
@@ -200,11 +299,19 @@ public class TracesAPI {
 	@javax.ws.rs.Path("/saved/{id}")
 	@Operation(summary = "Delete one saved call.")
 	public Response deleteCall(@PathParam("id") String id) {
+		if (!Operators.is(security)) {
+			return Operators.refused("Deleting a saved call");
+		}
 		String vorpalId = SavedCalls.vorpalId(id);
 		if (vorpalId == null) {
 			return bad("A saved call is named by its Vorpal-ID: hexadecimal digits");
 		}
 		try {
+			String existing = SavedCalls.read(savedDirectory(), vorpalId);
+			if (existing != null && !viewer().seesAll(mapper.readTree(existing))) {
+				return Response.status(Response.Status.FORBIDDEN).type(MediaType.TEXT_PLAIN)
+						.entity("Deleting this call needs a grant that shows all of it, content included").build();
+			}
 			if (!SavedCalls.delete(savedDirectory(), vorpalId)) {
 				return Response.status(Response.Status.NOT_FOUND).type(MediaType.TEXT_PLAIN)
 						.entity("No saved call " + vorpalId).build();
@@ -228,6 +335,9 @@ public class TracesAPI {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(summary = "List the armed trace rules across the domain.")
 	public Response rules() {
+		if (!Operators.is(security)) {
+			return Operators.refused("Reading the armed rules");
+		}
 		try (CloseableContext ctx = new CloseableContext()) {
 			MBeanServer mbs = (MBeanServer) ctx.lookup(JMX_DOMAIN_RUNTIME);
 			ObjectNode out = mapper.createObjectNode();
@@ -242,6 +352,17 @@ public class TracesAPI {
 					src.set("rules", parsed.get("rules"));
 				} catch (Exception ex) {
 					log.log(Level.FINE, "rules read failed for " + on + ": " + ex.getMessage());
+				}
+			}
+			if (!viewer().seesContent()) {
+				// A rule's pattern is often a caller's number.
+				for (JsonNode src : arr) {
+					for (JsonNode rule : src.path("rules")) {
+						if (rule.isObject()) {
+							((ObjectNode) rule).put("pattern", "(hidden)");
+							((ObjectNode) rule).put("label", "(hidden)");
+						}
+					}
 				}
 			}
 			return Response.ok(out.toString()).build();
@@ -259,6 +380,9 @@ public class TracesAPI {
 			@QueryParam("attribute") String attribute,
 			@QueryParam("pattern") String pattern,
 			@QueryParam("maxCaptures") Integer maxCaptures) {
+		if (!Operators.is(security)) {
+			return Operators.refused("Arming a trace rule");
+		}
 		if (isBlank(attribute) || isBlank(pattern)) {
 			return bad("Missing 'attribute' or 'pattern' parameter");
 		}
@@ -284,6 +408,9 @@ public class TracesAPI {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(summary = "Disarm all trace rules on every app in the domain.")
 	public Response disarm() {
+		if (!Operators.is(security)) {
+			return Operators.refused("Disarming trace rules");
+		}
 		return fanOut("disarm", new Object[0], new String[0]);
 	}
 
@@ -293,6 +420,9 @@ public class TracesAPI {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(summary = "Clear the buffered trace steps on every app in the domain.")
 	public Response clear() {
+		if (!Operators.is(security)) {
+			return Operators.refused("Clearing the trace buffers");
+		}
 		return fanOut("clearSteps", new Object[0], new String[0]);
 	}
 

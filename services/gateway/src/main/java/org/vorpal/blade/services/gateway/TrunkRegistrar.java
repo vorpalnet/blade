@@ -2,7 +2,7 @@ package org.vorpal.blade.services.gateway;
 
 import java.net.InetSocketAddress;
 
-import org.vorpal.blade.framework.v2.callflow.ClientCallflow;
+import org.vorpal.blade.framework.v3.ClientCallflow;
 
 /// The runtime contract a {@link RegistrationStyle} produces to keep one
 /// {@link VirtualGateway} registered: a client (UAC) callflow that owns the

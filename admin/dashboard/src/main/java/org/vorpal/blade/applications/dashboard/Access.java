@@ -11,109 +11,40 @@ import java.util.TreeSet;
 import javax.persistence.Parameter;
 import javax.persistence.Query;
 
-/// What one viewer may see: the union of the [DashboardGrant]s of every group
-/// they belong to. Applied on the server, inside every query, so the browser
-/// is only ever sent what this allows; a scope picker can narrow it, never
-/// widen it.
-///
-/// **Two kinds of seeing.** The platform (servers, heap, operations, data
-/// health, the per-minute samples) is per domain, and only a grant naming the
-/// domain under `platform` shows it: a tenant must not see the load of the
-/// tenants beside it. Calls are per tenant and department, and a rule shows a
-/// call row only if its domain, tenant and department all match.
+/// What one dashboard viewer may see: the framework's
+/// [org.vorpal.blade.framework.v3.access.Access], the union of their groups'
+/// [DashboardGrant]s, plus the JPQL conditions that apply it inside every
+/// report query, so the browser is only ever sent what it allows; a scope
+/// picker can narrow it, never widen it.
 ///
 /// **Department is per part of a call.** An event carries the department that
 /// handled it, so a department viewer sees only their own events of a call
 /// that passed through several. A call row has no department of its own; it
 /// is shown if any of its events carry one of the viewer's.
-public final class Access {
+public final class Access extends org.vorpal.blade.framework.v3.access.Access {
 
-	/// In a grant's list, every value, including none at all.
-	public static final String ALL = "*";
-
-	/// One grant's call rule. A null set is every value; an empty one, none.
-	static final class Rule {
-		final Set<String> domains;
-		final Set<String> tenants;
-		final Set<String> departments;
-
-		Rule(Set<String> domains, Set<String> tenants, Set<String> departments) {
-			this.domains = domains;
-			this.tenants = tenants;
-			this.departments = departments;
-		}
-
-		boolean showsNoCalls() {
-			return isEmpty(domains) || isEmpty(tenants) || isEmpty(departments);
-		}
-
-		@Override
-		public String toString() {
-			return show(domains) + "/" + show(tenants) + "/" + show(departments);
-		}
+	private Access(org.vorpal.blade.framework.v3.access.Access core) {
+		super(core);
 	}
 
-	final List<Rule> rules;
-	/// Domains whose platform this viewer sees; null for every one.
-	final Set<String> platform;
-	final boolean content;
-
-	Access(List<Rule> rules, Set<String> platform, boolean content) {
-		this.rules = Collections.unmodifiableList(rules);
-		this.platform = platform;
-		this.content = content;
+	/// The union of the grants a viewer holds, with no content. A viewer who
+	/// holds none sees nothing: no calls, no platform.
+	public static Access of(Collection<? extends org.vorpal.blade.framework.v3.access.Grant> held) {
+		return new Access(org.vorpal.blade.framework.v3.access.Access.of(held));
 	}
 
-	/// The union of the grants a viewer holds. A viewer who holds none sees
-	/// nothing: no calls, no platform, no content.
-	public static Access of(Collection<DashboardGrant> held) {
-		List<Rule> rules = new ArrayList<>();
-		Set<String> platform = new TreeSet<>();
-		boolean allPlatform = false;
-		boolean content = false;
-		for (DashboardGrant g : held) {
-			Rule r = new Rule(set(g.getDomains()), set(g.getTenants()), set(g.getDepartments()));
-			if (!r.showsNoCalls()) {
-				rules.add(r);
-			}
-			Set<String> p = set(g.getPlatform());
-			if (p == null) {
-				allPlatform = true;
-			} else {
-				platform.addAll(p);
-			}
-			content |= g.isContent();
-		}
-		return new Access(rules, allPlatform ? null : platform, content);
+	/// This scope, with content as `policy` grants it to `subject`.
+	@Override
+	public Access withContent(org.vorpal.blade.framework.v3.security.SubjectAttributes subject,
+			org.vorpal.blade.framework.v3.security.AccessEvaluator policy) {
+		return new Access(super.withContent(subject, policy));
 	}
 
-	/// The WebLogic roles that see everything while no grants are configured:
-	/// the roles the dashboard admitted before it had grants.
-	static final List<String> ADMIN_ROLES = java.util.Arrays.asList("Admin", "Operator", "Deployer", "Monitor");
-
-	/// What the person making `req` may see, by the groups they are in.
-	///
-	/// With no grants configured, a viewer in a WebLogic admin role sees
-	/// everything (null: no limit), as before grants existed, and anyone else
-	/// signed in, an identity-domain user for one, sees nothing. Signing in
-	/// is never on its own a reason to see calls.
+	/// What the person making `req` may see, by the groups they are in and the
+	/// dashboard's policy. See the framework's `forRequest`.
 	public static Access forRequest(javax.servlet.http.HttpServletRequest req, DashboardSettings settings) {
-		List<DashboardGrant> grants = (settings == null) ? null : settings.getGrants();
-		if (grants == null || grants.isEmpty()) {
-			for (String role : ADMIN_ROLES) {
-				if (req.isUserInRole(role)) {
-					return null;
-				}
-			}
-			return of(Collections.<DashboardGrant>emptyList());
-		}
-		List<DashboardGrant> held = new ArrayList<>();
-		for (DashboardGrant g : grants) {
-			if (g != null && g.getGroup() != null && req.isUserInRole(g.getGroup())) {
-				held.add(g);
-			}
-		}
-		return of(held);
+		return new Access(org.vorpal.blade.framework.v3.access.Access.forRequest(req,
+				(settings == null) ? null : settings.getGrants(), (settings == null) ? null : settings.getAccess()));
 	}
 
 	/// Answer for a live endpoint (servers, operations) the viewer may not see:
@@ -124,44 +55,13 @@ public final class Access {
 			javax.servlet.http.HttpServletResponse resp, javax.servlet.ServletContext context)
 			throws java.io.IOException {
 		Access access = forRequest(req, DashboardSettingsStartup.settings(context));
-		if (access == null || access.seesPlatform(org.vorpal.blade.framework.v2.config.SettingsManager.getDomainName())) {
+		if (access.seesPlatform(org.vorpal.blade.framework.v2.config.SettingsManager.getDomainName())) {
 			return false;
 		}
 		resp.setContentType("application/json");
 		resp.setCharacterEncoding("UTF-8");
 		resp.getWriter().write("{\"error\":\"no grant shows this domain's servers\",\"denied\":true}");
 		return true;
-	}
-
-	/// A grant's list as a set: null for [#ALL], empty for none.
-	static Set<String> set(List<String> values) {
-		if (values == null) {
-			return Collections.emptySet();
-		}
-		Set<String> s = new TreeSet<>();
-		for (String v : values) {
-			if (ALL.equals(v)) {
-				return null;
-			}
-			if (v != null && !v.isEmpty()) {
-				s.add(v);
-			}
-		}
-		return s;
-	}
-
-	/// True if the viewer sees `domain`'s platform.
-	public boolean seesPlatform(String domain) {
-		return platform == null || (domain != null && platform.contains(domain));
-	}
-
-	/// True if the viewer sees any domain's platform.
-	public boolean seesAnyPlatform() {
-		return platform == null || !platform.isEmpty();
-	}
-
-	public boolean seesContent() {
-		return content;
 	}
 
 	/// The JPQL condition, starting " AND", that keeps only the rows of
@@ -173,6 +73,9 @@ public final class Access {
 	String predicate(String alias, boolean departmentColumn) {
 		if (rules.isEmpty()) {
 			return " AND 1 = 0";
+		}
+		if (seesAllCalls()) {
+			return "";
 		}
 		StringBuilder any = new StringBuilder();
 		for (int i = 0; i < rules.size(); i++) {
@@ -228,51 +131,5 @@ public final class Access {
 		if (values != null && declared.contains(name)) {
 			q.setParameter(name, new ArrayList<>(values));
 		}
-	}
-
-	/// What this viewer sees, in words, one line per kind of seeing, for the
-	/// board's account menu. `access` null is the no-grants administrator.
-	public static List<String> describe(Access access) {
-		List<String> lines = new ArrayList<>();
-		if (access == null) {
-			lines.add("Calls: all");
-			lines.add("Servers: all domains");
-			lines.add("Transcripts and callers: yes");
-			return lines;
-		}
-		if (access.rules.isEmpty()) {
-			lines.add("Calls: none");
-		}
-		for (Rule r : access.rules) {
-			List<String> parts = new ArrayList<>();
-			parts.add(r.tenants == null ? "every tenant" : "tenant " + String.join(", ", r.tenants));
-			parts.add(r.departments == null ? "every department" : "department " + String.join(", ", r.departments));
-			if (r.domains != null) {
-				parts.add("in " + String.join(", ", r.domains));
-			}
-			lines.add("Calls: " + String.join(" \u00b7 ", parts));
-		}
-		lines.add("Servers: " + (access.platform == null ? "all domains"
-				: access.platform.isEmpty() ? "none" : String.join(", ", access.platform)));
-		lines.add("Transcripts and callers: " + (access.content ? "yes" : "no"));
-		return lines;
-	}
-
-	/// A stable description, for the report cache's key and the audit record.
-	public String key() {
-		return rules + "|" + show(platform) + "|" + content;
-	}
-
-	@Override
-	public String toString() {
-		return "Access[" + key() + "]";
-	}
-
-	private static boolean isEmpty(Set<String> s) {
-		return s != null && s.isEmpty();
-	}
-
-	private static String show(Set<String> s) {
-		return s == null ? ALL : String.join(",", s);
 	}
 }

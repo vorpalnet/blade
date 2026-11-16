@@ -35,7 +35,7 @@
 ///
 /// The API integrates with the Vorpal Blade framework's callflow system and leverages:
 ///
-/// - [org.vorpal.blade.framework.v2.callflow.Callflow] for SIP call processing
+/// - [org.vorpal.blade.framework.v3.Callflow] for SIP call processing
 /// - [org.vorpal.blade.services.tpcc.TpccServlet] for core TPCC functionality
 /// - [org.vorpal.blade.services.tpcc.callflows.CreateDialog] for dialog creation workflows
 ///
@@ -111,5 +111,5 @@
 ///
 /// @see DialogAPI
 /// @see org.vorpal.blade.services.tpcc.TpccServlet
-/// @see org.vorpal.blade.framework.v2.callflow.Callflow
+/// @see org.vorpal.blade.framework.v3.Callflow
 package org.vorpal.blade.services.tpcc.v1;

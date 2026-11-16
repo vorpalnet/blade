@@ -3,9 +3,10 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>BLADE Events · Destinations</title>
+	<title>Destinations · Events · BLADE</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
 	<script src="/blade/portal/brand/theme.js"></script>
+	<script src="/blade/portal/brand/shell.js" data-context="/blade/events" defer></script>
 	<link rel="stylesheet" href="events.css">
 	<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/vorpal_splotch.svg">
 </head>
@@ -51,34 +52,34 @@
 				</div>
 			</section>
 
-			<div class="ev-panel" id="create-panel" hidden style="margin-bottom:1rem">
-				<header><span>New destination</span></header>
+			<div class="ev-panel vorpal-panel" id="create-panel" hidden style="margin-bottom:1rem">
+				<header class="vorpal-panel-head"><h2 class="vorpal-panel-title">New destination</h2></header>
 				<div class="ev-body">
-					<div class="vorpal-form-row">
-						<label for="c-name">Name</label>
-						<input id="c-name" type="text" placeholder="BladeEventBusTopic">
+					<div class="ev-form-row">
+						<label class="vorpal-label" for="c-name">Name</label>
+						<input id="c-name" class="vorpal-input" type="text" placeholder="BladeEventBusTopic">
 					</div>
-					<div class="vorpal-form-row">
-						<label for="c-jndi">JNDI name</label>
-						<input id="c-jndi" type="text" placeholder="jms/BladeEventBusTopic">
+					<div class="ev-form-row">
+						<label class="vorpal-label" for="c-jndi">JNDI name</label>
+						<input id="c-jndi" class="vorpal-input" type="text" placeholder="jms/BladeEventBusTopic">
 					</div>
-					<div class="vorpal-form-row">
-						<label for="c-kind">Kind</label>
-						<select id="c-kind">
+					<div class="ev-form-row">
+						<label class="vorpal-label" for="c-kind">Kind</label>
+						<select class="vorpal-input" id="c-kind">
 							<option value="TOPIC">TOPIC — every subscriber gets a copy</option>
 							<option value="QUEUE">QUEUE — exactly one consumer</option>
 						</select>
 					</div>
-					<div class="vorpal-form-row">
-						<label for="c-targets">Target</label>
-						<select id="c-targets"><option value="">(the only cluster)</option></select>
+					<div class="ev-form-row">
+						<label class="vorpal-label" for="c-targets">Target</label>
+						<select class="vorpal-input" id="c-targets"><option value="">(the only cluster)</option></select>
 					</div>
-					<div class="vorpal-form-row">
-						<label for="c-quota">Quota (bytes)</label>
-						<input id="c-quota" type="number" value="1073741824">
+					<div class="ev-form-row">
+						<label class="vorpal-label" for="c-quota">Quota (bytes)</label>
+						<input id="c-quota" class="vorpal-input" type="number" value="1073741824">
 						<span class="ev-muted">Its own quota, so one destination cannot fill a shared store and starve the others.</span>
 					</div>
-					<div class="ev-toolbar" style="margin-top:.75rem">
+					<div class="ev-toolbar vorpal-toolbar" style="margin-top:.75rem">
 						<button id="c-create" class="vorpal-btn" type="button">Create</button>
 						<button id="c-cancel" class="vorpal-btn vorpal-btn-secondary" type="button">Cancel</button>
 					</div>
@@ -92,45 +93,45 @@
 
 			<pre class="ev-code" id="action-log" hidden></pre>
 
-			<div id="jms-error" class="ev-finding is-problem" hidden>
+			<div id="jms-error" class="ev-finding vorpal-error is-problem" hidden>
 				<div class="ev-kind">✕ Cannot read JMS</div>
 				<div class="ev-detail" id="jms-error-detail"></div>
 			</div>
 
-			<div class="ev-panel">
-				<header>
-					<span>Destinations</span>
-					<span id="destination-count" class="vorpal-pill">—</span>
+			<div class="ev-panel vorpal-panel">
+				<header class="vorpal-panel-head">
+					<h2 class="vorpal-panel-title">Destinations</h2>
+					<div class="vorpal-toolbar"><span id="destination-count" class="vorpal-badge">—</span></div>
 				</header>
 				<div class="ev-body">
-					<table class="ev-table" id="destinations-table">
+					<table class="ev-table vorpal-table" id="destinations-table">
 						<thead>
 							<tr>
 								<th>Destination</th>
 								<th>JNDI</th>
 								<th>Module</th>
 								<th>Kind</th>
-								<th class="ev-num">Current</th>
-								<th class="ev-num">Pending</th>
-								<th class="ev-num">Received</th>
-								<th class="ev-num">Consumers</th>
+								<th class="ev-num num">Current</th>
+								<th class="ev-num num">Pending</th>
+								<th class="ev-num num">Received</th>
+								<th class="ev-num num">Consumers</th>
 								<th>State</th>
 								<th>Actions</th>
 							</tr>
 						</thead>
 						<tbody></tbody>
 					</table>
-					<div id="destinations-empty" class="ev-empty ev-muted" hidden>
+					<div id="destinations-empty" class="vorpal-empty" hidden>
 						No JMS destinations found in this domain. Provision them with
 						<code>configure-messaging-jms.py</code>.
 					</div>
 				</div>
 			</div>
 
-			<div class="ev-panel" style="margin-top:1rem">
-				<header>
-					<span>Durable subscriptions</span>
-					<span id="subscription-count" class="vorpal-pill">—</span>
+			<div class="ev-panel vorpal-panel" style="margin-top:1rem">
+				<header class="vorpal-panel-head">
+					<h2 class="vorpal-panel-title">Durable subscriptions</h2>
+					<div class="vorpal-toolbar"><span id="subscription-count" class="vorpal-badge">—</span></div>
 				</header>
 				<div class="ev-body">
 					<p class="ev-muted">
@@ -139,7 +140,7 @@
 						the subscription gets nothing — and that is indistinguishable from
 						no events being published.
 					</p>
-					<table class="ev-table" id="subscriptions-table">
+					<table class="ev-table vorpal-table" id="subscriptions-table">
 						<thead>
 							<tr>
 								<th>Subscription</th>
@@ -147,23 +148,23 @@
 								<th>Client ID</th>
 								<th>Selector</th>
 								<th>Active</th>
-								<th class="ev-num">Pending</th>
+								<th class="ev-num num">Pending</th>
 								<th>Actions</th>
 							</tr>
 						</thead>
 						<tbody></tbody>
 					</table>
-					<div id="subscriptions-empty" class="ev-empty ev-muted" hidden>
+					<div id="subscriptions-empty" class="vorpal-empty" hidden>
 						No durable subscriptions. A consumer that has never started leaves
 						none behind.
 					</div>
 				</div>
 			</div>
 
-			<div class="ev-panel" id="browse-panel" hidden style="margin-top:1rem">
-				<header>
-					<span id="browse-title">Messages</span>
-					<button id="browse-close" class="vorpal-btn vorpal-btn-secondary" type="button">Close</button>
+			<div class="ev-panel vorpal-panel" id="browse-panel" hidden style="margin-top:1rem">
+				<header class="vorpal-panel-head">
+					<h2 id="browse-title" class="vorpal-panel-title">Messages</h2>
+					<div class="vorpal-toolbar"><button id="browse-close" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button">Close</button></div>
 				</header>
 				<div class="ev-body">
 					<p class="ev-muted">
@@ -177,21 +178,21 @@
 				</div>
 			</div>
 
-			<div class="ev-panel" style="margin-top:1rem">
-				<header>
-					<span>JMS servers</span>
-					<span id="server-count" class="vorpal-pill">—</span>
+			<div class="ev-panel vorpal-panel" style="margin-top:1rem">
+				<header class="vorpal-panel-head">
+					<h2 class="vorpal-panel-title">JMS servers</h2>
+					<div class="vorpal-toolbar"><span id="server-count" class="vorpal-badge">—</span></div>
 				</header>
 				<div class="ev-body">
-					<table class="ev-table" id="servers-table">
+					<table class="ev-table vorpal-table" id="servers-table">
 						<thead>
 							<tr>
 								<th>Server</th>
 								<th>Store</th>
 								<th>Targets</th>
-								<th class="ev-num">Destinations</th>
-								<th class="ev-num">Current</th>
-								<th class="ev-num">Pending</th>
+								<th class="ev-num num">Destinations</th>
+								<th class="ev-num num">Current</th>
+								<th class="ev-num num">Pending</th>
 								<th>Health</th>
 							</tr>
 						</thead>

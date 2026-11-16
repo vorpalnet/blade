@@ -1,41 +1,12 @@
 package org.vorpal.blade.framework.v2.transfer.api;
 
-import java.io.Serializable;
-
-import org.vorpal.blade.framework.v2.transfer.TransferSettings;
-
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
-import io.swagger.v3.oas.annotations.media.Schema;
-
-/**
- * REST API request for initiating a call transfer.
- *
- * <p>Contains transfer style, session identification, dialog selection,
- * notification preferences, and target destination.
- */
-@JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonPropertyOrder({ "style", "sessionKey", "dialogKey", "notification" })
-public class TransferRequest implements Serializable {
+/// @deprecated Use [org.vorpal.blade.framework.v3.transfer.api.TransferRequest]. This type is the v3 one under its old
+///             name, kept so code that names it still compiles.
+@Deprecated
+public class TransferRequest extends org.vorpal.blade.framework.v3.transfer.api.TransferRequest {
 	private static final long serialVersionUID = 1L;
 
-	@Schema(description = "style of transfer: blind, attended or conference", defaultValue = "blind", nullable = true)
-	public TransferSettings.TransferStyle style;
-
-	@Schema(description = "Vorpal Session or custom index key defined in the configuration file", defaultValue = "ABCD1234", nullable = true)
-	public String sessionKey; 
-
-//	@Schema(description = "Transferee dialog (SipSession) matching attribute", defaultValue = "ABCD1234", nullable = true)
-	public DialogKey dialogKey;
-
-	@Schema(description = "Notification delivery settings. Set 'style' to none (immediate response), "
-			+ "async (hang until final response), callback (REST webhook), or jms (JMS queue); "
-			+ "optionally include uid, callbackName, or jmsQueueName.", nullable = true)
-	public Notification notification;
-
-//	public Transferee transferee;
-
-	public Target target;
-
+	public TransferRequest() {
+		super();
+	}
 }

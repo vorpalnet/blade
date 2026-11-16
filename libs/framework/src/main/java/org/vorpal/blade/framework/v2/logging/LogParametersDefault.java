@@ -20,6 +20,9 @@ public class LogParametersDefault extends LogParameters implements Serializable 
 		this.sequenceDiagramLoggingLevel = LoggingLevel.FINE;
 		this.configurationLoggingLevel = LoggingLevel.INFO;
 		this.analyticsLoggingLevel = LoggingLevel.INFO;
+		// Every property the schema marks required needs a value here, or the
+		// sample an application writes fails its own schema in the Configurator.
+		this.snmpTrapLevel = LoggingLevel.OFF;
 	}
 
 }

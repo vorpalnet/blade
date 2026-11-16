@@ -1,166 +1,26 @@
-/* ============ THEME DEFINITIONS ============ */
-:root {
-    /* Chrome, text, borders, tabs and the primary button follow the admin
-       theme (brand.css tokens, light or dark by the top bar's switch); the
-       status, publish, clone and delete colours stay this app's own. */
-    /* Page chrome */
-    --bg-page: transparent;
-    --bg-surface: var(--vorpal-surface);
-    --bg-surface-alt: var(--vorpal-surface-alt);
-    --bg-inset: var(--vorpal-slate-100);
+/* ============================================================
+   The Configurator's own layout.
 
-    /* Text */
-    --text-primary: var(--vorpal-ink-900);
-    --text-secondary: var(--vorpal-ink-700);
-    --text-muted: var(--vorpal-slate-600);
+   Buttons, tabs, fields, panels, badges, toolbars and messages are the
+   shared components of the portal's brand layer (brand.css section 5:
+   .vorpal-btn, .vorpal-tabs, .vorpal-input, .vorpal-panel, .vorpal-badge,
+   .vorpal-toolbar, .vorpal-note, .vorpal-error ...), set on the elements in
+   configurator.html and by configurator.js. Bare inputs, selects and
+   textareas the form generates take the frame's default control look
+   (brand.css section 4). This file keeps layout, plus the visuals that have
+   no shared equivalent: the form's nested sections, the dropdown menus, the
+   modal, the diff list, the tooltip and the auto-publish switch. Every
+   colour is a --vorpal-* token, so light and dark both follow the theme.
+   ============================================================ */
 
-    /* Borders */
-    --border-default: var(--vorpal-slate-300);
-    --border-subtle: var(--vorpal-divider);
-    --border-strong: var(--vorpal-slate-300);
-    --border-item: var(--vorpal-divider);
-
-    /* Buttons */
-    --btn-primary: var(--vorpal-mark);
-    --btn-primary-hover: var(--vorpal-mark-hover);
-    --btn-secondary: #6b7280;
-    --btn-secondary-hover: #4b5563;
-    --btn-publish: #047857;   /* white text 5.5:1 (#059669 was 3.8:1) */
-    --btn-publish-hover: #065f46;
-    --btn-clone: #8b5cf6;
-    --btn-clone-hover: #7c3aed;
-    --btn-delete: #e879a0;
-    --btn-delete-hover: #d4527b;
-    --btn-add: var(--vorpal-mark);
-    --btn-add-hover: var(--vorpal-mark-hover);
-    --btn-text: #ffffff;
-
-    /* Tabs */
-    --tab-bg: var(--vorpal-slate-100);
-    --tab-text: var(--vorpal-slate-600);
-    --tab-hover-bg: var(--vorpal-slate-200);
-    --tab-hover-text: var(--vorpal-ink-900);
-    --tab-active-bg: var(--vorpal-surface);
-    --tab-active-text: var(--vorpal-ink-900);
-    --tab-active-accent: var(--vorpal-purple);
-
-    /* Status */
-    --status-success-bg: #d1fae5;
-    --status-success-text: #065f46;
-    --status-error-bg: #fee2e2;
-    --status-error-text: #991b1b;
-    --status-error-border: #fca5a5;
-    --status-warning-bg: #fef3c7;
-    --status-warning-text: #92400e;
-
-    /* Badges */
-    --badge-bg: var(--vorpal-slate-200);
-    --badge-text: var(--vorpal-slate-600);
-
-    /* Focus */
-    --focus-ring: var(--vorpal-purple-soft);
-    --focus-border: var(--vorpal-purple);
-
-    /* Dirty indicator */
-    --dirty-bg: #fbbf24;
-    --dirty-text: #78350f;
-
-
-    /* Tooltip */
-    --tooltip-bg: #1e293b;
-    --tooltip-text: #ffffff;
-
-    /* Modal */
-    --modal-backdrop: rgba(0, 0, 0, 0.5);
-    --modal-close-hover-bg: var(--vorpal-slate-100);
-
-    /* Shadows */
-    --shadow-sm: 0 4px 6px rgba(0, 0, 0, 0.05);
-    --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.3);
-    --shadow-tooltip: 0 4px 6px rgba(0, 0, 0, 0.3);
-
-    /* Misc */
-    --field-error-border: #ef4444;
-    --field-error-bg: #fef2f2;
-    --field-error-text: #dc2626;
-    --validation-list-text: #7f1d1d;
-    --version-hover-bg: var(--vorpal-surface-alt);
-    --add-placeholder-hover-bg: var(--vorpal-slate-100);
-    --add-placeholder-hover-border: var(--vorpal-slate-400);
-    --add-label-text: var(--vorpal-slate-600);
-    --disabled-bg: var(--vorpal-slate-300);
-}
-
-[data-theme="dark"] {
-    color-scheme: dark;
-    --btn-secondary: #64748b;
-    --btn-secondary-hover: #94a3b8;
-    --btn-publish: #047857;   /* white text 5.5:1 (#10b981 was 2.5:1) */
-    --btn-publish-hover: #065f46;
-    --btn-clone: #8b5cf6;
-    --btn-clone-hover: #a78bfa;
-    --btn-delete: #f472b6;
-    --btn-delete-hover: #f9a8d4;
-    --btn-text: #ffffff;
-
-    --status-success-bg: #064e3b;
-    --status-success-text: #6ee7b7;
-    --status-error-bg: #7f1d1d;
-    --status-error-text: #fca5a5;
-    --status-error-border: #991b1b;
-    --status-warning-bg: #78350f;
-    --status-warning-text: #fde68a;
-
-    --dirty-bg: #92400e;   /* #fef3c7 text 7.6:1 (#d97706 was 2.9:1) */
-    --dirty-text: #fef3c7;
-
-    --tooltip-bg: #0f172a;
-    --tooltip-text: #e2e8f0;
-
-    --modal-backdrop: rgba(0, 0, 0, 0.7);
-
-    --shadow-sm: 0 4px 6px rgba(0, 0, 0, 0.3);
-    --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
-    --shadow-tooltip: 0 4px 6px rgba(0, 0, 0, 0.5);
-
-    --field-error-border: #ef4444;
-    --field-error-bg: #450a0a;
-    --field-error-text: #fca5a5;
-    --validation-list-text: #fca5a5;
-}
-
-/* =========== END THEME DEFINITIONS ========== */
-
-* {
-    box-sizing: border-box;
-}
-
-body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    padding: 10px;
-    background: var(--bg-page);
-    line-height: 1.4;
-}
-
+/* The editor is a sheet on the page (.vorpal-panel). */
 .container {
-    background: var(--bg-surface);
-    border-radius: 8px;
-    box-shadow: var(--shadow-sm);
+    margin: 16px;
     padding: 16px;
 }
 
-h1 {
-    color: var(--text-primary);
+#schema-title {
     margin-bottom: 10px;
-    font-size: 1.4rem;
-    font-weight: 600;
-}
-
-h2 {
-    font-size: 1.1rem;
-    margin: 0 0 8px 0;
-    font-weight: 600;
-    color: var(--text-primary);
 }
 
 .form-group {
@@ -168,12 +28,11 @@ h2 {
 }
 
 .form-group.nested {
-    background: var(--bg-surface-alt);
-    border: 1px solid var(--border-subtle);
-    border-radius: 6px;
+    background: var(--vorpal-surface-alt);
+    border: 1px solid var(--vorpal-divider);
+    border-radius: var(--vorpal-radius-sm);
     padding: 10px 12px;
     flex: 1 1 220px;
-    box-sizing: border-box;
     margin-bottom: 0;
 }
 
@@ -194,7 +53,7 @@ h2 {
     flex: 1 0 100%;
 }
 
-/* @FormLayoutGroup row — takes a full row in its parent, and its own
+/* @FormLayoutGroup row: takes a full row in its parent, and its own
    children flow left-to-right as compact tiles. */
 .form-layout-group {
     flex: 1 0 100%;
@@ -204,7 +63,7 @@ h2 {
     align-items: flex-start;
 }
 
-/* @FormLayoutColumn — a vertical stack inside a @FormLayoutGroup(columns=...)
+/* @FormLayoutColumn: a vertical stack inside a @FormLayoutGroup(columns=...)
    row. Columns sit side-by-side; their children stack top-to-bottom, each
    taking the full column width. min-width:0 keeps a wide child from blocking
    the side-by-side layout (flex items default to min-width:auto). */
@@ -215,10 +74,10 @@ h2 {
     flex: 1 1 220px;
     min-width: 0;
 }
-/* Children size to their content vertically — never flex-grow or use a
-   length/percentage basis here: in a column container those are HEIGHT. A bare
-   220px basis balloons a one-line tile into a 220px-tall box; a percentage is
-   worse, since Safari resolves it against the ancestor.
+/* Children size to their content vertically: never flex-grow or use a
+   length/percentage basis here, since in a column container those are HEIGHT.
+   A bare 220px basis balloons a one-line tile into a 220px-tall box; a
+   percentage is worse, since Safari resolves it against the ancestor.
    Full column width comes free from the column's align-items stretch.
    The .nested variants are listed explicitly so this outranks the later
    .form-group.nested / .add-property-placeholder.nested row-flow rules, which
@@ -231,18 +90,18 @@ h2 {
     margin-bottom: 0;
 }
 
-/* @FormSection — a titled bordered sub-container that takes a full row. */
+/* @FormSection: a titled bordered sub-container that takes a full row. */
 .form-section {
     flex: 1 0 100%;
-    border: 1px solid var(--border-subtle);
-    border-radius: 6px;
-    background: var(--bg-inset);
+    border: 1px solid var(--vorpal-divider);
+    border-radius: var(--vorpal-radius-sm);
+    background: var(--vorpal-slate-100);
     padding: 8px 10px 10px;
     margin-top: 4px;
 }
 .form-section-title {
     font-weight: 600;
-    color: var(--text-secondary);
+    color: var(--vorpal-ink-700);
     font-size: 13px;
     margin-bottom: 6px;
 }
@@ -253,75 +112,224 @@ h2 {
     align-items: flex-start;
 }
 
-/* Live validation error — invalid input gets a red border + hover tooltip.
-   The border alone is color-only, so a text marker is added below for
-   colorblind users; the tooltip (title attribute, set in JS) still carries
+/* Live validation error: invalid input gets an error border + hover tooltip.
+   The border alone is colour-only, so a text marker is added below for
+   colourblind users; the tooltip (title attribute, set in JS) still carries
    the specific reason either way. */
 input.invalid,
 textarea.invalid,
 select.invalid {
-    border-color: #c43 !important;
-    box-shadow: 0 0 0 2px rgba(204, 51, 51, 0.15);
+    border-color: var(--vorpal-error) !important;
+    box-shadow: 0 0 0 2px var(--vorpal-error-soft);
 }
 
 .form-group-header.inline:has(> input.invalid)::after,
 .form-group-header.inline:has(> select.invalid)::after,
 .form-group:has(> textarea.invalid)::after {
     content: "\2717 invalid";
-    color: #c43;
+    color: var(--vorpal-error);
     font-size: 11px;
     font-weight: 600;
     margin-left: 6px;
     white-space: nowrap;
 }
 
-/* Multi-line editor sizing. */
+/* The words beside an invalid field outside a labelled row. */
+.invalid-mark { font-size: 11px; font-weight: 600; margin-left: 6px; color: var(--vorpal-error); }
+
+/* Form fields fill their row; the generated controls take the frame's
+   default look. Textareas here hold code, JSON and templates. */
+input, select, textarea {
+    width: 100%;
+}
+
 textarea {
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-family: var(--vorpal-font-mono);
     font-size: 12px;
     min-height: 60px;
     resize: vertical;
 }
 
+/* A multi-line secret (a textarea has no password type): shown as discs until the eye toggle. */
+textarea.secret-masked { -webkit-text-security: disc; text-security: disc; }
+
+/* Form field labels: the schema's property names, kept in their own case
+   (the uppercase .vorpal-label would hide the JSON key they name). */
+label {
+    display: block;
+    margin-bottom: 3px;
+    font-weight: 500;
+    color: var(--vorpal-ink-700);
+    font-size: 13px;
+}
+
+.description {
+    font-size: 11px;
+    color: var(--vorpal-slate-600);
+    margin-top: 2px;
+    font-style: italic;
+}
+
 /* ${var} autocomplete popup. */
 .context-var-popup {
-    background: var(--bg-surface);
-    border: 1px solid var(--border-default);
-    border-radius: 4px;
-    box-shadow: var(--shadow-sm);
+    background: var(--vorpal-surface);
+    border: 1px solid var(--vorpal-slate-300);
+    border-radius: var(--vorpal-radius-sm);
+    box-shadow: var(--vorpal-shadow-md);
     min-width: 160px;
     max-height: 200px;
     overflow-y: auto;
     z-index: 9999;
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-family: var(--vorpal-font-mono);
     font-size: 12px;
 }
 .context-var-option {
     padding: 4px 8px;
     cursor: pointer;
-    color: var(--text-primary);
+    color: var(--vorpal-ink-900);
 }
 .context-var-option:hover {
-    background: var(--bg-surface-alt);
+    background: var(--vorpal-slate-200);
 }
 
-/* Form toolbar — Save/Load/Publish + filter inline; grouped actions behind
-   File / History / View dropdowns keep the header uncluttered. */
-.form-toolbar {
-    display: flex;
+/* ---- The bar over every tab: target, schema, status, auto-publish ---- */
+.schema-selector-container {
+    margin-bottom: 10px;
+}
+.schema-selector-container label {
+    margin: 0;
+    white-space: nowrap;
+}
+.schema-selector-container select {
+    flex: 1;
+    max-width: 400px;
+}
+
+/* Unsaved changes: the badge pulses; "Not Published" holds steady, so the
+   two read apart by glyph, motion and word, not colour alone. */
+.dirty-indicator {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* Auto-publish toggle: a sliding on/off switch in the bar every tab shares,
+   pushed right (margin-left:auto) because it controls a global Configurator
+   behavior, not the currently-loaded app or one editor. State is carried by
+   thumb position and the on/off text label, not by colour alone. */
+.autopublish-switch {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 12px;
+    color: var(--vorpal-ink-700);
+}
+.autopublish-caption {
+    font-weight: 500;
+}
+/* Hide the real checkbox; the track/thumb is the visible control. */
+.autopublish-switch input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.autopublish-track {
+    position: relative;
+    width: 34px;
+    height: 18px;
+    border-radius: 9px;
+    background: var(--vorpal-slate-400);
+    border: 1px solid var(--vorpal-divider);
+    transition: background 0.15s ease;
+}
+/* White on the track, as the primary button's text is white on the mark. */
+.autopublish-thumb {
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.15s ease;
+}
+/* Checked = ON: the track takes the brand mark, thumb slides right. */
+.autopublish-switch input:checked + .autopublish-track {
+    background: var(--vorpal-mark);
+}
+.autopublish-switch input:checked + .autopublish-track .autopublish-thumb {
+    transform: translateX(16px);
+}
+.autopublish-switch input:focus-visible + .autopublish-track {
+    outline: 2px solid var(--vorpal-purple);
+    outline-offset: 1px;
+}
+.autopublish-state {
+    min-width: 1.8em;
+    font-weight: 600;
+    color: var(--vorpal-ink-900);
+}
+
+/* Auto-publish ON: saves go live on their own, so there is nothing to Publish. */
+/* Shown again while something is pending (a catch-up that failed). */
+body.autopublish-on:not(.has-unpublished) .btn-publish {
+    display: none;
+}
+
+/* ---- Tabs and their panes ---- */
+.tabs {
+    margin-bottom: 10px;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.form-toolbar,
+.json-controls {
     gap: 6px;
     margin-bottom: 10px;
-    flex-wrap: wrap;
-    align-items: center;
 }
+
+.json-editor-container {
+    height: 600px;
+    border: 1px solid var(--vorpal-slate-300);
+    border-radius: var(--vorpal-radius-md);
+    overflow: hidden;
+}
+
+/* Form toolbar: Save/Load/Publish + filter inline; grouped actions behind
+   File / History / View dropdowns keep the header uncluttered. */
+.form-filter-input {
+    flex: 0 0 220px;
+    width: auto;
+}
+.filtered-out {
+    display: none !important;
+}
+
+/* Welcome / empty state: fills the form tab until the first schema loads.
+   While #form-tab carries .no-schema the toolbar is hidden (every toolbar
+   action requires a loaded schema anyway). */
+#form-tab.no-schema .form-toolbar {
+    display: none;
+}
+
+/* Dropdown menus (File / History / View). No shared menu exists yet. */
 .toolbar-menu {
     position: relative;
     display: inline-block;
-}
-.toolbar-menu-trigger {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
 }
 .toolbar-chev {
     font-size: 10px;
@@ -333,10 +341,10 @@ textarea {
     top: calc(100% + 2px);
     left: 0;
     min-width: 200px;
-    background: var(--bg-surface);
-    border: 1px solid var(--border-default);
-    border-radius: 4px;
-    box-shadow: var(--shadow-sm);
+    background: var(--vorpal-surface);
+    border: 1px solid var(--vorpal-slate-300);
+    border-radius: var(--vorpal-radius-sm);
+    box-shadow: var(--vorpal-shadow-md);
     padding: 4px 0;
     z-index: 200;
 }
@@ -350,21 +358,153 @@ textarea {
     padding: 7px 14px;
     background: transparent;
     border: none;
-    color: var(--text-primary);
+    border-radius: 0;
+    color: var(--vorpal-ink-900);
     cursor: pointer;
     font-size: 12px;
+    font-weight: 500;
     white-space: nowrap;
 }
 .toolbar-menu-items > button:hover {
-    background: var(--bg-surface-alt);
+    background: var(--vorpal-slate-200);
 }
 .toolbar-menu-items > hr {
     margin: 4px 0;
     border: 0;
-    border-top: 1px solid var(--border-subtle);
+    border-top: 1px solid var(--vorpal-divider);
 }
 
-/* Files tab — left rail lists templates, right pane is the Ace editor. */
+.welcome-panel {
+    display: flex;
+    justify-content: center;
+    padding: 9vh 16px 12vh;
+}
+
+.welcome-card {
+    max-width: 520px;
+    width: 100%;
+    padding: 28px 32px;
+}
+
+.welcome-card .welcome-icon {
+    text-align: center;
+    font-size: 42px;
+    color: var(--vorpal-slate-400);
+    margin-bottom: 4px;
+}
+
+.welcome-card h2 {
+    text-align: center;
+    margin: 0 0 6px;
+}
+
+.welcome-card > p {
+    text-align: center;
+    margin: 0 0 16px;
+    color: var(--vorpal-ink-700);
+}
+
+.welcome-steps {
+    margin: 0 0 16px;
+    padding-left: 22px;
+    color: var(--vorpal-ink-700);
+}
+
+.welcome-steps li {
+    margin-bottom: 8px;
+}
+
+.welcome-steps li strong {
+    color: var(--vorpal-ink-900);
+}
+
+.welcome-card .welcome-links {
+    margin: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--vorpal-divider);
+    text-align: center;
+    font-size: 12px;
+    color: var(--vorpal-slate-600);
+}
+
+/* Draft banner: appears when localStorage holds a newer draft than the
+   server copy of the current schema/target. */
+.draft-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+/* Breadcrumb bar: shows the data-path of the focused field. Click copies. */
+.field-breadcrumb {
+    font-size: 11px;
+    color: var(--vorpal-ink-700);
+    padding: 4px 8px;
+    margin-bottom: 6px;
+    border: 1px solid var(--vorpal-divider);
+    border-radius: var(--vorpal-radius-sm);
+    background: var(--vorpal-surface-alt);
+    cursor: pointer;
+    user-select: text;
+    transition: background-color 0.2s, color 0.2s;
+}
+.field-breadcrumb:hover {
+    background: var(--vorpal-slate-200);
+    color: var(--vorpal-ink-900);
+}
+.field-breadcrumb.copied {
+    background: var(--vorpal-mark);
+    color: #fff;
+}
+
+/* Validation summary (.vorpal-error), shown while errors stand. */
+.validation-summary {
+    margin-bottom: 10px;
+    display: none;
+}
+
+.validation-summary.active {
+    display: block;
+}
+
+.validation-summary-header {
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.validation-summary-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.validation-summary-list li {
+    padding: 2px 0 2px 20px;
+    position: relative;
+}
+
+.validation-summary-list li::before {
+    content: '\2022';
+    position: absolute;
+    left: 8px;
+}
+
+.field-error {
+    border-color: var(--vorpal-error) !important;
+    background: var(--vorpal-error-soft) !important;
+}
+
+.field-error-message {
+    color: var(--vorpal-error);
+    font-size: 12px;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* ---- Files tab: left rail lists templates, right pane is the Ace editor ---- */
 .files-layout {
     display: flex;
     gap: 10px;
@@ -376,20 +516,12 @@ textarea {
     flex: 0 0 240px;
     display: flex;
     flex-direction: column;
-    border: 1px solid var(--border-subtle);
-    border-radius: 4px;
-    background: var(--bg-surface);
+    padding: 0;
     overflow: hidden;
 }
 .files-rail-title {
     padding: 8px 12px;
-    font-weight: 600;
-    font-size: 11px;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    background: var(--bg-surface-alt);
-    border-bottom: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--vorpal-divider);
 }
 .files-rail-body {
     flex: 1 1 auto;
@@ -399,16 +531,19 @@ textarea {
 .files-rail-body em {
     display: block;
     padding: 10px 12px;
-    color: var(--text-secondary);
+    color: var(--vorpal-slate-600);
     font-size: 12px;
 }
-.files-rail-body code {
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+.files-rail-body code,
+.template-list code {
+    font-family: var(--vorpal-font-mono);
     font-size: 11px;
-    background: var(--bg-surface-alt);
+    background: var(--vorpal-slate-100);
     padding: 1px 4px;
     border-radius: 2px;
 }
+/* A file list with one chosen: no shared selectable list exists yet. The
+   chosen file is filled AND bold, with a bar at its left edge. */
 .files-rail-entry {
     display: block;
     width: 100%;
@@ -416,33 +551,201 @@ textarea {
     padding: 6px 12px;
     background: transparent;
     border: none;
-    color: var(--text-primary);
+    border-radius: 0;
+    color: var(--vorpal-ink-900);
     cursor: pointer;
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-family: var(--vorpal-font-mono);
     font-size: 12px;
-    transition: background-color 0.1s;
+    font-weight: 400;
 }
 .files-rail-entry:hover {
-    background: var(--bg-surface-alt);
+    background: var(--vorpal-slate-200);
 }
 .files-rail-entry.active {
-    background: var(--btn-primary);
-    color: var(--btn-text);
-    font-weight: 500;
+    background: var(--vorpal-purple-soft);
+    box-shadow: inset 3px 0 0 var(--vorpal-purple);
+    font-weight: 700;
 }
 .files-layout > .json-editor-container {
     flex: 1 1 auto;
     min-height: 0;
 }
 
-/* Template library modal — "New from Template…" picker list. */
+/* ---- Inspector: schema docs for the focused field + every ${var} ---- */
+.inspector-panel {
+    position: fixed;
+    top: 70px;
+    right: 10px;
+    width: 280px;
+    max-height: calc(100vh - 90px);
+    overflow-y: auto;
+    box-shadow: var(--vorpal-shadow-md);
+    z-index: 100;
+    display: none;
+    font-size: 12px;
+}
+body.inspector-open .inspector-panel {
+    display: block;
+}
+.inspector-section {
+    margin-bottom: 12px;
+}
+.inspector-section:last-child {
+    margin-bottom: 0;
+}
+.inspector-title {
+    margin-bottom: 6px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid var(--vorpal-divider);
+}
+.inspector-count {
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+}
+.inspector-body em {
+    color: var(--vorpal-slate-600);
+}
+.inspector-row {
+    display: flex;
+    gap: 8px;
+    padding: 3px 0;
+    border-bottom: 1px dotted var(--vorpal-divider);
+    align-items: flex-start;
+}
+.inspector-row:last-child {
+    border-bottom: none;
+}
+.inspector-key {
+    flex: 0 0 80px;
+    color: var(--vorpal-slate-600);
+    font-size: 11px;
+}
+.inspector-val {
+    flex: 1 1 auto;
+    font-family: var(--vorpal-font-mono);
+    font-size: 11px;
+    word-break: break-word;
+}
+.inspector-var {
+    margin: 2px 4px 2px 0;
+}
+
+/* ---- Modals ---- */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(5px);
+}
+
+.modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    padding: 0;
+    box-shadow: var(--vorpal-shadow-lg);
+    width: 90%;
+    max-width: 800px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-header {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--vorpal-divider);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* The close glyph needs the size to be seen. */
+.modal-close {
+    font-size: 20px;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+}
+
+.modal-body {
+    padding: 12px 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.modal-footer {
+    padding: 10px 20px;
+    border-top: 1px solid var(--vorpal-divider);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* Version history. */
+.version-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.version-item {
+    border: 1px solid var(--vorpal-divider);
+    border-radius: var(--vorpal-radius-sm);
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.version-item:hover {
+    background: var(--vorpal-slate-200);
+}
+
+.version-info {
+    flex: 1;
+}
+
+.version-date {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.version-size {
+    font-size: 12px;
+    color: var(--vorpal-slate-600);
+}
+
+.version-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.version-preview {
+    max-height: 40vh; overflow: auto; margin-top: 10px; padding: 8px 10px;
+    border: 1px solid var(--vorpal-slate-300); border-radius: var(--vorpal-radius-sm); white-space: pre-wrap;
+}
+
+.empty-state-icon {
+    font-size: 36px;
+    margin-bottom: 8px;
+}
+
+/* Template library: "New from Template..." picker list. */
 .template-modal {
     max-width: 520px;
 }
 .template-modal-intro {
     margin: 0 0 12px;
-    color: var(--text-secondary);
-    font-size: 13px;
 }
 .template-list {
     display: flex;
@@ -452,54 +755,31 @@ textarea {
     overflow-y: auto;
 }
 .template-list em {
-    color: var(--text-secondary);
-    font-size: 13px;
-}
-.template-list code {
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 12px;
-    background: var(--bg-surface-alt);
-    padding: 1px 4px;
-    border-radius: 2px;
+    color: var(--vorpal-slate-600);
 }
 .template-entry {
-    display: flex;
-    align-items: center;
-    padding: 10px 14px;
-    background: var(--bg-surface-alt);
-    border: 1px solid var(--border-subtle);
-    border-radius: 4px;
-    color: var(--text-primary);
-    font-size: 13px;
-    cursor: pointer;
-    text-align: left;
-    transition: background-color 0.15s, border-color 0.15s;
-}
-.template-entry:hover {
-    background: var(--btn-primary);
-    color: var(--btn-text);
-    border-color: var(--btn-primary);
+    justify-content: flex-start;
 }
 .template-entry-name {
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-family: var(--vorpal-font-mono);
 }
 
-/* Diff modal — structural change list against the last-loaded server copy. */
+/* Diff: structural change list against the last-loaded server copy. */
 .diff-modal {
     max-width: 780px;
     max-height: 85vh;
 }
 .diff-summary {
     font-size: 13px;
-    color: var(--text-secondary);
+    color: var(--vorpal-ink-700);
     margin-bottom: 10px;
     padding-bottom: 6px;
-    border-bottom: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--vorpal-divider);
 }
 .diff-body {
     max-height: 55vh;
     overflow-y: auto;
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-family: var(--vorpal-font-mono);
     font-size: 12px;
 }
 .diff-row {
@@ -507,12 +787,11 @@ textarea {
     align-items: baseline;
     gap: 8px;
     padding: 4px 6px;
-    border-bottom: 1px dotted var(--border-subtle);
+    border-bottom: 1px dotted var(--vorpal-divider);
     cursor: pointer;
-    transition: background-color 0.15s;
 }
 .diff-row:hover {
-    background: var(--bg-surface-alt);
+    background: var(--vorpal-slate-200);
 }
 .diff-sign {
     flex: 0 0 14px;
@@ -521,38 +800,83 @@ textarea {
 }
 .diff-path {
     flex: 0 0 38%;
-    color: var(--text-primary);
     word-break: break-word;
 }
 .diff-val {
     flex: 1 1 auto;
-    color: var(--text-secondary);
+    color: var(--vorpal-ink-700);
     word-break: break-word;
 }
 .diff-arrow {
     margin: 0 6px;
-    color: var(--text-secondary);
+    color: var(--vorpal-ink-700);
 }
-.diff-added .diff-sign { color: #2a8; }
-.diff-removed .diff-sign { color: #c43; }
-.diff-changed .diff-sign { color: #d8a73c; }
+/* The sign (+ / - / ~) says the kind; the colour only repeats it. */
+.diff-added .diff-sign { color: var(--vorpal-success); }
+.diff-removed .diff-sign { color: var(--vorpal-error); }
+.diff-changed .diff-sign { color: var(--vorpal-warn); }
 .diff-old { text-decoration: line-through; opacity: 0.75; }
-.diff-new { color: var(--text-primary); font-weight: 500; }
+.diff-new { color: var(--vorpal-ink-900); font-weight: 500; }
 
 .diff-highlight {
-    outline: 2px solid #d8a73c !important;
+    outline: 2px solid var(--vorpal-warn) !important;
     outline-offset: 2px;
     transition: outline-color 0.4s;
 }
 
-/* Read-only / view mode — disables form mutation but keeps the structure
+/* Regex tester modal. */
+.regex-test-modal {
+    max-width: 600px;
+}
+.regex-test-row {
+    margin-bottom: 10px;
+}
+.regex-test-pattern {
+    display: block;
+    padding: 6px 10px;
+    background: var(--vorpal-slate-100);
+    border: 1px solid var(--vorpal-divider);
+    border-radius: var(--vorpal-radius-sm);
+    word-break: break-all;
+}
+.regex-test-result {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: var(--vorpal-slate-100);
+    border: 1px solid var(--vorpal-divider);
+    border-radius: var(--vorpal-radius-sm);
+    min-height: 30px;
+}
+.regex-test-hit {
+    color: var(--vorpal-success);
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+.regex-test-nomatch {
+    color: var(--vorpal-slate-600);
+    font-style: italic;
+}
+.regex-test-error {
+    color: var(--vorpal-error);
+}
+
+/* Clone dialog. */
+.clone-target-select {
+    margin-top: 8px;
+}
+
+.clone-warning-note {
+    margin-top: 15px;
+}
+
+/* Read-only / view mode: disables form mutation but keeps the structure
    browsable (collapse/expand, filter, inspector all still work). */
 body.view-mode #dynamicForm input,
 body.view-mode #dynamicForm select,
 body.view-mode #dynamicForm textarea {
     pointer-events: none;
     opacity: 0.85;
-    background: var(--bg-inset);
+    background: var(--vorpal-slate-100);
 }
 body.view-mode #dynamicForm .delete-property-btn,
 body.view-mode #dynamicForm .duplicate-item-btn,
@@ -568,202 +892,12 @@ body.view-mode .ai-ask {
     display: none !important;
 }
 
-/* Draft banner — appears when localStorage holds a newer draft than the
-   server copy of the current schema/target. */
-.draft-banner {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    margin-bottom: 10px;
-    background: var(--bg-surface-alt);
-    border: 1px solid var(--border-strong);
-    border-left: 4px solid #d8a73c;
-    border-radius: 4px;
-    color: var(--text-primary);
-    font-size: 13px;
-}
-
-/* Right-side inspector panel: schema docs for the focused field + a
-   palette of every ${var} available. Toggled via the toolbar button. */
-.inspector-panel {
-    position: fixed;
-    top: 70px;
-    right: 10px;
-    width: 280px;
-    max-height: calc(100vh - 90px);
-    overflow-y: auto;
-    background: var(--bg-surface);
-    border: 1px solid var(--border-subtle);
-    border-radius: 6px;
-    box-shadow: var(--shadow-sm);
-    padding: 8px 10px 12px;
-    z-index: 100;
-    display: none;
-    font-size: 12px;
-}
-body.inspector-open .inspector-panel {
-    display: block;
-}
-.inspector-section {
-    margin-bottom: 12px;
-}
-.inspector-section:last-child {
-    margin-bottom: 0;
-}
-.inspector-title {
-    font-weight: 600;
-    color: var(--text-secondary);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 6px;
-    padding-bottom: 3px;
-    border-bottom: 1px solid var(--border-subtle);
-}
-.inspector-count {
-    font-weight: 400;
-    color: var(--text-secondary);
-    font-size: 11px;
-    text-transform: none;
-    letter-spacing: 0;
-}
-.inspector-body {
-    color: var(--text-primary);
-}
-.inspector-body em {
-    color: var(--text-secondary);
-    font-style: italic;
-}
-.inspector-row {
-    display: flex;
-    gap: 8px;
-    padding: 3px 0;
-    border-bottom: 1px dotted var(--border-subtle);
-    align-items: flex-start;
-}
-.inspector-row:last-child {
-    border-bottom: none;
-}
-.inspector-key {
-    flex: 0 0 80px;
-    color: var(--text-secondary);
-    font-size: 11px;
-}
-.inspector-val {
-    flex: 1 1 auto;
-    color: var(--text-primary);
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 11px;
-    word-break: break-word;
-}
-.inspector-var {
-    display: inline-block;
-    margin: 2px 4px 2px 0;
-    padding: 3px 8px;
-    background: var(--bg-surface-alt);
-    border: 1px solid var(--border-subtle);
-    border-radius: 3px;
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 11px;
-    color: var(--text-primary);
-    cursor: pointer;
-    transition: background-color 0.15s, border-color 0.15s;
-}
-.inspector-var:hover {
-    background: var(--btn-primary);
-    color: var(--btn-text);
-    border-color: var(--btn-primary);
-}
-
-/* Regex tester — little "test" button on the pattern field, plus modal. */
-.regex-test-btn {
-    background: var(--bg-surface-alt);
-    color: var(--text-secondary);
-    border: 1px solid var(--border-subtle);
-    border-radius: 3px;
-    padding: 2px 8px;
-    font-size: 11px;
-    cursor: pointer;
-    transition: background-color 0.15s, color 0.15s;
-}
-.regex-test-btn:hover {
-    background: var(--btn-primary);
-    color: var(--btn-text);
-    border-color: var(--btn-primary);
-}
-.regex-test-modal {
-    max-width: 600px;
-}
-.regex-test-row {
-    margin-bottom: 10px;
-}
-.regex-test-row label {
-    display: block;
-    margin-bottom: 3px;
-    font-weight: 500;
-    color: var(--text-secondary);
-    font-size: 12px;
-}
-.regex-test-pattern {
-    display: block;
-    padding: 6px 10px;
-    background: var(--bg-surface-alt);
-    border: 1px solid var(--border-subtle);
-    border-radius: 4px;
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 12px;
-    color: var(--text-primary);
-    word-break: break-all;
-}
-.regex-test-result {
-    margin-top: 8px;
-    padding: 8px 10px;
-    background: var(--bg-surface-alt);
-    border: 1px solid var(--border-subtle);
-    border-radius: 4px;
-    min-height: 30px;
-}
-.regex-test-hit {
-    color: #2a8;
-    font-weight: 600;
-    margin-bottom: 6px;
-}
-.regex-test-nomatch {
-    color: var(--text-secondary);
-    font-style: italic;
-}
-.regex-test-error {
-    color: #c43;
-}
-
-/* Breadcrumb bar — shows the data-path of the focused field. Click copies. */
-.field-breadcrumb {
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 11px;
-    color: var(--text-secondary);
-    padding: 4px 8px;
-    margin-bottom: 6px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 4px;
-    background: var(--bg-surface-alt);
-    cursor: pointer;
-    user-select: text;
-    transition: background-color 0.2s, color 0.2s;
-}
-.field-breadcrumb:hover {
-    background: var(--bg-inset);
-    color: var(--text-primary);
-}
-.field-breadcrumb.copied {
-    background: var(--btn-primary);
-    color: var(--btn-text);
-}
+/* ---- The generated form's structure ---- */
 
 /* Drag-to-reorder handle on array-item headers. */
 .drag-handle {
     cursor: grab;
-    color: var(--text-secondary);
+    color: var(--vorpal-slate-600);
     font-size: 14px;
     padding: 2px 4px;
     line-height: 1;
@@ -774,44 +908,27 @@ body.inspector-open .inspector-panel {
 }
 .array-item.dragging {
     opacity: 0.5;
-    outline: 2px solid var(--border-strong);
+    outline: 2px solid var(--vorpal-slate-300);
 }
 
-/* Duplicate-item button — sits beside the delete button in the header. */
+/* Small square glyph buttons in field and item headers: add (+), remove (x),
+   duplicate. Their look is .vorpal-btn's; this is only their size. */
+.add-property-btn,
+.delete-property-btn,
 .duplicate-item-btn {
-    background: var(--bg-surface-alt);
-    border: 1px solid var(--border-subtle);
-    color: var(--text-secondary);
-    border-radius: 4px;
-    padding: 2px 6px;
-    cursor: pointer;
-    font-size: 12px;
-    line-height: 1;
-    transition: background-color 0.2s, color 0.2s;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    flex-shrink: 0;
 }
-.duplicate-item-btn:hover {
-    background: var(--btn-primary);
-    color: var(--btn-text);
-    border-color: var(--btn-primary);
+.delete-property-btn {
+    margin-left: 8px;
 }
+.add-property-icon,
+.delete-property-icon,
 .duplicate-item-icon {
-    display: inline-block;
     font-size: 14px;
-}
-
-/* Form filter input — sits in the form toolbar with the action buttons. */
-.form-filter-input {
-    flex: 0 0 220px;
-    padding: 5px 10px;
-    font-size: 12px;
-    border: 1px solid var(--border-default);
-    border-radius: 4px;
-    background: var(--bg-surface);
-    color: var(--text-primary);
-    width: auto;
-}
-.filtered-out {
-    display: none !important;
+    line-height: 1;
 }
 
 /* Password input + eye-toggle button. */
@@ -829,30 +946,12 @@ body.inspector-open .inspector-panel {
     right: 4px;
     top: 50%;
     transform: translateY(-50%);
-    background: transparent;
-    border: none;
-    color: var(--text-secondary);
-    cursor: pointer;
-    font-size: 14px;
-    line-height: 1;
-    padding: 4px 6px;
-    border-radius: 3px;
+    padding: 2px 6px;
     user-select: none;
 }
-.password-toggle:hover {
-    background: var(--bg-surface-alt);
-    color: var(--text-primary);
-}
 
-/* Empty-state hint — friendly message under an empty list/map's add button. */
+/* Empty-state hint (.vorpal-note) under an empty list/map's add button. */
 .empty-state-hint {
-    padding: 8px 10px;
-    color: var(--text-secondary);
-    font-style: italic;
-    font-size: 12px;
-    background: var(--bg-surface-alt);
-    border: 1px solid var(--border-subtle);
-    border-radius: 4px;
     margin-top: 2px;
 }
 
@@ -866,17 +965,18 @@ body.inspector-open .inspector-panel {
 }
 
 .form-group.array {
-    border: 1px solid var(--border-strong);
-    border-radius: 6px;
+    border: 1px solid var(--vorpal-slate-300);
+    border-radius: var(--vorpal-radius-sm);
     padding: 10px;
-    background: var(--bg-inset);
+    background: var(--vorpal-slate-100);
 }
 
+/* Collapsible sections: the form's nested accordion. */
 .collapsible-section {
-    border: 1px solid var(--border-subtle);
-    border-radius: 6px;
+    border: 1px solid var(--vorpal-divider);
+    border-radius: var(--vorpal-radius-sm);
     margin-bottom: 8px;
-    background: var(--bg-surface);
+    background: var(--vorpal-surface);
     overflow: hidden;
 }
 
@@ -885,15 +985,15 @@ body.inspector-open .inspector-panel {
     justify-content: space-between;
     align-items: center;
     padding: 8px 12px;
-    background: var(--bg-surface-alt);
-    border-bottom: 1px solid var(--border-subtle);
+    background: var(--vorpal-surface-alt);
+    border-bottom: 1px solid var(--vorpal-divider);
     cursor: pointer;
     user-select: none;
     transition: background-color 0.2s;
 }
 
 .collapsible-header:hover {
-    background: var(--bg-inset);
+    background: var(--vorpal-slate-200);
 }
 
 .collapsible-header.collapsed {
@@ -905,18 +1005,23 @@ body.inspector-open .inspector-panel {
     align-items: center;
     gap: 10px;
     font-weight: 600;
-    color: var(--text-secondary);
+    color: var(--vorpal-ink-700);
+    min-width: 0;
+    flex: 1;
 }
 
 .collapsible-arrow {
     transition: transform 0.2s;
     font-size: 12px;
-    color: var(--text-muted);
+    color: var(--vorpal-slate-600);
 }
 
 .collapsible-arrow.collapsed {
     transform: rotate(-90deg);
 }
+
+/* Keyboard focus on a section arrow is visible. */
+.collapsible-arrow:focus-visible { outline: 2px solid var(--vorpal-purple); outline-offset: 2px; border-radius: 2px; }
 
 .collapsible-content {
     padding: 10px 12px;
@@ -933,19 +1038,20 @@ body.inspector-open .inspector-panel {
     transition: max-height 0.3s ease-out, overflow 0s, visibility 0s 0.3s;
 }
 
-.collapsible-badge {
-    background: var(--badge-bg);
-    color: var(--badge-text);
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 500;
+/* Folded sections say what they hold; the words, not a "has data" pill,
+   carry it. The "empty" badge stays. */
+.collapsible-summary {
+    font-weight: 400; color: var(--vorpal-ink-700); font-size: 12px;
+    font-family: var(--vorpal-font-mono);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1;
 }
+.collapsible-header:not(.collapsed) .collapsible-summary { display: none; }
+.collapsible-badge.has-data { display: none; }
 
 .collapsible-java-class {
     font-size: 11px;
-    color: var(--text-muted);
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: var(--vorpal-slate-600);
+    font-family: var(--vorpal-font-mono);
     cursor: help;
 }
 
@@ -953,141 +1059,10 @@ body.inspector-open .inspector-panel {
     display: none;
 }
 
-.collapsible-badge.null {
-    background: var(--status-warning-bg);
-    color: var(--status-warning-text);
-}
-
-.collapsible-badge.has-data {
-    background: var(--status-success-bg);
-    color: var(--status-success-text);
-}
-
 /* SIP URI syntax-validity badge (see FormUriPreview.java / wireUriPreviewBadge
-   in configurator.js). Glyph carries the meaning, color only supplements —
-   readable in grayscale. */
+   in configurator.js). The glyph carries the meaning; colour only supplements. */
 .uri-preview-badge {
-    display: inline-block;
-    font-size: 13px;
-    font-weight: 700;
-    padding: 0 6px;
-    border-radius: 10px;
     cursor: help;
-}
-
-.uri-preview-badge.valid {
-    background: var(--status-success-bg);
-    color: var(--status-success-text);
-}
-
-.uri-preview-badge.invalid {
-    background: var(--status-warning-bg);
-    color: var(--status-warning-text);
-}
-
-.tabs {
-    display: flex;
-    border-bottom: 2px solid var(--border-item);
-    margin-bottom: 10px;
-    background: var(--bg-surface-alt);
-    border-radius: 6px 6px 0 0;
-    overflow: hidden;
-}
-
-.tab {
-    flex: 1;
-    padding: 8px 16px;
-    background: var(--tab-bg);
-    color: var(--tab-text);
-    cursor: pointer;
-    font-weight: 500;
-    transition: all 0.2s;
-    border: none;
-    font-size: 13px;
-}
-
-.tab:hover {
-    background: var(--tab-hover-bg);
-    color: var(--tab-hover-text);
-}
-
-.tab.active {
-    background: var(--tab-active-bg);
-    color: var(--tab-active-text);
-    box-shadow: 0 -2px 0 var(--tab-active-accent);
-}
-
-.tab-content {
-    display: none;
-}
-
-.tab-content.active {
-    display: block;
-}
-
-.json-editor-container {
-    height: 600px;
-    border: 1px solid var(--border-default);
-    border-radius: 8px;
-    overflow: hidden;
-}
-
-.json-controls {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 10px;
-    flex-wrap: wrap;
-}
-
-.sync-status {
-    padding: 4px 10px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 500;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.sync-status.success {
-    background: var(--status-success-bg);
-    color: var(--status-success-text);
-}
-
-.sync-status.error {
-    background: var(--status-error-bg);
-    color: var(--status-error-text);
-}
-
-.sync-status.warning {
-    background: var(--status-warning-bg);
-    color: var(--status-warning-text);
-}
-
-label {
-    display: block;
-    margin-bottom: 3px;
-    font-weight: 500;
-    color: var(--text-secondary);
-    font-size: 13px;
-}
-
-
-input, select, textarea {
-    width: 100%;
-    padding: 6px 10px;
-    border: 1px solid var(--border-default);
-    border-radius: 4px;
-    font-size: 13px;
-    background: var(--bg-surface);
-    color: var(--text-primary);
-    transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-input:focus, select:focus, textarea:focus {
-    outline: none;
-    border-color: var(--focus-border);
-    box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .checkbox-group {
@@ -1114,149 +1089,32 @@ input:focus, select:focus, textarea:focus {
 }
 
 /* Opaque object fallback: schema is just {type: object} with no properties,
-   so the form can't drive a structured editor. Render as a JSON textarea. */
+   so the form can't drive a structured editor. Render as a JSON textarea
+   (.vorpal-input .vorpal-mono). */
 .opaque-object-input {
     width: 100%;
     min-height: 60px;
-    padding: 8px;
-    border: 1px solid var(--border-item);
-    border-radius: 4px;
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 12px;
-    line-height: 1.45;
-    background: var(--bg-surface);
-    color: var(--text-primary);
     resize: vertical;
-    box-sizing: border-box;
 }
 
 .opaque-object-input.opaque-object-invalid {
-    border-color: #c43;
-    background: rgba(204, 51, 51, 0.05);
+    border-color: var(--vorpal-error);
+    background: var(--vorpal-error-soft);
 }
 
 .opaque-object-status {
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-family: var(--vorpal-font-mono);
 }
 
 .array-title {
     font-weight: 600;
-    color: var(--text-secondary);
-}
-
-.btn {
-    padding: 5px 12px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 500;
-    transition: all 0.2s;
-    white-space: nowrap;
-}
-
-button.btn {
-    flex-shrink: 0;
-}
-
-.btn-primary {
-    background: var(--btn-primary);
-    color: var(--btn-text);
-}
-
-.btn-primary:hover {
-    background: var(--btn-primary-hover);
-}
-
-.btn-secondary {
-    background: var(--btn-secondary);
-    color: var(--btn-text);
-}
-
-.btn-secondary:hover {
-    background: var(--btn-secondary-hover);
-}
-
-.btn-publish {
-    background: var(--btn-publish);
-    color: var(--btn-text);
-}
-
-.btn-publish:hover {
-    background: var(--btn-publish-hover);
-}
-
-/* Auto-publish ON: saves go live on their own, so there is nothing to Publish. */
-/* Shown again while something is pending (a catch-up that failed). */
-body.autopublish-on:not(.has-unpublished) .btn-publish {
-    display: none;
-}
-
-/* Auto-publish toggle — a sliding on/off switch in the bar every tab shares,
-   pushed right (margin-left:auto) because it controls a global Configurator
-   behavior, not the currently-loaded app or one editor. The theme selector
-   follows it. State is carried by thumb position and the on/off text label,
-   not by color alone. */
-.autopublish-switch {
-    margin-left: auto;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-    user-select: none;
-    font-size: 12px;
-    color: var(--text-secondary);
-}
-.autopublish-caption {
-    font-weight: 500;
-}
-/* Hide the real checkbox; the track/thumb is the visible control. */
-.autopublish-switch input {
-    position: absolute;
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-.autopublish-track {
-    position: relative;
-    width: 34px;
-    height: 18px;
-    border-radius: 9px;
-    background: var(--btn-secondary);
-    border: 1px solid var(--border-item);
-    transition: background 0.15s ease;
-}
-.autopublish-thumb {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: var(--btn-text, var(--vorpal-surface));
-    transition: transform 0.15s ease;
-}
-/* Checked = ON: track turns the publish color, thumb slides right. */
-.autopublish-switch input:checked + .autopublish-track {
-    background: var(--btn-publish);
-}
-.autopublish-switch input:checked + .autopublish-track .autopublish-thumb {
-    transform: translateX(16px);
-}
-.autopublish-switch input:focus-visible + .autopublish-track {
-    outline: 2px solid var(--btn-primary);
-    outline-offset: 1px;
-}
-.autopublish-state {
-    min-width: 1.8em;
-    font-weight: 600;
-    color: var(--text-primary);
+    color: var(--vorpal-ink-700);
 }
 
 .array-item {
-    background: var(--bg-surface);
-    border: 1px solid var(--border-item);
-    border-radius: 4px;
+    background: var(--vorpal-surface);
+    border: 1px solid var(--vorpal-divider);
+    border-radius: var(--vorpal-radius-sm);
     padding: 8px 10px;
     margin-bottom: 6px;
     position: relative;
@@ -1303,22 +1161,15 @@ body.autopublish-on:not(.has-unpublished) .btn-publish {
     flex: 1;
 }
 
+/* The item's type (.vorpal-badge .vorpal-mono), leading its header. */
 .array-item-type-label {
     margin-right: auto;
-    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-    font-size: 12px;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 10px;
-    background: var(--bg-surface-alt);
-    color: var(--text-primary);
-    border: 1px solid var(--border-subtle);
 }
 
 .map-entry {
-    background: var(--bg-surface);
-    border: 1px solid var(--border-item);
-    border-radius: 4px;
+    background: var(--vorpal-surface);
+    border: 1px solid var(--vorpal-divider);
+    border-radius: var(--vorpal-radius-sm);
     padding: 8px 10px;
     margin-bottom: 6px;
 }
@@ -1333,6 +1184,32 @@ body.autopublish-on:not(.has-unpublished) .btn-publish {
 
 .map-entry-header.collapsed {
     margin-bottom: 0;
+}
+
+.map-entry-content {
+    padding: 0 0 0 12px;
+    transition: max-height 0.3s ease-out, overflow 0s 0.3s, visibility 0s;
+    overflow: visible;
+}
+
+.map-entry-content.collapsed {
+    max-height: 0 !important;
+    padding: 0 0 0 12px;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out, overflow 0s, visibility 0s 0.3s;
+}
+
+/* Folded bodies are out of the Tab order as well as out of sight. */
+.array-item-body.collapsed,
+.map-entry-content.collapsed { visibility: hidden; }
+
+.map-entry-header .map-key-input {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.map-key-input {
+    font-weight: 500;
 }
 
 .polymorphic-content {
@@ -1352,7 +1229,7 @@ body.autopublish-on:not(.has-unpublished) .btn-publish {
 
 .polymorphic-type-label {
     font-weight: 600;
-    color: var(--text-secondary);
+    color: var(--vorpal-ink-700);
     font-size: 12px;
 }
 
@@ -1366,13 +1243,12 @@ body.autopublish-on:not(.has-unpublished) .btn-publish {
     margin-right: auto;
 }
 
-/* "+ Add X" selects dressed up as buttons in array/map headers. */
+/* "+ Add X" selects dressed as buttons in array/map headers (.vorpal-btn). */
 .add-menu-select {
     flex: 0 0 auto;
     width: auto;
     min-width: 160px;
     max-width: 260px;
-    cursor: pointer;
 }
 
 .extras-inline {
@@ -1402,541 +1278,32 @@ body.autopublish-on:not(.has-unpublished) .btn-publish {
     flex: 1 1 auto;
 }
 
-.map-entry-content {
-    padding: 0 0 0 12px;
-    transition: max-height 0.3s ease-out, overflow 0s 0.3s, visibility 0s;
-    overflow: visible;
-}
-
-.map-entry-content.collapsed {
-    max-height: 0 !important;
-    padding: 0 0 0 12px;
-    overflow: hidden;
-    transition: max-height 0.3s ease-out, overflow 0s, visibility 0s 0.3s;
-}
-
-.map-entry-header .map-key-input {
-    flex: 1;
-    margin-bottom: 0;
-}
-
-.map-key-input {
-    font-weight: 500;
-}
-
-.description {
-    font-size: 11px;
-    color: var(--text-muted);
-    margin-top: 2px;
-    font-style: italic;
-}
-
-/* Version History Modal */
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 2000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    background-color: var(--modal-backdrop);
-    backdrop-filter: blur(5px);
-}
-
-.modal.active {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.modal-content {
-    background: var(--bg-surface);
-    border-radius: 12px;
-    box-shadow: var(--shadow-lg);
-    width: 90%;
-    max-width: 800px;
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
-}
-
-.modal-header {
-    padding: 12px 20px;
-    border-bottom: 1px solid var(--border-item);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.modal-header h2 {
-    margin: 0;
-    font-size: 1.1rem;
-    color: var(--text-primary);
-}
-
-.modal-close {
-    background: none;
-    border: none;
-    font-size: 24px;
-    cursor: pointer;
-    color: var(--text-muted);
-    padding: 0;
-    width: 30px;
-    height: 30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 4px;
-}
-
-.modal-close:hover {
-    background: var(--modal-close-hover-bg);
-    color: var(--text-primary);
-}
-
-.modal-body {
-    padding: 12px 20px;
-    overflow-y: auto;
-    flex: 1;
-}
-
-.modal-footer {
-    padding: 10px 20px;
-    border-top: 1px solid var(--border-item);
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-}
-
-.version-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
-.version-item {
-    border: 1px solid var(--border-item);
-    border-radius: 6px;
-    padding: 8px 12px;
-    margin-bottom: 6px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    transition: all 0.2s;
-}
-
-.version-item:hover {
-    background: var(--version-hover-bg);
-    border-color: var(--focus-border);
-}
-
-.version-info {
-    flex: 1;
-}
-
-.version-date {
-    font-weight: 600;
-    color: var(--text-primary);
-    margin-bottom: 4px;
-}
-
-.version-size {
-    font-size: 12px;
-    color: var(--text-muted);
-}
-
-.version-actions {
-    display: flex;
-    gap: 8px;
-}
-
-.btn-small {
-    padding: 6px 12px;
-    font-size: 12px;
-}
-
-.empty-state {
-    text-align: center;
-    padding: 20px 12px;
-    color: var(--text-muted);
-}
-
-.empty-state-icon {
-    font-size: 36px;
-    margin-bottom: 8px;
-    opacity: 0.5;
-}
-
-/* Welcome / empty state — fills the form tab until the first schema loads.
-   While #form-tab carries .no-schema the toolbar is hidden (every toolbar
-   action requires a loaded schema anyway). */
-#form-tab.no-schema .form-toolbar {
-    display: none;
-}
-
-.welcome-panel {
-    display: flex;
-    justify-content: center;
-    padding: 9vh 16px 12vh;
-}
-
-.welcome-card {
-    max-width: 520px;
-    width: 100%;
-    padding: 28px 32px;
-    background: var(--bg-surface);
-    border: 1px solid var(--border-subtle);
-    border-left: 4px solid var(--tab-active-accent);
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}
-
-.welcome-card .welcome-icon {
-    text-align: center;
-    font-size: 42px;
-    color: var(--text-muted);
-    opacity: 0.5;
-    margin-bottom: 4px;
-}
-
-.welcome-card h2 {
-    text-align: center;
-    margin: 0 0 6px;
-    font-size: 18px;
-    color: var(--text-primary);
-}
-
-.welcome-card > p {
-    text-align: center;
-    margin: 0 0 16px;
-    color: var(--text-secondary);
-    font-size: 13px;
-}
-
-.welcome-steps {
-    margin: 0 0 16px;
-    padding-left: 22px;
-    color: var(--text-secondary);
-    font-size: 13px;
-}
-
-.welcome-steps li {
-    margin-bottom: 8px;
-}
-
-.welcome-steps li strong {
-    color: var(--text-primary);
-}
-
-.welcome-card .welcome-links {
-    margin: 0;
-    padding-top: 12px;
-    border-top: 1px solid var(--border-subtle);
-    text-align: center;
-    font-size: 12px;
-    color: var(--text-muted);
-}
-
-.schema-selector-container {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
-    padding: 8px 12px;
-    background: var(--bg-inset);
-    border-radius: 6px;
-    border: 1px solid var(--border-subtle);
-}
-
-.schema-selector-container label {
-    font-weight: 600;
-    color: var(--text-secondary);
-    margin: 0;
-    white-space: nowrap;
-    font-size: 13px;
-}
-
-.schema-selector-container select {
-    flex: 1;
-    max-width: 400px;
-    padding: 6px 10px;
-    border: 1px solid var(--border-default);
-    border-radius: 4px;
-    font-size: 13px;
-    background: var(--bg-surface);
-    color: var(--text-primary);
-}
-
-.schema-selector-container select:focus {
-    outline: none;
-    border-color: var(--focus-border);
-    box-shadow: 0 0 0 3px var(--focus-ring);
-}
-
-/* Feature: Unsaved Changes Warning */
-.dirty-indicator {
-    background: var(--dirty-bg);
-    color: var(--dirty-text);
-    padding: 4px 10px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 600;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
-}
-
-/* "Not Published" indicator — saved to disk, not yet live. Deliberately
-   distinct from the pulsing amber "Unsaved Changes" badge: steady (no pulse),
-   publish-colored, triangle glyph + its own label, so the two read apart
-   by shape/motion/text, not color alone. */
-.unpublished-indicator {
-    background: var(--btn-publish);
-    color: var(--btn-text, #fff);
-    padding: 4px 10px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 600;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    border: 1px solid var(--border-item);
-}
-
-/* Feature: Field Help Tooltips — a label/title carrying a schema description
-   is the hover target itself (no ? badge). The dotted underline is the
-   shape-based cue that a hint exists; the tooltip is one shared element
-   positioned by the delegated mouseenter handler. */
-.has-help {
-    cursor: help;
-    text-decoration: underline dotted var(--border-strong);
-    text-decoration-thickness: 1px;
-    text-underline-offset: 3px;
-}
-
-.field-help-tooltip {
-    position: fixed;
-    background: var(--tooltip-bg);
-    color: var(--tooltip-text);
-    padding: 10px 12px;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: normal;
-    line-height: 1.4;
-    max-width: 300px;
-    z-index: 10000;
-    white-space: normal;
-    box-shadow: var(--shadow-tooltip);
-    display: none;
-    pointer-events: none;
-}
-
-.field-help-tooltip::after {
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    border: 6px solid transparent;
-    border-top-color: var(--tooltip-bg);
-}
-
-.field-help-tooltip.below::after {
-    top: auto;
-    bottom: 100%;
-    border-top-color: transparent;
-    border-bottom-color: var(--tooltip-bg);
-}
-
-/* Feature: Validation Indicators */
-.validation-summary {
-    background: var(--status-error-bg);
-    border: 1px solid var(--status-error-border);
-    border-radius: 6px;
-    padding: 8px 12px;
-    margin-bottom: 10px;
-    display: none;
-}
-
-.validation-summary.active {
-    display: block;
-}
-
-.validation-summary-header {
-    font-weight: 600;
-    color: var(--status-error-text);
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.validation-summary-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
-.validation-summary-list li {
-    color: var(--validation-list-text);
-    font-size: 13px;
-    padding: 4px 0;
-    padding-left: 20px;
-    position: relative;
-}
-
-.validation-summary-list li::before {
-    content: '\2022';
-    position: absolute;
-    left: 8px;
-}
-
-.field-error {
-    border-color: var(--field-error-border) !important;
-    background: var(--field-error-bg) !important;
-}
-
-.field-error-message {
-    color: var(--field-error-text);
-    font-size: 12px;
-    margin-top: 4px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-/* Feature: Clone Configuration */
-.clone-button {
-    background: var(--btn-clone);
-    color: var(--btn-text);
-    border: none;
-    padding: 5px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 500;
-    transition: background 0.2s;
-}
-
-.clone-button:hover {
-    background: var(--btn-clone-hover);
-}
-
-.clone-button:disabled {
-    background: var(--disabled-bg);
-    cursor: not-allowed;
-}
-
-.clone-target-select {
-    width: 100%;
-    padding: 8px;
-    margin-top: 8px;
-    border: 1px solid var(--border-strong);
-    border-radius: 6px;
-}
-
-.clone-warning-note {
-    margin-top: 15px;
-    padding: 12px;
-    background: var(--status-warning-bg);
-    color: var(--status-warning-text);
-    border-radius: 6px;
-    font-size: 13px;
-}
-
-/* Add Property Placeholder */
+/* An unset optional field: a quiet "+ name" line, not a box. */
 .add-property-placeholder {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 10px;
+    padding: 3px 8px;
     margin-bottom: 8px;
-    background: var(--bg-surface-alt);
-    border: 1px solid var(--border-strong);
-    border-radius: 4px;
-    transition: all 0.2s;
+    border: 1px solid transparent;
+    border-radius: var(--vorpal-radius-sm);
 }
 
 .add-property-placeholder:hover {
-    background: var(--add-placeholder-hover-bg);
-    border-color: var(--add-placeholder-hover-border);
+    border-color: var(--vorpal-divider);
 }
 
 .add-property-placeholder.nested {
     flex: 1 1 220px;
-    box-sizing: border-box;
     margin-bottom: 0;
-}
-
-.add-property-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    border: none;
-    border-radius: 4px;
-    background: var(--btn-add);
-    color: var(--btn-text);
-    cursor: pointer;
-    transition: all 0.2s;
-    flex-shrink: 0;
-}
-
-.add-property-btn:hover {
-    background: var(--btn-add-hover);
-    transform: scale(1.05);
-}
-
-.add-property-icon {
-    font-size: 14px;
-    font-weight: bold;
-    line-height: 1;
 }
 
 .add-property-label {
     font-weight: 500;
-    color: var(--add-label-text);
+    color: var(--vorpal-slate-600);
     font-size: 12px;
     display: flex;
     align-items: center;
-}
-
-/* Delete Property Button */
-.delete-property-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    border: none;
-    border-radius: 4px;
-    background: var(--btn-delete);
-    color: var(--btn-text);
-    cursor: pointer;
-    transition: all 0.2s;
-    flex-shrink: 0;
-    margin-left: 8px;
-}
-
-.delete-property-btn:hover {
-    background: var(--btn-delete-hover);
-    transform: scale(1.05);
-}
-
-.delete-property-icon {
-    font-size: 16px;
-    font-weight: bold;
-    line-height: 1;
 }
 
 /* Form group header with delete button */
@@ -1952,7 +1319,7 @@ body.autopublish-on:not(.has-unpublished) .btn-publish {
 }
 
 /* Single-line simple fields: the control rides in the header row beside the
-   label — one line, matching the checkbox-group layout. Multi-line editors
+   label, one line, matching the checkbox-group layout. Multi-line editors
    (textarea) keep the stacked two-row layout and never get .inline. */
 .form-group-header.inline {
     gap: 8px;
@@ -1979,32 +1346,73 @@ body.autopublish-on:not(.has-unpublished) .btn-publish {
     margin-top: 0;
 }
 
+/* Feature: Field Help Tooltips. A label/title carrying a schema description
+   is the hover target itself (no ? badge). The dotted underline is the
+   shape-based cue that a hint exists; the tooltip is one shared element
+   positioned by the delegated mouseenter handler. It is drawn in the
+   theme's inverse (ink on surface swapped). */
+.has-help {
+    cursor: help;
+    text-decoration: underline dotted var(--vorpal-slate-400);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+}
+
+.field-help-tooltip {
+    position: fixed;
+    background: var(--vorpal-ink-900);
+    color: var(--vorpal-surface);
+    padding: 10px 12px;
+    border-radius: var(--vorpal-radius-sm);
+    font-size: 13px;
+    font-weight: normal;
+    line-height: 1.4;
+    max-width: 300px;
+    z-index: 10000;
+    white-space: normal;
+    box-shadow: var(--vorpal-shadow-md);
+    display: none;
+    pointer-events: none;
+}
+
+.field-help-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: var(--vorpal-ink-900);
+}
+
+.field-help-tooltip.below::after {
+    top: auto;
+    bottom: 100%;
+    border-top-color: transparent;
+    border-bottom-color: var(--vorpal-ink-900);
+}
+
 /* Feature: Jackson Identity References */
 .reference-link {
     display: inline-flex;
     align-items: center;
     gap: 6px;
     padding: 6px 12px;
-    background: var(--bg-inset);
-    border: 1px solid var(--focus-border);
-    border-radius: 4px;
+    background: var(--vorpal-purple-soft);
+    border: 1px solid var(--vorpal-purple);
+    border-radius: var(--vorpal-radius-sm);
     font-size: 13px;
 }
 
 .reference-link-icon {
-    color: var(--focus-border);
+    color: var(--vorpal-purple);
     font-size: 14px;
     font-weight: bold;
 }
 
 .reference-link-anchor {
-    color: var(--focus-border);
-    text-decoration: none;
+    color: var(--vorpal-purple);
     font-weight: 600;
-}
-
-.reference-link-anchor:hover {
-    text-decoration: underline;
 }
 
 .reference-highlight {
@@ -2012,7 +1420,7 @@ body.autopublish-on:not(.has-unpublished) .btn-publish {
 }
 
 @keyframes reference-pulse {
-    0% { outline: 3px solid var(--focus-border); outline-offset: 2px; }
+    0% { outline: 3px solid var(--vorpal-purple); outline-offset: 2px; }
     100% { outline: 3px solid transparent; outline-offset: 2px; }
 }
 
@@ -2021,72 +1429,3 @@ body.autopublish-on:not(.has-unpublished) .btn-publish {
 .form-readonly {
     opacity: 0.75;
 }
-
-/* ============================================================
-   The editor is a sheet on the page: an opaque themed surface
-   (var(--bg-surface)), inset and framed. It is deliberately not
-   pinned to white: the admin theme ([data-theme] on <html>) may be
-   dark, and a white sheet around dark fields would break it.
-   ============================================================ */
-body.vorpal-glass .container {
-    background: var(--bg-surface);
-    margin: 16px;
-    border-radius: var(--vorpal-radius-lg);
-    box-shadow: var(--vorpal-shadow-lg);
-}
-
-
-/* ---- The CRUD editor's look (2026-11) ---- */
-/* Folded sections say what they hold; the words, not a coloured
-   "has data" pill, carry it. */
-.collapsible-summary {
-    font-weight: 400; color: var(--text-secondary); font-size: 12px;
-    font-family: "JetBrains Mono", Menlo, monospace;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1;
-}
-.collapsible-header:not(.collapsed) .collapsible-summary { display: none; }
-.collapsible-title { min-width: 0; flex: 1; }
-.collapsible-badge.has-data { display: none; }
-/* One filled button, Save; the rest are outlined. */
-.form-toolbar .btn-secondary, .json-controls .btn-secondary, .form-toolbar .btn-publish, .json-controls .btn-publish {
-    background: transparent; color: var(--text-primary, inherit);
-    border: 1px solid var(--border-strong);
-}
-.form-toolbar .btn-secondary:hover, .json-controls .btn-secondary:hover,
-.form-toolbar .btn-publish:hover, .json-controls .btn-publish:hover {
-    background: transparent; border-color: var(--btn-primary); color: var(--btn-primary);
-}
-/* An unset optional field: a quiet "+ name" line, not a box. */
-.add-property-placeholder { background: transparent; border: 1px solid transparent; padding: 3px 8px; }
-.add-property-placeholder:hover { border-color: var(--border-subtle); }
-/* Add and remove: quiet outlined glyphs, as in the CRUD editor; the
-   glyph and the tooltip say which, the hover colour only supplements. */
-.add-property-btn { background: transparent; color: var(--btn-primary); border: 1px solid var(--border-strong); }
-.add-property-btn:hover { background: transparent; border-color: var(--btn-primary); transform: none; }
-.delete-property-btn { background: transparent; color: var(--text-secondary); border: 1px solid var(--border-strong); }
-.delete-property-btn:hover { background: transparent; color: #cf222e; border-color: #cf222e; transform: none; }
-.delete-property-icon { font-weight: 400; }
-.version-preview { max-height: 40vh; overflow: auto; margin-top: 10px; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 4px; font: 12px "JetBrains Mono", Menlo, monospace; white-space: pre-wrap; }
-
-/* A multi-line secret (a textarea has no password type): shown as discs until the eye toggle. */
-textarea.secret-masked { -webkit-text-security: disc; text-security: disc; }
-
-/* Folded bodies are out of the Tab order as well as out of sight. */
-.array-item-body.collapsed,
-.map-entry-content.collapsed { visibility: hidden; }
-
-/* View Mode said in words, not only by dimmed fields. */
-.view-mode-indicator {
-    padding: 4px 10px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 600;
-    border: 1px solid var(--text-secondary);
-    color: var(--text-primary, inherit);
-}
-
-/* Keyboard focus on a section arrow is visible. */
-.collapsible-arrow:focus-visible { outline: 2px solid var(--text-primary, currentColor); outline-offset: 2px; border-radius: 2px; }
-
-/* The words beside an invalid field outside a labelled row. */
-.invalid-mark { font-size: 11px; font-weight: 600; margin-left: 6px; color: var(--status-error-text); }

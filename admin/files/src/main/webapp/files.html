@@ -3,9 +3,10 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>BLADE Files — Editor</title>
+	<title>Files · BLADE</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
 	<script src="/blade/portal/brand/theme.js"></script>
+	<script src="/blade/portal/brand/shell.js" data-context="/blade/files" defer></script>
 	<link rel="stylesheet" href="files.css">
 	<link rel="icon" type="image/svg+xml" href="/blade/files/favicon.svg">
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.8/ace.js"></script>
@@ -39,16 +40,16 @@
 	</header>
 
 	<main class="vorpal-main">
-		<div class="files-toolbar">
-			<label for="file-select">File</label>
-			<select id="file-select" aria-label="File to edit"></select>
-			<span id="file-meta" class="files-meta"></span>
+		<div class="files-toolbar vorpal-toolbar">
+			<label for="file-select" class="vorpal-label">File</label>
+			<select id="file-select" class="vorpal-input" aria-label="File to edit"></select>
+			<span id="file-meta" class="files-meta vorpal-mono"></span>
 			<span class="files-spacer"></span>
-			<select id="version-select" aria-label="Backup versions" title="Restore a previous version"></select>
-			<button id="restore-btn" type="button" disabled>Restore</button>
-			<button id="reload-btn" type="button">Reload</button>
-			<button id="save-btn" type="button" class="files-primary" disabled>Save</button>
-			<button id="restart-btn" type="button" class="files-danger" title="Bounce the AdminServer so a hand-edited config takes effect" hidden>Restart AdminServer</button>
+			<select id="version-select" class="vorpal-input" aria-label="Backup versions" title="Restore a previous version"></select>
+			<button id="restore-btn" type="button" class="vorpal-btn vorpal-btn-secondary" disabled>Restore</button>
+			<button id="reload-btn" type="button" class="vorpal-btn vorpal-btn-secondary">Reload</button>
+			<button id="save-btn" type="button" class="files-primary vorpal-btn" disabled>Save</button>
+			<button id="restart-btn" type="button" class="files-danger vorpal-btn vorpal-btn-danger" title="Bounce the AdminServer so a hand-edited config takes effect" hidden>Restart AdminServer</button>
 		</div>
 
 		<div id="message" class="files-message" role="status" hidden></div>

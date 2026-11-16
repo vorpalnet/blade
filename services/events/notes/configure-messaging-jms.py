@@ -133,6 +133,31 @@ try:
 except:
     pass
 
+# And never leave one behind. A save or activation WebLogic refuses keeps the
+# edit session, and with it the domain's edit lock, which never expires: every
+# deploy after it waits on a change nobody will finish. So a refused save or
+# activation discards the session before the error is reported.
+_wlst_save = save
+_wlst_activate = activate
+
+
+def _discarding(step):
+    def run(*args):
+        try:
+            return step(*args)
+        except:
+            try:
+                stopEdit('y')
+                print('NOTE: discarded the edit session after the error below')
+            except:
+                pass
+            raise
+    return run
+
+
+save = _discarding(_wlst_save)
+activate = _discarding(_wlst_activate)
+
 cd('/')
 
 ADOPTED = cmo.lookupJMSSystemResource('BladeMessagingSystemModule') is None \
@@ -272,7 +297,11 @@ def ensure_connection_factory(name, jndi):
     cmo.setXAConnectionFactoryEnabled(true)
 
     cd('%s/ConnectionFactories/%s' % (RESOURCE, name))
-    cmo.setSubDeploymentName(SUBDEPLOYMENT)
+    # A factory that takes its module's targets (default targeting, as one made
+    # in the console does) keeps them: WebLogic refuses a subdeployment beside
+    # default targeting (JMSExceptions:045110), and both reach the same servers.
+    if not cmo.isDefaultTargetingEnabled():
+        cmo.setSubDeploymentName(SUBDEPLOYMENT)
     save()
     activate()
 
@@ -330,7 +359,8 @@ cd('%s/UniformDistributedTopics/BladeEventBusTopic' % RESOURCE)
 #      event exactly once across the cluster rather than once per member.
 cmo.setForwardingPolicy('Partitioned')
 cmo.setJNDIName('jms/BladeEventBusTopic')
-cmo.setSubDeploymentName(SUBDEPLOYMENT)
+if not cmo.isDefaultTargetingEnabled():  # see ensure_connection_factory
+    cmo.setSubDeploymentName(SUBDEPLOYMENT)
 cmo.setQuota(getMBean(eventbus_quota))
 
 # Time-to-live override: the broker expires anything on this destination older
@@ -389,7 +419,8 @@ if cmo.lookupUniformDistributedQueue('BladeEventBusErrorQueue') is None:
     cmo.createUniformDistributedQueue('BladeEventBusErrorQueue')
 cd('%s/UniformDistributedQueues/BladeEventBusErrorQueue' % RESOURCE)
 cmo.setJNDIName('jms/BladeEventBusErrorQueue')
-cmo.setSubDeploymentName(SUBDEPLOYMENT)
+if not cmo.isDefaultTargetingEnabled():  # see ensure_connection_factory
+    cmo.setSubDeploymentName(SUBDEPLOYMENT)
 cmo.setQuota(getMBean(eventbus_quota))
 
 cd('%s/UniformDistributedTopics/BladeEventBusTopic/DeliveryFailureParams/BladeEventBusTopic' % RESOURCE)

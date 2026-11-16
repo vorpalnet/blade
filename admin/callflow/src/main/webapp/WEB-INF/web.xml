@@ -16,31 +16,36 @@
 		<listener-class>org.vorpal.blade.applications.callflow.CallflowStartup</listener-class>
 	</listener>
 
-	<!-- login.jsp must be reachable WITHOUT auth, or the FORM login forward
-	     loops. Its CSS/logo/favicon come from /blade/portal/brand/*. -->
-	<security-constraint>
-		<web-resource-collection>
-			<web-resource-name>public-login</web-resource-name>
-			<url-pattern>/login.jsp</url-pattern>
-			<url-pattern>/denied.jsp</url-pattern>
-		</web-resource-collection>
-	</security-constraint>
+	<!--
+	  Who is asking: OidcLoginFilter signs the browser in with the deployment's
+	  OpenID Connect provider when WEB-INF/blade-oidc.properties is present
+	  (deploy.sh adds it), so a tenant's people need no WebLogic account; a WAR
+	  deployed without the file falls back to the container's login named below.
+	  What they may see: Trace's grants and access policy (TraceAccess). What
+	  they may change: arming, clearing and saving, and reading the source, need
+	  a WebLogic admin role, checked by each endpoint (Operators).
+	  There is deliberately no auth-constraint. The container checks one before
+	  any filter runs, so a constraint would demand the container's own login of
+	  every browser and the OpenID sign-in could never start. login.jsp and
+	  denied.jsp stay public: the login form must answer before anyone is
+	  signed in, or the FORM login forward loops. Their CSS, logo and favicon
+	  come from /blade/portal/brand/*.
+	-->
+	<filter>
+		<filter-name>OidcLoginFilter</filter-name>
+		<filter-class>org.vorpal.blade.framework.v3.security.OidcLoginFilter</filter-class>
+		<init-param>
+			<param-name>publicPaths</param-name>
+			<param-value>/login.jsp,/denied.jsp</param-value>
+		</init-param>
+	</filter>
+	<filter-mapping>
+		<filter-name>OidcLoginFilter</filter-name>
+		<url-pattern>/*</url-pattern>
+	</filter-mapping>
 
-	<security-constraint>
-		<web-resource-collection>
-			<web-resource-name>app</web-resource-name>
-			<url-pattern>/*</url-pattern>
-		</web-resource-collection>
-		<auth-constraint>
-			<role-name>Admin</role-name>
-			<role-name>Operator</role-name>
-			<role-name>Deployer</role-name>
-			<role-name>Monitor</role-name>
-		</auth-constraint>
-	</security-constraint>
-
-	<!-- A person signed in without a role that opens this application gets
-	     the master page naming the roles that do (admin/portal/denied.jsp). -->
+	<!-- A refusal sent as an error page gets the master page naming the
+	     roles that do (admin/portal/denied.jsp). -->
 	<error-page>
 		<error-code>403</error-code>
 		<location>/denied.jsp</location>
@@ -67,5 +72,17 @@
 	<security-role>
 		<role-name>Monitor</role-name>
 	</security-role>
+
+	<!-- Static files are re-checked (304 when unchanged), so a redeploy never
+	     pairs a new page with a cached old script. -->
+	<filter>
+		<filter-name>revalidate</filter-name>
+		<filter-class>org.vorpal.blade.framework.v3.web.RevalidateFilter</filter-class>
+		<async-supported>true</async-supported>
+	</filter>
+	<filter-mapping>
+		<filter-name>revalidate</filter-name>
+		<url-pattern>/*</url-pattern>
+	</filter-mapping>
 
 </web-app>

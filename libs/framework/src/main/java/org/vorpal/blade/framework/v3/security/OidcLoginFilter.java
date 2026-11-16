@@ -61,9 +61,10 @@ import com.nimbusds.oauth2.sdk.pkce.CodeVerifier;
 ///
 /// The callback compares the state to the session's, trades the code for the
 /// ID token with the PKCE verifier, verifies the token, checks the nonce, and
-/// stores the identity. `/oidc/logout` under the application's context root
-/// drops the session and, when the provider publishes one, visits its
-/// end-session endpoint.
+/// stores the identity. `/oidc/logout` under the application's context root,
+/// checked before any of the doors above but the public paths, ends the
+/// session and the container's login and, when the provider publishes one,
+/// visits its end-session endpoint.
 ///
 /// ## What the application sees
 ///
@@ -87,6 +88,11 @@ public class OidcLoginFilter implements Filter {
 	public static final String IDENTITY_ATTR = "org.vorpal.blade.oidc.identity";
 	/// Path under the context root that signs the browser out.
 	public static final String LOGOUT_PATH = "/oidc/logout";
+	/// [#LOGOUT_PATH]'s parameter naming where to land afterwards: a path on
+	/// this host, such as the portal's `/blade/portal/logout`, which ends the
+	/// sign-in of every application on the server. Without it, this
+	/// application's home.
+	public static final String THEN_PARAM = "then";
 	/// Authentication scheme reported by the wrapped request.
 	public static final String AUTH_TYPE = "OIDC";
 
@@ -237,6 +243,14 @@ public class OidcLoginFilter implements Filter {
 			return;
 		}
 
+		// Signing out comes before every way of being signed in, a container
+		// login included: otherwise a WebLogic user's /oidc/logout passes
+		// straight through to an application that serves no such path.
+		if (req.getRequestURI().equals(req.getContextPath() + LOGOUT_PATH)) {
+			logout(req, res, cfg);
+			return;
+		}
+
 		// 2. the container already knows who this is
 		if (req.getUserPrincipal() != null) {
 			chain.doFilter(req, res);
@@ -252,10 +266,6 @@ public class OidcLoginFilter implements Filter {
 		}
 
 		String path = req.getRequestURI();
-		if (path.equals(req.getContextPath() + LOGOUT_PATH)) {
-			logout(req, res, cfg);
-			return;
-		}
 
 		// 4. signed in earlier
 		HttpSession session = req.getSession(false);
@@ -479,13 +489,26 @@ public class OidcLoginFilter implements Filter {
 	/// goes with it as `id_token_hint` (OpenID Connect RP-Initiated Logout
 	/// 1.0), which an identity domain also requires.
 	private void logout(HttpServletRequest req, HttpServletResponse res, OidcLoginConfig cfg) throws IOException {
+		String then = landing(req.getParameter(THEN_PARAM), req.getContextPath() + "/");
 		HttpSession session = req.getSession(false);
 		String idToken = null;
 		if (session != null) {
 			idToken = (String) session.getAttribute(ID_TOKEN_ATTR);
 			session.invalidate();
 		}
-		String home = origin(cfg.redirectUrl()) + req.getContextPath() + "/";
+		// A container login is the container's to end, as well as the session.
+		try {
+			req.logout();
+		} catch (ServletException e) {
+			logger.log(Level.FINE, "container logout failed", e);
+		}
+		// No ID token: the provider did not sign this browser in, and its
+		// end-session endpoint refuses a logout it cannot tie to one.
+		if (cfg == null || idToken == null) {
+			res.sendRedirect(then);
+			return;
+		}
+		String home = origin(cfg.redirectUrl()) + then;
 		OidcProvider p = null;
 		try {
 			p = provider(cfg);
@@ -495,11 +518,22 @@ public class OidcLoginFilter implements Filter {
 		if (p != null && p.endSessionEndpoint() != null) {
 			String url = p.endSessionEndpoint() + (p.endSessionEndpoint().getQuery() == null ? "?" : "&")
 					+ "post_logout_redirect_uri=" + encode(home) + "&client_id=" + encode(cfg.clientId())
-					+ (idToken == null ? "" : "&id_token_hint=" + encode(idToken));
+					+ "&id_token_hint=" + encode(idToken);
 			res.sendRedirect(url);
 		} else {
 			res.sendRedirect(home);
 		}
+	}
+
+	/// `then` if it is a path on this host, else `home`. Only a single leading
+	/// `/` qualifies: `//host` and `/\host` are other sites to a browser, and
+	/// a signed-out user must never be sent to one by a link.
+	static String landing(String then, String home) {
+		if (then == null || !then.startsWith("/") || then.startsWith("//") || then.indexOf('\\') >= 0
+				|| then.indexOf('\r') >= 0 || then.indexOf('\n') >= 0) {
+			return home;
+		}
+		return then;
 	}
 
 	/// `https://host:port` of an absolute URL: everything before its path.

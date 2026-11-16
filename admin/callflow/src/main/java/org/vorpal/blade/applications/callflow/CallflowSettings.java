@@ -24,6 +24,9 @@ public class CallflowSettings extends Configuration implements Serializable {
 	protected String sourceServer = null;
 	protected String analyticsDataSource = "jdbc/BladeAnalytics";
 	protected String savedTracesDirectory = SavedCalls.DEFAULT_DIRECTORY;
+	protected java.util.List<org.vorpal.blade.framework.v3.access.Grant> grants = new java.util.ArrayList<>();
+	protected org.vorpal.blade.framework.v3.security.AccessPolicy access = org.vorpal.blade.framework.v3.access.Access
+			.defaultPolicy();
 
 	public CallflowSettings() {
 	}
@@ -49,6 +52,33 @@ public class CallflowSettings extends Configuration implements Serializable {
 	public CallflowSettings setAnalyticsDataSource(String analyticsDataSource) {
 		this.analyticsDataSource = (analyticsDataSource == null || analyticsDataSource.isEmpty())
 				? "jdbc/BladeAnalytics" : analyticsDataSource;
+		return this;
+	}
+
+	@JsonPropertyDescription("Who sees which calls: one entry per group, the same grants the dashboard takes. "
+			+ "A viewer sees the union of their groups' grants, and a viewer in none sees nothing. Calls are shown "
+			+ "by domain, tenant and department. 'platform' does not apply here. With no grants at all, the "
+			+ "WebLogic admin roles see every call. What may be read in a call is 'access', not a grant.")
+	public java.util.List<org.vorpal.blade.framework.v3.access.Grant> getGrants() {
+		return grants;
+	}
+
+	public CallflowSettings setGrants(java.util.List<org.vorpal.blade.framework.v3.access.Grant> grants) {
+		this.grants = (grants == null) ? new java.util.ArrayList<>() : grants;
+		return this;
+	}
+
+	@JsonPropertyDescription("Who may read what was said in the calls they see: SIP message text, and the "
+			+ "parties of recorded calls. Rules grant phi:transcript, and may match a call's domain, tenant and "
+			+ "department. Searching recorded calls by number needs a rule with no match. The first rule that is "
+			+ "about this viewer, about this call, and grants it decides; with none, the viewer sees each "
+			+ "message's shape without its text.")
+	public org.vorpal.blade.framework.v3.security.AccessPolicy getAccess() {
+		return access;
+	}
+
+	public CallflowSettings setAccess(org.vorpal.blade.framework.v3.security.AccessPolicy access) {
+		this.access = (access == null) ? new org.vorpal.blade.framework.v3.security.AccessPolicy() : access;
 		return this;
 	}
 

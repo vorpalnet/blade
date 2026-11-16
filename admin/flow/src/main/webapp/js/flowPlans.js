@@ -67,7 +67,7 @@ window.flowPlans = (function() {
 			'<input class="plan-value" type="text" placeholder="gold" value="' + esc(value) + '" style="flex:1;" />' +
 			'<span style="align-self:center;">&rarr;</span>' +
 			'<input class="plan-app" type="text" placeholder="premium-screening" value="' + esc(app) + '" style="flex:2;" />' +
-			'<svg style="color:#c00; cursor:pointer; align-self:center;" title="Remove plan" ' +
+			'<svg class="remove-btn" style="align-self:center;" title="Remove plan" ' +
 				'viewBox="0 0 16 16" width="14" height="14" ' +
 				'onclick="this.parentNode.parentNode.removeChild(this.parentNode);">' +
 				'<circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/>' +
@@ -83,7 +83,6 @@ window.flowPlans = (function() {
 		var div = document.createElement('div');
 		div.style.padding = '10px';
 		div.style.fontSize = '12px';
-		div.style.fontFamily = 'Arial';
 
 		var methodOptions = sipMethods().map(function(m) {
 			return '<option>' + m + '</option>';
@@ -94,24 +93,24 @@ window.flowPlans = (function() {
 				'mutually exclusive condition (<code>${var} == \'value\'</code>) plus an ' +
 				'optional default &mdash; evaluation order cannot matter. The variable is ' +
 				'published by a selector (typically a table selector mapping callers to plans).</div>' +
-			'<label><b>Variable</b></label><br/>' +
-			'<input id="plan-variable" type="text" value="tier" style="width:100%; box-sizing:border-box;" /><br/>' +
-			'<label style="margin-top:6px; display:block;"><b>SIP Method</b></label>' +
+			'<label class="vorpal-label" style="display:block;">Variable</label>' +
+			'<input id="plan-variable" type="text" value="tier" style="width:100%; box-sizing:border-box;" />' +
+			'<label class="vorpal-label" style="margin-top:8px; display:block;">SIP Method</label>' +
 			'<select id="plan-method" style="width:100%;">' + methodOptions + '</select>' +
-			'<label style="margin-top:6px; display:block;"><b>Plans</b> ' +
-				'<svg id="plan-add-row" title="Add plan" style="color:green; cursor:pointer;" ' +
+			'<label class="vorpal-label" style="margin-top:8px; display:block;">Plans ' +
+				'<svg id="plan-add-row" class="add-btn" title="Add plan" ' +
 					'viewBox="0 0 16 16" width="14" height="14">' +
 					'<circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/>' +
 					'<path d="M8 4.5v7M4.5 8h7" stroke="currentColor" stroke-width="1.5"/></svg></label>' +
 			'<div id="plan-rows">' +
 				rowHtml('gold', '') + rowHtml('silver', '') + rowHtml('bronze', '') +
 			'</div>' +
-			'<label style="margin-top:6px; display:block;"><b>Default application</b> ' +
-				'<span style="color:#666; font-size:10px;">(no condition; runs last; blank = none)</span></label>' +
+			'<label class="vorpal-label" style="margin-top:8px; display:block;">Default application ' +
+				'<span class="hint">(no condition; runs last; blank = none)</span></label>' +
 			'<input id="plan-default" type="text" style="width:100%; box-sizing:border-box;" />' +
-			'<div style="margin-top:10px; text-align:right;">' +
-				'<button id="plan-generate">Generate</button> ' +
-				'<button id="plan-cancel">Cancel</button>' +
+			'<div class="vorpal-toolbar" style="margin-top:10px;">' +
+				'<button id="plan-generate" type="button" class="vorpal-btn">Generate</button>' +
+				'<button id="plan-cancel" type="button" class="vorpal-btn vorpal-btn-secondary">Cancel</button>' +
 			'</div>';
 
 		var wnd = new mxWindow('Add plan dispatch', div, 120, 120, 380, 420, true, true);

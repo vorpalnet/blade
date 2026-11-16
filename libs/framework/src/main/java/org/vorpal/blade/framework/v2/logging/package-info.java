@@ -6,7 +6,7 @@
 ///
 /// Every BLADE application inherits logging automatically. The framework creates a
 /// per-application [Logger] during servlet initialization&mdash;no setup code required.
-/// Inside any [org.vorpal.blade.framework.v2.callflow.Callflow Callflow], the logger is
+/// Inside any [org.vorpal.blade.framework.Callflow Callflow], the logger is
 /// available as the inherited {@code sipLogger} field:
 ///
 /// {@snippet :

@@ -45,6 +45,16 @@
 		</web-resource-collection>
 	</security-constraint>
 
+	<!-- Sign-out is public too: an identity-domain sign-in is returned here by
+	     the identity domain with no WebLogic login, and ending sessions needs
+	     only the session cookie. -->
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>public-logout</web-resource-name>
+			<url-pattern>/logout</url-pattern>
+		</web-resource-collection>
+	</security-constraint>
+
 	<security-constraint>
 		<web-resource-collection>
 			<web-resource-name>app</web-resource-name>

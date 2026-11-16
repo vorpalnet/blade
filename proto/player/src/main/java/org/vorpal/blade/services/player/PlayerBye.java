@@ -6,7 +6,7 @@ import javax.media.mscontrol.MediaSession;
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v3.Callflow;
 import org.vorpal.blade.framework.v3.events.BladeEventTypes;
 import org.vorpal.blade.framework.v3.media.MediaCallflow;
 

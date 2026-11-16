@@ -6,10 +6,9 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
-import org.vorpal.blade.framework.v2.transfer.TransferListener;
 
 /// A [TransferListener] that also hears what an [AttendedTransfer] has to say
-/// and the v2 listener has no method for. Both defaults do nothing, so a
+/// and the plain listener has no method for. Both defaults do nothing, so a
 /// listener opts in by implementing this interface instead.
 public interface TransferObserver extends TransferListener {
 

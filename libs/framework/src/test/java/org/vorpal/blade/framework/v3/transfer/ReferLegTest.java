@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.v2.transfer;
+package org.vorpal.blade.framework.v3.transfer;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.vorpal.blade.framework.sip.DetachedApplicationSession;
 import org.vorpal.blade.framework.sip.DetachedRequest;
 import org.vorpal.blade.framework.sip.DetachedSipSession;
-import org.vorpal.blade.framework.v2.b2bua.InitialInvite;
+import org.vorpal.blade.framework.v3.b2bua.InitialInvite;
 
 /// Only the callee (contact-center) leg may start a transfer; a caller's REFER
 /// can name any destination.

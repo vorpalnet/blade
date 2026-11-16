@@ -96,7 +96,7 @@
 /// - {@link KeepAliveExpiry} - Session termination: BYE to both dialogs on timeout
 ///
 /// Both classes extend
-/// {@link org.vorpal.blade.framework.v2.callflow.ClientCallflow ClientCallflow} and
+/// {@link org.vorpal.blade.framework.v3.ClientCallflow ClientCallflow} and
 /// implement {@code SessionKeepAlive.Callback}. The SIP container calls their
 /// {@code handle(SipSession)} method when the keep-alive timer fires or expires.
 ///

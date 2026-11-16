@@ -3,96 +3,43 @@
    file picker, version/restore controls, and Save. */
 
 .files-toolbar {
-	display: flex;
-	align-items: center;
-	gap: 0.6rem;
-	padding: 0.6rem 1rem;
-	background: var(--vorpal-surface-alt);
+	padding: 10px 16px;
 	border-bottom: 1px solid var(--vorpal-divider);
-	flex-wrap: wrap;
 }
 
-.files-toolbar label {
-	font-weight: 600;
-	font-size: 0.85rem;
+/* A hidden control stays hidden although .vorpal-btn sets a display. */
+.files-toolbar [hidden] {
+	display: none;
 }
 
-.files-toolbar select,
-.files-toolbar button {
-	font: inherit;
-	padding: 0.35rem 0.6rem;
-	border: 1px solid var(--vorpal-slate-300);
-	border-radius: 0;
-	background: var(--vorpal-surface);
-	color: var(--vorpal-ink-900);
-}
-
-.files-toolbar button {
-	cursor: pointer;
-}
-
-.files-toolbar button:disabled {
-	opacity: 0.5;
-	cursor: default;
-}
-
-.files-toolbar button.files-primary {
-	background: var(--vorpal-purple);
-	color: #fff;
-	border-color: var(--vorpal-purple);
-}
-
-/* Restart is a heavyweight action (takes the admin tier down). It's set apart
-   by a double border + a circular-arrow glyph and an explicit label — not by
-   colour alone. */
-.files-toolbar button.files-danger {
-	border: 2px solid #a12b2b;
-	background: var(--vorpal-surface-alt);
-	color: #5a1414;
-	font-weight: 600;
-}
-
+/* Restart takes the admin tier down. Beyond the danger button it carries a
+   circular-arrow glyph and an explicit label, so it never reads by colour. */
 .files-toolbar button.files-danger::before {
-	content: "\21bb ";
+	content: "\21bb";
 	font-weight: 700;
 }
 
 .files-meta {
-	font-size: 0.8rem;
-	opacity: 0.75;
-	font-family: ui-monospace, Menlo, Consolas, monospace;
+	color: var(--vorpal-slate-600);
 }
 
 .files-spacer {
 	flex: 1 1 auto;
 }
 
+/* The outcome is an explicit word ("Saved" / "Rejected") plus a glyph; the
+   shared note or error box (set beside these classes in files.js) draws it. */
 .files-message {
-	margin: 0;
-	padding: 0.5rem 1rem;
-	font-size: 0.85rem;
-	border-bottom: 1px solid var(--vorpal-divider);
-}
-
-/* Outcome is conveyed by an explicit word ("Saved" / "Rejected") plus a left
-   border and icon — not by colour alone. */
-.files-message.files-ok {
-	background: var(--vorpal-surface-alt);
-	border-left: 4px solid #1f3a66;
+	margin: 8px 16px 0;
 }
 
 .files-message.files-ok::before {
-	content: "✔ ";
+	content: "\2714  ";
 	font-weight: 700;
 }
 
-.files-message.files-error {
-	background: var(--vorpal-surface-alt);
-	border-left: 4px solid #a12b2b;
-}
-
 .files-message.files-error::before {
-	content: "✘ ";
+	content: "\2718  ";
 	font-weight: 700;
 }
 

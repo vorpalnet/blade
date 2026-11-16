@@ -47,6 +47,7 @@ public class AccessRule implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	private String name;
+	private String signIn;
 	private LinkedList<String> groups = new LinkedList<>();
 	private LinkedHashMap<String, String> match = new LinkedHashMap<>();
 	private LinkedList<String> permit = new LinkedList<>();
@@ -108,9 +109,13 @@ public class AccessRule implements Serializable {
 		return unknown;
 	}
 
-	/// True if this rule is about `subject` — that is, the caller is in one of
+	/// True if this rule is about `subject`: they signed in the way
+	/// [#getSignIn] names, if it names one, and they are in one of
 	/// [#getGroups], or the rule names no groups at all.
 	public boolean appliesTo(SubjectAttributes subject) {
+		if (signIn != null && !signIn.isEmpty() && (subject == null || !signIn.equals(subject.signIn()))) {
+			return false;
+		}
 		if (groups.isEmpty()) {
 			return true;
 		}
@@ -168,6 +173,15 @@ public class AccessRule implements Serializable {
 
 	public void setName(String name) {
 		this.name = name;
+	}
+
+	@JsonPropertyDescription("How the caller must have signed in for this rule to apply: weblogic (the WebLogic login) or oidc (an identity domain or other OpenID Connect provider). Leave empty for either. Set it when a group name exists in both places, such as Administrators.")
+	public String getSignIn() {
+		return signIn;
+	}
+
+	public void setSignIn(String signIn) {
+		this.signIn = signIn;
 	}
 
 	@JsonPropertyDescription("Identity-provider groups this rule is about. The caller must be in at least one. Leave empty to mean every caller.")

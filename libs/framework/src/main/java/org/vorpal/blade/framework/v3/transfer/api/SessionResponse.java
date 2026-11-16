@@ -1,0 +1,117 @@
+package org.vorpal.blade.framework.v3.transfer.api;
+
+import java.io.Serializable;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+
+import javax.servlet.sip.SipApplicationSession;
+import javax.servlet.sip.SipSession;
+
+import org.vorpal.blade.framework.Callflow;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+
+/**
+ * REST API response containing SIP application session information.
+ *
+ * <p>
+ * Provides session attributes, group memberships, and dialog details for API
+ * inspection of active calls.
+ */
+public class SessionResponse implements Serializable {
+	private static final long serialVersionUID = 1L;
+	private static final String SIP_PROTOCOL = "SIP";
+
+	private Integer expires = null;
+
+	public String id = null;
+	public List<String> groups = new LinkedList<>();
+	public Map<String, String> attributes = new HashMap<>();
+	public Map<String, Dialog> dialogs = new HashMap<>();
+
+	public SessionResponse() {
+		// Default constructor
+	}
+
+	public SessionResponse(SipApplicationSession appSession) {
+		if (appSession == null) {
+			return;
+		}
+
+		// set the session id
+		id = Callflow.getVorpalSessionId(appSession);
+
+		// set any session variables (String)
+		for (String name : appSession.getAttributeNameSet()) {
+			Object obj = appSession.getAttribute(name);
+			if (obj instanceof String) {
+				attributes.put(name, (String) obj);
+			}
+		}
+
+		// set any groups (index keys) that are different than the id
+		for (String group : appSession.getIndexKeys()) {
+			if (!group.equals(id)) {
+				groups.add(group);
+			}
+		}
+
+		@SuppressWarnings("unchecked")
+		Iterator<SipSession> itr = (Iterator<SipSession>) appSession.getSessions(SIP_PROTOCOL);
+
+		while (itr.hasNext()) {
+			SipSession sipSession = itr.next();
+			if (sipSession.isValid()) {
+				String dialogId = Callflow.getVorpalDialogId(sipSession);
+
+				if (dialogId != null) {
+					Dialog sessionDialog = new Dialog(sipSession);
+					this.dialogs.put(dialogId, sessionDialog);
+				}
+
+			}
+		}
+
+	}
+
+	public void setExpires(Integer expires) {
+		this.expires = expires;
+	}
+
+	@Schema(type = "integer", //
+			name = "expires", //
+			description = "Session expiration due to inactivity, in minutes. Default is 3.", //
+			example = "30", //
+			examples = "{30}")
+	public Integer getExpires() {
+		return this.expires;
+	}
+
+	public SessionResponse addGroup(String group) {
+		if (groups == null) {
+			groups = new LinkedList<>();
+		}
+		groups.add(group);
+		return this;
+	}
+
+	public SessionResponse addAttribute(String name, String value) {
+		if (attributes == null) {
+			attributes = new HashMap<>();
+		}
+		attributes.put(name, value);
+		return this;
+	}
+
+	public SessionResponse addDialog(String dialogId, Dialog dialog) {
+		if (dialogs == null) {
+			dialogs = new HashMap<>();
+		}
+		dialogs.put(dialogId, dialog);
+		return this;
+	}
+
+}

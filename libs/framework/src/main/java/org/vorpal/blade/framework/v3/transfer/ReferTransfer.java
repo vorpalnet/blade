@@ -1,0 +1,278 @@
+/*
+ *  MIT License
+ *  
+ *  Copyright (c) 2021 Vorpal Networks, LLC
+ *  
+ *  Permission is hereby granted, free of charge, to any person obtaining a copy
+ *  of this software and associated documentation files (the "Software"), to deal
+ *  in the Software without restriction, including without limitation the rights
+ *  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ *  copies of the Software, and to permit persons to whom the Software is
+ *  furnished to do so, subject to the following conditions:
+ *  
+ *  The above copyright notice and this permission notice shall be included in all
+ *  copies or substantial portions of the Software.
+ *  
+ *  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ *  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ *  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ *  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ *  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ *  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ *  SOFTWARE.
+ */
+
+/* Visit https://plantuml.com/sequence-diagram for notes on how to draw.
+@startuml doc-files/refer_transfer.png
+title Success: Alice transfers to Carol
+hide footbox
+participant Alice as alice
+participant ReferTransfer as blade
+participant Bob as bob
+participant Carol as carol
+
+alice     <-->      bob         : RTP
+
+alice  <- blade                 : REFER
+                                  note right: Refer-To: <sip:carol@vorpal.net>\nReferred-By: <sip:bob@vorpal.net>                                   
+alice --> blade                 : 202 Accepted
+
+alice ->  blade                 : INVITE                   
+                                  note right: places call on hold
+          blade ->  bob         : INVITE                   
+          blade <-- bob         : 200 OK
+alice <-- blade                 : 200 OK
+alice ->  blade                 : ACK                                  
+          blade ->  bob         : ACK                                  
+
+alice ->  blade                 : INVITE
+          blade ->        carol : INVITE                   
+alice ->  blade                 : NOTIFY                   
+                                  note right: 100 Trying
+alice <-- blade                 : 200 OK (NOTIFY)
+
+          blade <--       carol : 200 OK (INVITE)
+alice  <- blade                 : 200 OK (INVITE)
+alice ->  blade                 : ACK
+          blade ->        carol : ACK
+alice ->  blade                 : NOTIFY          
+                                  note right: 200 OK
+alice <-- blade                 : 200 OK (NOTIFY)          
+alice     <-->            carol : RTP
+          blade ->  bob         : BYE                                  
+          blade <-- bob         : 200 OK
+          
+@enduml
+*/
+
+package org.vorpal.blade.framework.v3.transfer;
+
+import java.io.IOException;
+
+import javax.servlet.ServletException;
+import javax.servlet.sip.SipServletRequest;
+import javax.servlet.sip.SipServletResponse;
+import javax.servlet.sip.SipSession;
+import javax.servlet.sip.UAMode;
+import javax.servlet.sip.URI;
+
+import org.vorpal.blade.framework.Callflow;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.transfer.api.Header;
+
+/**
+ * The ReferTransfer callflow sends a REFER to Alice on behalf of Bob. Alice
+ * then transfers to Carol.
+ * <p>
+ * <img src="doc-files/refer_transfer.png">
+ */
+public class ReferTransfer extends Transfer {
+	private static final long serialVersionUID = 1L;
+
+	// SIPFRAG response code indicators
+	private static final String SIPFRAG_100 = "100";
+	private static final String SIPFRAG_200 = "200";
+	private static final String SIPFRAG_486 = "486";
+
+	// Session attribute keys
+	private static final String USER_AGENT_ATTR = "userAgent";
+	private static final String USER_AGENT_CALLEE = "callee";
+	private static final String USER_AGENT_CALLER = "caller";
+	private static final String X_PREVIOUS_DN_ATTR = "X-Previous-DN";
+
+	public SipServletResponse referResponse;
+
+	public ReferTransfer(TransferListener referListener, TransferSettings transferSettings) {
+		super(referListener, transferSettings);
+	}
+
+	@Override
+	public void process(SipServletRequest transferorRequest) throws ServletException, IOException {
+		try {
+
+			// jwm - there should be a 202 response, but right now this is only invoked by
+			// - REST APIs. should add a dummy 202 response in the future.
+
+			SipSession transferorSession = transferorRequest.getSession();
+			SipSession transfereeSession = getLinkedSession(transferorSession);
+
+			transfereeRequest = transfereeSession.createRequest(REFER);
+			copyContentAndHeaders(transferorRequest, transfereeRequest);
+
+			// If this was method was invoked by the REST API, it might have set some extra
+			// headers.
+			if (this.inviteHeaders != null && targetRequest != null) {
+				for (Header header : inviteHeaders) {
+					targetRequest.setHeader(header.getName(), header.getValue());
+				}
+			}
+
+			// save X-Previous-DN-Tmp for use later
+			URI referTo = transferorRequest.getAddressHeader(REFER_TO).getURI();
+			transferorRequest.setAttribute(REFER_TO, referTo);
+
+			// User is notified a transfer is requested
+			SettingsManager.createEvent("transferRequested", transferorRequest);
+			if (transferListener != null) {
+				transferListener.transferRequested(transferorRequest);
+			}
+			sipLogger.finer("ReferTransfer.process - SettingsManager.sendEvent(transferorRequest); #2");
+			SettingsManager.sendEvent(transferorRequest);
+
+			expectRequest(transfereeSession, CANCEL, (cancel) -> {
+				sipLogger.finer(transfereeSession, "ReferTransfer.process - expectRequest CANCEL, Alice hangs up.");
+
+				// Transferee (Alice) hangs up
+				SettingsManager.createEvent("transferAbandoned", transfereeRequest);
+				if (transferListener != null) {
+					transferListener.transferAbandoned(transfereeRequest);
+				}
+				sipLogger.finer("ReferTransfer.process - SettingsManager.sendEvent(transfereeRequest); #3");
+				SettingsManager.sendEvent(transfereeRequest);
+
+				// A CANCEL can only come from the INVITE it cancels — neither
+				// SipSession.createRequest nor SipFactory.createRequest will build
+				// one (both throw IllegalArgumentException on ACK and CANCEL), which
+				// is what the previous 'continueRequest(transferorSession, cancel)'
+				// tried to do. Same shape as Terminate: take the outstanding UAC
+				// INVITE on the transferor dialog and cancel that.
+				SipServletRequest transferorInvite = transferorSession.getActiveInvite(UAMode.UAC);
+				if (transferorInvite != null && transferorInvite.isCommitted()) {
+					SipServletRequest transferorCancel = transferorInvite.createCancel();
+					copyContentAndHeaders(cancel, transferorCancel);
+					sendRequest(transferorCancel);
+				} else {
+					sipLogger.finer(transferorSession, "ReferTransfer.process - no outstanding INVITE on the "
+							+ "transferor dialog; nothing to cancel.");
+				}
+			});
+
+			// Expect to receive NOTIFY messages from transferee (alice)
+			expectRequest(transfereeSession, NOTIFY, (notify) -> {
+
+				sipLogger.finer(transfereeSession, "ReferTransfer.process - expectRequest NOTIFY");
+
+				// Place TransferListener logic here
+
+				// Respond back to NOTIFY
+				sendResponse(notify.createResponse(200));
+
+				String sipfrag = null;
+
+				if (notify.getContent() != null) {
+					if (notify.getContent() instanceof String) {
+						sipfrag = (String) notify.getContent();
+					} else {
+						sipfrag = new String(notify.getRawContent()).trim();
+					}
+
+					if (sipfrag != null) {
+						// Can be one of these possibilities:
+						// SIP/2.0 100 Trying -- Call Initiated
+						// SIP/2.0 200 OK -- Call Answered
+						// SIP/2.0 486 Busy Here -- Call Refused
+
+						if (sipfrag.contains(SIPFRAG_100)) {
+							// User is notified that transfer is initiated
+
+							SettingsManager.createEvent("transferInitiated", transfereeRequest);
+							if (transferListener != null) {
+								transferListener.transferInitiated(transfereeRequest);
+							}
+							sipLogger.finer("ReferTransfer.process - SettingsManager.sendEvent(transfereeRequest); #4");
+							SettingsManager.sendEvent(transfereeRequest);
+
+						} else if (sipfrag.contains(SIPFRAG_200)) {
+							// User is notified of a successful transfer
+							// What response to use?
+
+							if (referResponse != null) {
+								SipSession callee = referResponse.getSession();
+								callee.setAttribute(USER_AGENT_ATTR, USER_AGENT_CALLEE);
+								SipSession caller = Callflow.getLinkedSession(callee);
+								if (caller != null) {
+									caller.setAttribute(USER_AGENT_ATTR, USER_AGENT_CALLER);
+								}
+								URI referTo2 = (URI) referResponse.getApplicationSession().getAttribute(REFER_TO);
+
+								if (referTo2 != null) {
+									referResponse.getApplicationSession().setAttribute(X_PREVIOUS_DN_ATTR, referTo2);
+								}
+
+									SettingsManager.createEvent("transferCompleted", referResponse);
+									if (transferListener != null) {
+									transferListener.transferCompleted(referResponse);
+									}
+									sipLogger.finer("ReferTransfer.process - SettingsManager.sendEvent(referResponse); #5");
+									SettingsManager.sendEvent(referResponse);
+							}
+							sendRequest(transferorSession.createRequest(BYE));
+						} else if (sipfrag.contains(SIPFRAG_486)) {
+
+							// User is notified that the transfer target did not answer
+							// What response to use?
+							if (referResponse != null) {
+
+									SettingsManager.createEvent("transferDeclined", referResponse);
+									if (transferListener != null) {
+									transferListener.transferDeclined(referResponse);
+									}
+									sipLogger.finer("ReferTransfer.process - SettingsManager.sendEvent(referResponse); #6");
+									SettingsManager.sendEvent(referResponse);
+
+							}
+
+						}
+
+					}
+
+				}
+
+			});
+
+			sendRequest(transfereeRequest, (referResponse) -> {
+				this.referResponse = referResponse;
+
+				if (failure(referResponse)) {
+					// If refer fails, complete REST invocation as a failure
+
+						SettingsManager.createEvent("transferDeclined", referResponse);
+						if (transferListener != null) {
+						transferListener.transferDeclined(referResponse);
+						}
+						sipLogger.finer("ReferTransfer.process - SettingsManager.sendEvent(referResponse); #1");
+						SettingsManager.sendEvent(referResponse);
+
+				}
+
+			});
+
+		} catch (
+
+		Exception e) {
+			sipLogger.logStackTrace(transfereeRequest, e);
+		}
+
+	}
+
+}

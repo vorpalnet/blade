@@ -155,7 +155,7 @@ window.flowSimulate = (function() {
 		}
 
 		var div = document.createElement('div');
-		div.style.cssText = 'font-family:Arial; font-size:12px; padding:8px; ' +
+		div.style.cssText = 'font-size:12px; padding:8px; ' +
 				'overflow-y:auto; height:100%; box-sizing:border-box;';
 		div.innerHTML =
 			tabBarHtml() +
@@ -186,12 +186,14 @@ window.flowSimulate = (function() {
 		wnd.setVisible(true);
 	}
 
+	// The shared .vorpal-tabs: the chosen tab is filled and bold, read from
+	// aria-selected, which select() below sets.
 	function tabBarHtml() {
 		function tab(id, label) {
-			return '<button class="sim-tab" data-tab="' + id + '" style="padding:4px 10px; ' +
-					'border:1px solid #999; background:#eee; cursor:pointer;">' + label + '</button>';
+			return '<button type="button" class="sim-tab" role="tab" aria-selected="false" data-tab="' + id + '">' +
+					label + '</button>';
 		}
-		return '<div style="margin-bottom:8px;">' +
+		return '<div class="vorpal-tabs" role="tablist" style="margin-bottom:8px;">' +
 				tab('simulate', 'Simulate') + tab('replay', 'Replay') + tab('live', 'Live') +
 				'</div>';
 	}
@@ -204,8 +206,7 @@ window.flowSimulate = (function() {
 			});
 			for (var i = 0; i < tabs.length; i++) {
 				var active = tabs[i].getAttribute('data-tab') === name;
-				tabs[i].style.background = active ? '#fff' : '#eee';
-				tabs[i].style.fontWeight = active ? 'bold' : 'normal';
+				tabs[i].setAttribute('aria-selected', active ? 'true' : 'false');
 			}
 		}
 		for (var i = 0; i < tabs.length; i++) {
@@ -223,45 +224,45 @@ window.flowSimulate = (function() {
 		var days = DAYS.map(function(d) { return '<option>' + d + '</option>'; }).join('');
 		return '' +
 			'<div style="display:flex; gap:6px;">' +
-			'  <label style="flex:1;">Method<br/><select id="sim-method" style="width:100%;">' + methods + '</select></label>' +
-			'  <label style="flex:2;">Request-URI<br/><input id="sim-uri" type="text" value="sip:bob@example.com" style="width:100%; box-sizing:border-box;"/></label>' +
+			'  <label class="vorpal-field" style="flex:1;"><span class="vorpal-label">Method</span><select id="sim-method">' + methods + '</select></label>' +
+			'  <label class="vorpal-field" style="flex:2;"><span class="vorpal-label">Request-URI</span><input id="sim-uri" type="text" value="sip:bob@example.com"/></label>' +
 			'</div>' +
-			'<label style="display:block; margin-top:4px;">From<br/>' +
-			'  <input id="sim-from" type="text" value="&lt;sip:alice@example.com&gt;;tag=1" style="width:100%; box-sizing:border-box;"/></label>' +
-			'<label style="display:block; margin-top:4px;">To<br/>' +
-			'  <input id="sim-to" type="text" value="&lt;sip:bob@example.com&gt;" style="width:100%; box-sizing:border-box;"/></label>' +
-			'<label style="display:block; margin-top:4px;">Call-ID<br/>' +
-			'  <input id="sim-callid" type="text" value="sim-1@flow" style="width:100%; box-sizing:border-box;"/></label>' +
+			'<label class="vorpal-field" style="margin-top:4px;"><span class="vorpal-label">From</span>' +
+			'  <input id="sim-from" type="text" value="&lt;sip:alice@example.com&gt;;tag=1"/></label>' +
+			'<label class="vorpal-field" style="margin-top:4px;"><span class="vorpal-label">To</span>' +
+			'  <input id="sim-to" type="text" value="&lt;sip:bob@example.com&gt;"/></label>' +
+			'<label class="vorpal-field" style="margin-top:4px;"><span class="vorpal-label">Call-ID</span>' +
+			'  <input id="sim-callid" type="text" value="sim-1@flow"/></label>' +
 			'<div id="sim-headers"></div>' +
 			'<div style="margin-top:4px;">' +
 			'  <a href="#" id="sim-add-header" style="font-size:11px;">+ header</a> &nbsp; ' +
 			'  <a href="#" id="sim-toggle-raw" style="font-size:11px;">paste SIP message&hellip;</a></div>' +
 			'<div id="sim-raw" style="display:none; margin-top:4px;">' +
-			'  <textarea id="sim-raw-text" placeholder="INVITE sip:bob@example.com SIP/2.0&#10;From: &lt;sip:alice@example.com&gt;;tag=1&#10;To: &lt;sip:bob@example.com&gt;&#10;&hellip;" ' +
-			'   style="width:100%; height:90px; font-family:monospace; font-size:10px; box-sizing:border-box;"></textarea>' +
-			'  <button id="sim-parse-raw" style="font-size:11px;">Fill form from message</button></div>' +
-			'<fieldset style="margin-top:6px; border:1px solid #ccc;">' +
-			'  <legend style="font-size:11px;">Pseudo-variable overrides (blank = live values)</legend>' +
+			'  <textarea id="sim-raw-text" class="vorpal-mono" placeholder="INVITE sip:bob@example.com SIP/2.0&#10;From: &lt;sip:alice@example.com&gt;;tag=1&#10;To: &lt;sip:bob@example.com&gt;&#10;&hellip;" ' +
+			'   style="width:100%; height:90px; box-sizing:border-box;"></textarea>' +
+			'  <button id="sim-parse-raw" type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" style="margin-top:4px;">Fill form from message</button></div>' +
+			'<fieldset class="vorpal-panel" style="margin-top:8px;">' +
+			'  <legend class="vorpal-label">Pseudo-variable overrides (blank = live values)</legend>' +
 			'  <div style="display:flex; gap:6px;">' +
-			'    <label style="flex:1;">${hour}<br/><input id="sim-hour" type="text" style="width:100%; box-sizing:border-box;" placeholder="0-23"/></label>' +
-			'    <label style="flex:2;">${dayOfWeek}<br/><select id="sim-day" style="width:100%;">' + days + '</select></label>' +
-			'    <label style="flex:1;">${hash100}<br/><input id="sim-hash" type="text" style="width:100%; box-sizing:border-box;" placeholder="0-99"/></label>' +
+			'    <label class="vorpal-field" style="flex:1;"><span class="vorpal-label">${hour}</span><input id="sim-hour" type="text" placeholder="0-23"/></label>' +
+			'    <label class="vorpal-field" style="flex:2;"><span class="vorpal-label">${dayOfWeek}</span><select id="sim-day">' + days + '</select></label>' +
+			'    <label class="vorpal-field" style="flex:1;"><span class="vorpal-label">${hash100}</span><input id="sim-hash" type="text" placeholder="0-99"/></label>' +
 			'  </div></fieldset>' +
-			'<fieldset style="margin-top:6px; border:1px solid #ccc;">' +
-			'  <legend style="font-size:11px;">Treat as undeployed (test bypass behavior) ' +
-			'   <a href="#" id="sim-refresh-apps" style="font-size:10px;">refresh</a></legend>' +
+			'<fieldset class="vorpal-panel" style="margin-top:8px;">' +
+			'  <legend class="vorpal-label">Treat as undeployed (test bypass behavior) ' +
+			'   <a href="#" id="sim-refresh-apps">refresh</a></legend>' +
 			'  <div id="sim-undeployed" style="max-height:80px; overflow-y:auto;"></div></fieldset>' +
-			'<div style="margin-top:8px;">' +
-			'  <button id="sim-run" style="font-weight:bold;">&#9654; Run simulation</button> ' +
-			'  <button id="sim-validate">Validate diagram</button> ' +
-			'  <button id="sim-clear">Clear</button></div>';
+			'<div class="vorpal-toolbar" style="margin-top:8px;">' +
+			'  <button id="sim-run" type="button" class="vorpal-btn vorpal-btn-sm">&#9654; Run simulation</button>' +
+			'  <button id="sim-validate" type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm">Validate diagram</button>' +
+			'  <button id="sim-clear" type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm">Clear</button></div>';
 	}
 
 	function headerRowHtml() {
 		return '<div class="sim-header-row" style="display:flex; gap:4px; margin-top:4px;">' +
 			'<input class="sim-h-name" type="text" placeholder="Header" style="flex:1;"/>' +
 			'<input class="sim-h-value" type="text" placeholder="value" style="flex:2;"/>' +
-			'<a href="#" class="sim-h-del" style="align-self:center; font-size:11px;">&#10005;</a></div>';
+			'<a href="#" class="sim-h-del" style="align-self:center; font-size:11px;" title="Remove header">&#10005;</a></div>';
 	}
 
 	function wireSimulateTab(div) {
@@ -316,7 +317,7 @@ window.flowSimulate = (function() {
 		}
 		var sorted = Object.keys(names).sort();
 		if (sorted.length === 0) {
-			container.innerHTML = '<span style="color:#888; font-style:italic; font-size:11px;">no states on canvas</span>';
+			container.innerHTML = '<span class="vorpal-panel-sub" style="font-style:italic;">no states on canvas</span>';
 			return;
 		}
 		container.innerHTML = sorted.map(function(n) {
@@ -455,7 +456,7 @@ window.flowSimulate = (function() {
 				collect(f.infos, 'INFO');
 				result.innerHTML = rows.length === 0
 					? '<b>Validation:</b> no findings.'
-					: '<div style="border:1px solid #ccc; padding:6px; max-height:200px; overflow-y:auto; font-size:11px;">' +
+					: '<div class="vorpal-note" style="max-height:200px; overflow-y:auto; font-size:11px;">' +
 						'<b>Validation findings (' + rows.length + '):</b>' + rows.join('') + '</div>';
 				// Dashed outline on every state a finding names — the text
 				// list above is the primary channel; this just points at them.
@@ -474,19 +475,19 @@ window.flowSimulate = (function() {
 
 	function replayTabHtml() {
 		return '' +
-			'<div style="font-size:11px; color:#444; margin-bottom:6px;">' +
+			'<div class="vorpal-panel-sub" style="margin-bottom:6px;">' +
 			'  Captures real calls’ routing traces on the engines (per-engine ' +
 			'  count) and replays them on the diagram. Uses the FSMAR&nbsp;3 metrics ' +
 			'  MBean over JMX.</div>' +
-			'<div style="display:flex; gap:6px; align-items:center;">' +
-			'  <button id="rep-arm">Arm capture</button>' +
-			'  <input id="rep-count" type="text" value="10" style="width:42px;"/> calls' +
-			'  <span id="rep-status" style="font-size:11px; color:#444;"></span></div>' +
-			'<div style="margin-top:6px;">' +
-			'  <button id="rep-refresh">Refresh list</button> ' +
-			'  <button id="rep-clear">Discard captures</button></div>' +
+			'<div class="vorpal-toolbar" style="gap:6px;">' +
+			'  <button id="rep-arm" type="button" class="vorpal-btn vorpal-btn-sm">Arm capture</button>' +
+			'  <input id="rep-count" type="text" value="10" style="width:52px;"/> calls' +
+			'  <span id="rep-status" class="vorpal-panel-sub"></span></div>' +
+			'<div class="vorpal-toolbar" style="margin-top:6px;">' +
+			'  <button id="rep-refresh" type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm">Refresh list</button>' +
+			'  <button id="rep-clear" type="button" class="vorpal-btn vorpal-btn-danger vorpal-btn-sm">Discard captures</button></div>' +
 			'<div id="rep-list" style="margin-top:6px; max-height:180px; overflow-y:auto; ' +
-			'  border:1px solid #ccc; font-size:11px;"></div>';
+			'  border:1px solid var(--vorpal-slate-300); border-radius:8px; font-size:11px;"></div>';
 	}
 
 	function wireReplayTab(div) {
@@ -517,10 +518,10 @@ window.flowSimulate = (function() {
 			list.innerHTML = '';
 			traces.forEach(function(t) {
 				var row = document.createElement('div');
-				row.style.cssText = 'padding:3px 5px; border-bottom:1px solid #eee; cursor:pointer;';
+				row.style.cssText = 'padding:3px 5px; border-bottom:1px solid var(--vorpal-divider); cursor:pointer;';
 				row.innerHTML = '<b>' + esc(t.method || '?') + '</b> ' + esc(t.requestURI || '') +
 						' &rarr; ' + esc(t.egress ? '(egress)' : (t.finalApp || '(downstream)')) +
-						'<br/><span style="color:#777;">' + esc(t.callId || '') +
+						'<br/><span style="color:var(--vorpal-slate-600);">' + esc(t.callId || '') +
 						(t.server ? ' · ' + esc(t.server) : '') + '</span>';
 				row.onclick = function() { loadTrace(t); };
 				list.appendChild(row);
@@ -534,12 +535,13 @@ window.flowSimulate = (function() {
 
 	function liveTabHtml() {
 		return '' +
-			'<div style="font-size:11px; color:#444; margin-bottom:6px;">' +
+			'<div class="vorpal-panel-sub" style="margin-bottom:6px;">' +
 			'  Overlays per-transition hit counts from every engine on the diagram ' +
 			'  edges. Edge thickness scales with traffic share; the count is the label.</div>' +
-			'<div><button id="live-toggle">Start live overlay</button> ' +
-			'  <button id="live-reset">Reset counters</button></div>' +
-			'<div id="live-totals" style="margin-top:6px; font-size:11px; color:#444;"></div>';
+			'<div class="vorpal-toolbar">' +
+			'  <button id="live-toggle" type="button" class="vorpal-btn vorpal-btn-sm">Start live overlay</button>' +
+			'  <button id="live-reset" type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm">Reset counters</button></div>' +
+			'<div id="live-totals" class="vorpal-panel-sub" style="margin-top:6px;"></div>';
 	}
 
 	function wireLiveTab(div) {
@@ -666,21 +668,22 @@ window.flowSimulate = (function() {
 		var hop = hops[step];
 		var html = '';
 
-		html += '<div style="border-top:1px solid #999; padding-top:6px;">';
-		html += '<div><button id="sim-prev"' + (step <= 0 ? ' disabled' : '') + '>&#9664;</button> ';
-		html += '<button id="sim-next"' + (step >= hops.length - 1 ? ' disabled' : '') + '>&#9654;</button> ';
-		html += '<button id="sim-play">' + (playTimer != null ? 'Pause' : 'Play') + '</button> ';
-		html += '<b>Hop ' + (step + 1) + ' of ' + hops.length + '</b> — state <b>' +
+		var stepBtn = ' type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm"';
+		html += '<div style="border-top:1px solid var(--vorpal-slate-300); padding-top:6px;">';
+		html += '<div class="vorpal-toolbar" style="gap:6px;"><button id="sim-prev"' + stepBtn + (step <= 0 ? ' disabled' : '') + ' title="Previous hop">&#9664;</button>';
+		html += '<button id="sim-next"' + stepBtn + (step >= hops.length - 1 ? ' disabled' : '') + ' title="Next hop">&#9654;</button>';
+		html += '<button id="sim-play"' + stepBtn + '>' + (playTimer != null ? 'Pause' : 'Play') + '</button>';
+		html += '<span><b>Hop ' + (step + 1) + ' of ' + hops.length + '</b> — state <b>' +
 				esc(hop ? hop.state : '?') + '</b>';
 		if (hop && hop.bypassed) html += ' <b>[BYPASSED — undeployed]</b>';
-		html += '</div>';
+		html += '</span></div>';
 
 		if (hop) {
 			var ex = hop.extracted || {};
 			var exKeys = Object.keys(ex);
 			if (exKeys.length > 0) {
 				html += '<div style="margin-top:4px;"><b>Extracted this hop:</b>' +
-						'<table style="font-size:11px; font-family:monospace; margin-left:8px;">';
+						'<table class="vorpal-mono" style="font-size:11px; margin-left:8px;">';
 				exKeys.forEach(function(k) {
 					html += '<tr><td>${' + esc(k) + '}</td><td>= ' + esc(ex[k]) + '</td></tr>';
 				});
@@ -714,7 +717,7 @@ window.flowSimulate = (function() {
 			}
 			if (hop.routes && hop.routes.length > 0) {
 				html += '<div style="margin-top:2px;"><b>Routes (' + esc(hop.routeModifier || 'ROUTE') + '):</b>' +
-						'<div style="margin-left:8px; font-family:monospace; font-size:11px;">' +
+						'<div class="vorpal-mono" style="margin-left:8px; font-size:11px;">' +
 						hop.routes.map(esc).join('<br/>') + '</div></div>';
 			}
 			if (hop.subscriberURI) {
@@ -724,7 +727,7 @@ window.flowSimulate = (function() {
 		}
 
 		// --- whole-call summary ---
-		html += '<div style="margin-top:6px; border-top:1px dotted #aaa; padding-top:4px;">';
+		html += '<div style="margin-top:6px; border-top:1px dotted var(--vorpal-slate-300); padding-top:4px;">';
 		if (trace.egress) {
 			html += '<b>Outcome:</b> egress — the call left OCCAS via its routes';
 		} else {
@@ -733,7 +736,7 @@ window.flowSimulate = (function() {
 		if (trace.defaultFallback) html += ' · <b>DEFAULT FALLBACK</b>';
 		if (trace.cycleDetected) html += ' · <b>CYCLE DETECTED</b>';
 		if (trace.server) html += ' · engine ' + esc(trace.server);
-		if (trace.callId) html += '<br/><span style="color:#777; font-size:11px;">' + esc(trace.callId) + '</span>';
+		if (trace.callId) html += '<br/><span class="vorpal-panel-sub">' + esc(trace.callId) + '</span>';
 		(trace.problems || []).forEach(function(p) {
 			html += '<div><b>NOTE:</b> ' + esc(p) + '</div>';
 		});

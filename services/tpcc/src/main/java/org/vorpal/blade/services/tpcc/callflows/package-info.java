@@ -38,6 +38,6 @@
 /// JAX-RS asynchronous REST response model, enabling the REST caller to receive
 /// the SIP outcome as an HTTP status code.
 ///
-/// @see [org.vorpal.blade.framework.v2.callflow.ClientCallflow]
+/// @see [org.vorpal.blade.framework.v3.ClientCallflow]
 /// @see [org.vorpal.blade.services.tpcc.v1.DialogAPI]
 package org.vorpal.blade.services.tpcc.callflows;

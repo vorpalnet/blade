@@ -12,7 +12,7 @@ import org.vorpal.blade.framework.sip.DetachedApplicationSession;
 import org.vorpal.blade.framework.sip.DetachedRequest;
 import org.vorpal.blade.framework.sip.DetachedResponse;
 import org.vorpal.blade.framework.sip.DetachedSipSession;
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.framework.v2.config.Configuration;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;

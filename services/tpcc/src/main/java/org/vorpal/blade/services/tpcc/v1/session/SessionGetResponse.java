@@ -9,7 +9,7 @@ import java.util.Map;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipSession;
 
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.services.tpcc.v1.dialog.Dialog;
 
 import io.swagger.v3.oas.annotations.media.Schema;

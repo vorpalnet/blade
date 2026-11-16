@@ -61,8 +61,8 @@ public abstract class AsyncSipServlet extends org.vorpal.blade.framework.AsyncSi
 			try {
 				SipServletResponse response = CrudHook.refuse(request, refusal);
 				// The outcome, as for a refusal on the way out ([Callflow#reportRefusal]).
-				Callflow.reportRefusal(response, (this instanceof org.vorpal.blade.framework.v2.b2bua.B2buaListener)
-						? (org.vorpal.blade.framework.v2.b2bua.B2buaListener) this : null);
+				Callflow.reportRefusal(response, (this instanceof org.vorpal.blade.framework.v3.b2bua.B2buaListener)
+						? (org.vorpal.blade.framework.v3.b2bua.B2buaListener) this : null);
 				Callflow.getLogger().superArrow(Direction.SEND, null, response, "crud");
 				traced(Direction.SEND, null, response, getClass().getName(), "initialRequest");
 				response.send();

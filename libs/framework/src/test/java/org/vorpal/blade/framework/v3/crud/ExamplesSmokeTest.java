@@ -2,7 +2,7 @@ package org.vorpal.blade.framework.v3.crud;
 
 import javax.servlet.sip.SipApplicationSession;
 
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.sip.DetachedApplicationSession;

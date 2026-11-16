@@ -40,6 +40,8 @@ public class DashboardSettings extends Configuration implements Serializable {
 	private int analyticsRefreshSeconds = 60;
 	private int cacheMinutes = 5;
 	private java.util.List<DashboardGrant> grants = new java.util.ArrayList<>();
+	private org.vorpal.blade.framework.v3.security.AccessPolicy access = org.vorpal.blade.framework.v3.access.Access
+			.defaultPolicy();
 	private java.util.List<NetworkSite> sites = new java.util.ArrayList<>();
 	private int networkWindowMinutes = 15;
 	private int networkFailingCalls = 3;
@@ -232,13 +234,22 @@ public class DashboardSettings extends Configuration implements Serializable {
 		this.cacheMinutes = clamp(cacheMinutes, 0, 60);
 	}
 
-	@JsonPropertyDescription("Who sees what: one entry per group. A viewer sees the union of their groups' grants, and a viewer in none sees nothing. With no grants at all, every signed-in viewer sees everything.")
+	@JsonPropertyDescription("Who sees which calls and servers: one entry per group. A viewer sees the union of their groups' grants, and a viewer in none sees nothing. With no grants at all, the WebLogic admin roles see every call and server. What may be read in a call is 'access', not a grant.")
 	public java.util.List<DashboardGrant> getGrants() {
 		return grants;
 	}
 
 	public void setGrants(java.util.List<DashboardGrant> grants) {
 		this.grants = grants;
+	}
+
+	@JsonPropertyDescription("Who may read what was said in the calls they see: transcripts, caller numbers and identities, and accounts. Rules grant phi:transcript. The board asks it of every call a viewer sees at once, so only a rule with no match gives it here. Without it, a viewer sees counts, durations, outcomes and the shape of a call.")
+	public org.vorpal.blade.framework.v3.security.AccessPolicy getAccess() {
+		return access;
+	}
+
+	public void setAccess(org.vorpal.blade.framework.v3.security.AccessPolicy access) {
+		this.access = (access == null) ? new org.vorpal.blade.framework.v3.security.AccessPolicy() : access;
 	}
 
 	@JsonPropertyDescription("The places on the network map: where this domain's servers run, where calls arrive from, and where they are sent. A balancer site with coordinates is added for it.")

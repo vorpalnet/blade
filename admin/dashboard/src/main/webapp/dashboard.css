@@ -105,8 +105,7 @@ a.brand { color: inherit; text-decoration: none; }
 	border-radius: 9px; padding: 4px 13px 4px 9px; font-weight: 800; font-size: 15px; letter-spacing: -.01em;
 	-webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
-button.brand__pill { font-family: inherit; border: 0; cursor: pointer; }
-button.brand__pill:hover, button.brand__pill[aria-expanded="true"] { box-shadow: 0 0 0 2px var(--accent); }
+a.brand__pill:hover { box-shadow: 0 0 0 2px var(--accent); text-decoration: none; }
 .brand__logo { height: 28px; width: auto; filter: brightness(0) invert(1); }
 .spacer { flex: 1 1 auto; }
 .nav { display: flex; gap: 6px; }
@@ -479,6 +478,18 @@ a.srv__name--link:hover, a.srv__n--link:hover { text-decoration-color: var(--acc
 	display: block; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line);
 	font-size: 13px; font-weight: 700; color: var(--accent);
 }
+/* About, under Sign out's rule: shell.js's. */
+.acct__link {
+	display: block; margin-top: 12px; padding: 0; font: inherit; font-size: 12.5px; font-weight: 600;
+	color: var(--accent); background: none; border: 0; cursor: pointer; text-align: left;
+}
+.acct__link:hover { text-decoration: underline; }
+.acct__about { margin-top: 8px; font-size: 12px; color: var(--ink-2); }
+.acct__about-ver { font-weight: 700; color: var(--ink); }
+.acct__about-rows { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 8px 0 0; }
+.acct__about-rows dt { color: var(--ink-3); }
+.acct__about-rows dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.acct__about-legal { margin-top: 8px; font-size: 11px; color: var(--ink-3); }
 @media (max-width: 760px) { .acct__name { display: none; } }
 
 /* The theme switch theme.js adds to the top bar. */
@@ -491,20 +502,6 @@ a.srv__name--link:hover, a.srv__n--link:hover { text-decoration-color: var(--acc
 .theme-switch svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 @media (max-width: 760px) { .theme-switch span { display: none; } }
 
-/* About, under the brand pill: same surface as the account menu. */
-.about {
-	position: absolute; left: 0; top: calc(100% + 8px); z-index: 20; width: min(340px, calc(100vw - 32px));
-	background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 12px; padding: 14px 16px;
-	box-shadow: var(--shadow); font-size: 13px; color: var(--ink-2);
-}
-.about__name { font-weight: 800; font-size: 15px; color: var(--ink); }
-.about__ver { margin-top: 2px; font-size: 12px; color: var(--ink-3); }
-.about__rows { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 12px 0 0; }
-.about__rows dt { color: var(--ink-3); }
-.about__rows dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
-.about__links { display: flex; gap: 16px; margin-top: 12px; font-weight: 700; }
-.about__links a { color: var(--accent); }
-.about__legal { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--ink-3); }
 
 .tz {
 	font: inherit; font-size: 12px; color: var(--ink-2); background: var(--bg-2);
@@ -623,6 +620,9 @@ table.report tr.row--link:hover td { text-decoration: underline; text-decoration
 /* The inventory heads the list, set off by a rule: a report, not an app. */
 .rail__item--first { margin-bottom: 4px; border-bottom: 1px solid var(--line); border-radius: 8px 8px 0 0; padding-bottom: 10px; }
 .rail__note { font-size: 11px; color: var(--ink-3); margin: 4px; }
+/* The board's own entry: a filled tile and a bar at its left edge. */
+.rail__item--here { background: var(--panel-2); color: var(--ink); font-weight: 700; box-shadow: inset 3px 0 0 var(--accent); }
+.rail__item--here .rail__icon { background-color: var(--ink); }
 @media (max-width: 900px) {
 	.board__body { flex-direction: column; }
 	.rail { width: auto; flex-direction: row; overflow-x: auto; overflow-y: hidden; border-right: 0; border-bottom: 1px solid var(--line); padding: 6px 10px; }

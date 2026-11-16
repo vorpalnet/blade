@@ -21,6 +21,25 @@
 
 	<build>
 		<finalName>blade-recordings</finalName>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-war-plugin</artifactId>
+				<configuration>
+					<!-- Portal master login page injected at build time, for the
+					     WebLogic sign-in; never add a per-app login page. -->
+					<webResources>
+						<resource>
+							<directory>${project.basedir}/../../admin/portal/src/main/webapp</directory>
+							<includes>
+								<include>login.jsp</include>
+							</includes>
+							<targetPath>login</targetPath>
+						</resource>
+					</webResources>
+				</configuration>
+			</plugin>
+		</plugins>
 	</build>
 
 	<dependencies>

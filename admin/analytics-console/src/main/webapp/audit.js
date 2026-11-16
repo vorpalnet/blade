@@ -39,7 +39,7 @@
 
 			const left = document.createElement('div');
 			const badge = document.createElement('span');
-			badge.className = 'audit-badge ' + state;
+			badge.className = 'audit-badge vorpal-badge ' + (f.present ? 'vorpal-badge-ok ' : 'vorpal-badge-warn ') + state;
 			badge.textContent = f.present ? 'OK' : 'MISSING';
 			left.appendChild(badge);
 

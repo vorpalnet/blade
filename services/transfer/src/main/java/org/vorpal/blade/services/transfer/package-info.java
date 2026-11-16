@@ -48,8 +48,8 @@
 /// It provides both programmatic SIP servlet interfaces and HTTP REST endpoints for maximum
 /// flexibility in integration scenarios.
 ///
-/// @see [org.vorpal.blade.framework.v2.transfer.api.TransferAPI]
-/// @see [org.vorpal.blade.framework.v2.transfer.TransferListener]
-/// @see [org.vorpal.blade.framework.v2.b2bua.B2buaServlet]
-/// @see [org.vorpal.blade.framework.v2.b2bua.B2buaListener]
+/// @see [org.vorpal.blade.framework.v3.transfer.api.TransferAPI]
+/// @see [org.vorpal.blade.framework.v3.transfer.TransferListener]
+/// @see [org.vorpal.blade.framework.v3.B2buaServlet]
+/// @see [org.vorpal.blade.framework.v3.b2bua.B2buaListener]
 package org.vorpal.blade.services.transfer;

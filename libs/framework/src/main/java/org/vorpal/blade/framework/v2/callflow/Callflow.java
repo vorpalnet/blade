@@ -66,6 +66,13 @@ import org.vorpal.blade.framework.v2.proxy.ProxyTier;
 /// plus [org.vorpal.blade.framework.Callflow#sendAcknowledgement] /
 /// [org.vorpal.blade.framework.Callflow#createAcknowledgement] for
 /// acknowledgements.
+///
+/// @deprecated Extend [org.vorpal.blade.framework.v3.Callflow]. Its sends are
+///             recorded by the Trace app, pinned to the line that made them; a
+///             v2 callflow's sends are not. For the static helpers
+///             (`getSipLogger`, `getVorpalSessionId`, ...), name the baseline
+///             [org.vorpal.blade.framework.Callflow], where they are declared.
+@Deprecated
 public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	private static final long serialVersionUID = 1L;
 

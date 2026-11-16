@@ -104,7 +104,7 @@ each receiving their own copy of one event: the same events also land in
 
 - [services/events](../events/README.md) — the event bus carrying the transfer events
 - [services/analytics](../analytics/README.md) — persists them
-- [Framework v2 API](../../libs/framework/src/main/java/org/vorpal/blade/framework/v2/README.md) — home of the transfer callflows (`v2.transfer`)
+- [Framework v3 transfer package](../../libs/framework/src/main/java/org/vorpal/blade/framework/v3/transfer/package-info.java) — home of the transfer callflows and the REST API (`v3.transfer`)
 - [BLADE](../../README.md) — project home
 
 ## Maven Coordinates

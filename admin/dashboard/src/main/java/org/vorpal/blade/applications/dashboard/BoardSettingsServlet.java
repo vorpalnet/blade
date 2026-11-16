@@ -53,8 +53,8 @@ public class BoardSettingsServlet extends HttpServlet {
 		out.put("displayName", displayName(req));
 		out.put("signedInWith", "OIDC".equals(req.getAuthType()) ? "identity domain" : "WebLogic");
 		out.put("sees", Access.describe(access));
-		out.put("platform", access == null || access.seesAnyPlatform());
-		out.put("content", access == null || access.seesContent());
+		out.put("platform", access.seesAnyPlatform());
+		out.put("content", access.seesContent());
 		out.put("about", about());
 		resp.setContentType("application/json");
 		resp.setCharacterEncoding("UTF-8");

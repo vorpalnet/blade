@@ -33,6 +33,12 @@ import java.util.Set;
 /// implementation lives with the application that installs it.
 public interface SubjectAttributes {
 
+	/// [#signIn] for a caller the WebLogic realm signed in.
+	String WEBLOGIC = "weblogic";
+
+	/// [#signIn] for a caller [OidcLoginFilter] or a bearer token signed in.
+	String OIDC = "oidc";
+
 	/// The authenticated caller's name, for the audit record. Never null in
 	/// practice; an unauthenticated request should not reach an evaluation at
 	/// all.
@@ -45,6 +51,17 @@ public interface SubjectAttributes {
 	/// Extra caller attributes a rule may match on, keyed by name. Never null,
 	/// and empty on the container path — see the class note.
 	Map<String, String> attributes();
+
+	/// How the caller signed in: [#WEBLOGIC] or [#OIDC]; null when not known,
+	/// which a rule naming a sign-in never matches.
+	///
+	/// A group name alone does not say where it came from. An identity domain
+	/// has its own `Administrators` group, the cloud account's administrators,
+	/// and a rule written for the WebLogic group of that name must not admit
+	/// them. [AccessRule#getSignIn] keeps the two apart.
+	default String signIn() {
+		return null;
+	}
 
 	/// True if the caller is in `group`. Case-sensitive, matching how the realm
 	/// compares group names.
@@ -60,6 +77,11 @@ public interface SubjectAttributes {
 	/// A fixed set of attributes, for tests and for callers that already hold
 	/// the facts. The returned value copies its inputs and is immutable.
 	static SubjectAttributes of(String name, Set<String> groups, Map<String, String> attributes) {
+		return of(name, groups, attributes, null);
+	}
+
+	/// A fixed set of attributes, signed in by `signIn`.
+	static SubjectAttributes of(String name, Set<String> groups, Map<String, String> attributes, String signIn) {
 		Set<String> g = Collections
 				.unmodifiableSet(new LinkedHashSet<>((groups == null) ? Collections.emptySet() : groups));
 		Map<String, String> a = Collections
@@ -81,8 +103,13 @@ public interface SubjectAttributes {
 			}
 
 			@Override
+			public String signIn() {
+				return signIn;
+			}
+
+			@Override
 			public String toString() {
-				return "SubjectAttributes[" + name + " groups=" + g + "]";
+				return "SubjectAttributes[" + name + " groups=" + g + (signIn == null ? "" : " signIn=" + signIn) + "]";
 			}
 		};
 	}
@@ -106,6 +133,18 @@ public interface SubjectAttributes {
 	/// rule may match on `${subject.<claim>}` here.
 	static SubjectAttributes of(JwtIdentity identity) {
 		return (identity == null) ? null
-				: of(identity.getName(), identity.groups(), identity.claims());
+				: of(identity.getName(), identity.groups(), identity.claims(), OIDC);
+	}
+
+	/// The caller making `req`: as the token named them when
+	/// [OidcLoginFilter] signed them in, otherwise as the container knows
+	/// them, through [ContainerSubject]. Null for a request nobody signed in
+	/// to, which [AccessEvaluator] denies.
+	static SubjectAttributes of(javax.servlet.http.HttpServletRequest req) {
+		java.security.Principal principal = req.getUserPrincipal();
+		if (principal instanceof JwtIdentity) {
+			return of((JwtIdentity) principal);
+		}
+		return RealmSubjectAttributes.of(ContainerSubject.current(), (principal == null) ? null : principal.getName());
 	}
 }

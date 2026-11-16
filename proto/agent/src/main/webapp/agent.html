@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Agent Console</title>
+<title>Agent Console · BLADE</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+<script src="/blade/portal/brand/theme.js"></script>
+<script src="/blade/portal/brand/shell.js" data-context="/agent" defer></script>
 <!--
   The live screen-pop. A signed-in agent's browser holds one WebSocket; a card
   arrives on it while the call is still ringing, in time for the agent to decide
@@ -15,7 +19,8 @@
   bus, and what the catalog already recorded; the one write is the Update
   button: one disposition per call (outcome, caller identity, action, notes).
 
-  Hand-rolled, served from this WAR, nothing fetched from outside it.
+  Hand-rolled, served from this WAR and the portal's shared styles on the same
+  host, nothing fetched from another site.
 
   Redundant coding, not colour removed. Risk is shown twice at once: a colour
   AND the word "clear/watch/suspect" with its score. The colour reads at a
@@ -27,8 +32,9 @@
 -->
 <style>
   :root {
-    --ink: #1f1f1f; --muted: #5a5a5a; --line: #d8d8d8; --panel: #f6f6f6;
-    --brand: #602671; --brand-300: #b97cd0;
+    /* The shared theme's tokens, light or dark (brand.css, theme.js). */
+    --ink: var(--vorpal-ink-900); --muted: var(--vorpal-slate-600); --line: var(--vorpal-divider);
+    --panel: var(--vorpal-slate-200); --brand: var(--vorpal-purple);
     /* The threat scale, five steps from calm to alarm (Kelly's palette). Every
        bar and every trail column is coloured by where its value falls; the
        number beside it says the same thing for anyone who reads order from
@@ -40,14 +46,9 @@
      takes the height that is left and its three panes scroll inside it, so
      nothing on the page itself ever scrolls. */
   html, body { height: 100%; }
-  body { margin: 0; font: 14px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--ink); background: #fff; display: flex; flex-direction: column; overflow: hidden; }
-  header { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
-  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
-  header a { color: var(--brand); }
-  header .who { color: var(--muted); font-size: 13px; margin-left: auto; }
+  body { display: flex; flex-direction: column; overflow: hidden; }
+  body > .vorpal-topbar { flex: none; }
   /* Connection state is words + a shape, never a bare colour dot. */
-  .conn { font-size: 12px; border: 1px solid var(--line); border-radius: 12px; padding: 2px 10px; color: var(--muted); }
-  .conn.live { border-color: var(--brand); color: var(--brand); }
   .conn.live::before { content: "\25CF  "; }   /* filled circle: connected */
   .conn.down::before { content: "\25CB  "; }    /* hollow circle: not connected */
 
@@ -55,39 +56,36 @@
   /* The queue scrolls; a maximized card takes the full height of it (the
      current call fits the screen), a minimized one is its header line. */
   #pops { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
-  .hint { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
-  .empty { color: var(--muted); padding: 40px 0; text-align: center; font-style: italic; margin: auto; }
+  #empty { margin: auto; }
   .muted { color: var(--muted); }
 
   /* One call = one card. Newest on top. */
-  .pop { border: 1px solid var(--line); border-radius: 6px; margin-bottom: 10px; overflow: hidden; transition: opacity .5s; display: flex; flex-direction: column; flex: 0 0 auto; }
+  .pop { padding: 0; margin-bottom: 10px; overflow: hidden; transition: opacity .5s; display: flex; flex-direction: column; flex: 0 0 auto; }
   .pop.max { height: calc(100% - 10px); }
   .pop.min .body, .pop.min .dispose, .pop.min.flagged .flag { display: none; }
   /* The toggle: a triangle pointing down when open, right when closed. */
-  .pop .tog { font: inherit; font-size: 13px; line-height: 1; width: 22px; height: 22px; border: 1px solid var(--line); border-radius: 4px; background: #fff; color: var(--muted); cursor: pointer; padding: 0; }
-  .pop .tog:hover { color: var(--ink); border-color: var(--ink); }
+  .pop .tog { line-height: 1; width: 22px; height: 22px; padding: 0; }
   /* When minimized the header also says how the call rated. */
   .pop .mini { display: none; }
   .pop.min .mini { display: inline; }
   .pop.leaving { opacity: 0; }
-  .pop .top { display: flex; align-items: baseline; gap: 12px; padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .pop .top { display: flex; align-items: baseline; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
   .pop .num { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
   .pop .name { color: var(--muted); font-size: 15px; }
   .pop .from { color: var(--ink); font-size: 14px; }
   .pop .dialed { color: var(--muted); font-size: 13px; margin-left: auto; }
   /* How the caller was last time: the mood the previous agent recorded, as a face. */
   .pop .mood { font-size: 22px; line-height: 1; cursor: help; }
-  /* Call state: a word in a pill. "talking" carries a running clock. */
-  .state { font-size: 12px; border: 1px solid var(--ink); border-radius: 12px; padding: 1px 10px; font-variant-numeric: tabular-nums; }
+  /* Call state: a word in a badge, with a glyph; ringing also has a dashed
+     edge. "talking" carries a running clock. */
+  .state { font-variant-numeric: tabular-nums; }
   .state.ringing { border-style: dashed; }
   .state.ringing::before { content: "\260E  "; }   /* telephone */
-  .state.talking { border-color: var(--brand); color: var(--brand); }
   .state.talking::before { content: "\25B6  "; }   /* play */
-  .state.ended, .state.declined, .state.abandoned { color: var(--muted); border-color: var(--line); }
   .state.ended::before { content: "\25A0  "; }     /* stop */
 
   /* Flagged: a banner across the card, words first. */
-  .flag { display: none; padding: 8px 16px; background: #fbe1de; color: #b3261e; font-weight: 600; border-bottom: 1px solid var(--line); }
+  .flag { display: none; border-radius: 0; font-weight: 600; }
   .flag::before { content: "\26A0  "; }
   .pop.flagged .flag { display: block; }
 
@@ -97,7 +95,7 @@
   .pane { padding: 10px 16px; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
   .pane > * { flex: 0 0 auto; }
   .pane + .pane { border-left: 1px solid var(--line); }
-  .pane h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+  .pane h3 { margin: 0 0 8px; }
   .kv { display: grid; grid-template-columns: 110px 1fr; gap: 3px 10px; font-size: 13px; }
   .kv dt { color: var(--muted); }
   /* Anything with a summary shows it on hover; the dotted underline says so. */
@@ -112,6 +110,9 @@
   .band.clear   { color: #1f6a0b; background: #e2f6d8; }
   .band.watch   { color: #8a4b00; background: #fde6c6; }
   .band.suspect { color: #b31414; background: #fbd9d9; }
+  html[data-theme="dark"] .band.clear   { color: #a8e59a; background: rgba(68, 206, 27, .16); }
+  html[data-theme="dark"] .band.watch   { color: #f5c88a; background: rgba(242, 161, 52, .16); }
+  html[data-theme="dark"] .band.suspect { color: #f3a3a3; background: rgba(229, 31, 31, .18); }
   .band.none    { color: var(--muted); font-weight: 400; padding: 0; }
   dd.risk { font-size: 18px; }
   .kv.headline { grid-template-columns: 60px 1fr; align-items: center; margin-bottom: 4px; }
@@ -168,16 +169,15 @@
   .lines li.agent { align-self: flex-end; text-align: right; color: var(--brand); }
   .lines .meta { display: block; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; margin-bottom: 1px; }
   .lines .meta .who { text-transform: uppercase; letter-spacing: .04em; }
-  .lines .tag { display: inline-block; margin-left: 6px; font-size: 11px; border: 1px solid #b3261e; color: #b3261e; border-radius: 3px; padding: 0 5px; vertical-align: 1px; }
+  .lines .tag { margin-left: 6px; vertical-align: 1px; }
   /* A label the model added, as opposed to a phrase match: dashed edge, same words. */
   .lines .tag.model { border-style: dashed; }
   .lines li.new { animation: land .8s ease-out; }
-  @keyframes land { from { background: #efe3f3; } to { background: transparent; } }
+  @keyframes land { from { background: var(--vorpal-purple-soft); } to { background: transparent; } }
   .listening { color: var(--muted); font-style: italic; font-size: 13px; }
   .listening.off { display: none; }
 
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
-  .chip { border: 1px solid var(--ink); border-radius: 3px; padding: 1px 7px; font-size: 12px; }
   .count { font-weight: 600; }
   .topics { font-size: 12px; margin-top: 6px; }
   .topics .tlabel { color: var(--muted); }
@@ -195,15 +195,12 @@
   .dispose .bring-result { font-size: 12px; color: var(--muted); min-height: 1em; }
   .dispose .go { grid-column: 4 / 5; justify-content: flex-end; align-items: end; }
   @media (max-width: 720px) { .dispose { grid-template-columns: 1fr; } }
-  .dispose label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
-  .dispose select, .dispose textarea { font: inherit; width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
+  .dispose select, .dispose textarea { width: 100%; }
   .dispose .reasons { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 14px; }
-  .dispose .reasons label { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--ink); margin: 0; cursor: pointer; }
+  .dispose .reasons > label { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--ink); margin: 0; cursor: pointer; }
   .dispose .reasons .cap { flex-basis: 100%; }
   .dispose textarea { resize: none; height: 34px; }
   .dispose .go { display: flex; align-items: center; gap: 12px; }
-  .dispose button { font: inherit; padding: 7px 18px; border: 1px solid var(--brand); background: var(--brand); color: #fff; border-radius: 4px; cursor: pointer; }
-  .dispose button[disabled] { opacity: .5; cursor: default; }
   .dispose .result { font-size: 13px; }
   .dispose .result.ok::before { content: "\2713  "; }  /* check mark */
   .dispose select:disabled, .dispose textarea:disabled { background: var(--panel); color: var(--muted); }
@@ -217,15 +214,17 @@
 </style>
 </head>
 <body>
-<header>
-  <h1>Agent Console</h1>
-  <span id="conn" class="conn down">connecting</span>
-  <span class="who">signed in as <b id="who">&hellip;</b> &middot; <a href="oidc/logout" id="signout">sign out</a></span>
+<header class="vorpal-topbar">
+  <a class="vorpal-brand" href="agent.html" title="Agent Console"><img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal"></a>
+  <a class="vorpal-appmark" href="agent.html">Agent Console</a>
+  <div class="vorpal-topbar-right">
+    <span id="conn" class="vorpal-badge conn down">connecting</span>
+  </div>
 </header>
 
 <main>
   <div id="pops"></div>
-  <div id="empty" class="empty">Queue is clear. Waiting for the next call&hellip;</div>
+  <div id="empty" class="vorpal-empty">Queue is clear. Waiting for the next call&hellip;</div>
 </main>
 
 <script src="vorpal/geo.js"></script>
@@ -434,7 +433,7 @@
     c.state = state;
     var bring = c.el.querySelector(".bring-go");
     if (bring) { bring.disabled = !(state === "talking" && mayReport); }
-    el.className = "state " + state;
+    el.className = "vorpal-badge state " + state + (state === "talking" ? " vorpal-badge-brand" : "");
     if (state === "talking") {
       c.answeredAt = Date.now();
       var tick = function () {
@@ -465,7 +464,7 @@
     var at = (u.atMs != null && !isNaN(parseInt(u.atMs, 10))) ? fmtClock(parseInt(u.atMs, 10)) : "";
     var tags = "";
     (u.labels || []).forEach(function (l) {
-      tags += '<span class="tag">' + esc(l) + "</span>";
+      tags += '<span class="vorpal-badge vorpal-badge-bad tag">' + esc(l) + "</span>";
       c.content[l] = (c.content[l] || 0) + 1;
     });
     li.innerHTML = '<span class="meta"><span class="who">' + esc(who) + "</span>" +
@@ -516,7 +515,7 @@
     }
     if (h.priorLabels && h.priorLabels.length) {
       out += '<div class="chips">';
-      h.priorLabels.forEach(function (l) { out += '<span class="chip">' + esc(l) + "</span>"; });
+      h.priorLabels.forEach(function (l) { out += '<span class="vorpal-badge chip">' + esc(l) + "</span>"; });
       out += "</div>";
     }
     if (h.topics && h.topics.length) {
@@ -615,23 +614,23 @@
 
   function card(pop) {
     var el = document.createElement("div");
-    el.className = "pop";
+    el.className = "pop vorpal-panel";
 
     el.innerHTML =
       '<div class="top">' +
-        '<button type="button" class="tog" title="minimize">\u25BE</button>' +
+        '<button type="button" class="tog vorpal-btn vorpal-btn-secondary vorpal-btn-sm" title="minimize">\u25BE</button>' +
         (pop.history && pop.history.lastFace ? '<span class="mood" title="last time this caller was ' + esc(faceWord(pop.history.lastFace)) + '">' + faceGlyph(pop.history.lastFace) + "</span>" : "") +
         '<span class="num">' + esc(pop.ani ? fmtNumber(pop.ani) : (pop.anonymous ? "Anonymous" : "unknown")) + "</span>" +
         (whereFrom(pop.ani) ? '<span class="from" title="from the area code">' + esc(whereFrom(pop.ani)) + "</span>" : "") +
         (pop.displayName ? '<span class="name">' + esc(pop.displayName) + "</span>" : "") +
-        '<span class="state ringing"' + t("state") + '>ringing</span>' +
+        '<span class="vorpal-badge state ringing"' + t("state") + '>ringing</span>' +
         '<span class="mini band none"></span>' +
         '<span class="dialed">to ' + esc(pop.dialed || "?") + " · " + fmtWhen(pop.receivedUtc) + "</span>" +
       "</div>" +
-      '<div class="flag"' + t("flag") + '>Flagged: risk sustained across several windows. Verify the caller before acting on anything they ask.</div>' +
+      '<div class="flag vorpal-error"' + t("flag") + '>Flagged: risk sustained across several windows. Verify the caller before acting on anything they ask.</div>' +
       '<div class="body">' +
         '<div class="pane">' +
-          "<h3>This call</h3>" +
+          "<h3 class=\"vorpal-label\">This call</h3>" +
           '<dl class="kv headline">' +
             "<dt" + t("risk") + ">Risk</dt><dd class=\"risk\">" + riskHtml(pop) + "</dd>" +
           "</dl>" +
@@ -639,29 +638,29 @@
           '<div class="review off"></div>' +
         "</div>" +
         '<div class="pane">' +
-          "<h3>Live transcript</h3>" +
+          "<h3 class=\"vorpal-label\">Live transcript</h3>" +
           '<ul class="lines"></ul>' +
           '<div class="listening off">waiting for the call to be answered…</div>' +
         "</div>" +
         '<div class="pane caller">' +
-          "<h3>This caller</h3>" +
+          "<h3 class=\"vorpal-label\">This caller</h3>" +
           history(pop.history) +
         "</div>" +
       "</div>" +
       '<div class="dispose">' +
-        "<div><label>Outcome</label><select class=\"outcome\">" + options(OUTCOMES) + "</select></div>" +
-        "<div><label>Caller identity</label><select class=\"identity\">" + options(IDENTITIES) + "</select></div>" +
-        "<div><label>Action</label><select class=\"action\">" + options(ACTIONS, LIVE_ACTIONS) + "</select></div>" +
-        '<div><label>Mood</label><select class="face-pick"><option value="">not said</option>' +
+        "<div class=\"vorpal-field\"><label>Outcome</label><select class=\"outcome vorpal-input\">" + options(OUTCOMES) + "</select></div>" +
+        "<div class=\"vorpal-field\"><label>Caller identity</label><select class=\"identity vorpal-input\">" + options(IDENTITIES) + "</select></div>" +
+        "<div class=\"vorpal-field\"><label>Action</label><select class=\"action vorpal-input\">" + options(ACTIONS, LIVE_ACTIONS) + "</select></div>" +
+        '<div class="vorpal-field"><label>Mood</label><select class="face-pick vorpal-input"><option value="">not said</option>' +
           FACES.map(function (m) { return '<option value="' + m[0] + '">' + m[1] + " " + m[2] + "</option>"; }).join("") + "</select></div>" +
-        '<div class="reasons off"><span class="cap"><label>What tipped you off</label></span>' +
+        '<div class="reasons off"><span class="cap"><label class="vorpal-label">What tipped you off</label></span>' +
           REASONS.map(function (r) { return '<label><input type="checkbox" value="' + r[0] + '"> ' + r[1] + "</label>"; }).join("") +
         "</div>" +
-        '<div class="notes"><label' + t("notes") + '>Notes</label><textarea rows="2" placeholder="what the caller wanted, what you did"></textarea></div>' +
-        '<div class="bring' + (people.length ? "" : " off") + '"><label>Bring in</label><span class="row"><select class="who">' +
+        '<div class="notes vorpal-field"><label' + t("notes") + '>Notes</label><textarea class="vorpal-input" rows="2" placeholder="what the caller wanted, what you did"></textarea></div>' +
+        '<div class="bring vorpal-field' + (people.length ? "" : " off") + '"><label>Bring in</label><span class="row"><select class="who vorpal-input">' +
           people.map(function (n) { return '<option>' + esc(n) + "</option>"; }).join("") +
-          '</select><button type="button" class="bring-go" disabled>Bring in</button></span><span class="bring-result"></span></div>' +
-        '<div class="go"><button type="button">Update</button><span class="result"></span></div>' +
+          '</select><button type="button" class="bring-go vorpal-btn vorpal-btn-secondary" disabled>Bring in</button></span><span class="bring-result"></span></div>' +
+        '<div class="go"><button type="button" class="vorpal-btn">Update</button><span class="result"></span></div>' +
       "</div>";
 
     var tog = el.querySelector(".tog");
@@ -749,7 +748,7 @@
   }
 
   function hello(m) {
-    if (m.user) { whoEl.textContent = m.user; }
+    if (m.user && whoEl) { whoEl.textContent = m.user; }
     mayReport = !!m.mayReport;
     people = Array.isArray(m.people) ? m.people : [];
     // Apply to any cards already on screen (hello normally arrives first).
@@ -823,7 +822,7 @@
     (m.labels || []).forEach(function (l) {
       if (have[l]) return;
       var tag = document.createElement("span");
-      tag.className = model ? "tag model" : "tag";
+      tag.className = "vorpal-badge vorpal-badge-bad tag" + (model ? " model" : "");
       if (model) { tag.title = "added by the model, not the phrase patterns"; }
       tag.textContent = l;
       li.appendChild(tag);
@@ -897,7 +896,7 @@
     try { ws = new WebSocket(url); }
     catch (e) { setTimeout(connect, 4000); return; }
 
-    ws.onopen = function () { socket = ws; connEl.className = "conn live"; connEl.textContent = "live"; };
+    ws.onopen = function () { socket = ws; connEl.className = "vorpal-badge vorpal-badge-brand conn live"; connEl.textContent = "live"; };
     ws.onmessage = function (ev) {
       var m;
       try { m = JSON.parse(ev.data); } catch (e) { return; /* ignore a malformed frame */ }
@@ -909,7 +908,7 @@
     };
     ws.onclose = function () {
       socket = null;
-      connEl.className = "conn down"; connEl.textContent = "reconnecting…";
+      connEl.className = "vorpal-badge conn down"; connEl.textContent = "reconnecting…";
       // A socket refused for a dead sign-in looks exactly like a network drop
       // from here (the browser hides the 401), and a redeploy kills every
       // HTTP session while this page keeps coming back from cache. So before

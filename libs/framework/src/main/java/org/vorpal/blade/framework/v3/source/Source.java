@@ -179,7 +179,7 @@ public class Source implements SourceMXBean {
 	private boolean isCallflow(String className) {
 		try {
 			Class<?> c = Class.forName(className, false, getClass().getClassLoader());
-			Class<?> base = org.vorpal.blade.framework.v2.callflow.Callflow.class;
+			Class<?> base = org.vorpal.blade.framework.Callflow.class;
 			return base.isAssignableFrom(c)
 					&& !c.equals(base)
 					&& !c.equals(org.vorpal.blade.framework.v3.Callflow.class);

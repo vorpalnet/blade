@@ -1,14 +1,11 @@
-/* BLADE Trace — Traces layout on the shared brand layer (brand.css).
- * Policy "dark shell, light document": the topbar + backdrop are dark/purple;
- * the calls index and the detail pane are light sheets floating on it.
- * Controls are square (flat) — only the sheet surfaces carry radius. */
+/* BLADE Trace: the Traces page's layout on the shared brand layer
+ * (brand.css). Buttons, fields, tabs, panels and messages are the shared
+ * components; this file keeps the layout and the pieces only Trace has: the
+ * call and step lists, the sequence diagram, the raw message and the source
+ * view. */
 
 .cf-group-label {
-	font-size: 11px;
-	font-weight: 700;
-	text-transform: uppercase;
-	letter-spacing: 0.06em;
-	color: var(--vorpal-slate-600);
+	display: block;
 	padding: 12px 10px 4px;
 }
 
@@ -25,24 +22,23 @@
 	color: var(--vorpal-ink-900);
 }
 .cf-item:hover { background: var(--vorpal-slate-100); }
+/* The chosen row: a bar at its leading edge and a tint, the same mark as a
+ * selected table row, so it reads without telling colours apart. */
 .cf-item.cf-active {
-	background: var(--vorpal-purple-100);
+	background: var(--vorpal-purple-soft);
 	border-left-color: var(--vorpal-purple);
 }
 .cf-item .cf-item-title { font-weight: 600; font-size: 14px; }
 .cf-item .cf-item-cat { display: block; font-size: 11.5px; color: var(--vorpal-slate-600); margin-top: 1px; }
 
-/* ---- Right detail (light sheet) ---- */
+/* ---- Right detail ---- */
 .cf-detail {
-	background: var(--vorpal-surface);
-	border: 1px solid var(--vorpal-divider);
-	border-radius: var(--vorpal-radius-lg);
-	box-shadow: var(--vorpal-shadow-lg);
+	padding: 0;
 	overflow: hidden;
-	color: var(--vorpal-ink-900);
 }
 
 .cf-detail-head { padding: 20px 22px 14px; border-bottom: 1px solid var(--vorpal-divider); }
+.cf-detail-head > .vorpal-btn { margin-top: 10px; }
 .cf-detail-head h1 { margin: 0 0 8px; font-size: 22px; color: var(--vorpal-ink-900); }
 
 .cf-blurb { margin: 0; font-size: 14px; line-height: 1.5; color: var(--vorpal-ink-700); max-width: 78ch; }
@@ -70,8 +66,6 @@
 	background: transparent;
 }
 
-.cf-muted { color: var(--vorpal-slate-600); font-size: 13px; padding: 10px; }
-
 /* ==== Traces page ==== */
 
 .tr-page {
@@ -80,19 +74,13 @@
 	padding: 24px;
 }
 
-/* ---- Arming strip (light sheet) — one compact control row ---- */
+/* ---- Arming strip: one compact control row ---- */
 .tr-armbar {
 	display: flex;
 	align-items: flex-end;
 	flex-wrap: wrap;
 	gap: 8px 14px;
-	background: var(--vorpal-surface);
-	border: 1px solid var(--vorpal-divider);
-	border-radius: var(--vorpal-radius-lg);
-	box-shadow: var(--vorpal-shadow-lg);
-	padding: 10px 14px;
 	margin-bottom: 12px;
-	color: var(--vorpal-ink-900);
 }
 
 .tr-arm-form {
@@ -101,46 +89,21 @@
 	gap: 10px;
 	flex-wrap: wrap;
 }
-.tr-arm-form label {
-	display: flex;
-	flex-direction: column;
-	gap: 3px;
-	font-size: 11px;
-	font-weight: 700;
-	text-transform: uppercase;
-	letter-spacing: 0.06em;
-	color: var(--vorpal-slate-600);
-}
-.tr-arm-form input, .tr-arm-form select {
-	font: inherit;
-	font-size: 13px;
-	color: var(--vorpal-ink-900);
-	background: var(--vorpal-surface);
-	border: 1px solid var(--vorpal-slate-300);
-	border-radius: 0;
-	padding: 5px 8px;
-}
-.tr-arm-form #tr-pattern { min-width: 220px; font-family: var(--vorpal-font-mono, ui-monospace, Menlo, Consolas, monospace); }
+.tr-arm-form #tr-pattern { min-width: 220px; }
 .tr-arm-form #tr-max { width: 70px; }
 
-.tr-btn {
-	font: inherit;
-	font-size: 13px;
-	font-weight: 600;
-	color: var(--vorpal-ink-900);
-	background: var(--vorpal-slate-100);
-	border: 1px solid var(--vorpal-slate-300);
-	border-radius: 0;
-	padding: 6px 14px;
-	cursor: pointer;
-}
-.tr-btn:hover { background: var(--vorpal-purple-100); border-color: var(--vorpal-purple); }
+/* Recorded mode: the filter over the flight recorder's calls, at the top of
+ * the left column. Labels as the arm form's; two fields a row. */
+.tr-rfilter { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; padding: 0 4px 10px; border-bottom: 1px solid var(--vorpal-divider); margin-bottom: 6px; }
+.tr-rfilter > .cf-group-label, .tr-rfilter .tr-rf-wide { grid-column: 1 / -1; }
+/* A hidden control stays hidden although .vorpal-btn and .vorpal-field set
+ * a display. */
+.tr-rfilter[hidden], .tr-arm-form[hidden], .tr-rules[hidden], .tr-btn[hidden] { display: none; }
+.tr-rfilter label[hidden] { display: none; }
+.tr-rf-actions { display: flex; gap: 8px; align-items: flex-end; }
+.tr-rf-more { margin: 6px 0 10px; }
 
 .tr-arm-actions {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	flex-wrap: wrap;
 	margin-left: auto; /* push actions to the right, same row as the form */
 }
 .tr-rules {
@@ -163,10 +126,6 @@
 }
 
 .tr-left {
-	background: var(--vorpal-surface);
-	border: 1px solid var(--vorpal-divider);
-	border-radius: var(--vorpal-radius-lg);
-	box-shadow: var(--vorpal-shadow-lg);
 	padding: 8px;
 	position: sticky;
 	top: 24px;
@@ -177,8 +136,8 @@
 /* ==== Traces page fills the viewport; the panes scroll, not the page ====
  * The brand shell is already `grid-template-rows: auto 1fr; min-height:100vh`,
  * so we pin the app to the viewport and let the calls pane + the tabbed detail
- * grow to the bottom of the window (no lower) and scroll internally — up, down,
- * left, right — instead of pushing the whole page taller. All dynamic: sizes
+ * grow to the bottom of the window (no lower) and scroll internally (up, down,
+ * left, right) instead of pushing the whole page taller. All dynamic: sizes
  * come from the viewport, so it rescales with the browser window. */
 .tr-app.vorpal-glass { height: 100vh; min-height: 0; overflow: hidden; }
 .tr-app .vorpal-app { height: 100vh; min-height: 0; }
@@ -244,7 +203,7 @@
 }
 .tr-line-text { color: var(--vorpal-ink-900); }
 /* The emitting line: marked by the ▶ gutter glyph, a heavy left border, and
- * bold text — never by color alone. */
+ * bold text, never by color alone. */
 .tr-mark {
 	background: var(--vorpal-purple-100);
 	border-left: 4px solid var(--vorpal-purple);
@@ -252,27 +211,16 @@
 .tr-mark .tr-gutter { color: var(--vorpal-ink-900); font-weight: 700; }
 .tr-mark .tr-line-text { font-weight: 700; }
 
-/* ---- Detail tabs: Sequence | Message | Source ---- */
-.tr-tabs {
+/* ---- Detail tabs: Sequence | Message | Source ----
+ * The shared tabs, with the pretty-print toggle at the right end of the bar
+ * (Message tab only). */
+.tr-tabbar {
 	display: flex;
-	gap: 2px;
-	padding: 0 12px;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 12px;
 	border-bottom: 1px solid var(--vorpal-divider);
-	background: var(--vorpal-surface);
 }
-.tr-tab {
-	font: inherit;
-	font-size: 13px;
-	font-weight: 600;
-	color: var(--vorpal-slate-600);
-	background: none;
-	border: 0;
-	border-bottom: 2px solid transparent;
-	padding: 9px 14px;
-	cursor: pointer;
-}
-.tr-tab:hover { color: var(--vorpal-ink-900); background: var(--vorpal-slate-100); }
-.tr-tab.cf-active { color: var(--vorpal-ink-900); border-bottom-color: var(--vorpal-purple); }
 .tr-panel[hidden] { display: none; }
 
 /* ---- Sequence (ladder) diagram ---- */
@@ -280,13 +228,28 @@
  * per party (BLADE apps boxed + solid, network peers plain + dashed), one arrow
  * per step. Click an arrow to select its step; selecting a step (here or in the
  * timeline) highlights its arrow. Selection is shown by a heavy line, a band,
- * and bold text — never by color alone. */
+ * and bold text, never by color alone. */
 .tr-ladder {
 	max-height: calc(100vh - 300px);
 	min-height: 160px;
 	overflow: auto;
-	padding: 14px 16px;
+	padding: 0 16px 14px;
+	/* The pinned lane strip covers the top 50px; an arrow brought into view
+	 * by selection stops below it, not under it. */
+	scroll-padding-top: 50px;
 	background: var(--vorpal-surface-alt);
+}
+/* The lane boxes stay pinned at the top while the arrows scroll under them.
+ * Opaque, and as wide as the diagram, so no arrow shows through. */
+.tr-ladder-head {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	width: max-content;
+	min-width: 100%;
+	padding-top: 14px;
+	background: var(--vorpal-surface-alt);
+	border-bottom: 1px solid var(--vorpal-slate-200);
 }
 .tr-ladder-svg { display: block; }
 .tr-ladder-svg text {
@@ -318,10 +281,10 @@
 	max-height: calc(100vh - 64px);
 	padding: 0;
 	border: 1px solid var(--vorpal-slate-400);
-	border-radius: 8px;
+	border-radius: var(--vorpal-radius-md);
 	background: var(--vorpal-surface);
 	color: var(--vorpal-ink-900);
-	box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+	box-shadow: var(--vorpal-shadow-lg);
 }
 .tr-msg-dialog[open] { display: flex; flex-direction: column; }
 .tr-msg-dialog::backdrop { background: rgba(0, 0, 0, 0.35); }
@@ -334,6 +297,8 @@
 	border-bottom: 1px solid var(--vorpal-divider);
 }
 .tr-msg-head h2 {
+	flex: 1;
+	min-width: 0;
 	margin: 0;
 	font-family: var(--vorpal-font-mono, ui-monospace, Menlo, Consolas, monospace);
 	font-size: 13px;
@@ -352,13 +317,25 @@
 	font-family: var(--vorpal-font-mono, ui-monospace, Menlo, Consolas, monospace);
 	font-size: 12px;
 	line-height: 1.5;
-	white-space: pre;
+	/* Wrap rather than scroll sideways: a long Via, a token, an SDP crypto
+	 * line. anywhere breaks inside a value with no spaces in it. */
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
 }
+/* messageHtml's lines: a wrapped line continues indented under its own
+ * value, so where one header ends and the next begins reads by position. */
+.tr-ml { display: block; padding-left: 4ch; text-indent: -4ch; }
+.tr-hn { font-weight: 700; }
+.tr-ml-part { font-weight: 700; }
+/* The pretty-print toggle: right end of the tab bar (Message tab only) and
+ * beside Close in the popup. Its label says on or off. */
+.tr-tabbar .tr-pretty { margin-left: auto; }
+.tr-pretty[hidden] { display: none; }
 
 /* ---- Around a recorded call: the server that minute, the same cause,
    the changes before it, the log. Terms left, facts right. ---- */
 .tr-around { margin-top: 14px; border-top: 1px solid var(--vorpal-slate-300); padding-top: 10px; }
-.tr-around-title { font-size: 13px; font-weight: 700; margin: 0 0 6px; color: var(--vorpal-ink-900); }
+.tr-around-title { margin: 0 0 6px; }
 .tr-around-list { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; margin: 0; font-size: 13px; }
 .tr-around-list dt { color: var(--vorpal-slate-600); }
 .tr-around-list dd { margin: 0; color: var(--vorpal-ink-900); overflow-wrap: anywhere; }

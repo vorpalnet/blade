@@ -46,6 +46,6 @@
 /// and configures health checks with a 60-second interval and `"SELECT 1"` SQL query.
 ///
 /// @see [org.vorpal.blade.services.analytics.jms.AnalyticsEventListener]
-/// @see [org.vorpal.blade.framework.v2.b2bua.B2buaServlet]
+/// @see [org.vorpal.blade.framework.v3.B2buaServlet]
 /// @see [org.vorpal.blade.framework.v2.config.Configuration]
 package org.vorpal.blade.services.analytics.sip;

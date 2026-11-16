@@ -4,7 +4,9 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -32,6 +34,11 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /// on, so a request sent to a host name and the messages from that host's IP
 /// address stay on one lane.
 ///
+/// **What a recorded call keeps besides.** The call's parties, once, from its
+/// initial INVITE (`parties`: From, To, P-Asserted-Identity), and its row's
+/// domain, tenant and department on every step, so a viewer's grants apply to
+/// it as to a live step ([TraceAccess]), here and once the call is saved.
+///
 /// One source per application that recorded the call: every BLADE application
 /// on a call writes its own record under the same Vorpal-ID, and the page
 /// joins them into one timeline as it joins live steps.
@@ -42,26 +49,111 @@ final class RecordedCalls {
 	private RecordedCalls() {
 	}
 
-	/// The recorded calls, newest first: one call's records when `vorpalId` is
-	/// given, else the latest `limit` records, recorded at or after `since`
-	/// (epoch millis) when it is given. `{"sources":[...]}`.
-	static ObjectNode read(String dataSource, String vorpalId, Long since, int limit)
-			throws NamingException, SQLException {
+	/// What to narrow the recorded calls to. Every field is optional; null
+	/// means no condition. Text compares without regard to case.
+	///
+	/// - `vorpalId`: one call.
+	/// - `since` / `before`: recorded at or after, or strictly before, an
+	///   instant (epoch millis). `before` pages back: the page passes the oldest
+	///   record it holds.
+	/// - `app`, `server`: the application or server that recorded it, exactly.
+	/// - `finding`: one of the verdict's findings (`silent`, `timeout`, ...), or
+	///   `dropped` for a call that expired dropped.
+	/// - `fault`: `downstream` or `application`.
+	/// - `peer`: part of the far end the verdict names (`10.20.1.7`, `:5060`).
+	/// - `number`: part of the call's From, To or P-Asserted-Identity. The
+	///   API takes it only from a viewer who sees content.
+	/// - `access`: the viewer's grants; null for no limit.
+	static final class Filter {
+		String vorpalId;
+		Long since;
+		Long before;
+		String app;
+		String server;
+		String finding;
+		String fault;
+		String peer;
+		String number;
+		TraceAccess access;
+
+		/// The WHERE clause for `v_call_traced`, its values added to `params`
+		/// in order: Strings, and Longs for instants.
+		String where(List<Object> params) {
+			StringBuilder sql = new StringBuilder(" WHERE 1 = 1");
+			if (vorpalId != null) {
+				sql.append(" AND vorpal_id = ?");
+				params.add(vorpalId.trim().toUpperCase(Locale.ROOT));
+			}
+			if (since != null) {
+				sql.append(" AND traced_at >= ?");
+				params.add(since);
+			}
+			if (before != null) {
+				sql.append(" AND traced_at < ?");
+				params.add(before);
+			}
+			if (app != null) {
+				sql.append(" AND LOWER(application) = ?");
+				params.add(app.trim().toLowerCase(Locale.ROOT));
+			}
+			if (server != null) {
+				sql.append(" AND LOWER(server) = ?");
+				params.add(server.trim().toLowerCase(Locale.ROOT));
+			}
+			if ("dropped".equalsIgnoreCase(finding)) {
+				sql.append(" AND dropped = 'true'");
+			} else if (finding != null) {
+				sql.append(" AND finding = ?");
+				params.add(finding.trim().toLowerCase(Locale.ROOT));
+			}
+			if (fault != null) {
+				sql.append(" AND fault = ?");
+				params.add(fault.trim().toLowerCase(Locale.ROOT));
+			}
+			if (peer != null) {
+				sql.append(" AND LOWER(peer) LIKE ? ESCAPE '!'");
+				params.add(contains(peer));
+			}
+			if (number != null) {
+				sql.append(" AND (LOWER(call_from) LIKE ? ESCAPE '!' OR LOWER(call_to) LIKE ? ESCAPE '!'"
+						+ " OR LOWER(asserted) LIKE ? ESCAPE '!')");
+				String like = contains(number);
+				params.add(like);
+				params.add(like);
+				params.add(like);
+			}
+			if (access != null) {
+				sql.append(access.recordedWhere(params));
+			}
+			return sql.toString();
+		}
+
+		/// A LIKE pattern matching `text` anywhere, its wildcards taken literally.
+		private static String contains(String text) {
+			return "%" + text.trim().toLowerCase(Locale.ROOT).replace("!", "!!").replace("%", "!%").replace("_", "!_")
+					+ "%";
+		}
+	}
+
+	/// The recorded calls that pass `filter`, newest first, at most `limit`
+	/// records (one per application per call). `{"sources":[...]}`, each source
+	/// with `tracedAt` (epoch millis), the instant the page pages back from.
+	static ObjectNode read(String dataSource, Filter filter, int limit) throws NamingException, SQLException {
 		DataSource ds = (DataSource) new InitialContext().lookup(dataSource);
-		String sql = "SELECT application, vorpal_id, server, payload FROM v_call_traced WHERE 1 = 1"
-				+ (vorpalId == null ? "" : " AND vorpal_id = ?") + (since == null ? "" : " AND traced_at >= ?")
-				+ " ORDER BY traced_at DESC";
+		List<Object> params = new ArrayList<>();
+		String sql = "SELECT application, vorpal_id, server, payload, traced_at, cluster_name, tenant, department"
+				+ " FROM v_call_traced"
+				+ filter.where(params) + " ORDER BY traced_at DESC";
 		ObjectNode out = MAPPER.createObjectNode();
 		ArrayNode sources = out.putArray("sources");
 		try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
 			int i = 1;
-			if (vorpalId != null) {
-				ps.setString(i++, vorpalId.trim().toUpperCase(Locale.ROOT));
-			}
-			if (since != null) {
-				// The database keeps UTC wall-clock times.
-				ps.setTimestamp(i++, java.sql.Timestamp.valueOf(java.time.LocalDateTime
-						.ofInstant(java.time.Instant.ofEpochMilli(since), java.time.ZoneOffset.UTC)));
+			for (Object p : params) {
+				if (p instanceof Long) {
+					ps.setTimestamp(i++, utc((Long) p));
+				} else {
+					ps.setString(i++, (String) p);
+				}
 			}
 			ps.setMaxRows(limit);
 			try (ResultSet rs = ps.executeQuery()) {
@@ -72,6 +164,17 @@ final class RecordedCalls {
 							// The application's row names its server; the record need not.
 							src.put("server", rs.getString(3));
 						}
+						// Each step carries the row's scope, so the grants apply to it
+						// as to a live step, here and once the call is saved.
+						for (JsonNode step : src.path("steps")) {
+							((ObjectNode) step).put("domain", rs.getString(6));
+							((ObjectNode) step).put("tenant", rs.getString(7));
+							((ObjectNode) step).put("department", rs.getString(8));
+						}
+						java.sql.Timestamp at = rs.getTimestamp(5);
+						if (at != null) {
+							src.put("tracedAt", at.toLocalDateTime().toInstant(java.time.ZoneOffset.UTC).toEpochMilli());
+						}
 						sources.add(src);
 					} catch (java.io.IOException unreadable) {
 						// one bad row must not hide the rest
@@ -80,6 +183,12 @@ final class RecordedCalls {
 			}
 		}
 		return out;
+	}
+
+	/// An instant as the database keeps it: UTC wall-clock time.
+	private static java.sql.Timestamp utc(long epochMillis) {
+		return java.sql.Timestamp.valueOf(java.time.LocalDateTime
+				.ofInstant(java.time.Instant.ofEpochMilli(epochMillis), java.time.ZoneOffset.UTC));
 	}
 
 	/// One `callTraced` payload as a trace source: `{app, server, recorded,
@@ -102,6 +211,17 @@ final class RecordedCalls {
 			}
 		}
 		verdict.put("dropped", payload.path("dropped").asBoolean(false));
+		// Who the call was between, from its initial INVITE: content, taken
+		// out for a viewer without it ([TraceAccess]).
+		ObjectNode parties = MAPPER.createObjectNode();
+		for (String f : new String[] { "from", "to", "asserted" }) {
+			if (payload.hasNonNull(f)) {
+				parties.put(f, payload.get(f).asText());
+			}
+		}
+		if (parties.size() > 0) {
+			src.set("parties", parties);
+		}
 
 		// Far ends: the request each response answers, and the addresses that
 		// answered for a name (a host name's IP address).

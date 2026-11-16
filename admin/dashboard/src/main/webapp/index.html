@@ -3,16 +3,17 @@
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>BLADE Dashboard</title>
+	<title>Dashboard · BLADE</title>
 	<link rel="icon" href="favicon.svg" type="image/svg+xml">
 	<link rel="stylesheet" href="dashboard.css">
 	<script src="/blade/portal/brand/theme.js"></script>
+	<script src="/blade/portal/brand/shell.js" data-context="/blade/dashboard" data-me="/blade/dashboard/settings" data-cards="/blade/dashboard/cards" defer></script>
 </head>
 <body class="board">
 
 	<header class="topbar topbar--board">
-		<div class="brand" id="about">
-			<button class="brand__pill" type="button" title="About" aria-haspopup="true" aria-expanded="false"><img class="brand__logo" src="/blade/portal/brand/VorpalBoy_lightpurple.svg" alt="Vorpal">Dashboard</button>
+		<div class="brand">
+			<a class="brand__pill" href="/blade/dashboard/" title="Dashboard: the domain at a glance. About this application is in the account menu."><img class="brand__logo" src="/blade/portal/brand/VorpalBoy_lightpurple.svg" alt="Vorpal">Dashboard</a>
 		</div>
 		<div class="seg" id="range" title="The range every panel shows. Live is the last hour, as it happens."></div>
 		<div class="spacer"></div>
@@ -20,11 +21,11 @@
 		<span class="clock" id="clock"></span>
 		<select class="tz" id="tz" title="Time zone for every time on the board. The data is UTC."></select>
 		<span data-theme-switch></span>
-		<div class="acct" id="acct" hidden></div>
+		<div class="acct" id="acct" data-shell-account hidden></div>
 	</header>
 
 	<div class="board__body">
-	<nav class="rail" id="rail" aria-label="Applications and services"></nav>
+	<nav class="rail" id="rail" data-shell-rail aria-label="Applications and services"></nav>
 	<main class="board__grid">
 		<section class="kpis" id="kpis"></section>
 

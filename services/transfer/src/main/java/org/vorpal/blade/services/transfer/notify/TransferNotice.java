@@ -3,7 +3,7 @@ package org.vorpal.blade.services.transfer.notify;
 import java.io.Serializable;
 import java.util.List;
 
-import org.vorpal.blade.framework.v2.transfer.api.TransferRequest;
+import org.vorpal.blade.framework.v3.transfer.api.TransferRequest;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;

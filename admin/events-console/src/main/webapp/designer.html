@@ -3,9 +3,10 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>BLADE Events · Designer</title>
+	<title>Designer · Events · BLADE</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
 	<script src="/blade/portal/brand/theme.js"></script>
+	<script src="/blade/portal/brand/shell.js" data-context="/blade/events" defer></script>
 	<link rel="stylesheet" href="events.css">
 	<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/vorpal_splotch.svg">
 </head>
@@ -47,82 +48,82 @@
 
 			<div class="ev-grid">
 
-				<div class="ev-panel">
-					<header>
-						<span>Declaration</span>
-						<button id="d-help-open" class="vorpal-btn vorpal-btn-secondary" type="button">Help</button>
+				<div class="ev-panel vorpal-panel">
+					<header class="vorpal-panel-head">
+						<h2 class="vorpal-panel-title">Declaration</h2>
+						<div class="vorpal-toolbar"><button id="d-help-open" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button">Help</button></div>
 					</header>
 					<div class="ev-body">
-						<div class="vorpal-form-row">
-							<label for="d-type">Event type</label>
-							<input id="d-type" type="text" placeholder="net.vorpal.attendant.meeting.scheduled">
+						<div class="ev-form-row">
+							<label class="vorpal-label" for="d-type">Event type</label>
+							<input id="d-type" class="vorpal-input" type="text" placeholder="net.vorpal.attendant.meeting.scheduled">
 						</div>
-						<div class="vorpal-form-row">
-							<label for="d-title">Title</label>
-							<input id="d-title" type="text" placeholder="Meeting Scheduled">
+						<div class="ev-form-row">
+							<label class="vorpal-label" for="d-title">Title</label>
+							<input id="d-title" class="vorpal-input" type="text" placeholder="Meeting Scheduled">
 						</div>
-						<div class="vorpal-form-row">
-							<label for="d-description">Description</label>
-							<input id="d-description" type="text" placeholder="What this event means and when it is emitted">
+						<div class="ev-form-row">
+							<label class="vorpal-label" for="d-description">Description</label>
+							<input id="d-description" class="vorpal-input" type="text" placeholder="What this event means and when it is emitted">
 						</div>
-						<div class="vorpal-form-row">
-							<label for="d-package">Java package</label>
-							<input id="d-package" type="text" placeholder="com.example.events">
+						<div class="ev-form-row">
+							<label class="vorpal-label" for="d-package">Java package</label>
+							<input id="d-package" class="vorpal-input" type="text" placeholder="com.example.events">
 						</div>
-						<div class="vorpal-form-row">
-							<label for="d-class">Java class</label>
-							<input id="d-class" type="text" placeholder="derived from the last segment if blank">
+						<div class="ev-form-row">
+							<label class="vorpal-label" for="d-class">Java class</label>
+							<input id="d-class" class="vorpal-input" type="text" placeholder="derived from the last segment if blank">
 						</div>
-						<div class="vorpal-form-row">
-							<label for="d-destination">Destination JNDI</label>
-							<input id="d-destination" type="text" value="jms/BladeEventBusTopic">
+						<div class="ev-form-row">
+							<label class="vorpal-label" for="d-destination">Destination JNDI</label>
+							<input id="d-destination" class="vorpal-input" type="text" value="jms/BladeEventBusTopic">
 						</div>
-						<div class="vorpal-form-row">
-							<label for="d-kind">Delivery</label>
-							<select id="d-kind">
+						<div class="ev-form-row">
+							<label class="vorpal-label" for="d-kind">Delivery</label>
+							<select class="vorpal-input" id="d-kind">
 								<option value="TOPIC">TOPIC — every subscriber gets a copy</option>
 								<option value="QUEUE">QUEUE — exactly one consumer</option>
 							</select>
 						</div>
-						<div class="vorpal-form-row">
-							<label for="d-persist">Persist</label>
+						<div class="ev-form-row">
+							<label class="vorpal-label" for="d-persist">Persist</label>
 							<input id="d-persist" type="checkbox">
 							<button class="ev-help" type="button"
 								aria-label="The analytics sink writes this event to the database. Read from the live catalog per message, so turning it on takes effect without a redeploy."
 								data-tip="The analytics sink writes this event to the database. Read from the live catalog per message, so turning it on takes effect without a redeploy.">?</button>
 						</div>
 
-						<h3 class="ev-subhead">Fields
+						<h3 class="ev-subhead vorpal-label">Fields
 							<button class="ev-help" type="button"
 								aria-label="The wire name is what appears in the JSON. A snake_case name becomes a camelCase Java property with the wire form preserved by @JsonProperty — the bytes never change shape to suit Java."
 								data-tip="The wire name is what appears in the JSON. A snake_case name becomes a camelCase Java property with the wire form preserved by @JsonProperty — the bytes never change shape to suit Java.">?</button>
 						</h3>
 						<div id="d-fields"></div>
-						<button id="d-add-field" class="vorpal-btn vorpal-btn-secondary" type="button">Add field</button>
+						<button id="d-add-field" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button">Add field</button>
 
-						<h3 class="ev-subhead">Subscriber
+						<h3 class="ev-subhead vorpal-label">Subscriber
 							<button class="ev-help" type="button"
 								aria-label="Who listens is declared separately from what an event is: several applications may want the same event, and each needs its own subscription identity to receive its own copy. Two subscribers sharing a name are one subscription named twice — the apps compete for a single stream."
 								data-tip="Who listens is declared separately from what an event is: several applications may want the same event, and each needs its own subscription identity to receive its own copy. Two subscribers sharing a name are one subscription named twice — the apps compete for a single stream.">?</button>
 						</h3>
-						<div class="vorpal-form-row">
-							<label for="s-name">Subscription name</label>
-							<input id="s-name" type="text" placeholder="calendar">
+						<div class="ev-form-row">
+							<label class="vorpal-label" for="s-name">Subscription name</label>
+							<input id="s-name" class="vorpal-input" type="text" placeholder="calendar">
 							<button class="ev-help" type="button"
 								aria-label="Name the subscriber, not the event. Becomes the JMS client id, the durable subscription name and the consumer's class name."
 								data-tip="Name the subscriber, not the event. Becomes the JMS client id, the durable subscription name and the consumer's class name.">?</button>
 						</div>
-						<div class="vorpal-form-row">
-							<label for="s-description">What it does</label>
-							<input id="s-description" type="text" placeholder="Creates the appointment when a meeting is confirmed">
+						<div class="ev-form-row">
+							<label class="vorpal-label" for="s-description">What it does</label>
+							<input id="s-description" class="vorpal-input" type="text" placeholder="Creates the appointment when a meeting is confirmed">
 						</div>
-						<div class="vorpal-form-row">
-							<label for="s-package">Java package</label>
-							<input id="s-package" type="text" placeholder="com.example.consumer">
+						<div class="ev-form-row">
+							<label class="vorpal-label" for="s-package">Java package</label>
+							<input id="s-package" class="vorpal-input" type="text" placeholder="com.example.consumer">
 						</div>
-						<div class="vorpal-form-row">
-							<label for="s-mode">Filtering</label>
-							<select id="s-mode">
+						<div class="ev-form-row">
+							<label class="vorpal-label" for="s-mode">Filtering</label>
+							<select class="vorpal-input" id="s-mode">
 								<option value="DERIVED">At the broker — a selector naming this event type</option>
 								<option value="NONE">In code — take everything on the destination</option>
 							</select>
@@ -130,8 +131,8 @@
 								aria-label="A selector fails closed: an event type nobody added is never enqueued. Filtering in code fails open, which is what a sink wants."
 								data-tip="A selector fails closed: an event type nobody added is never enqueued. Filtering in code fails open, which is what a sink wants.">?</button>
 						</div>
-						<div class="vorpal-form-row">
-							<label for="s-durable">Durable</label>
+						<div class="ev-form-row">
+							<label class="vorpal-label" for="s-durable">Durable</label>
 							<input id="s-durable" type="checkbox" checked>
 							<button class="ev-help" type="button"
 								aria-label="Hold events while this subscriber is down. On for a sink; consider off for something that takes action, where a stale action can be worse than a missed one. Ignored on a queue."
@@ -140,17 +141,17 @@
 					</div>
 				</div>
 
-				<div class="ev-panel">
-					<header>
-						<span>Preview
+				<div class="ev-panel vorpal-panel">
+					<header class="vorpal-panel-head">
+						<h2 class="vorpal-panel-title ev-title">Preview
 							<button class="ev-help" type="button"
 								aria-label="Source only — the server never compiles this or publishes a jar; the wire contract is the schema. The consumer module goes into the consuming application's own source tree, never into the framework. See Help for why."
 								data-tip="Source only — the server never compiles this or publishes a jar; the wire contract is the schema. The consumer module goes into the consuming application's own source tree, never into the framework. See Help for why.">?</button>
-						</span>
-						<span id="d-selector" class="vorpal-pill">—</span>
+						</h2>
+						<div class="vorpal-toolbar"><span id="d-selector" class="vorpal-badge vorpal-mono">—</span></div>
 					</header>
 					<div class="ev-body">
-						<div class="ev-tabs" role="tablist">
+						<div class="ev-tabs vorpal-tabs" role="tablist">
 							<button class="ev-tab" role="tab" data-tab="java" aria-selected="true">Java</button>
 							<button class="ev-tab" role="tab" data-tab="schema" aria-selected="false">Schema</button>
 							<button class="ev-tab" role="tab" data-tab="sample" aria-selected="false">Sample</button>
@@ -158,8 +159,8 @@
 							<button class="ev-tab" role="tab" data-tab="producer" aria-selected="false">Producer</button>
 						</div>
 						<pre class="ev-code" id="d-preview">Start typing an event type…</pre>
-						<div id="d-findings" class="ev-muted" hidden style="margin-top:.75rem"></div>
-						<div class="ev-toolbar" style="margin-top:.75rem">
+						<div id="d-findings" hidden style="margin-top:.75rem"></div>
+						<div class="ev-toolbar vorpal-toolbar" style="margin-top:.75rem">
 							<button id="d-copy" class="vorpal-btn vorpal-btn-secondary" type="button">Copy</button>
 							<button id="d-download" class="vorpal-btn" type="button">Download event .zip</button>
 							<button id="s-download" class="vorpal-btn vorpal-btn-secondary" type="button">Download consumer .zip</button>
@@ -175,7 +176,7 @@
 	<dialog id="d-help" class="ev-help-dialog" aria-labelledby="d-help-title">
 		<header>
 			<span id="d-help-title">Designer help</span>
-			<form method="dialog"><button class="vorpal-btn vorpal-btn-secondary">Close</button></form>
+			<form method="dialog"><button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm">Close</button></form>
 		</header>
 		<div class="ev-help-body">
 			<h3>What the designer does</h3>

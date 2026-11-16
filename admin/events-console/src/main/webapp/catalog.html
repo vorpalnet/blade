@@ -3,9 +3,10 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>BLADE Events · Catalog</title>
+	<title>Catalog · Events · BLADE</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
 	<script src="/blade/portal/brand/theme.js"></script>
+	<script src="/blade/portal/brand/shell.js" data-context="/blade/events" defer></script>
 	<link rel="stylesheet" href="events.css">
 	<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/vorpal_splotch.svg">
 </head>
@@ -50,40 +51,40 @@
 				</div>
 			</section>
 
-			<div class="ev-toolbar">
+			<div class="ev-toolbar vorpal-toolbar">
 				<span id="catalog-source" class="ev-muted"></span>
 			</div>
 
-			<div class="ev-panel">
-				<header>
-					<span>Declared types</span>
-					<span id="type-count" class="vorpal-pill">—</span>
+			<div class="ev-panel vorpal-panel">
+				<header class="vorpal-panel-head">
+					<h2 class="vorpal-panel-title">Declared types</h2>
+					<div class="vorpal-toolbar"><span id="type-count" class="vorpal-badge">—</span></div>
 				</header>
 				<div class="ev-body">
-					<table class="ev-table" id="types-table">
+					<table class="ev-table vorpal-table" id="types-table">
 						<thead>
 							<tr>
 								<th>Type</th>
 								<th>Title</th>
 								<th>Destination</th>
 								<th>Kind</th>
-								<th class="ev-num">Fields</th>
+								<th class="ev-num num">Fields</th>
 								<th>Selector</th>
 							</tr>
 						</thead>
 						<tbody></tbody>
 					</table>
-					<div id="types-empty" class="ev-empty ev-muted" hidden>
+					<div id="types-empty" class="vorpal-empty" hidden>
 						No event types declared yet. The Designer creates them; the
 						framework's own types can be restored from the Overview.
 					</div>
 				</div>
 			</div>
 
-			<div class="ev-panel" style="margin-top:1rem">
-				<header>
-					<span>Declared by applications</span>
-					<span id="app-type-count" class="vorpal-pill">—</span>
+			<div class="ev-panel vorpal-panel" style="margin-top:1rem">
+				<header class="vorpal-panel-head">
+					<h2 class="vorpal-panel-title">Declared by applications</h2>
+					<div class="vorpal-toolbar"><span id="app-type-count" class="vorpal-badge">—</span></div>
 				</header>
 				<div class="ev-body">
 					<p class="ev-muted">
@@ -92,29 +93,29 @@
 						a type declared above as well follows the catalog. Call events are
 						stored whether declared or not.
 					</p>
-					<table class="ev-table" id="app-types-table">
+					<table class="ev-table vorpal-table" id="app-types-table">
 						<thead>
 							<tr>
 								<th>Type</th>
 								<th>Title</th>
 								<th>Application</th>
 								<th>Stored</th>
-								<th class="ev-num">Fields</th>
+								<th class="ev-num num">Fields</th>
 								<th>Catalog</th>
 							</tr>
 						</thead>
 						<tbody></tbody>
 					</table>
-					<div id="app-types-empty" class="ev-empty ev-muted" hidden>
+					<div id="app-types-empty" class="vorpal-empty" hidden>
 						No running application declares its own event types.
 					</div>
 				</div>
 			</div>
 
-			<div class="ev-panel" style="margin-top:1rem">
-				<header>
-					<span>Catalog versus the running domain</span>
-					<span id="drift-count" class="vorpal-pill">—</span>
+			<div class="ev-panel vorpal-panel" style="margin-top:1rem">
+				<header class="vorpal-panel-head">
+					<h2 class="vorpal-panel-title">Catalog versus the running domain</h2>
+					<div class="vorpal-toolbar"><span id="drift-count" class="vorpal-badge">—</span></div>
 				</header>
 				<div class="ev-body" id="drift-body">
 					<p class="ev-muted">Checking…</p>

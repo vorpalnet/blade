@@ -7,7 +7,7 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
-import org.vorpal.blade.framework.Callflow;
+import org.vorpal.blade.framework.v3.Callflow;
 import org.vorpal.blade.framework.v3.media.MediaDirection;
 
 /// A request on the dialog to a party brought into the call, which the

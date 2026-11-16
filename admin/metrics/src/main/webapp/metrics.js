@@ -53,11 +53,11 @@
 
 	function renderApp(app) {
 		var panel = document.createElement('div');
-		panel.className = 'ev-panel m-app';
+		panel.className = 'vorpal-panel m-app';
 
 		var nodes = (app.nodes || []).map(function (x) { return x.node; }).join(', ');
-		panel.innerHTML = '<header><span>' + esc(app.app) + '</span>'
-			+ '<span class="m-nodes ev-muted">' + (app.nodes || []).length + ' node(s): ' + esc(nodes) + '</span>'
+		panel.innerHTML = '<header class="vorpal-panel-head"><h2 class="vorpal-panel-title">' + esc(app.app) + '</h2>'
+			+ '<span class="vorpal-panel-sub">' + (app.nodes || []).length + ' node(s): ' + esc(nodes) + '</span>'
 			+ '</header><div class="ev-body"></div>';
 		var body = panel.querySelector('.ev-body');
 
@@ -67,7 +67,7 @@
 
 		if (!(app.counters || []).length && !(app.gauges || []).length && !(app.histograms || []).length) {
 			var none = document.createElement('p');
-			none.className = 'ev-muted';
+			none.className = 'vorpal-empty';
 			none.textContent = 'Registered, but has not recorded anything yet.';
 			body.appendChild(none);
 		}
@@ -89,12 +89,12 @@
 		if (names.length) {
 			var max = 0;
 			names.forEach(function (k) { max = Math.max(max, Number(values[k])); });
-			head += '<table class="ev-table">';
+			head += '<table class="vorpal-table m-values">';
 			names.forEach(function (k) {
 				var value = Number(values[k]);
 				var width = max ? Math.max(1, Math.round((value / max) * 160)) : 1;
 				head += '<tr><td>' + esc(k) + '</td>'
-					+ '<td class="ev-num">' + n(value) + '</td>'
+					+ '<td class="num">' + n(value) + '</td>'
 					+ '<td><span class="m-bar" style="width:' + width + 'px"></span></td></tr>';
 			});
 			head += '</table>';
@@ -137,8 +137,8 @@
 			+ (h.description ? '<div class="ev-muted">' + esc(h.description) + '</div>' : '')
 			+ bars
 			+ (h.mismatchedBounds
-				? '<div class="ev-finding is-problem"><div class="ev-kind">✕ mismatched buckets</div>'
-					+ '<div class="ev-detail">A node reported different bucket boundaries — likely a rolling '
+				? '<div class="vorpal-error m-msg"><div class="m-kind">✕ mismatched buckets</div>'
+					+ '<div>A node reported different bucket boundaries — likely a rolling '
 					+ 'upgrade in progress. Its samples are excluded rather than summed into a plausible, '
 					+ 'wrong distribution.</div></div>'
 				: '');

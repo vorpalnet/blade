@@ -58,8 +58,14 @@ public class HttpTraceFilter implements Filter {
 			return null;
 		}
 		exchange.sessionId = sessionId;
-		return HttpSteps.step(sessionId, exchange.arrived, CallStep.IN, HttpSteps.REQUEST, exchange.label, null,
+		exchange.resource = HttpSteps.resourceFrame();
+		return HttpSteps.step(sessionId, exchange.arrived, CallStep.IN, HttpSteps.REQUEST, exchange.label,
+				exchange.resource, methodOf(exchange.resource),
 				exchange.head + exchange.requestBody.text(exchange.requestEncoding));
+	}
+
+	private static String methodOf(StackWalker.StackFrame frame) {
+		return frame != null ? frame.getMethodName() : null;
 	}
 
 	@Override
@@ -72,7 +78,7 @@ public class HttpTraceFilter implements Filter {
 		}
 		Exchange exchange = new Exchange((HttpServletRequest) request);
 		CopyingRequest req = new CopyingRequest((HttpServletRequest) request, exchange.requestBody);
-		CopyingResponse res = new CopyingResponse((HttpServletResponse) response, exchange.responseBody);
+		CopyingResponse res = new CopyingResponse((HttpServletResponse) response, exchange);
 		serving.set(exchange);
 		try {
 			chain.doFilter(req, res);
@@ -121,6 +127,12 @@ public class HttpTraceFilter implements Filter {
 		final Copy requestBody = new Copy();
 		final Copy responseBody = new Copy();
 		volatile String sessionId;
+		/// The resource method, found when the request joined a call.
+		volatile StackWalker.StackFrame resource;
+		/// The line that resumed the response, found as the response starts
+		/// ([#answering]).
+		volatile StackWalker.StackFrame resumer;
+		private volatile boolean answering;
 		private boolean responded;
 
 		Exchange(HttpServletRequest request) {
@@ -138,6 +150,22 @@ public class HttpTraceFilter implements Filter {
 			head = sb.append('\n').toString();
 		}
 
+		/// Called as the response starts: its status set, or its body opened.
+		/// For an asynchronous response that is on the thread that resumed it,
+		/// so the stack still holds the line that did. Only a request that
+		/// joined a call pays for the stack walk, and only once.
+		void answering() {
+			if (answering || sessionId == null) {
+				return;
+			}
+			answering = true;
+			try {
+				resumer = HttpSteps.resumerFrame();
+			} catch (Exception ignore) {
+				// a source position is best-effort
+			}
+		}
+
 		synchronized void respond(HttpServletResponse response) {
 			if (responded) {
 				return;
@@ -153,8 +181,16 @@ public class HttpTraceFilter implements Filter {
 					}
 				}
 				sb.append('\n').append(responseBody.text(response.getCharacterEncoding()));
-				TraceLog.append(HttpSteps.step(sessionId, System.currentTimeMillis(), CallStep.OUT,
-						HttpSteps.RESPONSE, String.valueOf(status), null, sb.toString()));
+				// A synchronous resource has returned before its response is
+				// written: pin the resource method, with no line.
+				long now = System.currentTimeMillis();
+				String text = sb.toString();
+				TraceLog.append(resumer != null
+						? HttpSteps.step(sessionId, now, CallStep.OUT, HttpSteps.RESPONSE, String.valueOf(status),
+								resumer, resumer.getMethodName(), text)
+						: HttpSteps.step(sessionId, now, CallStep.OUT, HttpSteps.RESPONSE, String.valueOf(status),
+								resource != null ? HttpSteps.topLevel(resource.getClassName()) : null,
+								methodOf(resource), -1, text));
 			} catch (Exception ignore) {
 				// tracing is best-effort; it must never affect the response
 			}
@@ -239,15 +275,42 @@ public class HttpTraceFilter implements Filter {
 
 	static final class CopyingResponse extends HttpServletResponseWrapper {
 		private final Copy copy;
+		private final Exchange exchange;
 		private ServletOutputStream out;
 
-		CopyingResponse(HttpServletResponse response, Copy copy) {
+		CopyingResponse(HttpServletResponse response, Exchange exchange) {
 			super(response);
-			this.copy = copy;
+			this.copy = exchange.responseBody;
+			this.exchange = exchange;
+		}
+
+		@Override
+		public void setStatus(int sc) {
+			exchange.answering();
+			super.setStatus(sc);
+		}
+
+		@Override
+		public void sendError(int sc) throws IOException {
+			exchange.answering();
+			super.sendError(sc);
+		}
+
+		@Override
+		public void sendError(int sc, String msg) throws IOException {
+			exchange.answering();
+			super.sendError(sc, msg);
+		}
+
+		@Override
+		public java.io.PrintWriter getWriter() throws IOException {
+			exchange.answering();
+			return super.getWriter();
 		}
 
 		@Override
 		public ServletOutputStream getOutputStream() throws IOException {
+			exchange.answering();
 			if (out == null) {
 				ServletOutputStream real = super.getOutputStream();
 				out = new ServletOutputStream() {

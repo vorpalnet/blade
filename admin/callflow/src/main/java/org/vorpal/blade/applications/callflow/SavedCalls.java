@@ -96,6 +96,14 @@ final class SavedCalls {
 	/// Saves call `id` from the page's `body` (`sources`, `sourceFiles`),
 	/// keeping only the steps of that call, and returns its summary.
 	static ObjectNode write(Path root, String id, JsonNode body, String savedBy) throws IOException {
+		return write(root, id, body, savedBy, null);
+	}
+
+	/// As [#write(Path,String,JsonNode,String)], with the call's `scopes`
+	/// ([TraceAccess#scopesOf]) kept in its summary, so the list can be
+	/// narrowed to the calls a viewer may see without reading every call.
+	static ObjectNode write(Path root, String id, JsonNode body, String savedBy, ArrayNode scopes)
+			throws IOException {
 		if (body == null || !body.path("sources").isArray()) {
 			throw new IllegalArgumentException("a saved call is {\"sources\":[...], \"sourceFiles\":{...}}");
 		}
@@ -142,6 +150,9 @@ final class SavedCalls {
 		summary.put("steps", steps);
 		ArrayNode appList = summary.putArray("apps");
 		apps.forEach(appList::add);
+		if (scopes != null) {
+			summary.set("scopes", scopes);
+		}
 
 		Path dir = root.resolve(id);
 		createPrivate(root);

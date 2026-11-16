@@ -78,7 +78,7 @@ case "$REDIRECT" in
     OUT="${BLADE_HOME}/${ENV_NAME}/oidc.properties"
     case "$REDIRECT" in *'${host}'*) [ -n "${BLADE_HOSTS:-}" ] || { echo "BLADE_HOSTS names the hosts a \${host} template stands for" >&2; exit 2; } ;; esac
     for h in ${BLADE_HOSTS:-none}; do
-      for c in ${BLADE_CONTEXT_PATHS:-/blade/dashboard /blade/phone /blade/recordings /blade/audit /agent}; do
+      for c in ${BLADE_CONTEXT_PATHS:-/blade/dashboard /blade/callflow /blade/phone /blade/recordings /blade/audit /agent}; do
         u="${REDIRECT//\$\{host\}/$h}"; REDIRECTS+=("${u//\$\{contextPath\}/$c}")
       done
     done ;;
@@ -86,6 +86,11 @@ case "$REDIRECT" in
 esac
 json_list() { python3 -c 'import sys,json; print(json.dumps(sys.argv[1:]))' "$@"; }
 LOGOUTS=(); for u in "${REDIRECTS[@]}"; do LOGOUTS+=("${u%/oidc/callback}/"); done
+# The dashboard's "Sign out" returns through the identity domain to the portal's
+# /logout, which ends every admin application's sign-in on that host.
+for u in "${REDIRECTS[@]}"; do
+  case "$u" in */blade/dashboard/oidc/callback) LOGOUTS+=("${u%/blade/dashboard/oidc/callback}/blade/portal/logout") ;; esac
+done
 OCI=(oci identity-domains)
 
 say() { printf '# %s\n' "$*"; }
@@ -124,6 +129,16 @@ else
           --schemas '["urn:ietf:params:scim:api:messages:2.0:PatchOp"]' \
           --operations "[{\"op\":\"add\",\"path\":\"redirectUris\",\"value\":[\"${u}\"]},{\"op\":\"add\",\"path\":\"postLogoutRedirectUris\",\"value\":[\"${u%/oidc/callback}/\"]}]" >/dev/null \
           || say "could not add the redirect URL; add it to ${APP} in the console"
+    fi
+  done
+  HAVE=$("${OCI[@]}" app get --endpoint "$DOMAIN" --app-id "$APP_ID" --query 'data."post-logout-redirect-uris"' 2>/dev/null || true)
+  for u in "${LOGOUTS[@]}"; do
+    if ! printf '%s' "$HAVE" | grep -qF "\"${u}\""; then
+      say "adding post-logout URL ${u} to ${APP}"
+      "${OCI[@]}" app patch --endpoint "$DOMAIN" --app-id "$APP_ID" \
+          --schemas '["urn:ietf:params:scim:api:messages:2.0:PatchOp"]' \
+          --operations "[{\"op\":\"add\",\"path\":\"postLogoutRedirectUris\",\"value\":[\"${u}\"]}]" >/dev/null \
+          || say "could not add the post-logout URL; add it to ${APP} in the console"
     fi
   done
 fi
@@ -217,7 +232,7 @@ if [ -n "$TEST_USER" ]; then
       USER_ID=$("${OCI[@]}" user create --endpoint "$DOMAIN" \
           --schemas '["urn:ietf:params:scim:schemas:core:2.0:User"]' \
           --user-name "$TEST_USER" --name "{\"givenName\":\"Test\",\"familyName\":\"${TEST_GROUP}\"}" \
-          --emails "[{\"value\":\"${TEST_USER}@example.com\",\"type\":\"work\",\"primary\":true}]" \
+          --emails "[{\"value\":\"${TEST_USER}@vorpal.net\",\"type\":\"work\",\"primary\":true}]" \
           --password "$TEST_PASSWORD" --query 'data.id' --raw-output)
     fi
   else

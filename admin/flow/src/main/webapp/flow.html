@@ -1,8 +1,9 @@
 <html>
 <head>
-	<title>Editor · BLADE Flow</title>
+	<title>Flow · BLADE</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
 	<script src="/blade/portal/brand/theme.js"></script>
+	<script src="/blade/portal/brand/shell.js" data-context="/blade/flow" defer></script>
 	<!-- Property-panel styles. The panels are fragment-loaded into THIS
 	     document, so their styles must be linked here — head styles in the
 	     fragment pages are discarded by jQuery .load(url, '#fragment'). -->
@@ -66,7 +67,6 @@
 		/* View filter panel inside the Tasks window */
 		.view-panel {
 			padding: 8px 10px 10px;
-			font-family: var(--vorpal-font-sans, Arial);
 			font-size: 12px;
 		}
 		.view-panel .view-header {
@@ -74,11 +74,6 @@
 		}
 		.view-panel .view-header a {
 			font-size: 11px;
-			color: var(--vorpal-purple);
-			text-decoration: none;
-		}
-		.view-panel .view-header a:hover {
-			text-decoration: underline;
 		}
 		.view-panel .view-item {
 			display: block;
@@ -198,7 +193,7 @@
 		</div>
 	</header>
 	<table id="splash" width="100%" height="100%"
-		style="background:white;position:absolute;top:0px;left:0px;z-index:4;">
+		style="background:var(--vorpal-surface);position:absolute;top:0px;left:0px;z-index:4;">
 		<tr>
 			<td align="center" valign="middle">
 				<img src="images/loading.gif">

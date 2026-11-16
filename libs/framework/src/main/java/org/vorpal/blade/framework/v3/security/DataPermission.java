@@ -39,9 +39,11 @@ public enum DataPermission {
 	/// before they have a reason to open anything.
 	LIST("phi:list"),
 
-	/// Read what was said. Separate from [#PLAY] because a transcript is
-	/// searchable, copyable and quotable in a way audio is not, and because a
-	/// voice identifies a person even where the words do not.
+	/// Read what was said and who said it: a transcript, and in the admin
+	/// applications a call's caller numbers, identities, accounts and SIP
+	/// message text. Separate from [#PLAY] because a transcript is searchable,
+	/// copyable and quotable in a way audio is not, and because a voice
+	/// identifies a person even where the words do not.
 	TRANSCRIPT("phi:transcript"),
 
 	/// Hear the call, streamed. Deliberately not [#EXPORT]: playing leaves the

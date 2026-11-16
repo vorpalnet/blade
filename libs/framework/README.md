@@ -78,16 +78,13 @@ Keep-alive mechanisms for maintaining SIP registrations and monitoring connectio
 Enhanced logging framework with SIP-aware formatters, structured logging, and debugging utilities.
 
 #### `org.vorpal.blade.framework.v2.proxy`
-High-level proxy implementations for common SIP proxy patterns including stateful and stateless proxying.
+Deprecated. A v3 callflow with `session.passthru` set proxies the INVITE instead; see the proxy-balancer service.
 
 #### `org.vorpal.blade.framework.sip`
 Testing utilities and mock objects for unit testing SIP applications and integration testing.
 
-#### `org.vorpal.blade.framework.v2.transfer`
-Call transfer implementations supporting both attended and unattended transfer scenarios.
-
-#### `org.vorpal.blade.framework.v2.transfer.api`
-API definitions and interfaces for call transfer functionality.
+#### `org.vorpal.blade.framework.v2.transfer`, `org.vorpal.blade.framework.v2.transfer.api`
+Deprecated. Call transfer and its REST API moved to `v3.transfer` and `v3.transfer.api`; the v2 names remain as empty subclasses so existing code compiles.
 
 ### Vorpal Blade Framework v3 Packages
 
@@ -143,7 +140,7 @@ read a real callflow. Packaging a service is the short section at the end.
 For the pieces on their own:
 
 - **Callflows** — the [v2 callflow guide](src/main/java/org/vorpal/blade/framework/v2/callflow/README.md) explains the lambda model; the [v3 API](src/main/java/org/vorpal/blade/framework/v3/README.md) is the line to write new code against
-- **B2BUA** — the [b2bua guide](src/main/java/org/vorpal/blade/framework/v2/b2bua/README.md) covers the pre-built callflows and the six lifecycle callbacks
+- **B2BUA** — the [b2bua guide](src/main/java/org/vorpal/blade/framework/v3/b2bua/README.md) covers the pre-built callflows and the six lifecycle callbacks
 - **Configuration** — the [config guide](src/main/java/org/vorpal/blade/framework/v2/config/README.md) covers turning a POJO into a live, hot-reloadable JSON config file
 - **Logging** — the [logging guide](src/main/java/org/vorpal/blade/framework/v2/logging/README.md) covers the SIP-aware logger and its sequence diagrams
 
