@@ -299,6 +299,33 @@ public abstract class Callflow implements Serializable {
 		return callback;
 	}
 
+	/// The session attribute that holds the callback for a request's responses.
+	///
+	/// INVITE keeps one name per dialog: the glare guard in [#sendRequest] lets
+	/// only one INVITE be open at a time, and early-dialog merging
+	/// (`AsyncSipServlet.mergeEarlyDialogSession`) looks the callback up by that
+	/// name. Every other method is keyed by its CSeq number as well. Two requests
+	/// of one method can be open on a dialog at once (a transfer's 100 Trying
+	/// NOTIFY and its final one, PRACKs for two reliable 1xx, INFOs for DTMF),
+	/// and keyed by method alone the second callback replaced the first, so a
+	/// relaying B2BUA answered the second request with the first one's response
+	/// and never answered the first. The container fixes a request's CSeq when
+	/// it creates it, and a transaction timeout's 408 carries the same CSeq, so
+	/// every callback is found by its own response and removed by its final one.
+	///
+	/// @param message a request about to be sent, or a response to one
+	/// @return the attribute name
+	public static String responseCallbackKey(SipServletMessage message) {
+		String method = message.getMethod();
+		if (INVITE.equals(method)) {
+			return RESPONSE_CALLBACK_ + method;
+		}
+		String cseq = message.getHeader("CSeq"); // "2 NOTIFY"
+		int space = (cseq != null) ? cseq.trim().indexOf(' ') : -1;
+		return (space > 0) ? RESPONSE_CALLBACK_ + method + "_" + cseq.trim().substring(0, space)
+				: RESPONSE_CALLBACK_ + method;
+	}
+
 	/**
 	 * Retrieves and removes the response callback associated with the SIP session.
 	 * For proxy responses, retrieves the callback from the original request's
@@ -313,7 +340,7 @@ public abstract class Callflow implements Serializable {
 
 		Callback<SipServletResponse> callback = null;
 		SipSession sipSession = response.getSession();
-		String attribute = RESPONSE_CALLBACK_ + response.getMethod();
+		String attribute = responseCallbackKey(response);
 		callback = (Callback<SipServletResponse>) sipSession.getAttribute(attribute);
 		if (callback != null) {
 
@@ -1075,7 +1102,7 @@ public abstract class Callflow implements Serializable {
 				}
 
 				if (lambdaFunction != null) {
-					request.getSession().setAttribute(RESPONSE_CALLBACK_ + request.getMethod(), lambdaFunction);
+					request.getSession().setAttribute(responseCallbackKey(request), lambdaFunction);
 				}
 
 				// useful for identifying sessions

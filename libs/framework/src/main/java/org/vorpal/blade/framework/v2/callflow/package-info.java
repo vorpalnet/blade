@@ -42,8 +42,10 @@
 ///
 /// <ul>
 ///   <li><b>{@code sendRequest(request, callback)}</b> &mdash; sends the request and
-///       stores the callback in the SIP session, keyed by the request method
-///       (e.g. {@code RESPONSE_CALLBACK_INVITE}). When a response arrives, the
+///       stores the callback in the SIP session, keyed by the request method, and
+///       for methods other than INVITE by its CSeq too (e.g.
+///       {@code RESPONSE_CALLBACK_INVITE}, {@code RESPONSE_CALLBACK_NOTIFY_3}; see
+///       {@link org.vorpal.blade.framework.Callflow#responseCallbackKey}). When a response arrives, the
 ///       framework retrieves and invokes the callback with that response.</li>
 ///   <li><b>{@code sendResponse(response, callback)}</b> &mdash; sends the response and
 ///       stores the callback for the subsequent ACK or PRACK

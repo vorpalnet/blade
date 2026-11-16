@@ -404,7 +404,7 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 				}
 
 				if (lambdaFunction != null) {
-					request.getSession().setAttribute(RESPONSE_CALLBACK_ + request.getMethod(), lambdaFunction);
+					request.getSession().setAttribute(responseCallbackKey(request), lambdaFunction);
 				}
 
 				// useful for identifying sessions

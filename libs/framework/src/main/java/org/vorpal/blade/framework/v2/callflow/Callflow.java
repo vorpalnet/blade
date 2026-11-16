@@ -181,8 +181,7 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 			}
 
 			if (lambdaFunction != null) {
-				inboundRequest.getSession().setAttribute(RESPONSE_CALLBACK_ + inboundRequest.getMethod(),
-						lambdaFunction);
+				inboundRequest.getSession().setAttribute(responseCallbackKey(inboundRequest), lambdaFunction);
 			}
 
 			inboundRequest.getApplicationSession().setAttribute(IS_PROXY_ATTR, Boolean.TRUE);
