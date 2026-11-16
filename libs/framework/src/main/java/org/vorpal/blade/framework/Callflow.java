@@ -1732,8 +1732,9 @@ public abstract class Callflow implements Serializable {
 
 				break;
 			default:
-				// Clear GLARE if final response
-				if (false == (provisional(response) || status == 491)) {
+				// Clear GLARE on a final response, but only to a request that opened protection or
+				// ends it (releasesGlare): answering an INFO must not release our open re-INVITE.
+				if (releasesGlare(method) && false == (provisional(response) || status == 491)) {
 					setGlareState(sipSession, GlareState.ALLOW);
 				}
 
@@ -2508,6 +2509,45 @@ public abstract class Callflow implements Serializable {
 			return null;
 		}
 		return linkedSession.getActiveInvite(UAMode.UAS);
+	}
+
+	/// Whether a request of this method, arriving on a dialog, is held to one at a time.
+	///
+	/// Only requests that carry an offer are: an INVITE (RFC 3261 section 14.1 forbids a second
+	/// while one is open in either direction) and an UPDATE (RFC 3311 section 5.2 refuses one that
+	/// crosses ours). Each opens protection, and either is answered 491 while the dialog is
+	/// protected. A REFER has its own rule (one transfer at a time). Every other method, INFO,
+	/// MESSAGE, OPTIONS, SUBSCRIBE and the rest, is its own transaction and may overlap anything:
+	/// it neither waits for protection nor opens it. Refusing them dropped DTMF sent as INFO,
+	/// one request per digit, wherever the next digit came before the last was answered.
+	///
+	/// @param method the request method
+	/// @return true for INVITE and UPDATE
+	public static boolean carriesOffer(String method) {
+		return INVITE.equals(method) || UPDATE.equals(method);
+	}
+
+	/// Whether a final response to a request of this method ends glare protection on its dialog.
+	///
+	/// True only for the methods that open it, INVITE, UPDATE and REFER, plus two more. NOTIFY:
+	/// a REFER we accepted keeps the dialog protected until the transferor answers our first
+	/// NOTIFY. BYE: the dialog is over. A final response to anything else, a 200 to a keep-alive
+	/// OPTIONS or to an INFO, says nothing about an INVITE still open on the dialog, and releasing
+	/// on it let a crossing re-INVITE through.
+	///
+	/// @param method the method of the request the response answers
+	/// @return true when its final response clears the dialog
+	public static boolean releasesGlare(String method) {
+		switch (method) {
+		case INVITE:
+		case UPDATE:
+		case REFER:
+		case NOTIFY:
+		case BYE:
+			return true;
+		default:
+			return false;
+		}
 	}
 
 	public static void setGlareState(SipSession sipSession, GlareState state) {

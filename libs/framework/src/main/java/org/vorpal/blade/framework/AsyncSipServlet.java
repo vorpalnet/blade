@@ -794,8 +794,27 @@ public abstract class AsyncSipServlet extends SipServlet
 				// It neither opens nor closes protection: the state is left as it is.
 				break;
 			default:
+				// Only an INVITE or UPDATE waits for protection or opens it (Callflow.carriesOffer).
+				// Anything else, an INFO for instance, passes a protected dialog and leaves its state
+				// alone. It is still parked between our 2xx and the ACK, and behind anything already
+				// parked, so requests reach the application in the order they arrived.
+				boolean offer = Callflow.carriesOffer(method);
 				switch (Callflow.getGlareState(sipSession)) {
 				case PROTECT:
+					if (!offer) {
+						if (!glareQueue.isEmpty() && !Boolean.TRUE.equals(request.getAttribute(GLARE_REPLAY))) {
+							if (glareQueue.size() >= MAX_GLARE_QUEUE) {
+								sipLogger.warning(request, "AsyncSipServlet.doRequest - glare queue full ("
+										+ MAX_GLARE_QUEUE + "), sending 491 response");
+								sendResponse(request.createResponse(491));
+								return; // -- RETURN, STOP PROCESSING
+							}
+							glareQueue.add(request);
+							sipSession.setAttribute(GLARE_QUEUE, glareQueue);
+							return; // -- RETURN, STOP PROCESSING; replayed once the dialog clears
+						}
+						break;
+					}
 					sipLogger.warning(request, "AsyncSipServlet.doRequest - glare, sending 491 response");
 					sendResponse(request.createResponse(491));
 					return; // -- RETURN, STOP PROCESSING
@@ -829,7 +848,9 @@ public abstract class AsyncSipServlet extends SipServlet
 						drainGlareQueue(sipSession);
 						return; // -- RETURN, STOP PROCESSING
 					}
-					Callflow.setGlareState(sipSession, GlareState.PROTECT);
+					if (offer) {
+						Callflow.setGlareState(sipSession, GlareState.PROTECT);
+					}
 				}
 			}
 
@@ -1440,8 +1461,9 @@ public abstract class AsyncSipServlet extends SipServlet
 			// independent of how the ACK is sent. A provisional (1xx) leaves the transaction
 			// open, so glare protection stays until the final arrives.
 			// A final response to a PRACK closes only the PRACK: the INVITE it belongs to is still
-			// open, so its protection stays.
-			if (false == Callflow.provisional(response) && !PRACK.equals(response.getMethod())) {
+			// open, so its protection stays. So does a final response to an INFO, OPTIONS or any
+			// other request that never opened protection (Callflow.releasesGlare).
+			if (false == Callflow.provisional(response) && Callflow.releasesGlare(response.getMethod())) {
 				Callflow.setGlareState(sipSession, GlareState.ALLOW);
 				drainGlareQueue(sipSession);
 			}

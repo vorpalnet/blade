@@ -504,8 +504,9 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 
 				break;
 			default:
-				// Clear GLARE if final response
-				if (false == (provisional(response) || status == 491)) {
+				// Clear GLARE on a final response, but only to a request that opened protection or
+				// ends it (releasesGlare): answering an INFO must not release our open re-INVITE.
+				if (releasesGlare(method) && false == (provisional(response) || status == 491)) {
 					setGlareState(sipSession, GlareState.ALLOW);
 				}
 

@@ -156,6 +156,46 @@ class OverlappingRequestsTest {
 		}
 	}
 
+	/// The relay as the container runs it: each request goes through `doRequest`, glare guard first.
+	final AsyncSipServlet relay = new AsyncSipServlet() {
+		private static final long serialVersionUID = 1L;
+
+		@Override
+		protected void servletCreated(SipServletContextEvent event) {
+		}
+
+		@Override
+		protected void servletDestroyed(SipServletContextEvent event) {
+		}
+
+		@Override
+		protected Callflow chooseCallflow(SipServletRequest request) {
+			return "INVITE".equals(request.getMethod()) ? new org.vorpal.blade.framework.v3.b2bua.Reinvite(null)
+					: new Passthru(null);
+		}
+	};
+
+	@Test
+	void backToBackInfosAreBothRelayedAndEachGetsItsOwnAnswer() throws Exception {
+		relay.doRequest(fromAlice("INFO", 2)); // DTMF 1
+		relay.doRequest(fromAlice("INFO", 3)); // DTMF 2, before Bob answered the first
+		assertEquals(2, toBob.size(), "the second INFO was answered 491 instead of relayed");
+		assertEquals(Map.of(), aliceAnswers);
+
+		bobAnswers(1, 200);
+		bobAnswers(0, 481);
+
+		assertEquals(Map.of("2 INFO", 481, "3 INFO", 200), aliceAnswers);
+	}
+
+	@Test
+	void anInfoIsRelayedWhileAReinviteIsOpenOnTheFarLeg() throws Exception {
+		relay.doRequest(fromAlice("INVITE", 2)); // re-INVITE relayed, Bob has not answered
+		relay.doRequest(fromAlice("INFO", 3));
+		assertEquals(List.of("INVITE", "INFO"), toBob.stream().map(SipServletRequest::getMethod).collect(java.util.stream.Collectors.toList()));
+		assertEquals(Map.of(), aliceAnswers, "nothing refused");
+	}
+
 	@Test
 	void anInviteKeepsItsOneNamePerDialog() throws Exception {
 		DetachedRequest invite = new DetachedRequest(app, "INVITE");

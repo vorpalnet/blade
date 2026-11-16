@@ -166,16 +166,16 @@ class GlareServletTest {
 	// ---- one transaction at a time
 
 	@Test
-	void aRequestOnAQuietDialogIsHandledAndOpensATransaction() throws Exception {
-		receive("INFO");
-		assertEquals(List.of("INFO"), reached);
+	void anOfferOnAQuietDialogIsHandledAndOpensATransaction() throws Exception {
+		receive("UPDATE");
+		assertEquals(List.of("UPDATE"), reached);
 		assertEquals(GlareState.PROTECT, state());
 	}
 
 	@Test
-	void aSecondRequestWhileOneIsOpenIsRefused() throws Exception {
+	void anOfferWhileATransactionIsOpenIsRefused() throws Exception {
 		Callflow.setGlareState(dialog, GlareState.PROTECT);
-		receive("INFO");
+		receive("UPDATE");
 		assertTrue(reached.isEmpty(), "answered 491, never handed to the application");
 		assertEquals(GlareState.PROTECT, state());
 	}
@@ -247,13 +247,24 @@ class GlareServletTest {
 	}
 
 	@Test
-	void parkedRequestsReplayOneTransactionAtATime() throws Exception {
+	void parkedOffersReplayOneTransactionAtATime() throws Exception {
+		Callflow.setGlareState(dialog, GlareState.QUEUE);
+		receive("UPDATE");
+		receive("UPDATE");
+		receive("ACK");
+		assertEquals(List.of("ACK", "UPDATE"), reached, "the second waits for the first to be answered");
+		assertEquals(GlareState.PROTECT, state());
+	}
+
+	@Test
+	void parkedInfosAllReplayInOrderAfterTheAck() throws Exception {
 		Callflow.setGlareState(dialog, GlareState.QUEUE);
 		receive("INFO");
+		receive("MESSAGE");
 		receive("INFO");
 		receive("ACK");
-		assertEquals(List.of("ACK", "INFO"), reached, "the second waits for the first to be answered");
-		assertEquals(GlareState.PROTECT, state());
+		assertEquals(List.of("ACK", "INFO", "MESSAGE", "INFO"), reached, "none opens a transaction to wait on");
+		assertEquals(GlareState.ALLOW, state());
 	}
 
 	@Test
@@ -530,6 +541,99 @@ class GlareServletTest {
 		assertEquals(List.of("UPDATE 491"), answered);
 	}
 
+	// ---- requests that carry no offer overlap freely (RFC 3261 section 14.1 guards INVITEs only)
+
+	/// Answer the request the way a v3 application does.
+	private void answerV3(SipServletRequest request, int status) throws Exception {
+		new org.vorpal.blade.framework.v3.Callflow() {
+			private static final long serialVersionUID = 1L;
+
+			@Override
+			public void process(SipServletRequest r) throws ServletException, IOException {
+			}
+		}.sendResponse(request.createResponse(status));
+	}
+
+	@Test
+	void backToBackInfosBothReachTheApplication() throws Exception {
+		receive("INFO"); // a DTMF digit, not yet answered
+		receive("INFO"); // the next digit
+		assertEquals(List.of("INFO", "INFO"), reached, "a 491 here drops a digit");
+		assertTrue(answered.isEmpty());
+	}
+
+	@Test
+	void anInfoOnAQuietDialogLeavesItOpenForAnInvite() throws Exception {
+		receive("INFO");
+		assertEquals(GlareState.ALLOW, state());
+		receive("INVITE");
+		assertEquals(List.of("INFO", "INVITE"), reached);
+	}
+
+	@Test
+	void anInfoGetsThroughWhileOurReinviteIsOpen() throws Exception {
+		sendInvite(inDialog("INVITE"));
+		receive("INFO");
+		assertEquals(List.of("INFO"), reached);
+		assertEquals(GlareState.PROTECT, state(), "our INVITE is still open");
+	}
+
+	@Test
+	void ourReinviteGoesWhileTheirInfoIsUnanswered() throws Exception {
+		receive("INFO");
+		sendInvite(inDialog("INVITE"));
+		assertTrue(ourResponses.isEmpty(), "sent, not refused locally");
+		assertEquals(GlareState.PROTECT, state());
+	}
+
+	@Test
+	void theAnswerToOurInfoKeepsOurReinviteProtected() throws Exception {
+		sendInvite(inDialog("INVITE"));
+		respond("INFO", 200);
+		assertEquals(GlareState.PROTECT, state());
+		receive("INVITE");
+		assertEquals(List.of("INVITE 491"), answered, "their crossing INVITE is still refused");
+	}
+
+	@Test
+	void theAnswerToOurOptionsKeepsOurReinviteProtected() throws Exception {
+		sendInvite(inDialog("INVITE"));
+		respond("OPTIONS", 200); // a keep-alive
+		assertEquals(GlareState.PROTECT, state());
+	}
+
+	@Test
+	void answeringTheirInfoKeepsOurReinviteProtected() throws Exception {
+		answer = true; // the baseline Callflow answers 200
+		sendInvite(inDialog("INVITE"));
+		receive("INFO");
+		assertEquals(List.of("INFO 200"), answered);
+		assertEquals(GlareState.PROTECT, state());
+	}
+
+	@Test
+	void aV3AnswerToTheirInfoKeepsOurReinviteProtected() throws Exception {
+		sendInvite(inDialog("INVITE"));
+		answerV3(inDialog("INFO"), 200);
+		assertEquals(GlareState.PROTECT, state());
+	}
+
+	@Test
+	void aV3AnswerToTheirUpdateStillReleasesTheDialog() throws Exception {
+		receive("UPDATE");
+		assertEquals(GlareState.PROTECT, state());
+		answerV3(inDialog("UPDATE"), 200);
+		assertEquals(GlareState.ALLOW, state());
+	}
+
+	@Test
+	void theAnswerToOurFirstNotifyStillReleasesAnAcceptedRefer() throws Exception {
+		receive("REFER");
+		assertEquals(GlareState.PROTECT, state());
+		respond("NOTIFY", 200);
+		assertEquals(GlareState.ALLOW, state(), "AttendedTransfer relies on this");
+	}
+
 	// ---- the far end never confirms (the container's SipErrorListener callbacks)
 
 	/// A dialog that records the requests the framework creates on it, which is what it sends.
@@ -641,18 +745,18 @@ class GlareServletTest {
 		AsyncSipServlet.replayer = b2bua;
 
 		Callflow.setGlareState(dialog, GlareState.QUEUE);
-		b2bua.doRequest(inDialog("INFO"));
-		b2bua.doRequest(inDialog("MESSAGE"));
+		b2bua.doRequest(inDialog("UPDATE"));
+		b2bua.doRequest(inDialog("UPDATE"));
 		b2bua.doRequest(inDialog("ACK"));
-		assertEquals(1, toBob.size(), "the INFO is relayed; the MESSAGE waits for its answer");
+		assertEquals(1, toBob.size(), "the first UPDATE is relayed; the second waits for its answer");
 
-		b2bua.doResponse(new DetachedResponse(toBob.get(0), 200)); // Bob answers the INFO
-		assertEquals(List.of("INFO 200"), answered);
+		b2bua.doResponse(new DetachedResponse(toBob.get(0), 200)); // Bob answers the first
+		assertEquals(List.of("UPDATE 200"), answered);
 		assertEquals(2, toBob.size(), "relaying Bob's 200 to Alice releases her dialog");
-		assertEquals("MESSAGE", toBob.get(1).getMethod());
+		assertEquals("UPDATE", toBob.get(1).getMethod());
 
 		b2bua.doResponse(new DetachedResponse(toBob.get(1), 200));
-		assertEquals(List.of("INFO 200", "MESSAGE 200"), answered);
+		assertEquals(List.of("UPDATE 200", "UPDATE 200"), answered);
 		assertEquals(GlareState.ALLOW, state());
 	}
 
