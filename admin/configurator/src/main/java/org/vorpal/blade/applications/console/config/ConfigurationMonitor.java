@@ -378,9 +378,13 @@ public class ConfigurationMonitor extends Thread {
 										&& isConfigPlace(child)) {
 									String gone = child.getFileName().toString();
 									String app = gone.substring(0, gone.length() - ".json".length());
-									if (ValidationAPI.appName(app) && !"blade-configurator".equals(app)) {
-										ValidationAPI.watcherMissed(app, !child.toAbsolutePath().normalize().getParent()
-												.equals(watchedDir.toAbsolutePath().normalize()));
+									boolean domainFile = child.toAbsolutePath().normalize().getParent()
+											.equals(watchedDir.toAbsolutePath().normalize());
+									// A domain file of an application that runs only here is
+									// read where it lies: its deletion is already live.
+									if (ValidationAPI.appName(app) && !"blade-configurator".equals(app)
+											&& (!domainFile || runsElsewhere(app))) {
+										ValidationAPI.watcherMissed(app, !domainFile);
 									}
 								}
 							} catch (Exception forEx) {
@@ -723,4 +727,42 @@ public class ConfigurationMonitor extends Thread {
 		processEvents();
 	}
 
+
+	/// True if a server other than this one runs `app`: a deleted file lingers
+	/// only on a server with its own disk, until a Publish clears it there.
+	/// Unknown (no domain runtime) counts as elsewhere, so nothing is lost.
+	static boolean runsElsewhere(String app) {
+		InitialContext ctx = null;
+		try {
+			ctx = new InitialContext();
+			MBeanServer mbs = (MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
+			java.util.List<String> places = new java.util.ArrayList<>();
+			for (ObjectName n : mbs.queryNames(new ObjectName("vorpal.blade:Name=" + app + ",Type=Configuration,*"), null)) {
+				places.add(n.getKeyProperty("Location"));
+			}
+			return elsewhere(places, System.getProperty("weblogic.Name"));
+		} catch (Exception e) {
+			return true;
+		} finally {
+			if (ctx != null) {
+				try {
+					ctx.close();
+				} catch (Exception ignored) {
+					// nothing held
+				}
+			}
+		}
+	}
+
+	/// True if any of an application's Configuration MBeans is at a place
+	/// other than `here`. One registered by cluster, with no Location, is an
+	/// engine's. None at all: the application runs nowhere, so nothing lingers.
+	static boolean elsewhere(java.util.Collection<String> locations, String here) {
+		for (String location : locations) {
+			if (location == null || !location.equals(here)) {
+				return true;
+			}
+		}
+		return false;
+	}
 }
