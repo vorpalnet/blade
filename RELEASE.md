@@ -88,6 +88,22 @@ the dashboard uses it from there.
   ladder, the phone's handset, Flow's canvas, the agent console's risk scale). Tuning keeps
   Bootstrap only for its grid, switches and tooltips. Colours come from the theme tokens
   throughout, so every page follows light and dark.
+- **Menus, lists, dialogs, switches and tips are shared too.** `brand.css` adds a dropdown
+  menu, a pick-one list (the chosen item filled, bold and barred, as the rail marks its
+  application), a dialog with its scrim (native `<dialog>` included), an on/off switch, a tip,
+  a popover and its round "?", a collapsible section and a stat tile, and the applications
+  use them in place of their own. Tuning no longer uses Bootstrap's form controls. Flow's
+  toolbar icons follow the dark theme.
+- **The Configurator no longer holds an AdminServer-only application as unpublished** when its
+  configuration file is deleted: the AdminServer reads the file where it lies, so the deletion
+  is already live. A deletion is pending only for an application another server runs.
+- **Recordings is one screen.** A compact search (words said, the days, a number; the rarer
+  filters folded under "More filters", opened when one is in use), the latest calls on arrival
+  as a list to pick from, and the record beside it with its transcript filling the panel.
+  Audit shows a refusal or a failed read in place of the log, and says when a day is empty.
+- **A sign-in that lost its session starts again.** When the application was redeployed or
+  sat idle while the browser was at the identity domain, the return used to stop on "login
+  state does not match"; it now starts the sign-in again, once, and lands where it was going.
 - **Sign out of every admin application at once.** The dashboard's "Sign out" now ends at
   the portal's `/logout`, which ends every session the browser holds on the AdminServer
   (WebLogic's `ServletAuthentication.invalidateAll`): the admin applications share one
@@ -111,6 +127,26 @@ the dashboard uses it from there.
   by a viewer the policy lets read every call they see.
 - **Recorded calls are searched on the server,** by time, finding, fault, application, far
   end, number or Vorpal-ID, 50 records a page.
+
+### Requests that overlap on a call each get their own answer
+
+- **Each relayed request gets its own answer.** A B2BUA kept the callback for a relayed request
+  under its method alone, so two NOTIFYs open at once on one dialog shared it: the answer to the
+  first went upstream as the answer to the second, and the first was never answered. A transfer
+  whose target failed at once lost its final NOTIFY this way. Callbacks are now kept by method
+  and CSeq (`Callflow.responseCallbackKey`); an INVITE keeps one per dialog.
+- **Only an INVITE or UPDATE waits for another transaction.** The glare guard answered 491 to
+  any in-dialog request that arrived while another was open, so a relay dropped the second of
+  two DTMF INFOs sent back to back, and an INFO sent during a re-INVITE. RFC 3261 holds only
+  INVITEs to one at a time. Now only an INVITE or UPDATE waits or opens protection
+  (`Callflow.carriesOffer`); INFO, MESSAGE, OPTIONS and the rest pass. A request that arrives
+  between our 2xx and its ACK is still parked and replayed in order.
+- **Answering an INFO no longer releases an open re-INVITE.** Any final response cleared the
+  dialog, so a 200 to an INFO or a keep-alive OPTIONS let a crossing re-INVITE through while
+  ours was still open. Only a final response to INVITE, UPDATE, REFER, NOTIFY or BYE clears it
+  now (`Callflow.releasesGlare`).
+
+All three were shown on a running domain through a B2BUA with SIPp, before and after.
 
 ### Telling one 503 from another
 
