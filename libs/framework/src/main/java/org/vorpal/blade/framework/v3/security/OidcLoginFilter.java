@@ -16,6 +16,7 @@ import javax.servlet.FilterConfig;
 import javax.servlet.ServletException;
 import javax.servlet.ServletRequest;
 import javax.servlet.ServletResponse;
+import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletRequestWrapper;
 import javax.servlet.http.HttpServletResponse;
@@ -371,9 +372,24 @@ public class OidcLoginFilter implements Filter {
 		HttpSession session = req.getSession(false);
 		String expected = (session == null) ? null : (String) session.getAttribute(STATE_ATTR);
 		String state = req.getParameter("state");
+		if (expected == null && state != null && !restarted(req)) {
+			// The session that started this login is gone: the application was
+			// redeployed, or sat idle, while the browser was at the provider.
+			// Start again, once: the provider still has the person signed in,
+			// so they land where they were going without seeing a thing.
+			Cookie once = new Cookie(RESTART_COOKIE, "1");
+			once.setMaxAge(60);
+			once.setPath(req.getContextPath().isEmpty() ? "/" : req.getContextPath());
+			once.setHttpOnly(true);
+			once.setSecure(req.isSecure());
+			res.addCookie(once);
+			res.sendRedirect(req.getContextPath() + "/");
+			return;
+		}
 		if (expected == null || state == null || !expected.equals(state)) {
-			// No session, or not the one that started this login: a stale
-			// bookmark, a cookie the browser refused, or a forged callback.
+			// Not the login this session started, or a second lost session in a
+			// minute (a browser refusing cookies would otherwise go round
+			// forever): a stale bookmark, or a forged callback.
 			deny(res, HttpServletResponse.SC_BAD_REQUEST, "login state does not match; start again", false);
 			return;
 		}
@@ -523,6 +539,22 @@ public class OidcLoginFilter implements Filter {
 		} else {
 			res.sendRedirect(home);
 		}
+	}
+
+	/// Cookie marking a sign-in restarted after its session was lost, so a
+	/// second loss within its minute is answered, not restarted again.
+	static final String RESTART_COOKIE = "blade-oidc-restart";
+
+	private static boolean restarted(HttpServletRequest req) {
+		Cookie[] cookies = req.getCookies();
+		if (cookies != null) {
+			for (Cookie c : cookies) {
+				if (RESTART_COOKIE.equals(c.getName())) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	/// `then` if it is a path on this host, else `home`. Only a single leading

@@ -131,6 +131,7 @@ class OidcLoginFilterTest {
 		int logoutCalls;
 		final Map<String, String> headers = new LinkedHashMap<>();
 		final Map<String, String> params = new LinkedHashMap<>();
+		javax.servlet.http.Cookie[] cookies;
 		Session session;
 
 		Request accept(String value) {
@@ -160,6 +161,8 @@ class OidcLoginFilterTest {
 							return headers.get(args[0]);
 						case "getParameter":
 							return params.get(args[0]);
+						case "getCookies":
+							return cookies;
 						case "authenticate":
 							authenticateCalls++;
 							return authenticateAnswer;
@@ -185,6 +188,7 @@ class OidcLoginFilterTest {
 	static final class Response {
 		int status = 200;
 		String redirect;
+		final java.util.List<javax.servlet.http.Cookie> cookies = new java.util.ArrayList<>();
 		final Map<String, String> headers = new LinkedHashMap<>();
 		final StringWriter body = new StringWriter();
 
@@ -198,6 +202,9 @@ class OidcLoginFilterTest {
 						case "sendRedirect":
 							status = 302;
 							redirect = (String) args[0];
+							return null;
+						case "addCookie":
+							cookies.add((javax.servlet.http.Cookie) args[0]);
 							return null;
 						case "setHeader":
 							headers.put((String) args[0], (String) args[1]);
@@ -413,6 +420,23 @@ class OidcLoginFilterTest {
 			f.doFilter(req.proxy(), res.proxy(), new Chain());
 			assertEquals(400, res.status);
 			assertNull(req.session.attributes.get(OidcLoginFilter.IDENTITY_ATTR));
+		}
+
+		@Test
+		void aLostSessionStartsTheLoginAgainOnce() throws Exception {
+			OidcLoginFilter f = filter(config(), providerKeys(), null);
+			Request req = callbackRequest("issued-before-a-redeploy", "the-code");
+			Response res = new Response();
+			f.doFilter(req.proxy(), res.proxy(), new Chain());
+			assertEquals(CONTEXT + "/", res.redirect, "home, which signs in again at the provider");
+			assertEquals(OidcLoginFilter.RESTART_COOKIE, res.cookies.get(0).getName());
+
+			// Lost again within the minute (a browser refusing cookies): answered, not looped.
+			Request again = callbackRequest("issued-before-a-redeploy", "the-code");
+			again.cookies = new javax.servlet.http.Cookie[] { new javax.servlet.http.Cookie(OidcLoginFilter.RESTART_COOKIE, "1") };
+			Response refused = new Response();
+			f.doFilter(again.proxy(), refused.proxy(), new Chain());
+			assertEquals(400, refused.status);
 		}
 
 		@Test
