@@ -81,9 +81,9 @@
     COUNT_LABELS.forEach(function (pair) {
       var key = pair[0];
       if (counts[key] == null) return;
-      var card = el('div', 'sample-stat');
-      card.appendChild(el('div', 'sample-stat-n', Number(counts[key]).toLocaleString()));
-      card.appendChild(el('div', 'sample-stat-k', pair[1]));
+      var card = el('div', 'sample-stat vorpal-stat');
+      card.appendChild(el('div', 'sample-stat-n vorpal-stat-value', Number(counts[key]).toLocaleString()));
+      card.appendChild(el('div', 'sample-stat-k vorpal-stat-label', pair[1]));
       box.appendChild(card);
     });
     document.getElementById('result-area').hidden = false;

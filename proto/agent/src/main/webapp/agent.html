@@ -57,7 +57,6 @@
      current call fits the screen), a minimized one is its header line. */
   #pops { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
   #empty { margin: auto; }
-  .muted { color: var(--muted); }
 
   /* One call = one card. Newest on top. */
   .pop { padding: 0; margin-bottom: 10px; overflow: hidden; transition: opacity .5s; display: flex; flex-direction: column; flex: 0 0 auto; }
@@ -182,6 +181,7 @@
   .topics { font-size: 12px; margin-top: 6px; }
   .topics .tlabel { color: var(--muted); }
   .recent { list-style: none; margin: 6px 0 0; padding: 0; font-size: 12px; color: var(--muted); }
+  .recent .vorpal-muted { font-size: inherit; }
   .recent li { padding: 2px 0; border-top: 1px dotted var(--line); font-variant-numeric: tabular-nums; }
 
   /* The disposition: three choices, notes, one button. Every call gets one. */
@@ -511,7 +511,7 @@
     if (h.callCount > 0) {
       out += '<div class="count">Called ' + h.callCount + ' time' + (h.callCount === 1 ? "" : "s") + " before</div>";
     } else {
-      out += '<div class="muted">First time this number has called.</div>';
+      out += '<div class="vorpal-muted">First time this number has called.</div>';
     }
     if (h.priorLabels && h.priorLabels.length) {
       out += '<div class="chips">';
@@ -531,13 +531,13 @@
           out += '<span class="disp"><span class="o">' + esc(OUTCOME_WORDS[c.outcome] || c.outcome) + "</span>" +
             (c.identity ? " · " + esc(IDENTITY_WORDS[c.identity] || c.identity) : "") +
             (c.action && c.action !== "none" ? " · " + esc(ACTION_WORDS[c.action] || c.action) : "") +
-            (c.agent ? ' <span class="muted">by ' + esc(c.agent) + "</span>" : "") +
-            (c.reasons ? '<br><span class="muted">tells: </span>' + esc(String(c.reasons).split(",").map(function (r) { return REASON_WORDS[r] || r; }).join(", ")) : "") +
+            (c.agent ? ' <span class="vorpal-muted">by ' + esc(c.agent) + "</span>" : "") +
+            (c.reasons ? '<br><span class="vorpal-muted">tells: </span>' + esc(String(c.reasons).split(",").map(function (r) { return REASON_WORDS[r] || r; }).join(", ")) : "") +
             (c.notes ? '<br><span class="n">' + esc(c.notes) + "</span>" : "") +
           "</span>";
         }
         if (c.reviewLabels) {
-          out += '<span class="disp"><span class="muted">review: </span>' +
+          out += '<span class="disp"><span class="vorpal-muted">review: </span>' +
             esc(String(c.reviewLabels).split(",").map(function (l) { return REVIEW_WORDS[l] || l; }).join(", ")) +
             (c.reviewText ? ' <span class="n">“' + esc(c.reviewText) + '”</span>' : "") + "</span>";
         }

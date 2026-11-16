@@ -15,7 +15,7 @@
 		   layout loads from /blade/portal/lib/blade-editor.css. */
 		.crud-content { max-width: 1400px; margin: 0 auto; padding: 24px; }
 		.crud-content > h1 { margin: 0 0 8px; font-size: 20px; font-weight: 600; color: var(--vorpal-ink-900); }
-		.subtitle { color: var(--vorpal-slate-600); margin: 0 0 24px; }
+		.subtitle { margin: 0 0 24px; }
 		.subtitle code { color: var(--vorpal-ink-900); }
 		.subtitle a.handoff { font-size: 12px; color: var(--vorpal-slate-600); margin-left: 6px; }
 		.grid {
@@ -48,7 +48,7 @@
 		.cfg-vars { display: grid; grid-template-columns: minmax(140px, 220px) 1fr auto; gap: 6px 8px; margin-bottom: 8px; }
 		.cfg-vars input.name, .vars-grid input.name { color: var(--vorpal-purple); }
 		.cfg-vars input[readonly] { color: var(--vorpal-slate-600); }
-		.vars-empty { color: var(--vorpal-slate-600); font-style: italic; padding: 6px 0; }
+		.vars-empty { font-style: italic; padding: 6px 0; }
 		.vars-grid {
 			display: grid;
 			grid-template-columns: 220px 1fr 32px;
@@ -93,32 +93,14 @@
 		.diag-grid .k { color: var(--vorpal-slate-600); }
 		.diag-grid .v { word-break: break-all; }
 		.diag-part { margin-top: 10px; }
-		.diag pre, .warn-panel pre, .diff-body {
-			background: var(--vorpal-slate-100);
-			border: 1px solid var(--vorpal-divider);
-			border-radius: var(--vorpal-radius-sm);
-			color: var(--vorpal-ink-900);
-		}
-		.diag pre, .warn-panel pre {
-			padding: 8px 10px;
-			margin: 4px 0 0;
-			max-height: 240px;
-			overflow: auto;
-			font: 11px/1.4 var(--vorpal-font-mono);
-			white-space: pre-wrap;
-			word-break: break-all;
-		}
+		/* The log and request blocks are .vorpal-code, held to a height. */
+		.diag pre, .warn-panel pre { margin-top: 4px; max-height: 240px; overflow: auto; word-break: break-all; }
 		#diagStack, .warn-panel pre { border-color: var(--vorpal-error); }
 		.warn-panel { margin-top: 12px; }
 		.warn-panel-title { font-weight: 600; }
 		.diff-panel { margin-top: 12px; }
-		.diff-body {
-			margin: 0;
-			padding: 10px 0;
-			max-height: 480px;
-			overflow: auto;
-			font: 12px/1.5 var(--vorpal-font-mono);
-		}
+		/* A .vorpal-code block; its lines run edge to edge. */
+		.diff-body { padding: 10px 0; max-height: 480px; overflow: auto; }
 		.diff-line {
 			display: flex;
 			padding: 0 12px;
@@ -127,12 +109,12 @@
 		}
 		/* An added or removed line: its + or - marker, then a tint. */
 		.diff-line .marker { flex: 0 0 16px; user-select: none; color: var(--vorpal-slate-600); }
-		.diff-line.add { background: color-mix(in srgb, var(--vorpal-success) 12%, transparent); }
+		.diff-line.add { background: var(--vorpal-success-soft); }
 		.diff-line.add .marker, .diff-line.add .text { color: var(--vorpal-success); }
 		.diff-line.del { background: var(--vorpal-error-soft); }
 		.diff-line.del .marker, .diff-line.del .text { color: var(--vorpal-error); }
 		.diff-line.ctx .text { opacity: 0.55; }
-		.diff-empty { color: var(--vorpal-slate-600); font-style: italic; padding: 0 12px; }
+		.diff-empty { font-style: italic; padding: 0 12px; }
 
 		/* ---- crud-editor page-specific editor layout ---- */
 		.editor-body {
@@ -141,32 +123,13 @@
 			border-top: 1px solid var(--vorpal-divider);
 			min-height: 200px;
 		}
-		.rs-list {
-			border-right: 1px solid var(--vorpal-divider);
-			padding: 8px;
-			display: flex;
-			flex-direction: column;
-			gap: 4px;
-		}
-		/* A rule set: the file picker's look, the chosen one filled and bold
-		   with a bar at its edge. */
+		/* The rule sets are a .vorpal-list: the chosen one (.active) is filled,
+		   bold and barred by the shared rule. Here only the column, and each
+		   row's name beside its delete button. */
+		.rs-list { border-right: 1px solid var(--vorpal-divider); padding: 8px; gap: 4px; }
 		.rs-list .rs-item {
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			gap: 6px;
-			border-radius: 6px;
-			padding: 4px 4px 4px 10px;
-			font: 12px var(--vorpal-font-mono);
-			color: var(--vorpal-ink-900);
-			word-break: break-all;
-			cursor: pointer;
-		}
-		.rs-list .rs-item:hover { background: var(--vorpal-slate-200); }
-		.rs-list .rs-item.active {
-			background: var(--vorpal-slate-200);
-			box-shadow: inset 3px 0 0 var(--vorpal-purple);
-			font-weight: 700;
+			display: flex; align-items: center; justify-content: space-between; gap: 6px;
+			padding: 4px 4px 4px 10px; font: 12px var(--vorpal-font-mono); word-break: break-all;
 		}
 		.rs-list .rs-item .rs-name { flex: 1; min-width: 0; }
 		.rs-list .rs-add { align-self: flex-start; margin-top: 4px; }
@@ -240,7 +203,7 @@
 
 	<main class="crud-content" data-shell-main>
 	<h1>CRUD rules</h1>
-	<p class="subtitle" title="Rules for: the CRUD service, or any application with a crud section.">
+	<p class="subtitle vorpal-muted" title="Rules for: the CRUD service, or any application with a crud section.">
 		Editing <code id="targetFile">crud.json</code>
 		<a class="handoff" id="handoff" href="/blade/configurator/configurator.html?schema=crud"
 			title="Logging, session settings, and cluster/server overlays are edited in the Configurator">
@@ -282,7 +245,7 @@
 		<div class="versions-panel" id="versionsPanel" style="display:none;">
 			<div class="vorpal-panel-head"><h2 class="vorpal-panel-title">Version history</h2></div>
 			<div id="versionsBody"></div>
-			<pre id="versionPreview" style="display:none;"></pre>
+			<pre id="versionPreview" class="vorpal-code" style="display:none;"></pre>
 		</div>
 
 		<div class="versions-panel" id="jsonPanel" style="display:none;">
@@ -290,30 +253,30 @@
 				<h2 class="vorpal-panel-title" id="jsonTitle">Draft crud.json · read-only, exactly what Save writes</h2>
 				<div class="vorpal-toolbar"><button id="copyJson" type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm">copy</button></div>
 			</div>
-			<pre id="jsonBody"></pre>
+			<pre id="jsonBody" class="vorpal-code"></pre>
 		</div>
 
 		<div class="section-head">
 			<span class="step">1</span>
 			<span class="vorpal-panel-title" title="Values every call starts with, read as ${name} by the pipeline, when and operations. Saved with the file; a cluster or server file sets its own by naming them.">Variables</span>
-			<button class="help-mini vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" data-help="variables">?</button>
+			<button class="help-mini vorpal-help" type="button" data-help="variables">?</button>
 		</div>
 		<div id="configVarsPanel" class="pipeline-panel"></div>
 
 		<div class="section-head">
 			<span class="step">2</span>
 			<span class="vorpal-panel-title" title="Connectors run in order on each initial request, extracting values into variables; the one that writes ruleSet picks the rule set.">Pipeline</span>
-			<button class="help-mini vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" data-help="pipeline">?</button>
+			<button class="help-mini vorpal-help" type="button" data-help="pipeline">?</button>
 		</div>
 		<div id="pipelinePanel" class="pipeline-panel"></div>
 
 		<div class="section-head">
 			<span class="step">3</span>
 			<span class="vorpal-panel-title" title="Each rule filters by method, lifecycle event and when, then runs its operations in order.">Rule sets</span>
-			<button class="help-mini vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" data-help="rulesets">?</button>
+			<button class="help-mini vorpal-help" type="button" data-help="rulesets">?</button>
 		</div>
 		<div class="editor-body">
-			<div class="rs-list" id="rsList"></div>
+			<div class="rs-list vorpal-list" id="rsList"></div>
 			<div class="rs-detail" id="rsDetail">
 				<div class="vorpal-empty">loading configuration…</div>
 			</div>
@@ -327,7 +290,7 @@
 	<div class="section-head on-glass">
 		<span class="step">4</span>
 		<span class="vorpal-panel-title" title="Runs the unsaved draft in-process on the AdminServer; nothing touches the wire.">Preview</span>
-		<button class="help-mini vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" data-help="preview">?</button>
+		<button class="help-mini vorpal-help" type="button" data-help="preview">?</button>
 	</div>
 
 	<div class="grid">
@@ -384,7 +347,7 @@
 				<div class="vorpal-label">Value</div>
 				<div></div>
 			</div>
-			<div id="varsEmpty" class="vars-empty">none</div>
+			<div id="varsEmpty" class="vars-empty vorpal-muted">none</div>
 			<div class="vars-toolbar vorpal-toolbar">
 				<button id="addVar" type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm">+ Add</button>
 				<button id="clearVars" type="button" class="clear-btn vorpal-btn vorpal-btn-danger vorpal-btn-sm">Clear</button>
@@ -393,7 +356,7 @@
 
 		<div class="vorpal-panel span">
 			<div class="vorpal-panel-head"><h2 class="vorpal-panel-title" title="Saved runs of this file: these inputs must still give this result. Saving the domain file runs its tests and refuses on a failure; a cluster or server file's tests run here, against what that file runs.">Tests</h2>
-				<button class="help-mini vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" data-help="tests">?</button>
+				<button class="help-mini vorpal-help" type="button" data-help="tests">?</button>
 				<span id="testsSummary" class="vorpal-panel-sub"></span></div>
 			<div class="tests-bar vorpal-toolbar">
 				<input id="testName" class="vorpal-input" placeholder="name for the last run" spellcheck="false">
@@ -405,7 +368,7 @@
 
 		<div class="vorpal-panel span">
 			<div class="vorpal-panel-head"><h2 class="vorpal-panel-title" title="Calls the Callflow trace caught for this application, with every message as it went over the wire. Arm a trace in Callflow, make the call, then pick it here.">A traced call</h2>
-				<button class="help-mini vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" data-help="tests">?</button></div>
+				<button class="help-mini vorpal-help" type="button" data-help="tests">?</button></div>
 			<div class="tests-bar vorpal-toolbar">
 				<select id="tracedCall" class="vorpal-input"><option value="">pick a traced call…</option></select>
 				<button id="refreshTraces" type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" title="Read the trace buffers again">↻</button>
@@ -420,7 +383,7 @@
 			<h2 class="vorpal-panel-title">Diff (input → output)</h2>
 			<span class="vorpal-panel-sub" id="diffSummary"></span>
 		</div>
-		<div id="diffBody" class="diff-body"></div>
+		<div id="diffBody" class="diff-body vorpal-code"></div>
 	</div>
 
 	<div id="firedPanel" class="fired vorpal-panel" style="display:none;">
@@ -440,17 +403,17 @@
 		<div class="warn-panel-title">
 			Engine log for this run (warnings and skipped operations)
 		</div>
-		<pre id="warnBody"></pre>
+		<pre id="warnBody" class="vorpal-code"></pre>
 	</div>
 	</aside>
 	</div>
 
-	<dialog id="helpDialog" class="help-dialog">
-		<div class="help-head">
-			<h2 class="vorpal-panel-title">How the CRUD service works</h2>
+	<dialog id="helpDialog" class="help-dialog vorpal-dialog">
+		<div class="help-head vorpal-dialog-head">
+			<h2 class="vorpal-dialog-title">How the CRUD service works</h2>
 			<button type="button" id="helpClose" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm">close</button>
 		</div>
-		<div class="help-body">
+		<div class="help-body vorpal-dialog-body">
 			<section id="help-pipeline">
 				<h3>The pipeline</h3>
 				<p>When a call arrives, the CRUD service has to answer one question before it can
@@ -638,15 +601,15 @@
 		</div>
 		<div class="diag-part">
 			<div class="vorpal-label">Request body</div>
-			<pre id="diagReq"></pre>
+			<pre id="diagReq" class="vorpal-code"></pre>
 		</div>
 		<div class="diag-part">
 			<div class="vorpal-label">Response body (raw)</div>
-			<pre id="diagResp"></pre>
+			<pre id="diagResp" class="vorpal-code"></pre>
 		</div>
 		<div id="diagStackWrap" class="diag-part" style="display:none;">
 			<div class="vorpal-label">Server stack trace</div>
-			<pre id="diagStack"></pre>
+			<pre id="diagStack" class="vorpal-code"></pre>
 		</div>
 	</details>
 	</main>
@@ -908,7 +871,7 @@ a=sendrecv
 
 			panel.style.display = '';
 			if (added === 0 && removed === 0) {
-				body.innerHTML = '<div class="diff-empty">no changes — message is byte-identical to the input</div>';
+				body.innerHTML = '<div class="diff-empty vorpal-muted">no changes — message is byte-identical to the input</div>';
 				summary.textContent = '';
 			} else {
 				body.innerHTML = html;
@@ -1167,7 +1130,7 @@ a=sendrecv
 					? ' · <strong>refused: the caller would get ' + escapeHtml(data.rejected) + '</strong>'
 					: '');
 			firedList.innerHTML = fired.length === 0
-				? '<span class="vars-empty">none</span>'
+				? '<span class="vars-empty vorpal-muted">none</span>'
 				: fired.map(id => `<span class="chip vorpal-badge vorpal-badge-brand">${escapeHtml(id)}</span>`).join('');
 			document.getElementById('undoneRow').style.display = undone.length ? '' : 'none';
 			document.getElementById('undoneList').innerHTML = undone
@@ -1886,7 +1849,7 @@ a=sendrecv
 			list.innerHTML = '';
 			for (const id of Object.keys(ed.doc.ruleSets)) {
 				const item = document.createElement('div');
-				item.className = 'rs-item' + (id === ed.current ? ' active' : '');
+				item.className = 'rs-item vorpal-list-item' + (id === ed.current ? ' active' : '');
 				item.setAttribute('role', 'button');
 				item.tabIndex = 0;
 				const name = document.createElement('span');

@@ -435,8 +435,9 @@
 		savedList.forEach(function (c) {
 			var btn = document.createElement('button');
 			btn.type = 'button';
-			btn.className = 'cf-item' + (c.id === selectedCall ? ' cf-active' : '');
-			btn.innerHTML = '<span class="cf-item-title"></span><span class="cf-item-cat"></span>';
+			btn.className = 'cf-item vorpal-list-item' + (c.id === selectedCall ? ' cf-active' : '');
+			if (c.id === selectedCall) { btn.setAttribute('aria-current', 'true'); }
+			btn.innerHTML = '<span class="cf-item-title"></span><span class="cf-item-cat vorpal-list-sub"></span>';
 			btn.querySelector('.cf-item-title').textContent = c.id + '  ·  ' + c.steps + ' steps';
 			btn.querySelector('.cf-item-cat').textContent = new Date(c.firstMillis).toLocaleString()
 				+ '  ·  ' + (c.apps || []).join(', ');
@@ -554,8 +555,9 @@
 		calls.forEach(function (c) {
 			var btn = document.createElement('button');
 			btn.type = 'button';
-			btn.className = 'cf-item' + (c.sessionId === selectedCall ? ' cf-active' : '');
-			btn.innerHTML = '<span class="cf-item-title"></span><span class="cf-item-cat"></span>';
+			btn.className = 'cf-item vorpal-list-item' + (c.sessionId === selectedCall ? ' cf-active' : '');
+			if (c.sessionId === selectedCall) { btn.setAttribute('aria-current', 'true'); }
+			btn.innerHTML = '<span class="cf-item-title"></span><span class="cf-item-cat vorpal-list-sub"></span>';
 			// the X-Vorpal-Session id is the call's key — lead with it; then the
 			// UNIQUE apps it touched (c.apps repeats every time the call bounces
 			// back through an app, which just wastes space here)
@@ -593,8 +595,9 @@
 		call.steps.forEach(function (s, i) {
 			var btn = document.createElement('button');
 			btn.type = 'button';
-			btn.className = 'cf-item tr-step' + (i === selectedStep ? ' cf-active' : '');
-			btn.innerHTML = '<span class="cf-item-title"></span><span class="cf-item-cat"></span>';
+			btn.className = 'cf-item vorpal-list-item tr-step' + (i === selectedStep ? ' cf-active' : '');
+			if (i === selectedStep) { btn.setAttribute('aria-current', 'true'); }
+			btn.innerHTML = '<span class="cf-item-title"></span><span class="cf-item-cat vorpal-list-sub"></span>';
 			// direction-aware arrows: sent →, received ← (older data has no
 			// direction — fall back to the original kind convention)
 			var arrow = s.direction ? (s.direction === 'in' ? '←' : '→')
@@ -1172,9 +1175,9 @@
 			'<div class="tr-layout">',
 			'<aside class="tr-left vorpal-panel" aria-label="Captured calls">',
 			'<div class="cf-group-label vorpal-label">Captured calls</div>',
-			'<div id="tr-calls"></div>',
+			'<div id="tr-calls" class="vorpal-list"></div>',
 			'<div class="cf-group-label vorpal-label">Timeline</div>',
-			'<div id="tr-timeline"><p class="cf-muted vorpal-empty">Pick a call above.</p></div>',
+			'<div id="tr-timeline" class="vorpal-list"><p class="cf-muted vorpal-empty">Pick a call above.</p></div>',
 			'</aside>',
 			'<article class="cf-detail vorpal-panel">',
 			'<div class="cf-detail-head">',
@@ -1195,8 +1198,8 @@
 			'<pre id="tr-message" class="tr-sipmsg tr-panel" data-tab="msg" hidden></pre>',
 			'<pre id="tr-code-panel" class="cf-code tr-panel" data-tab="src" hidden><ol id="tr-code" class="tr-lines"></ol></pre>',
 			'</div>',
-			'<dialog id="tr-msg-dialog" class="tr-msg-dialog" aria-labelledby="tr-msg-title">',
-			'<div class="tr-msg-head"><h2 id="tr-msg-title"></h2>',
+			'<dialog id="tr-msg-dialog" class="tr-msg-dialog vorpal-dialog" aria-labelledby="tr-msg-title">',
+			'<div class="tr-msg-head vorpal-dialog-head"><h2 id="tr-msg-title" class="vorpal-dialog-title"></h2>',
 			PRETTY_POPUP_BUTTON,
 			'<button id="tr-msg-close" type="button" class="tr-btn vorpal-btn vorpal-btn-secondary vorpal-btn-sm" aria-label="Close">Close</button></div>',
 			'<pre id="tr-msg-popup" class="tr-sipmsg"></pre>',

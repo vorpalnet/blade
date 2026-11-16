@@ -4,8 +4,6 @@
 
    State is signalled by glyph + word + border position, never by hue alone. */
 
-.ev-muted { color: var(--vorpal-slate-600); font-size: 13px; }
-
 .m-msg { margin-bottom: .75rem; }
 .m-kind { font-weight: 700; }
 

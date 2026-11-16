@@ -116,7 +116,7 @@ var events = (function () {
 						'<td><code>' + esc(t.type) + '</code></td>' +
 						'<td>' + esc(text(t.title)) + '</td>' +
 						'<td>' + esc(app.application) +
-						(app.servers && app.servers.length ? ' <span class="ev-muted">(' + esc(app.servers.join(', ')) + ')</span>' : '') +
+						(app.servers && app.servers.length ? ' <span class="vorpal-muted">(' + esc(app.servers.join(', ')) + ')</span>' : '') +
 						'</td>' +
 						'<td>' + (t.persist ? 'Yes' : 'No') + '</td>' +
 						num((t.fields || []).length) +
@@ -460,7 +460,7 @@ var events = (function () {
 					return '<option' + (t === (type || 'STRING') ? ' selected' : '') + '>' + t + '</option>';
 				}).join('') +
 			'</select>' +
-			'<label class="ev-muted"><input type="checkbox"' + (required ? ' checked' : '') + '> required</label>' +
+			'<label class="vorpal-muted"><input type="checkbox"' + (required ? ' checked' : '') + '> required</label>' +
 			'<button type="button" class="vorpal-btn vorpal-btn-danger vorpal-btn-sm">Remove</button>';
 
 		row.querySelector('button').addEventListener('click', function () {

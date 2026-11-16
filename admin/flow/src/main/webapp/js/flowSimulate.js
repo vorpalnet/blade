@@ -486,7 +486,7 @@ window.flowSimulate = (function() {
 			'<div class="vorpal-toolbar" style="margin-top:6px;">' +
 			'  <button id="rep-refresh" type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm">Refresh list</button>' +
 			'  <button id="rep-clear" type="button" class="vorpal-btn vorpal-btn-danger vorpal-btn-sm">Discard captures</button></div>' +
-			'<div id="rep-list" style="margin-top:6px; max-height:180px; overflow-y:auto; ' +
+			'<div id="rep-list" class="vorpal-list" style="margin-top:6px; max-height:180px; overflow-y:auto; padding:4px; ' +
 			'  border:1px solid var(--vorpal-slate-300); border-radius:8px; font-size:11px;"></div>';
 	}
 
@@ -518,10 +518,11 @@ window.flowSimulate = (function() {
 			list.innerHTML = '';
 			traces.forEach(function(t) {
 				var row = document.createElement('div');
-				row.style.cssText = 'padding:3px 5px; border-bottom:1px solid var(--vorpal-divider); cursor:pointer;';
+				row.className = 'vorpal-list-item';
+				row.style.fontSize = '12px';
 				row.innerHTML = '<b>' + esc(t.method || '?') + '</b> ' + esc(t.requestURI || '') +
 						' &rarr; ' + esc(t.egress ? '(egress)' : (t.finalApp || '(downstream)')) +
-						'<br/><span style="color:var(--vorpal-slate-600);">' + esc(t.callId || '') +
+						'<span class="vorpal-list-sub">' + esc(t.callId || '') +
 						(t.server ? ' · ' + esc(t.server) : '') + '</span>';
 				row.onclick = function() { loadTrace(t); };
 				list.appendChild(row);

@@ -77,13 +77,13 @@
 					<div class="ev-form-row">
 						<label class="vorpal-label" for="c-quota">Quota (bytes)</label>
 						<input id="c-quota" class="vorpal-input" type="number" value="1073741824">
-						<span class="ev-muted">Its own quota, so one destination cannot fill a shared store and starve the others.</span>
+						<span class="vorpal-muted">Its own quota, so one destination cannot fill a shared store and starve the others.</span>
 					</div>
 					<div class="ev-toolbar vorpal-toolbar" style="margin-top:.75rem">
 						<button id="c-create" class="vorpal-btn" type="button">Create</button>
 						<button id="c-cancel" class="vorpal-btn vorpal-btn-secondary" type="button">Cancel</button>
 					</div>
-					<p class="ev-muted">
+					<p class="vorpal-muted">
 						An existing BLADE JMS module is adopted rather than duplicated —
 						WebLogic cannot rename a JMS resource, and destroy-and-recreate
 						would orphan its file store.
@@ -91,7 +91,7 @@
 				</div>
 			</div>
 
-			<pre class="ev-code" id="action-log" hidden></pre>
+			<pre class="ev-code vorpal-code" id="action-log" hidden></pre>
 
 			<div id="jms-error" class="ev-finding vorpal-error is-problem" hidden>
 				<div class="ev-kind">✕ Cannot read JMS</div>
@@ -134,7 +134,7 @@
 					<div class="vorpal-toolbar"><span id="subscription-count" class="vorpal-badge">—</span></div>
 				</header>
 				<div class="ev-body">
-					<p class="ev-muted">
+					<p class="vorpal-muted">
 						A subscription's selector is the one thing that decides whether it
 						receives anything. If it does not match what the publisher stamps,
 						the subscription gets nothing — and that is indistinguishable from
@@ -167,14 +167,14 @@
 					<div class="vorpal-toolbar"><button id="browse-close" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button">Close</button></div>
 				</header>
 				<div class="ev-body">
-					<p class="ev-muted">
+					<p class="vorpal-muted">
 						Non-destructive: this reads what is at rest through a cursor and
 						takes nothing, so it cannot steal a message from the real
 						consumer. Bodies are truncated for display. Every browse is
 						logged with your username — an event body carries the call
 						correlator and whatever the producer put in it.
 					</p>
-					<pre class="ev-code" id="browse-body"></pre>
+					<pre class="ev-code vorpal-code" id="browse-body"></pre>
 				</div>
 			</div>
 

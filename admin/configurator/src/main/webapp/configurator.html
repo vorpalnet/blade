@@ -83,11 +83,10 @@
             <!-- Auto-publish toggle. Global Configurator behavior, not tied to the
                  currently-loaded app or to one editor, so it lives in the bar every
                  tab shares: in the Form Editor's toolbar it vanished from the JSON
-                 Editor. State is shown by thumb position AND the on/off text label. -->
-            <label class="autopublish-switch" title="ON: saved files go live automatically and the Publish button is hidden. OFF: saves wait for Publish.">
+                 Editor. State is shown by knob position AND the on/off text label. -->
+            <label class="autopublish-switch vorpal-switch" title="ON: saved files go live automatically and the Publish button is hidden. OFF: saves wait for Publish.">
                 <span class="autopublish-caption">Auto-publish</span>
                 <input type="checkbox" id="autopublish-toggle" checked onchange="setAutoPublish(this.checked)">
-                <span class="autopublish-track"><span class="autopublish-thumb"></span></span>
                 <span id="autopublish-state" class="autopublish-state">on</span>
             </label>
         </div>
@@ -110,37 +109,37 @@
                        placeholder="Filter fields..." aria-label="Filter form fields"
                        oninput="filterForm(this.value)">
 
-                <div class="toolbar-menu">
+                <div class="toolbar-menu vorpal-menu">
                     <button type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm toolbar-menu-trigger">File <span class="toolbar-chev">▾</span></button>
-                    <div class="toolbar-menu-items" role="menu">
-                        <button type="button" onclick="showTemplateLibrary()">New from Template…</button>
-                        <hr>
-                        <button type="button" onclick="importConfig()">Import…</button>
-                        <button type="button" onclick="exportConfig()">Export</button>
-                        <hr>
-                        <button type="button" onclick="resetForm()">Reset Form</button>
+                    <div class="toolbar-menu-items vorpal-menu-list" role="menu">
+                        <button type="button" class="vorpal-menu-item" role="menuitem" onclick="showTemplateLibrary()">New from Template…</button>
+                        <div class="vorpal-menu-sep" role="separator"></div>
+                        <button type="button" class="vorpal-menu-item" role="menuitem" onclick="importConfig()">Import…</button>
+                        <button type="button" class="vorpal-menu-item" role="menuitem" onclick="exportConfig()">Export</button>
+                        <div class="vorpal-menu-sep" role="separator"></div>
+                        <button type="button" class="vorpal-menu-item" role="menuitem" onclick="resetForm()">Reset Form</button>
                     </div>
                 </div>
 
-                <div class="toolbar-menu">
+                <div class="toolbar-menu vorpal-menu">
                     <button type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm toolbar-menu-trigger">History <span class="toolbar-chev">▾</span></button>
-                    <div class="toolbar-menu-items" role="menu">
-                        <button type="button" onclick="showVersionHistory()">Version History</button>
-                        <button type="button" onclick="showDiff()">Diff…</button>
-                        <hr>
-                        <button type="button" onclick="showCloneDialog()">Clone to Another Target</button>
+                    <div class="toolbar-menu-items vorpal-menu-list" role="menu">
+                        <button type="button" class="vorpal-menu-item" role="menuitem" onclick="showVersionHistory()">Version History</button>
+                        <button type="button" class="vorpal-menu-item" role="menuitem" onclick="showDiff()">Diff…</button>
+                        <div class="vorpal-menu-sep" role="separator"></div>
+                        <button type="button" class="vorpal-menu-item" role="menuitem" onclick="showCloneDialog()">Clone to Another Target</button>
                     </div>
                 </div>
 
-                <div class="toolbar-menu">
+                <div class="toolbar-menu vorpal-menu">
                     <button type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm toolbar-menu-trigger">View <span class="toolbar-chev">▾</span></button>
-                    <div class="toolbar-menu-items" role="menu">
-                        <button type="button" onclick="expandAll()">Expand All</button>
-                        <button type="button" onclick="collapseAll()">Collapse All</button>
-                        <button type="button" onclick="collapseEmpty()">Collapse Empty</button>
-                        <hr>
-                        <button type="button" id="inspector-toggle" onclick="toggleInspector()">Inspector</button>
-                        <button type="button" id="view-mode-toggle" onclick="toggleViewMode()">View Mode</button>
+                    <div class="toolbar-menu-items vorpal-menu-list" role="menu">
+                        <button type="button" class="vorpal-menu-item" role="menuitem" onclick="expandAll()">Expand All</button>
+                        <button type="button" class="vorpal-menu-item" role="menuitem" onclick="collapseAll()">Collapse All</button>
+                        <button type="button" class="vorpal-menu-item" role="menuitem" onclick="collapseEmpty()">Collapse Empty</button>
+                        <div class="vorpal-menu-sep" role="separator"></div>
+                        <button type="button" class="vorpal-menu-item" role="menuitem" id="inspector-toggle" onclick="toggleInspector()">Inspector</button>
+                        <button type="button" class="vorpal-menu-item" role="menuitem" id="view-mode-toggle" onclick="toggleViewMode()">View Mode</button>
                     </div>
                 </div>
 
@@ -225,7 +224,7 @@
             <div class="files-layout">
                 <aside class="files-rail vorpal-panel">
                     <div class="files-rail-title vorpal-label">Template files</div>
-                    <div id="files-rail-body" class="files-rail-body"><em>Loading…</em></div>
+                    <div id="files-rail-body" class="files-rail-body vorpal-list"><em>Loading…</em></div>
                 </aside>
                 <div id="text-editor" class="json-editor-container"></div>
             </div>
@@ -249,47 +248,47 @@
     </aside>
 
     <!-- Template library modal — "New from Template…" picker. -->
-    <div id="templateModal" class="modal">
-        <div class="modal-content vorpal-panel template-modal">
-            <div class="modal-header">
-                <h2 class="vorpal-panel-title">New from Template</h2>
-                <button type="button" class="modal-close vorpal-btn vorpal-btn-ghost vorpal-btn-sm" aria-label="Close" onclick="closeTemplateLibrary()">&times;</button>
+    <div id="templateModal" class="modal vorpal-backdrop">
+        <div class="modal-content vorpal-dialog template-modal">
+            <div class="modal-header vorpal-dialog-head">
+                <h2 class="vorpal-dialog-title">New from Template</h2>
+                <button type="button" class="modal-close vorpal-btn vorpal-btn-ghost vorpal-btn-icon" aria-label="Close" onclick="closeTemplateLibrary()">&times;</button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body vorpal-dialog-body">
                 <p class="template-modal-intro vorpal-panel-sub">Pick a starter config to load into the form. You'll review and Save to keep it.</p>
                 <div id="template-list" class="template-list"></div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer vorpal-dialog-foot">
                 <button type="button" class="vorpal-btn vorpal-btn-secondary" onclick="closeTemplateLibrary()">Close</button>
             </div>
         </div>
     </div>
 
     <!-- Diff modal — shows per-path changes vs. the last-loaded server copy. -->
-    <div id="diffModal" class="modal">
-        <div class="modal-content vorpal-panel diff-modal">
-            <div class="modal-header">
-                <h2 class="vorpal-panel-title">Diff · unsaved changes</h2>
-                <button type="button" class="modal-close vorpal-btn vorpal-btn-ghost vorpal-btn-sm" aria-label="Close" onclick="closeDiffModal()">&times;</button>
+    <div id="diffModal" class="modal vorpal-backdrop">
+        <div class="modal-content vorpal-dialog diff-modal">
+            <div class="modal-header vorpal-dialog-head">
+                <h2 class="vorpal-dialog-title">Diff · unsaved changes</h2>
+                <button type="button" class="modal-close vorpal-btn vorpal-btn-ghost vorpal-btn-icon" aria-label="Close" onclick="closeDiffModal()">&times;</button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body vorpal-dialog-body">
                 <div id="diff-summary" class="diff-summary"></div>
                 <div id="diff-body" class="diff-body"></div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer vorpal-dialog-foot">
                 <button type="button" class="vorpal-btn vorpal-btn-secondary" onclick="closeDiffModal()">Close</button>
             </div>
         </div>
     </div>
 
     <!-- Regex tester modal — opened by the "test" button next to RegexSelector.pattern. -->
-    <div id="regexTestModal" class="modal">
-        <div class="modal-content vorpal-panel regex-test-modal">
-            <div class="modal-header">
-                <h2 class="vorpal-panel-title">Regex Tester</h2>
-                <button type="button" class="modal-close vorpal-btn vorpal-btn-ghost vorpal-btn-sm" aria-label="Close" onclick="closeRegexTest()">&times;</button>
+    <div id="regexTestModal" class="modal vorpal-backdrop">
+        <div class="modal-content vorpal-dialog regex-test-modal">
+            <div class="modal-header vorpal-dialog-head">
+                <h2 class="vorpal-dialog-title">Regex Tester</h2>
+                <button type="button" class="modal-close vorpal-btn vorpal-btn-ghost vorpal-btn-icon" aria-label="Close" onclick="closeRegexTest()">&times;</button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body vorpal-dialog-body">
                 <div class="regex-test-row">
                     <label class="vorpal-label">Pattern</label>
                     <code id="regex-test-pattern" class="regex-test-pattern vorpal-mono"></code>
@@ -304,37 +303,37 @@
                 </div>
                 <div id="regex-test-result" class="regex-test-result"></div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer vorpal-dialog-foot">
                 <button type="button" class="vorpal-btn vorpal-btn-secondary" onclick="closeRegexTest()">Close</button>
             </div>
         </div>
     </div>
 
     <!-- Version History Modal -->
-    <div id="versionModal" class="modal">
-        <div class="modal-content vorpal-panel">
-            <div class="modal-header">
-                <h2 class="vorpal-panel-title">Version History</h2>
-                <button type="button" class="modal-close vorpal-btn vorpal-btn-ghost vorpal-btn-sm" aria-label="Close" onclick="closeVersionHistory()">&times;</button>
+    <div id="versionModal" class="modal vorpal-backdrop">
+        <div class="modal-content vorpal-dialog">
+            <div class="modal-header vorpal-dialog-head">
+                <h2 class="vorpal-dialog-title">Version History</h2>
+                <button type="button" class="modal-close vorpal-btn vorpal-btn-ghost vorpal-btn-icon" aria-label="Close" onclick="closeVersionHistory()">&times;</button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body vorpal-dialog-body">
                 <div id="versionListContainer"></div>
                 <pre id="versionPreview" class="version-preview vorpal-mono" style="display:none"></pre>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer vorpal-dialog-foot">
                 <button type="button" class="vorpal-btn vorpal-btn-secondary" onclick="closeVersionHistory()">Close</button>
             </div>
         </div>
     </div>
 
     <!-- Clone Configuration Modal -->
-    <div id="cloneModal" class="modal">
-        <div class="modal-content vorpal-panel">
-            <div class="modal-header">
-                <h2 class="vorpal-panel-title">Clone Configuration</h2>
-                <button type="button" class="modal-close vorpal-btn vorpal-btn-ghost vorpal-btn-sm" aria-label="Close" onclick="closeCloneDialog()">&times;</button>
+    <div id="cloneModal" class="modal vorpal-backdrop">
+        <div class="modal-content vorpal-dialog">
+            <div class="modal-header vorpal-dialog-head">
+                <h2 class="vorpal-dialog-title">Clone Configuration</h2>
+                <button type="button" class="modal-close vorpal-btn vorpal-btn-ghost vorpal-btn-icon" aria-label="Close" onclick="closeCloneDialog()">&times;</button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body vorpal-dialog-body">
                 <p>Clone the current configuration to another target directory:</p>
                 <div class="form-group">
                     <label for="clone-target-select" class="vorpal-label">Destination Target:</label>
@@ -346,7 +345,7 @@
                     <strong>Note:</strong> This will save the current configuration to the selected target directory.
                 </div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer vorpal-dialog-foot">
                 <button type="button" class="vorpal-btn" onclick="executeClone()">Clone</button>
                 <button type="button" class="vorpal-btn vorpal-btn-secondary" onclick="closeCloneDialog()">Cancel</button>
             </div>

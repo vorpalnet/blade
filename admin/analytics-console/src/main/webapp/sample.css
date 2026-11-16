@@ -1,7 +1,7 @@
 /*
  * Analytics sample-data page layout. Panels, fields, buttons and messages
- * are the shared components of /blade/portal/brand/brand.css; only this
- * page's layout and its result tiles live here.
+ * are the shared components of /blade/portal/brand/brand.css, the result
+ * tiles are the shared .vorpal-stat; only this page's layout lives here.
  */
 
 .sample-fieldset {
@@ -32,24 +32,12 @@
   gap: 14px;
   margin-bottom: 1.5rem;
 }
-.sample-status {
-  color: var(--vorpal-slate-600);
-  font-size: 13px;
-}
 
 .sample-counts {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
-/* A result tile. No shared stat tile exists yet. */
-.sample-stat {
-  padding: 10px 12px;
-  border: 1px solid var(--vorpal-divider);
-  border-radius: var(--vorpal-radius-md);
-}
-.sample-stat-n { font-size: 1.5em; font-weight: 700; font-variant-numeric: tabular-nums; }
-.sample-stat-k { font-size: 12px; color: var(--vorpal-slate-600); margin-top: 2px; }
 
 .sample-error {
   margin-top: 1rem;

@@ -7,11 +7,6 @@
 	border-bottom: 1px solid var(--vorpal-divider);
 }
 
-/* A hidden control stays hidden although .vorpal-btn sets a display. */
-.files-toolbar [hidden] {
-	display: none;
-}
-
 /* Restart takes the admin tier down. Beyond the danger button it carries a
    circular-arrow glyph and an explicit label, so it never reads by colour. */
 .files-toolbar button.files-danger::before {

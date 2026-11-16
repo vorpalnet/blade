@@ -16,13 +16,12 @@
 	<style>
 		/* Controls are the shared components from brand.css (.vorpal-btn,
 		   .vorpal-panel, .vorpal-table, .vorpal-input, .vorpal-badge, messages).
-		   Bootstrap stays for its grid, spacing utilities, the custom-control
-		   checkboxes and the tooltip plugin; everything here is layout or a
-		   visual with no shared equivalent. */
+		   Bootstrap stays for its grid, spacing utilities and the tooltip
+		   plugin (its script and the tooltip's CSS); everything here is layout
+		   or a visual with no shared equivalent. */
 		.container-fluid { max-width: 1440px; margin: 0 auto; padding: 24px 24px 40px; }
 		.container-fluid > .vorpal-page-title { margin: 0 0 20px; font-size: 22px; }
 		.container-fluid > .vorpal-panel { margin-bottom: 16px; }
-		.muted { color: var(--vorpal-slate-600); }
 		.vorpal-input { display: block; width: 100%; }
 		.vorpal-note, .vorpal-error, .vorpal-warn { margin-bottom: 12px; }
 		.container-fluid .vorpal-table td { vertical-align: middle; }
@@ -30,7 +29,7 @@
 		/* Section labels: the shared label, a rule under a group's heading, and
 		   a parenthetical or a button inside one kept in its own case. */
 		.tuning-rule { border-bottom: 1px solid var(--vorpal-divider); padding-bottom: 2px; }
-		.vorpal-label .muted { text-transform: none; letter-spacing: 0; font-weight: 400; }
+		.vorpal-label .vorpal-muted { text-transform: none; letter-spacing: 0; font-weight: 400; font-size: inherit; }
 		.vorpal-label .vorpal-btn { text-transform: none; letter-spacing: 0; }
 
 		/* Inline field groups */
@@ -48,14 +47,11 @@
 		.jvm-target-detail textarea.vorpal-input.is-set { font-weight: 700; box-shadow: inset 3px 0 0 var(--vorpal-purple); background-color: var(--vorpal-purple-soft); }
 		.field-group .vorpal-input::placeholder { font-style: italic; color: var(--vorpal-slate-400); }
 
-		/* Bootstrap's checkboxes and switches, on the brand tokens. Checked is
-		   the tick or the knob's position, not only the fill. */
-		.custom-control-label::before { background-color: var(--vorpal-surface); border-color: var(--vorpal-slate-400); }
-		.custom-control-input:checked ~ .custom-control-label::before { background-color: var(--vorpal-mark); border-color: var(--vorpal-mark); }
-		.custom-control-input:focus ~ .custom-control-label::before { box-shadow: 0 0 0 2px var(--vorpal-purple-100); }
-		.custom-control-input:focus:not(:checked) ~ .custom-control-label::before { border-color: var(--vorpal-purple); }
-		.custom-switch .custom-control-label::after { background-color: var(--vorpal-slate-400); }
-		.custom-switch .custom-control-input:checked ~ .custom-control-label::after { background-color: var(--vorpal-surface); }
+		/* A plain checkbox and its words in one label; the tick is the state.
+		   On/off switches use the shared .vorpal-switch. */
+		.tuning-check { display: inline-flex; align-items: baseline; gap: 6px; font-size: 12px; margin: 0; cursor: pointer; }
+		.tuning-check input { margin: 0; flex: none; accent-color: var(--vorpal-mark); cursor: pointer; }
+		.vorpal-switch { margin: 0; }
 
 		/* About panel: three readout columns over a deployed-apps strip. The
 		   tier of each deployed app is shown by a text label + position (services
@@ -276,9 +272,9 @@
 				</div>
 			</div>
 			<div>
-				<div class="mb-1 vorpal-label tuning-rule">OS &amp; Limits <span class="muted" style="font-weight:400">(from the platform OperatingSystem MBean)</span></div>
+				<div class="mb-1 vorpal-label tuning-rule">OS &amp; Limits <span class="vorpal-muted" style="font-weight:400">(from the platform OperatingSystem MBean)</span></div>
 				<div id="os-container"><div class="vorpal-empty">Loading...</div></div>
-				<div class="mt-3 mb-1 vorpal-label tuning-rule">Findings <span class="muted" style="font-weight:400">(static checks of the current JVM configuration; fixes are applied in the sections below)</span></div>
+				<div class="mt-3 mb-1 vorpal-label tuning-rule">Findings <span class="vorpal-muted" style="font-weight:400">(static checks of the current JVM configuration; fixes are applied in the sections below)</span></div>
 				<div id="health-container"><div class="vorpal-empty">Loading...</div></div>
 			</div>
 		</div>
@@ -293,7 +289,7 @@
 				<div class="vorpal-toolbar">
 					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="jvmToggleHistory()" title="Every write this page makes to a ServerStart first records the state it is about to replace. The baseline is what install.sh wrote. Any entry can be written back verbatim.">History &amp; baseline</button>
 					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="loadJvmProfiles()">Refresh</button>
-					<span class=" muted" style="font-size:12px; line-height:31px">Apply template to selected profile:</span>
+					<span class="vorpal-muted" style="font-size:12px; line-height:31px">Apply template to selected profile:</span>
 					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="recommendJvm()" title="Set -Xms = -Xmx on the selected profile so the heap is fully committed at startup (no runtime resize pauses), plus Fast SecureRandom (urandom), concurrent System.gc() (ExplicitGCInvokesConcurrent), Exit on OOM, and wlss.maddr.enable.">Deterministic (G1GC)</button>
 					<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="recommendJvmZgc()" title="Low-latency preset for JDK 21 applied to the selected profile: ZGC + Generational + AlwaysPreTouch + -Xms=-Xmx + Fast SecureRandom (urandom) + concurrent System.gc() (ExplicitGCInvokesConcurrent) + Exit on OOM + wlss.maddr.enable. (JDK 21/22; do not carry the Generational flag past JDK 23.)">Low-Latency (ZGC)</button>
 				</div>
@@ -474,27 +470,27 @@
 				<!-- Toggles -->
 				<h6 class="vorpal-label mb-2 mt-3">Features</h6>
 				<div class="row">
-					<div class="col-md-4 mb-2"><div class="custom-control custom-checkbox">
-						<input type="checkbox" class="custom-control-input sip-check" id="sip-engineCallStateCache"><label class="custom-control-label" for="sip-engineCallStateCache" data-toggle="tooltip" title="Cache call state in the local engine's memory for faster access. Reduces Coherence lookups during SIP processing. Recommended for high-traffic deployments.">Engine Call State Cache</label>
-					</div></div>
-					<div class="col-md-4 mb-2"><div class="custom-control custom-checkbox">
-						<input type="checkbox" class="custom-control-input sip-check" id="sip-enableSipOutbound"><label class="custom-control-label" for="sip-enableSipOutbound" data-toggle="tooltip" title="RFC 5626: Enables SIP Outbound for clients behind NATs and firewalls. Allows persistent connections from UA to the server so inbound requests can be routed back through the same connection.">SIP Outbound (RFC 5626)</label>
-					</div></div>
-					<div class="col-md-4 mb-2"><div class="custom-control custom-checkbox">
-						<input type="checkbox" class="custom-control-input sip-check" id="sip-enableDnsSrvLookup"><label class="custom-control-label" for="sip-enableDnsSrvLookup" data-toggle="tooltip" title="Use DNS SRV record lookups (RFC 3263) to discover SIP servers by domain. Enables proper SIP routing via NAPTR/SRV/A records instead of hardcoded addresses.">DNS SRV Lookup</label>
-					</div></div>
-					<div class="col-md-4 mb-2"><div class="custom-control custom-checkbox">
-						<input type="checkbox" class="custom-control-input sip-check" id="sip-enableTimerAffinity"><label class="custom-control-label" for="sip-enableTimerAffinity" data-toggle="tooltip" title="Process each SIP timer on the engine that set it. Off (the default), a timer riding replicated call state may fire on a different engine than the one that created it — correct either way, since the callflow state travels with the call. Turn it on only if an application keeps node-local state a timer callback depends on. Meaningless outside a replicated/clustered call-state deployment.">Timer Affinity</label>
-					</div></div>
-					<div class="col-md-4 mb-2"><div class="custom-control custom-checkbox">
-						<input type="checkbox" class="custom-control-input sip-check" id="sip-enableRPort"><label class="custom-control-label" for="sip-enableRPort" data-toggle="tooltip" title="RFC 3581: Add rport parameter to Via header. Allows the server to send responses back to the port the request came from, which helps with NAT traversal.">RPort (RFC 3581)</label>
-					</div></div>
-					<div class="col-md-4 mb-2"><div class="custom-control custom-checkbox">
-						<input type="checkbox" class="custom-control-input sip-check" id="sip-enableLocalDispatch"><label class="custom-control-label" for="sip-enableLocalDispatch" data-toggle="tooltip" title="When this engine sends or forwards a request whose destination address is one of its own SIP listen addresses — or the cluster's load-balancer public address — deliver it in-process instead of out through the network. The decision is by destination address, not by session location. Saves a socket round-trip on app-to-app hops within one engine; the trade-off is that a request aimed at the load balancer stays on this engine instead of being re-distributed.">Local Dispatch</label>
-					</div></div>
-					<div class="col-md-4 mb-2"><div class="custom-control custom-checkbox">
-						<input type="checkbox" class="custom-control-input sip-check" id="sip-enableSend100ForNonInvite"><label class="custom-control-label" for="sip-enableSend100ForNonInvite" data-toggle="tooltip" title="OCCAS's RFC 4320 guard, ON by default (the default is compiled in — no sipserver.xml entry means enabled): every non-INVITE server transaction arms a timer at T2 (4 s), and if the application has not answered by then the container sends 100 Trying itself. BLADE applications answer in milliseconds, so the guard never fires usefully — but it can misfire: when the request was answered through another path (e.g. a retransmission processed as a fresh request), the timer trips over the completed transaction and logs BEA-331601 'Client timer task failed … This transaction has been completed already' at ERROR level. Recommended: off. If you see BEA-331601 on REGISTER/SUBSCRIBE traffic, this is the switch.">Send 100 for Non-INVITE</label>
-					</div></div>
+					<div class="col-md-4 mb-2">
+						<label class="tuning-check" data-toggle="tooltip" title="Cache call state in the local engine's memory for faster access. Reduces Coherence lookups during SIP processing. Recommended for high-traffic deployments."><input type="checkbox" class="sip-check" id="sip-engineCallStateCache"> Engine Call State Cache</label>
+					</div>
+					<div class="col-md-4 mb-2">
+						<label class="tuning-check" data-toggle="tooltip" title="RFC 5626: Enables SIP Outbound for clients behind NATs and firewalls. Allows persistent connections from UA to the server so inbound requests can be routed back through the same connection."><input type="checkbox" class="sip-check" id="sip-enableSipOutbound"> SIP Outbound (RFC 5626)</label>
+					</div>
+					<div class="col-md-4 mb-2">
+						<label class="tuning-check" data-toggle="tooltip" title="Use DNS SRV record lookups (RFC 3263) to discover SIP servers by domain. Enables proper SIP routing via NAPTR/SRV/A records instead of hardcoded addresses."><input type="checkbox" class="sip-check" id="sip-enableDnsSrvLookup"> DNS SRV Lookup</label>
+					</div>
+					<div class="col-md-4 mb-2">
+						<label class="tuning-check" data-toggle="tooltip" title="Process each SIP timer on the engine that set it. Off (the default), a timer riding replicated call state may fire on a different engine than the one that created it — correct either way, since the callflow state travels with the call. Turn it on only if an application keeps node-local state a timer callback depends on. Meaningless outside a replicated/clustered call-state deployment."><input type="checkbox" class="sip-check" id="sip-enableTimerAffinity"> Timer Affinity</label>
+					</div>
+					<div class="col-md-4 mb-2">
+						<label class="tuning-check" data-toggle="tooltip" title="RFC 3581: Add rport parameter to Via header. Allows the server to send responses back to the port the request came from, which helps with NAT traversal."><input type="checkbox" class="sip-check" id="sip-enableRPort"> RPort (RFC 3581)</label>
+					</div>
+					<div class="col-md-4 mb-2">
+						<label class="tuning-check" data-toggle="tooltip" title="When this engine sends or forwards a request whose destination address is one of its own SIP listen addresses — or the cluster's load-balancer public address — deliver it in-process instead of out through the network. The decision is by destination address, not by session location. Saves a socket round-trip on app-to-app hops within one engine; the trade-off is that a request aimed at the load balancer stays on this engine instead of being re-distributed."><input type="checkbox" class="sip-check" id="sip-enableLocalDispatch"> Local Dispatch</label>
+					</div>
+					<div class="col-md-4 mb-2">
+						<label class="tuning-check" data-toggle="tooltip" title="OCCAS's RFC 4320 guard, ON by default (the default is compiled in — no sipserver.xml entry means enabled): every non-INVITE server transaction arms a timer at T2 (4 s), and if the application has not answered by then the container sends 100 Trying itself. BLADE applications answer in milliseconds, so the guard never fires usefully — but it can misfire: when the request was answered through another path (e.g. a retransmission processed as a fresh request), the timer trips over the completed transaction and logs BEA-331601 'Client timer task failed … This transaction has been completed already' at ERROR level. Recommended: off. If you see BEA-331601 on REGISTER/SUBSCRIBE traffic, this is the switch."><input type="checkbox" class="sip-check" id="sip-enableSend100ForNonInvite"> Send 100 for Non-INVITE</label>
+					</div>
 				</div>
 				<!-- Overload protection (classic <overload> element: OverloadBean) -->
 				<h6 class="vorpal-label mb-2 mt-3">Overload Protection</h6>
@@ -823,7 +819,7 @@
 			if (b.built) h += '<dt>Built</dt><dd class="vorpal-mono">' + he(fmtBuilt(b.built)) + '</dd>';
 			if (b.license) h += '<dt>License</dt><dd>' + he(b.license) + '</dd>';
 			h += '</dl>';
-			if (b.copyright) h += '<div class="muted" style="font-size:11px;margin-top:6px">' + he(b.copyright) + '</div>';
+			if (b.copyright) h += '<div class="vorpal-muted" style="font-size:11px;margin-top:6px">' + he(b.copyright) + '</div>';
 			h += '</div>';
 
 			// --- Platform ---------------------------------------------
@@ -842,7 +838,7 @@
 			// --- Patches ----------------------------------------------
 			h += '<div class="about-col"><h6 class="vorpal-label mb-2">Applied Patches (' + patches.length + ')</h6>';
 			if (!patches.length) {
-				h += '<div class="muted" style="font-size:12px">None reported by the OPatch inventory.</div>';
+				h += '<div class="vorpal-muted" style="font-size:12px">None reported by the OPatch inventory.</div>';
 			} else {
 				$.each(patches, function (i, pt) {
 					h += '<div class="about-patch"><span class="pid">' + he(pt.id) + '</span> '
@@ -925,7 +921,7 @@
 			if (!d) return '<td class="vorpal-mono">&mdash;</td>';
 			var counts = '';
 			if (d.activeSipSessions >= 0 || d.sipThroughput >= 0) {
-				counts = ' <span class="muted">(' +
+				counts = ' <span class="vorpal-muted">(' +
 					(d.activeSipSessions >= 0 ? 'sessions ' + fmtNum(d.activeSipSessions) : '') +
 					(d.sipThroughput >= 0 ? (d.activeSipSessions >= 0 ? ' · ' : '') + 'work/period ' + fmtNum(d.sipThroughput) : '') +
 					')</span>';
@@ -962,7 +958,7 @@
 
 		function loadOsTable() {
 			$.getJSON('api/v1/os', function (rows) {
-				if (!rows || !rows.length) { $('#os-container').html('<span class="muted">No OS info available.</span>'); return; }
+				if (!rows || !rows.length) { $('#os-container').html('<span class="vorpal-muted">No OS info available.</span>'); return; }
 				var html = '<table class="vorpal-table mb-0"><thead><tr>';
 				html += '<th>Server</th>';
 				html += '<th data-toggle="tooltip" title="Lifecycle state from ServerLifeCycleRuntime: RUNNING, STARTING, SHUTDOWN, FAILED, UNKNOWN…">State</th>';
@@ -973,7 +969,7 @@
 				html += '<th></th></tr></thead><tbody>';
 				$.each(rows, function (i, r) {
 					var lowFd = r.maxFds > 0 && r.maxFds < 16384;
-					html += '<tr><td><strong>' + he(r.server) + '</strong> <span class="muted">' + he(r.arch || '') + '</span></td>';
+					html += '<tr><td><strong>' + he(r.server) + '</strong> <span class="vorpal-muted">' + he(r.arch || '') + '</span></td>';
 					html += '<td class="vorpal-mono">' + he(r.state || '—') + '</td>';
 					html += '<td class="vorpal-mono">' + he((r.name ? r.name + ' ' : '') + (r.kernel || '')) + '</td>';
 					html += '<td class="vorpal-mono">' + fmtNum(r.processors) + '</td>';
@@ -1239,7 +1235,7 @@
 				h += '<div class="col-md-5"><label class="vorpal-label d-block">Arguments</label>';
 				h += '<div class="jvm-argwrap"><div id="jvm-arghl" class="jvm-arghl"></div>';
 				h += '<textarea id="jvm-argbox" class="jvm-argta" rows="20" spellcheck="false"></textarea></div>';
-				h += '<div class="muted mt-1" style="font-size:11px">Edit fields or type here — they stay in sync. A <span class="jvm-bad">wavy-underlined</span> token is flagged invalid (see the reasons below); unmodeled args are preserved.</div>';
+				h += '<div class="vorpal-muted mt-1" style="font-size:11px">Edit fields or type here — they stay in sync. A <span class="jvm-bad">wavy-underlined</span> token is flagged invalid (see the reasons below); unmodeled args are preserved.</div>';
 				h += '<div id="jvm-argissues" class="jvm-argissues"></div></div></div>';
 			} else {
 				h += '<div class="vorpal-note">No profile selected. Click <strong>New</strong> to create one.</div>';
@@ -1290,8 +1286,7 @@
 			h += '<div class="row">';
 			JVM_SCALARS.filter(function (s) { return s.group === 'heap'; }).forEach(function (s) { h += renderScalar(id, s, st); });
 			h += '</div>';
-			h += '<div class="custom-control custom-checkbox mb-1"><input type="checkbox" class="custom-control-input" id="p-metaAuto"' + (p.metaAuto ? ' checked' : '') + '>';
-			h += '<label class="custom-control-label" for="p-metaAuto" style="font-size:12px" data-toggle="tooltip" title="Auto-size Metaspace and Max Metaspace from Max Heap. Metaspace tracks class metadata, not heap, so this is a clamped convenience: Max Metaspace = Max Heap / 16 (bounded 256m to 1g) and Metaspace stays at the WebLogic-safe 256m. Uncheck to set them by hand.">Auto-size Metaspace from Max Heap</label></div>';
+			h += '<div class="mb-1"><label class="tuning-check" data-toggle="tooltip" title="Auto-size Metaspace and Max Metaspace from Max Heap. Metaspace tracks class metadata, not heap, so this is a clamped convenience: Max Metaspace = Max Heap / 16 (bounded 256m to 1g) and Metaspace stays at the WebLogic-safe 256m. Uncheck to set them by hand."><input type="checkbox" id="p-metaAuto"' + (p.metaAuto ? ' checked' : '') + '> Auto-size Metaspace from Max Heap</label></div>';
 
 			// Garbage Collection — collector selector + only the chosen collector's options.
 			h += jvmPanelHeader('Garbage Collection');
@@ -1305,7 +1300,7 @@
 				gcFlags.forEach(function (f) { h += tipCb(id, f.flag, f.label, st.flags, f.tip); });
 				h += '</div>';
 			} else {
-				h += '<div class="muted" style="font-size:11px">' + (collector ? 'No extra tuning options modeled for this collector.' : 'Pick a collector to see its tuning options.') + '</div>';
+				h += '<div class="vorpal-muted" style="font-size:11px">' + (collector ? 'No extra tuning options modeled for this collector.' : 'Pick a collector to see its tuning options.') + '</div>';
 			}
 
 			h += jvmPanelHeader('Performance');
@@ -1322,8 +1317,8 @@
 
 			// Flight Recording (JFR) — a compound -XX:StartFlightRecording arg.
 			h += jvmPanelHeader('Flight Recording (JFR)');
-			h += '<div class="custom-control custom-checkbox mb-2"><input type="checkbox" class="custom-control-input" id="p-jfrEnable"' + (st.jfr.enabled ? ' checked' : '') + '>';
-			h += '<label class="custom-control-label" for="p-jfrEnable" style="font-size:12px">Start a recording at JVM startup (-XX:StartFlightRecording). On JDK 11+ JFR is free — do not add -XX:+UnlockCommercialFeatures.</label></div>';
+			h += '<div class="mb-2"><label class="tuning-check"><input type="checkbox" id="p-jfrEnable"' + (st.jfr.enabled ? ' checked' : '') + '>';
+			h += ' Start a recording at JVM startup (-XX:StartFlightRecording). On JDK 11+ JFR is free — do not add -XX:+UnlockCommercialFeatures.</label></div>';
 			h += '<div class="row">';
 			JFR_FIELDS.forEach(function (f) { h += renderJfrField(id, f, st.jfr.vals[f.key]); });
 			h += '</div>';
@@ -1554,13 +1549,13 @@
 			var what = [];
 			if (t.argumentsDiffer) what.push('arguments');
 			if (t.classPathDiffers) what.push('classpath');
-			return '<span class="base-diff">&ne; baseline</span> <span class="muted" style="font-size:11px">(' + what.join(', ') + ')</span>';
+			return '<span class="base-diff">&ne; baseline</span> <span class="vorpal-muted" style="font-size:11px">(' + what.join(', ') + ')</span>';
 		}
 		function renderJvmTargetsHtml() {
 			var h = '<div class="d-flex align-items-baseline mb-1" style="gap:8px;flex-wrap:wrap">';
 			h += '<span style="font-weight:600">Targets</span>';
-			h += '<span class="muted" style="font-size:12px">The ServerStart owners in config.xml. A dynamic engine has none of its own: it boots from its cluster\'s template.</span>';
-			h += '<span class="ml-auto muted" style="font-size:11px">' + (jvm.baselineCapturedAt
+			h += '<span class="vorpal-muted" style="font-size:12px">The ServerStart owners in config.xml. A dynamic engine has none of its own: it boots from its cluster\'s template.</span>';
+			h += '<span class="ml-auto vorpal-muted" style="font-size:11px">' + (jvm.baselineCapturedAt
 				? 'Baseline pinned ' + he(fmtBuilt(jvm.baselineCapturedAt)) + (jvm.baselineReason ? ' (' + he(jvm.baselineReason) + ')' : '')
 				: 'No baseline pinned yet') + '</span></div>';
 			if (jvm.orphaned.length) {
@@ -1581,11 +1576,11 @@
 				h += '<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="jvmRestoreTarget(' + JSON.stringify(t.name).replace(/"/g, '&quot;') + ')"' + (t.inBaseline && (t.argumentsDiffer || t.classPathDiffers) ? '' : ' disabled') + ' title="Write this target\'s baseline ClassPath and Arguments back verbatim (no merge). The current state is recorded in History first.">Restore baseline</button></td></tr>';
 				if (open) h += '<tr class="jvm-target-detail"><td colspan="5">' + renderJvmTargetDetail(t, id) + '</td></tr>';
 			});
-			if (!jvm.targets.length) h += '<tr><td colspan="5" class="muted">No targets found.</td></tr>';
+			if (!jvm.targets.length) h += '<tr><td colspan="5" class="vorpal-muted">No targets found.</td></tr>';
 			h += '</tbody></table>';
 			h += '<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="jvmPreview()" title="Saves the profiles, then shows what Apply would change on each assigned target. Nothing is written to the domain.">Preview</button> ';
 			h += '<button class="vorpal-btn vorpal-btn-sm" onclick="jvmApply()" title="Saves the profiles, records the current ServerStart of every target in History, then overlays each assigned profile onto its target.">Apply to targets</button>';
-			h += ' <span class="muted" style="font-size:12px">Restart the affected servers to activate.</span>';
+			h += ' <span class="vorpal-muted" style="font-size:12px">Restart the affected servers to activate.</span>';
 			return h;
 		}
 		function renderJvmTargetDetail(t, id) {
@@ -1696,10 +1691,10 @@
 			h += '<span class="summary">' + ch.length + ' target(s) assigned, ' + n + ' with changes' + (applied ? ', written to config.xml' : ', nothing written yet') + '</span>';
 			if (!applied && n) h += '<button class="vorpal-btn vorpal-btn-sm ml-auto" onclick="jvmApply()">Apply these changes</button>';
 			h += '<button class="vorpal-btn vorpal-btn-ghost vorpal-btn-sm' + (applied || !n ? ' ml-auto' : ' ml-2') + '" onclick="$(\'#jvm-preview\').empty()">Close</button></div>';
-			if (!ch.length) h += '<div class="jvm-diff-target muted">No profile is assigned to any target.</div>';
+			if (!ch.length) h += '<div class="jvm-diff-target vorpal-muted">No profile is assigned to any target.</div>';
 			ch.forEach(function (c) {
 				h += '<div class="jvm-diff-target"><div class="who"><strong class="vorpal-mono">' + he(c.target) + '</strong><span class="kind">' + he(c.kind) + '</span>';
-				if (c.ok) h += ' &larr; ' + he(c.profile) + (c.unchanged ? ' <span class="muted">(already applied, nothing to write)</span>' : '');
+				if (c.ok) h += ' &larr; ' + he(c.profile) + (c.unchanged ? ' <span class="vorpal-muted">(already applied, nothing to write)</span>' : '');
 				else h += ' <strong>&#9888; skipped:</strong> ' + he(c.error || 'error');
 				h += '</div>';
 				(c.warnings || []).forEach(function (w) { h += '<div class="vorpal-warn warn"><strong>&#9888;</strong> ' + he(w) + '</div>'; });
@@ -1734,14 +1729,14 @@
 			el.html('<div class="vorpal-empty">Loading history...</div>');
 			$.getJSON('api/v1/jvm/history', function (rows) {
 				var h = '<div class="d-flex align-items-center mb-1" style="gap:8px"><strong>History &amp; baseline</strong>';
-				h += '<span class="muted" style="font-size:12px">Each entry is the state of every target just before a write. Restore writes it back verbatim.</span>';
+				h += '<span class="vorpal-muted" style="font-size:12px">Each entry is the state of every target just before a write. Restore writes it back verbatim.</span>';
 				h += '<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm ml-auto" onclick="jvmViewSnapshot(\'baseline\')" title="Show the pinned baseline: every target\'s ServerStart as install.sh left it.">View baseline</button> ';
 				h += '<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="jvmRestoreAll(\'baseline\')" title="Write the baseline ClassPath and Arguments back onto every target, verbatim. The current state is recorded first.">Restore baseline on all</button> ';
 				h += '<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="jvmRebaseline()" title="Pin the current live ServerStart of every target as the new baseline (the old baseline is kept as a version beside it). Do this after re-running install.sh or after a change you want treated as the new normal.">Re-baseline</button>';
 				h += '<button class="vorpal-btn vorpal-btn-ghost vorpal-btn-sm" onclick="$(\'#jvm-history\').hide()">Close</button></div>';
 				h += '<div id="jvm-snapshot"></div>';
 				rows = rows || [];
-				if (!rows.length) h += '<div class="muted" style="font-size:12px">No writes recorded yet.</div>';
+				if (!rows.length) h += '<div class="vorpal-muted" style="font-size:12px">No writes recorded yet.</div>';
 				else {
 					h += '<table class="vorpal-table mb-3"><thead><tr><th>When</th><th>Reason</th><th>Targets</th><th></th></tr></thead><tbody>';
 					rows.forEach(function (r) {
@@ -1759,7 +1754,7 @@
 				var h = '<div class="vorpal-note"><strong>' + (id === 'baseline' ? 'Baseline' : 'Snapshot') + '</strong> captured ' + he(fmtBuilt(s.capturedAt)) + ' (' + he(s.reason) + ') <a href="#" class="float-right" onclick="$(\'#jvm-snapshot\').empty();return false">close</a>';
 				Object.keys(s.targets || {}).forEach(function (name) {
 					var e = s.targets[name];
-					h += '<div class="mt-2"><strong class="vorpal-mono">' + he(name) + '</strong> <span class="muted" style="font-size:11px">' + he(e.kind) + (e.javaHome ? ' &middot; ' + he(e.javaHome) : '') + '</span>';
+					h += '<div class="mt-2"><strong class="vorpal-mono">' + he(name) + '</strong> <span class="vorpal-muted" style="font-size:11px">' + he(e.kind) + (e.javaHome ? ' &middot; ' + he(e.javaHome) : '') + '</span>';
 					h += '<div style="font-size:11px;font-weight:600;margin-top:2px">Arguments</div><pre>' + he(e.arguments || '(empty)') + '</pre>';
 					h += '<div style="font-size:11px;font-weight:600;margin-top:2px">ClassPath</div><pre>' + he(e.classPath || '(empty)') + '</pre></div>';
 				});
@@ -1794,7 +1789,7 @@
 
 		function loadServerTuning() {
 			$.getJSON('api/v1/server-tuning', function (data) {
-				if (!data || data.length === 0) { $('#server-tuning-container').html('<span class="muted">No servers found.</span>'); return; }
+				if (!data || data.length === 0) { $('#server-tuning-container').html('<span class="vorpal-muted">No servers found.</span>'); return; }
 				var html = '<table class="vorpal-table mb-3"><thead><tr>';
 				html += '<th>Server</th><th>Port</th>';
 				html += '<th data-toggle="tooltip" title="Minimum size of the self-tuning thread pool. WebLogic dynamically adjusts thread count above this floor. Higher values guarantee more threads for SIP processing under load. Engine servers typically need 100+, AdminServer much less.">Thread Pool Min</th>';
@@ -1806,7 +1801,7 @@
 				$.each(data, function (i, s) {
 					var id = esc(s.server);
 					html += '<tr id="st-' + id + '">';
-					html += '<td><strong>' + s.server + '</strong><br><span class="muted" style="font-size:11px">' + (s.listenAddress || '*') + '</span></td>';
+					html += '<td><strong>' + s.server + '</strong><br><span class="vorpal-muted" style="font-size:11px">' + (s.listenAddress || '*') + '</span></td>';
 					html += '<td class="vorpal-mono">' + s.listenPort + '</td>';
 					html += '<td><input type="number" class="vorpal-input vorpal-mono" id="st-' + id + '-threadPoolMin" value="' + s.threadPoolMin + '" style="width:80px"></td>';
 					html += '<td><input type="number" class="vorpal-input vorpal-mono" id="st-' + id + '-threadPoolMax" value="' + s.threadPoolMax + '" style="width:80px"></td>';
@@ -1932,7 +1927,7 @@
 		function loadWorkManagers() {
 			$.getJSON('api/v1/work-managers', function (data) {
 				wmData = data;
-				if (!data || data.length === 0) { $('#wm-container').html('<span class="muted">No WLSS work managers found.</span>'); return; }
+				if (!data || data.length === 0) { $('#wm-container').html('<span class="vorpal-muted">No WLSS work managers found.</span>'); return; }
 
 				var html = '<table class="vorpal-table mb-0">';
 				html += '<thead><tr>';
@@ -1948,8 +1943,8 @@
 					var meta = wmMeta[wm.name] || { label: wm.name, desc: '' };
 
 					html += '<tr>';
-					html += '<td><strong>' + meta.label + '</strong><br><span class="muted" style="font-size:11px">' + wm.name + '</span>';
-					if (meta.desc) html += '<br><span class="muted" style="font-size:11px">' + meta.desc + '</span>';
+					html += '<td><strong>' + meta.label + '</strong><br><span class="vorpal-muted" style="font-size:11px">' + wm.name + '</span>';
+					if (meta.desc) html += '<br><span class="vorpal-muted" style="font-size:11px">' + meta.desc + '</span>';
 					html += '</td>';
 
 					// Fair share - always present for wlss
@@ -1976,7 +1971,7 @@
 
 		function wmInput(id, field, value, constraintName) {
 			if (constraintName === undefined || constraintName === null) {
-				return '<span class="muted vorpal-mono" style="font-size:12px">—</span>';
+				return '<span class="vorpal-muted vorpal-mono" style="font-size:12px">—</span>';
 			}
 			return '<input type="number" class="vorpal-input vorpal-mono" id="wm-' + id + '-' + field + '" value="' + (value || 0)
 				+ '" style="width:80px" title="' + constraintName + '">';
@@ -2026,7 +2021,7 @@
 		function loadJdbc() {
 			$.getJSON('api/v1/jdbc', function (data) {
 				jdbcData = data || [];
-				if (!jdbcData.length) { $('#jdbc-container').html('<span class="muted">No data sources found.</span>'); return; }
+				if (!jdbcData.length) { $('#jdbc-container').html('<span class="vorpal-muted">No data sources found.</span>'); return; }
 				var html = '<table class="vorpal-table mb-3"><thead><tr>';
 				html += '<th>Data Source</th>';
 				html += '<th data-toggle="tooltip" title="Connections created when the pool starts. Restart-required. Set equal to Max so the pool is fully allocated at startup.">Initial</th>';
@@ -2036,7 +2031,7 @@
 				$.each(jdbcData, function (i, p) {
 					var id = esc(p.name);
 					html += '<tr id="jdbc-row-' + id + '">';
-					html += '<td><strong>' + p.name + '</strong><br><span class="muted" style="font-size:11px">' + (p.jndiName || '') + '</span></td>';
+					html += '<td><strong>' + p.name + '</strong><br><span class="vorpal-muted" style="font-size:11px">' + (p.jndiName || '') + '</span></td>';
 					html += '<td><input type="number" class="vorpal-input vorpal-mono" id="jdbc-' + id + '-initialCapacity" value="' + p.initialCapacity + '" style="width:90px"></td>';
 					html += '<td><input type="number" class="vorpal-input vorpal-mono" id="jdbc-' + id + '-minCapacity" value="' + p.minCapacity + '" style="width:90px"></td>';
 					html += '<td><input type="number" class="vorpal-input vorpal-mono" id="jdbc-' + id + '-maxCapacity" value="' + p.maxCapacity + '" style="width:90px"></td>';
@@ -2110,7 +2105,7 @@
 			var el = $('#health-container');
 			if (!el.length) return;
 			if (!issues.length) {
-				el.html('<span class="muted">&#10003; No configuration issues detected across ' + ((jvmData || []).length) + ' server(s).</span>');
+				el.html('<span class="vorpal-muted">&#10003; No configuration issues detected across ' + ((jvmData || []).length) + ' server(s).</span>');
 				return;
 			}
 			// Critical (boot-blocker) findings sort to the top, labeled — never
@@ -2120,7 +2115,7 @@
 			$.each(issues, function (i, it) {
 				html += '<li style="margin-bottom:4px"><strong>' + it.server + ':</strong> '
 					+ (it.sev === 'critical' ? '<strong>CRITICAL &mdash; </strong>' : '') + it.msg
-					+ ' <span class="muted">&mdash; ' + it.fix + '</span></li>';
+					+ ' <span class="vorpal-muted">&mdash; ' + it.fix + '</span></li>';
 			});
 			html += '</ul>';
 			el.html(html);
@@ -2217,7 +2212,7 @@
 					html += '</tbody></table>';
 				}
 
-				$('#cluster-container').html(html || '<span class="muted">No clusters configured.</span>');
+				$('#cluster-container').html(html || '<span class="vorpal-muted">No clusters configured.</span>');
 			}).fail(function (xhr) {
 				$('#cluster-container').html('<div class="vorpal-error">Unable to load. ' + parseError(xhr) + '</div>');
 			});
@@ -2247,7 +2242,7 @@
 			html += '<h3 class="vorpal-panel-title">' + he(r.name) + '</h3>';
 			html += '<button class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm" onclick="saveCoherence(\'' + esc(r.name) + '\',\'' + id + '\')">Save</button></div>';
 			if (r.error || r.found === false) {
-				html += '<div class="muted" style="font-size:12px">' + he(r.error || 'No cluster params available for this resource.') + '</div></div>';
+				html += '<div class="vorpal-muted" style="font-size:12px">' + he(r.error || 'No cluster params available for this resource.') + '</div></div>';
 				return html;
 			}
 			html += '<div>';
@@ -2392,7 +2387,7 @@
 					return;
 				}
 				var servers = rows.map(function (r) { return r.server || '?'; });
-				var html = '<div class="muted mb-1" style="font-size:11px">The <strong>Recommended (SIP)</strong> column is a baseline for a high-CPS OCCAS engine: the SIP-relevant network / file-descriptor values from the Oracle Linux 8 database preinstall, adjusted for a latency engine (THP <span class="vorpal-mono">never</span>, low <span class="vorpal-mono">swappiness</span>, conntrack untracked). Blank = no specific recommendation. Compare each node\'s live value against it; a <span class="vorpal-badge vorpal-badge-warn">&#9650;</span> marks a value worth a closer look.</div>';
+				var html = '<div class="vorpal-muted mb-1" style="font-size:11px">The <strong>Recommended (SIP)</strong> column is a baseline for a high-CPS OCCAS engine: the SIP-relevant network / file-descriptor values from the Oracle Linux 8 database preinstall, adjusted for a latency engine (THP <span class="vorpal-mono">never</span>, low <span class="vorpal-mono">swappiness</span>, conntrack untracked). Blank = no specific recommendation. Compare each node\'s live value against it; a <span class="vorpal-badge vorpal-badge-warn">&#9650;</span> marks a value worth a closer look.</div>';
 				html += '<table class="vorpal-table mb-0"><thead><tr><th style="min-width:200px">Parameter</th>';
 				html += '<th data-toggle="tooltip" title="Recommended SIP baseline (Oracle Linux 8 preinstall network/FD values + latency adjustments). Informational — not pushed to any node.">Recommended (SIP)</th>';
 				servers.forEach(function (s) { html += '<th class="vorpal-mono">' + he(s) + '</th>'; });
@@ -2403,8 +2398,8 @@
 						html += '<tr><td colspan="' + (servers.length + 2) + '" class="tuning-cat">' + he(m.cat) + '</td></tr>';
 						lastCat = m.cat;
 					}
-					html += '<tr><td data-toggle="tooltip" title="' + he(m.tip) + '">' + he(m.label) + ' <span class="muted vorpal-mono" style="font-size:10px">' + he(m.key) + '</span></td>';
-					html += '<td class="vorpal-mono tuning-rec">' + (m.rec ? he(m.rec) : '<span class="muted">—</span>') + '</td>';
+					html += '<tr><td data-toggle="tooltip" title="' + he(m.tip) + '">' + he(m.label) + ' <span class="vorpal-muted vorpal-mono" style="font-size:10px">' + he(m.key) + '</span></td>';
+					html += '<td class="vorpal-mono tuning-rec">' + (m.rec ? he(m.rec) : '<span class="vorpal-muted">—</span>') + '</td>';
 					rows.forEach(function (r) {
 						var bag = r[m.src || 'readings'] || {};
 						var val = m.derive ? m.derive(bag, r) : bag[m.key];
@@ -2478,8 +2473,7 @@
 		function boolField(id, name, label, checked, cols, tip) {
 			var cid = id + '-' + name;
 			return '<div class="col-md-' + cols + ' field-group vorpal-field"><label style="visibility:hidden">.</label>'
-				+ '<div class="custom-control custom-checkbox"><input type="checkbox" class="custom-control-input jvm-bool" id="' + cid + '" data-name="' + name + '"' + (checked ? ' checked' : '') + '>'
-				+ '<label class="custom-control-label" for="' + cid + '" style="font-size:12px" data-toggle="tooltip" title="' + he(tip) + '">' + label + '</label></div></div>';
+				+ '<div><label class="tuning-check" data-toggle="tooltip" title="' + he(tip) + '"><input type="checkbox" class="jvm-bool" id="' + cid + '" data-name="' + name + '"' + (checked ? ' checked' : '') + '> ' + label + '</label></div></div>';
 		}
 		// Render a scalar param by its type: bool -> checkbox, enum -> select, else text field.
 		function renderScalar(id, s, st) {
@@ -2491,9 +2485,8 @@
 		function renderJfrField(id, f, val) {
 			if (f.type === 'bool') {
 				var cid = id + '-' + f.name;
-				return '<div class="col-md-' + f.cols + ' field-group vorpal-field"><label style="visibility:hidden">.</label><div class="custom-control custom-checkbox">'
-					+ '<input type="checkbox" class="custom-control-input jfr-bool" id="' + cid + '" data-name="' + f.name + '"' + (val ? ' checked' : '') + '>'
-					+ '<label class="custom-control-label" for="' + cid + '" style="font-size:12px" data-toggle="tooltip" title="' + he(f.tip) + '">' + he(f.label) + '</label></div></div>';
+				return '<div class="col-md-' + f.cols + ' field-group vorpal-field"><label style="visibility:hidden">.</label><div>'
+					+ '<label class="tuning-check" data-toggle="tooltip" title="' + he(f.tip) + '"><input type="checkbox" class="jfr-bool" id="' + cid + '" data-name="' + f.name + '"' + (val ? ' checked' : '') + '> ' + he(f.label) + '</label></div></div>';
 			}
 			var set = $.trim((val == null ? '' : val).toString()) !== '';
 			return '<div class="col-md-' + f.cols + ' field-group vorpal-field"><label data-toggle="tooltip" title="' + he(f.tip) + '">' + he(f.label) + '</label>'
@@ -2502,16 +2495,14 @@
 		function cb(id, flag, label, flags) {
 			var cbId = id + '-flag-' + flag.replace(/[^a-zA-Z0-9]/g, '_');
 			var checked = flags && flags[flag] ? ' checked' : '';
-			return '<div class="col-md-auto mb-1"><div class="custom-control custom-checkbox">'
-				+ '<input type="checkbox" class="custom-control-input jvm-flag" id="' + cbId + '" data-flag="' + flag + '"' + checked + '>'
-				+ '<label class="custom-control-label" for="' + cbId + '" style="font-size:12px">' + label + '</label></div></div>';
+			return '<div class="col-md-auto mb-1"><label class="tuning-check">'
+				+ '<input type="checkbox" class="jvm-flag" id="' + cbId + '" data-flag="' + flag + '"' + checked + '> ' + label + '</label></div>';
 		}
 		function tipCb(id, flag, label, flags, tip) {
 			var cbId = id + '-flag-' + flag.replace(/[^a-zA-Z0-9]/g, '_');
 			var checked = flags && flags[flag] ? ' checked' : '';
-			return '<div class="col-md-auto mb-1"><div class="custom-control custom-checkbox">'
-				+ '<input type="checkbox" class="custom-control-input jvm-flag" id="' + cbId + '" data-flag="' + flag + '"' + checked + '>'
-				+ '<label class="custom-control-label" for="' + cbId + '" style="font-size:12px" data-toggle="tooltip" title="' + tip + '">' + label + '</label></div></div>';
+			return '<div class="col-md-auto mb-1"><label class="tuning-check" data-toggle="tooltip" title="' + tip + '">'
+				+ '<input type="checkbox" class="jvm-flag" id="' + cbId + '" data-flag="' + flag + '"' + checked + '> ' + label + '</label></div>';
 		}
 		function v(id) { return $('#' + id).val(); }
 		function esc(s) { return s.replace(/[^a-zA-Z0-9]/g, '_'); }
@@ -2553,16 +2544,16 @@
 				var h = '<div class="row">';
 				h += '<div class="col-md-3 field-group vorpal-field">'
 					+ '<label data-toggle="tooltip" title="Whether this WebLogic domain runs in production or development mode. WebLogic reads this at server boot — the config is written immediately, but the mode only takes effect after the AdminServer and every engine node restart. The mode also drives WebLogic defaults (auto-deployment, demo-certificate handling, default log levels), so flip it deliberately.">Mode *</label>'
-					+ '<div class="custom-control custom-checkbox"><input type="checkbox" class="custom-control-input" id="dm-prod"' + (prod ? ' checked' : '') + '><label class="custom-control-label" for="dm-prod">Production</label></div>'
+					+ '<div><label class="tuning-check"><input type="checkbox" id="dm-prod"' + (prod ? ' checked' : '') + '> Production</label></div>'
 					+ '</div>';
 				h += '<div class="col-md-3 field-group vorpal-field">'
 					+ '<label data-toggle="tooltip" title="Archive the previous domain configuration under DOMAIN_HOME/configArchive each time a configuration change is activated — cheap insurance against a bad config push.">Config Archive</label>'
-					+ '<div class="custom-control custom-checkbox"><input type="checkbox" class="custom-control-input" id="dm-backup"' + (data.configBackupEnabled ? ' checked' : '') + '><label class="custom-control-label" for="dm-backup">Archive on activation</label></div>'
+					+ '<div><label class="tuning-check"><input type="checkbox" id="dm-backup"' + (data.configBackupEnabled ? ' checked' : '') + '> Archive on activation</label></div>'
 					+ '</div>';
 				h += '<div class="col-md-3 field-group vorpal-field">'
 					+ '<label data-toggle="tooltip" title="How many archived configurations to keep in DOMAIN_HOME/configArchive before the oldest is discarded. 0 keeps every archive forever (unbounded disk growth on the AdminServer); around 20 is a sensible operating value.">Archive Count</label>'
 					+ '<input type="number" class="vorpal-input vorpal-mono" id="dm-archcount" value="' + (data.archiveConfigurationCount || 0) + '" style="width:90px">'
-					+ '<div class="muted" style="font-size:11px;margin-top:2px">0 = keep all (unbounded)</div>'
+					+ '<div class="vorpal-muted" style="font-size:11px;margin-top:2px">0 = keep all (unbounded)</div>'
 					+ '</div>';
 				h += '<div class="col-md-3 field-group vorpal-field">'
 					+ '<label data-toggle="tooltip" title="Record every configuration change: Log writes it to the server log, Audit sends it to the security audit provider (one must be configured), Log + Audit does both.">Config Audit</label>'
@@ -2578,7 +2569,7 @@
 					+ 'Warning: no Auditing provider is configured in the security realm, so audit records have nowhere to go. '
 					+ 'Add one under Security Realms &rarr; myrealm &rarr; Providers &rarr; Auditing (restart required), or use Log instead.</div>';
 				h += '<div class="mt-2"><button class="vorpal-btn vorpal-btn-sm" onclick="saveDomainMode()">Save</button>'
-					+ '<span class="muted ml-3" style="font-size:12px">* Requires restart of the AdminServer and every engine node.</span></div>';
+					+ '<span class="vorpal-muted ml-3" style="font-size:12px">* Requires restart of the AdminServer and every engine node.</span></div>';
 				$('#domain-mode-container').html(h);
 
 				// Enabling the archive with count 0 would silently mean "keep
@@ -2646,14 +2637,14 @@
 			$.getJSON('api/v1/snmp', function (data) {
 				snmpData = data || {};
 				if (data && data.present === false) {
-					$('#snmp-container').html('<span class="muted">This domain has no SNMP agent bean to configure.</span>');
+					$('#snmp-container').html('<span class="vorpal-muted">This domain has no SNMP agent bean to configure.</span>');
 					return;
 				}
 				var h = '';
 				h += '<h6 class="vorpal-label mb-2">Agent</h6>';
 				h += '<div class="row mb-3">';
-				h += '<div class="col-md-3 field-group vorpal-field"><label>Enabled</label><div class="custom-control custom-switch"><input type="checkbox" class="custom-control-input" id="snmp-enabled"' + (data.enabled ? ' checked' : '') + '><label class="custom-control-label" for="snmp-enabled">Agent on</label></div></div>';
-				h += '<div class="col-md-3 field-group vorpal-field"><label data-toggle="tooltip" title="OCCAS sendSipAppTrap() only fires when automatic traps are enabled on the agent.">Send Automatic Traps</label><div class="custom-control custom-switch"><input type="checkbox" class="custom-control-input" id="snmp-auto"' + (data.sendAutomaticTrapsEnabled ? ' checked' : '') + '><label class="custom-control-label" for="snmp-auto">Traps on</label></div></div>';
+				h += '<div class="col-md-3 field-group vorpal-field"><label>Enabled</label><div><label class="vorpal-switch"><input type="checkbox" id="snmp-enabled"' + (data.enabled ? ' checked' : '') + '> Agent on</label></div></div>';
+				h += '<div class="col-md-3 field-group vorpal-field"><label data-toggle="tooltip" title="OCCAS sendSipAppTrap() only fires when automatic traps are enabled on the agent.">Send Automatic Traps</label><div><label class="vorpal-switch"><input type="checkbox" id="snmp-auto"' + (data.sendAutomaticTrapsEnabled ? ' checked' : '') + '> Traps on</label></div></div>';
 				h += '<div class="col-md-2 field-group vorpal-field"><label>Agent Port</label><input type="number" class="vorpal-input vorpal-mono" id="snmp-port" value="' + (data.port || 161) + '"></div>';
 				h += '<div class="col-md-2 field-group vorpal-field"><label>Trap Version</label><select class="vorpal-input" id="snmp-version"><option value="1"' + (data.trapVersion == 1 ? ' selected' : '') + '>v1</option><option value="2"' + (data.trapVersion == 2 ? ' selected' : '') + '>v2c</option></select></div>';
 				h += '<div class="col-md-2 field-group vorpal-field"><label>Community Prefix</label><input type="text" class="vorpal-input vorpal-mono" id="snmp-community" value="' + he(data.communityPrefix || 'public') + '"></div>';

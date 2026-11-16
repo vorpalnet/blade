@@ -33,7 +33,7 @@
 .ai-chat-title { flex: 1; font-weight: 600; }
 .ai-chat-title .ai-spark { color: var(--vorpal-purple); }
 .ai-log { flex: 1; overflow: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; }
-.ai-empty { color: var(--vorpal-slate-600); }
+/* .ai-empty also carries .vorpal-muted for its colour. */
 .ai-empty ul { margin: 6px 0 8px 18px; padding: 0; }
 .ai-msg { max-width: 92%; padding: 8px 10px; border-radius: 8px; overflow-wrap: anywhere; }
 .ai-msg.user { align-self: flex-end; background: var(--vorpal-purple-100); white-space: pre-wrap; }

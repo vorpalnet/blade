@@ -1,35 +1,18 @@
 /* BLADE Trace: the Traces page's layout on the shared brand layer
- * (brand.css). Buttons, fields, tabs, panels and messages are the shared
- * components; this file keeps the layout and the pieces only Trace has: the
- * call and step lists, the sequence diagram, the raw message and the source
- * view. */
+ * (brand.css). Buttons, fields, tabs, panels, messages, the call and step
+ * lists and the message dialog are the shared components; this file keeps the
+ * layout and the pieces only Trace has: the sequence diagram, the raw message
+ * and the source view. */
 
 .cf-group-label {
 	display: block;
 	padding: 12px 10px 4px;
 }
 
-.cf-item {
-	display: block;
-	width: 100%;
-	text-align: left;
-	border: 0;
-	border-left: 3px solid transparent;
-	background: none;
-	padding: 8px 10px;
-	cursor: pointer;
-	font: inherit;
-	color: var(--vorpal-ink-900);
-}
-.cf-item:hover { background: var(--vorpal-slate-100); }
-/* The chosen row: a bar at its leading edge and a tint, the same mark as a
- * selected table row, so it reads without telling colours apart. */
-.cf-item.cf-active {
-	background: var(--vorpal-purple-soft);
-	border-left-color: var(--vorpal-purple);
-}
-.cf-item .cf-item-title { font-weight: 600; font-size: 14px; }
-.cf-item .cf-item-cat { display: block; font-size: 11.5px; color: var(--vorpal-slate-600); margin-top: 1px; }
+/* The call and step lists are the shared pick-one list (.vorpal-list): the
+ * chosen row carries cf-active and aria-current, which the shared item marks
+ * with a bar at its leading edge and bold, so it reads without telling colours
+ * apart. */
 
 /* ---- Right detail ---- */
 .cf-detail {
@@ -96,10 +79,10 @@
  * the left column. Labels as the arm form's; two fields a row. */
 .tr-rfilter { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; padding: 0 4px 10px; border-bottom: 1px solid var(--vorpal-divider); margin-bottom: 6px; }
 .tr-rfilter > .cf-group-label, .tr-rfilter .tr-rf-wide { grid-column: 1 / -1; }
-/* A hidden control stays hidden although .vorpal-btn and .vorpal-field set
- * a display. */
-.tr-rfilter[hidden], .tr-arm-form[hidden], .tr-rules[hidden], .tr-btn[hidden] { display: none; }
-.tr-rfilter label[hidden] { display: none; }
+/* A saved snapshot has no shell, so the shared hidden guard (.vorpal-shell
+ * [hidden]) is not there: a hidden button would show, as .vorpal-btn sets a
+ * display. */
+.tr-btn[hidden] { display: none; }
 .tr-rf-actions { display: flex; gap: 8px; align-items: flex-end; }
 .tr-rf-more { margin: 6px 0 10px; }
 
@@ -221,7 +204,6 @@
 	padding: 6px 12px;
 	border-bottom: 1px solid var(--vorpal-divider);
 }
-.tr-panel[hidden] { display: none; }
 
 /* ---- Sequence (ladder) diagram ---- */
 /* A UML-style ladder built from the same steps as the timeline: one lifeline
@@ -274,35 +256,16 @@
 .tr-larrow-on .tr-larrow-label { fill: var(--vorpal-ink-900); font-weight: 700; }
 
 /* ---- Raw SIP message: the Message tab, and a dialog opened from a ladder arrow ---- */
-/* No padding on the dialog itself: a click that lands on the dialog element is
- * a click on the backdrop, and closes it. */
-.tr-msg-dialog {
-	width: min(900px, calc(100vw - 32px));
-	max-height: calc(100vh - 64px);
-	padding: 0;
-	border: 1px solid var(--vorpal-slate-400);
-	border-radius: var(--vorpal-radius-md);
-	background: var(--vorpal-surface);
-	color: var(--vorpal-ink-900);
-	box-shadow: var(--vorpal-shadow-lg);
-}
-.tr-msg-dialog[open] { display: flex; flex-direction: column; }
-.tr-msg-dialog::backdrop { background: rgba(0, 0, 0, 0.35); }
-.tr-msg-head {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
-	padding: 10px 14px 10px 20px;
-	border-bottom: 1px solid var(--vorpal-divider);
-}
-.tr-msg-head h2 {
-	flex: 1;
+/* The shared dialog (.vorpal-dialog, a native <dialog>), wider for a SIP
+ * message. It has no padding of its own: a click that lands on the dialog
+ * element is a click on the backdrop, and closes it. The shared class sets a
+ * display, so a closed dialog is hidden here. */
+.tr-msg-dialog { width: min(900px, calc(100vw - 32px)); max-height: calc(100vh - 64px); }
+.tr-msg-dialog:not([open]) { display: none; }
+.tr-msg-head .vorpal-dialog-title {
 	min-width: 0;
-	margin: 0;
 	font-family: var(--vorpal-font-mono, ui-monospace, Menlo, Consolas, monospace);
 	font-size: 13px;
-	font-weight: 700;
 	white-space: pre;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -330,7 +293,6 @@
 /* The pretty-print toggle: right end of the tab bar (Message tab only) and
  * beside Close in the popup. Its label says on or off. */
 .tr-tabbar .tr-pretty { margin-left: auto; }
-.tr-pretty[hidden] { display: none; }
 
 /* ---- Around a recorded call: the server that minute, the same cause,
    the changes before it, the log. Terms left, facts right. ---- */

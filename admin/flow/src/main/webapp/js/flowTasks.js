@@ -1109,7 +1109,7 @@ window.flowTasks = (function() {
 		}
 		var $list = $('#view-methods').empty();
 		if (methods.length === 0) {
-			$list.append('<div class="view-empty">No transitions yet</div>');
+			$list.append('<div class="view-empty vorpal-muted">No transitions yet</div>');
 		}
 		for (var i = 0; i < methods.length; i++) {
 			var m = methods[i];

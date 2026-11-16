@@ -107,20 +107,20 @@
 						        title="Close" aria-label="Close connection and signaling">&#10005;</button>
 					</div>
 
-					<details class="phone-panel" data-panel="connection" open>
+					<details class="vorpal-details phone-panel" data-panel="connection" open>
 						<summary class="phone-panel-title"><span class="phone-panel-name">Connection</span><span class="phone-panel-peek" id="peek-connection"></span></summary>
 						<div class="vorpal-field phone-field">
-							<label for="gateway">Gateway<span class="phone-tip" tabindex="0"
+							<label for="gateway">Gateway<span class="vorpal-help phone-tip" tabindex="0"
 								aria-describedby="tip-gateway"><span class="phone-tip-mark" aria-hidden="true">?</span><span
-								class="phone-tip-bubble" role="tooltip" id="tip-gateway">The <code>webrtc</code> service runs on
+								class="vorpal-tip phone-tip-bubble" role="tooltip" id="tip-gateway">The <code>webrtc</code> service runs on
 								the engine tier. This page comes from the admin tier, so the address is configuration, not this
 								page&rsquo;s own origin.</span></span></label>
 							<input class="vorpal-input" id="gateway" autocomplete="off" spellcheck="false">
 						</div>
 						<div class="vorpal-field phone-field">
-							<label for="aor">Your address<span class="phone-tip" tabindex="0"
+							<label for="aor">Your address<span class="vorpal-help phone-tip" tabindex="0"
 								aria-describedby="tip-aor"><span class="phone-tip-mark" aria-hidden="true">?</span><span
-								class="phone-tip-bubble" role="tooltip" id="tip-aor">The address other browsers dial to reach
+								class="vorpal-tip phone-tip-bubble" role="tooltip" id="tip-aor">The address other browsers dial to reach
 								you, as <code>user@host</code>. Where the deployment allows it, edit it to register as someone
 								else, which a browser&#8209;to&#8209;browser test from one account needs. The gateway honours
 								only the address inside your signed token, and the token still records who signed
@@ -129,9 +129,9 @@
 							       readonly aria-readonly="true">
 						</div>
 						<div class="vorpal-field phone-field">
-							<label for="stun">STUN server<span class="phone-tip" tabindex="0"
+							<label for="stun">STUN server<span class="vorpal-help phone-tip" tabindex="0"
 								aria-describedby="tip-stun"><span class="phone-tip-mark" aria-hidden="true">?</span><span
-								class="phone-tip-bubble" role="tooltip" id="tip-stun">Browsers publish <code>&lt;uuid&gt;.local</code>
+								class="vorpal-tip phone-tip-bubble" role="tooltip" id="tip-stun">Browsers publish <code>&lt;uuid&gt;.local</code>
 								mDNS candidates instead of private addresses, so a reachable STUN or TURN server is
 								required.</span></span></label>
 							<input class="vorpal-input" id="stun" autocomplete="off" spellcheck="false">
@@ -143,7 +143,7 @@
 						<p class="vorpal-note phone-auth" id="auth-state" data-verified="unknown">Not registered.</p>
 					</details>
 
-					<details class="phone-panel" data-panel="media" open>
+					<details class="vorpal-details phone-panel" data-panel="media" open>
 						<summary class="phone-panel-title"><span class="phone-panel-name">Media</span><span class="phone-panel-peek" id="peek-media"></span></summary>
 						<dl class="phone-facts">
 							<div class="phone-fact"><dt>Media path</dt><dd id="fact-path">&ndash;</dd></div>
@@ -154,14 +154,14 @@
 						</dl>
 					</details>
 
-					<details class="phone-panel phone-panel-log" data-panel="signaling" open>
+					<details class="vorpal-details phone-panel phone-panel-log" data-panel="signaling" open>
 						<summary class="phone-panel-title"><span class="phone-panel-name">Signaling</span><span class="phone-panel-peek" id="peek-signaling"></span></summary>
 						<ul class="phone-log" id="log"><li class="phone-log-empty">Nothing yet.</li></ul>
 					</details>
 				</aside>
 			</div>
 
-			<footer class="phone-footer">Keyboard: digits dial &middot; Enter calls &middot; Escape hangs up</footer>
+			<footer class="phone-footer vorpal-muted">Keyboard: digits dial &middot; Enter calls &middot; Escape hangs up</footer>
 
 		</div>
 	</main>

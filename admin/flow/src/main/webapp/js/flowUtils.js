@@ -210,6 +210,7 @@ window.flowUtils = (function() {
 		if (!infoPop) {
 			infoPop = document.createElement('div');
 			infoPop.id = 'info-tip-pop';
+			infoPop.className = 'vorpal-popover';
 			infoPop.style.display = 'none';
 			document.body.appendChild(infoPop);
 			// Moving from the icon onto the popup must not dismiss it — the

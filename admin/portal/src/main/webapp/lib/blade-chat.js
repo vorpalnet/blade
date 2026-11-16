@@ -119,7 +119,7 @@
 			renderAsk();
 			log.innerHTML = '';
 			if (!state.messages.length && !state.job && opts.intro) {
-				log.appendChild(el('div', { className: 'ai-empty', innerHTML: opts.intro }));
+				log.appendChild(el('div', { className: 'ai-empty vorpal-muted', innerHTML: opts.intro }));
 			}
 			state.messages.forEach(m => log.appendChild(message(m)));
 			if (state.job) {

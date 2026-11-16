@@ -654,7 +654,7 @@ window.BladeEditor = (function () {
 	function helpMini(topic) {
 		const b = document.createElement('button');
 		b.type = 'button';
-		b.className = 'mini help-mini vorpal-btn vorpal-btn-secondary vorpal-btn-sm';
+		b.className = 'mini help-mini vorpal-help';
 		b.textContent = '?';
 		b.title = 'What is this?';
 		b.addEventListener('click', () => openHelp(topic));
@@ -766,7 +766,7 @@ window.BladeEditor = (function () {
 		const rail = document.createElement('nav');
 		rail.className = 'file-picker vorpal-panel';
 		rail.setAttribute('aria-label', 'Configuration files');
-		rail.innerHTML = '<div class="file-picker-title vorpal-label">Files</div><div class="file-picker-body">loading…</div>';
+		rail.innerHTML = '<div class="file-picker-title vorpal-label">Files</div><div class="file-picker-body vorpal-list">loading…</div>';
 		const body = rail.querySelector('.file-picker-body');
 		const currentId = opts.current || 'domain';
 		let mergedPanel = null;
@@ -774,7 +774,7 @@ window.BladeEditor = (function () {
 		function item(f, label, depth) {
 			const b = document.createElement('button');
 			b.type = 'button';
-			b.className = 'file-picker-item depth-' + depth;
+			b.className = 'file-picker-item vorpal-list-item depth-' + depth;
 			const current = f.id === currentId;
 			if (current) {
 				b.classList.add('current');
@@ -805,7 +805,7 @@ window.BladeEditor = (function () {
 		}
 		const mergedBtn = document.createElement('button');
 		mergedBtn.type = 'button';
-		mergedBtn.className = 'file-picker-item file-picker-merged';
+		mergedBtn.className = 'file-picker-item vorpal-list-item file-picker-merged';
 		mergedBtn.textContent = 'merged (read-only)';
 		mergedBtn.title = 'What the current file runs: it and the files below it, merged as the server merges them';
 		mergedBtn.addEventListener('click', () => {
@@ -846,7 +846,7 @@ window.BladeEditor = (function () {
 			}
 			if (files.length === 1) {
 				const note = document.createElement('div');
-				note.className = 'file-picker-note';
+				note.className = 'file-picker-note vorpal-muted';
 				note.textContent = 'domain only';
 				note.title = 'A file in _clusters/<name>/ or _servers/<name>/ shows here.';
 				body.appendChild(note);
@@ -954,7 +954,7 @@ window.BladeEditor = (function () {
 		panel.className = 'merged-view vorpal-panel';
 		panel.innerHTML = '<div class="merged-head"><strong title="Read-only, saved files only. Each file merges over '
 			+ 'the ones before it: objects key by key, lists get items added on the end, other values replaced. '
-			+ 'Nothing can be removed.">Merged</strong><span class="merged-chain"></span></div>'
+			+ 'Nothing can be removed.">Merged</strong><span class="merged-chain vorpal-muted"></span></div>'
 			+ '<div class="merged-body">loading…</div>';
 		const close = document.createElement('button');
 		close.type = 'button';

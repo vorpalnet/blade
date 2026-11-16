@@ -7,9 +7,12 @@
    .vorpal-toolbar, .vorpal-note, .vorpal-error ...), set on the elements in
    configurator.html and by configurator.js. Bare inputs, selects and
    textareas the form generates take the frame's default control look
-   (brand.css section 4). This file keeps layout, plus the visuals that have
-   no shared equivalent: the form's nested sections, the dropdown menus, the
-   modal, the diff list, the tooltip and the auto-publish switch. Every
+   (brand.css section 4). The dropdown menus, the files and version lists,
+   the dialogs, the auto-publish switch, the field tooltip and the ${var}
+   popup are the shared .vorpal-menu, .vorpal-list, .vorpal-backdrop +
+   .vorpal-dialog, .vorpal-switch and .vorpal-tip; this file keeps only how
+   they are shown, placed and sized here. It also keeps the visuals that have
+   no shared equivalent: the form's nested sections and the diff list. Every
    colour is a --vorpal-* token, so light and dark both follow the theme.
    ============================================================ */
 
@@ -170,26 +173,14 @@ label {
     font-style: italic;
 }
 
-/* ${var} autocomplete popup. */
+/* ${var} autocomplete popup (.vorpal-menu-list of .vorpal-menu-item), placed
+   by the JS under its input: above the inspector, in the code font. */
 .context-var-popup {
-    background: var(--vorpal-surface);
-    border: 1px solid var(--vorpal-slate-300);
-    border-radius: var(--vorpal-radius-sm);
-    box-shadow: var(--vorpal-shadow-md);
+    z-index: 9999;
     min-width: 160px;
     max-height: 200px;
     overflow-y: auto;
-    z-index: 9999;
     font-family: var(--vorpal-font-mono);
-    font-size: 12px;
-}
-.context-var-option {
-    padding: 4px 8px;
-    cursor: pointer;
-    color: var(--vorpal-ink-900);
-}
-.context-var-option:hover {
-    background: var(--vorpal-slate-200);
 }
 
 /* ---- The bar over every tab: target, schema, status, auto-publish ---- */
@@ -216,65 +207,16 @@ label {
     50% { opacity: 0.7; }
 }
 
-/* Auto-publish toggle: a sliding on/off switch in the bar every tab shares,
-   pushed right (margin-left:auto) because it controls a global Configurator
-   behavior, not the currently-loaded app or one editor. State is carried by
-   thumb position and the on/off text label, not by colour alone. */
+/* Auto-publish (.vorpal-switch) in the bar every tab shares, pushed right
+   because it controls a global Configurator behavior, not the loaded app or
+   one editor. State is carried by knob position and the on/off word, not by
+   colour alone. */
 .autopublish-switch {
     margin-left: auto;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-    user-select: none;
-    font-size: 12px;
-    color: var(--vorpal-ink-700);
-}
-.autopublish-caption {
-    font-weight: 500;
-}
-/* Hide the real checkbox; the track/thumb is the visible control. */
-.autopublish-switch input {
-    position: absolute;
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-.autopublish-track {
-    position: relative;
-    width: 34px;
-    height: 18px;
-    border-radius: 9px;
-    background: var(--vorpal-slate-400);
-    border: 1px solid var(--vorpal-divider);
-    transition: background 0.15s ease;
-}
-/* White on the track, as the primary button's text is white on the mark. */
-.autopublish-thumb {
-    position: absolute;
-    top: 1px;
-    left: 1px;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: #fff;
-    transition: transform 0.15s ease;
-}
-/* Checked = ON: the track takes the brand mark, thumb slides right. */
-.autopublish-switch input:checked + .autopublish-track {
-    background: var(--vorpal-mark);
-}
-.autopublish-switch input:checked + .autopublish-track .autopublish-thumb {
-    transform: translateX(16px);
-}
-.autopublish-switch input:focus-visible + .autopublish-track {
-    outline: 2px solid var(--vorpal-purple);
-    outline-offset: 1px;
 }
 .autopublish-state {
     min-width: 1.8em;
     font-weight: 600;
-    color: var(--vorpal-ink-900);
 }
 
 /* Auto-publish ON: saves go live on their own, so there is nothing to Publish. */
@@ -326,52 +268,17 @@ body.autopublish-on:not(.has-unpublished) .btn-publish {
     display: none;
 }
 
-/* Dropdown menus (File / History / View). No shared menu exists yet. */
-.toolbar-menu {
-    position: relative;
-    display: inline-block;
-}
+/* Dropdown menus (File / History / View) are .vorpal-menu; the JS opens one
+   by setting .open on its .toolbar-menu. */
 .toolbar-chev {
     font-size: 10px;
     opacity: 0.7;
 }
 .toolbar-menu-items {
     display: none;
-    position: absolute;
-    top: calc(100% + 2px);
-    left: 0;
-    min-width: 200px;
-    background: var(--vorpal-surface);
-    border: 1px solid var(--vorpal-slate-300);
-    border-radius: var(--vorpal-radius-sm);
-    box-shadow: var(--vorpal-shadow-md);
-    padding: 4px 0;
-    z-index: 200;
 }
 .toolbar-menu.open .toolbar-menu-items {
-    display: block;
-}
-.toolbar-menu-items > button {
-    display: block;
-    width: 100%;
-    text-align: left;
-    padding: 7px 14px;
-    background: transparent;
-    border: none;
-    border-radius: 0;
-    color: var(--vorpal-ink-900);
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 500;
-    white-space: nowrap;
-}
-.toolbar-menu-items > button:hover {
-    background: var(--vorpal-slate-200);
-}
-.toolbar-menu-items > hr {
-    margin: 4px 0;
-    border: 0;
-    border-top: 1px solid var(--vorpal-divider);
+    display: flex;
 }
 
 .welcome-panel {
@@ -526,7 +433,7 @@ body.autopublish-on:not(.has-unpublished) .btn-publish {
 .files-rail-body {
     flex: 1 1 auto;
     overflow-y: auto;
-    padding: 4px 0;
+    padding: 4px;
 }
 .files-rail-body em {
     display: block;
@@ -542,29 +449,11 @@ body.autopublish-on:not(.has-unpublished) .btn-publish {
     padding: 1px 4px;
     border-radius: 2px;
 }
-/* A file list with one chosen: no shared selectable list exists yet. The
-   chosen file is filled AND bold, with a bar at its left edge. */
+/* The file list is a .vorpal-list (the chosen file .active); paths read in
+   the code font. */
 .files-rail-entry {
-    display: block;
-    width: 100%;
-    text-align: left;
-    padding: 6px 12px;
-    background: transparent;
-    border: none;
-    border-radius: 0;
-    color: var(--vorpal-ink-900);
-    cursor: pointer;
     font-family: var(--vorpal-font-mono);
     font-size: 12px;
-    font-weight: 400;
-}
-.files-rail-entry:hover {
-    background: var(--vorpal-slate-200);
-}
-.files-rail-entry.active {
-    background: var(--vorpal-purple-soft);
-    box-shadow: inset 3px 0 0 var(--vorpal-purple);
-    font-weight: 700;
 }
 .files-layout > .json-editor-container {
     flex: 1 1 auto;
@@ -631,100 +520,41 @@ body.inspector-open .inspector-panel {
     margin: 2px 4px 2px 0;
 }
 
-/* ---- Modals ---- */
+/* ---- Dialogs (.vorpal-backdrop + .vorpal-dialog) ----
+   Hidden until the JS shows one: versionModal by .active, the others by an
+   inline display:flex, and both centre the dialog. Stacked over the chat
+   panel (blade-chat.css, z-index 1000). */
 .modal {
     display: none;
-    position: fixed;
     z-index: 2000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(5px);
-}
-
-.modal.active {
-    display: flex;
-    align-items: center;
     justify-content: center;
 }
-
+.modal.active {
+    display: grid;
+}
 .modal-content {
-    padding: 0;
-    box-shadow: var(--vorpal-shadow-lg);
-    width: 90%;
-    max-width: 800px;
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
+    width: min(800px, calc(100vw - 32px));
 }
-
-.modal-header {
-    padding: 12px 20px;
-    border-bottom: 1px solid var(--vorpal-divider);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
 /* The close glyph needs the size to be seen. */
 .modal-close {
-    font-size: 20px;
-    width: 30px;
-    height: 30px;
-    padding: 0;
+    font-size: 18px;
 }
 
-.modal-body {
-    padding: 12px 20px;
-    overflow-y: auto;
-    flex: 1;
-}
-
-.modal-footer {
-    padding: 10px 20px;
-    border-top: 1px solid var(--vorpal-divider);
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-}
-
-/* Version history. */
-.version-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
+/* Version history (.vorpal-list): each row a date, a size and two actions.
+   The row itself picks nothing, so it keeps the default cursor. */
 .version-item {
-    border: 1px solid var(--vorpal-divider);
-    border-radius: var(--vorpal-radius-sm);
-    padding: 8px 12px;
-    margin-bottom: 6px;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 12px;
+    cursor: default;
 }
-
-.version-item:hover {
-    background: var(--vorpal-slate-200);
-}
-
 .version-info {
     flex: 1;
 }
-
 .version-date {
     font-weight: 600;
-    margin-bottom: 4px;
 }
-
-.version-size {
-    font-size: 12px;
-    color: var(--vorpal-slate-600);
-}
-
 .version-actions {
     display: flex;
     gap: 8px;
@@ -1349,8 +1179,8 @@ body.view-mode .ai-ask {
 /* Feature: Field Help Tooltips. A label/title carrying a schema description
    is the hover target itself (no ? badge). The dotted underline is the
    shape-based cue that a hint exists; the tooltip is one shared element
-   positioned by the delegated mouseenter handler. It is drawn in the
-   theme's inverse (ink on surface swapped). */
+   positioned by the delegated mouseenter handler. Its look is .vorpal-tip;
+   it is placed in viewport coordinates, so it is fixed, and shown by the JS. */
 .has-help {
     cursor: help;
     text-decoration: underline dotted var(--vorpal-slate-400);
@@ -1360,19 +1190,8 @@ body.view-mode .ai-ask {
 
 .field-help-tooltip {
     position: fixed;
-    background: var(--vorpal-ink-900);
-    color: var(--vorpal-surface);
-    padding: 10px 12px;
-    border-radius: var(--vorpal-radius-sm);
-    font-size: 13px;
-    font-weight: normal;
-    line-height: 1.4;
-    max-width: 300px;
     z-index: 10000;
-    white-space: normal;
-    box-shadow: var(--vorpal-shadow-md);
     display: none;
-    pointer-events: none;
 }
 
 .field-help-tooltip::after {

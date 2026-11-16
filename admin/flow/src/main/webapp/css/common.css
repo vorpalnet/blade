@@ -113,6 +113,14 @@ img.mxToolbarItem:hover {
 	background: var(--vorpal-purple-soft);
 	border-color: var(--vorpal-purple-100);
 }
+/* The icons are one colour, drawn in currentColor, yet an <img> cannot hand
+   a colour to the SVG it shows, so they always draw black. On the dark
+   theme they are inverted to the theme's light ink. */
+html[data-theme="dark"] img.mxToolbarItem,
+html[data-theme="dark"] img.mxToolbarMode,
+html[data-theme="dark"] img.mxToolbarModeSelected {
+	filter: invert(0.92);
+}
 select.mxToolbarCombo {
 	vertical-align: top;
 }

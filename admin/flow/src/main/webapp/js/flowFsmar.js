@@ -1332,14 +1332,18 @@ window.flowFsmar = (function() {
 	function fileBrowser(options) {
 		options = options || {};
 
+		// The shared pick-one list (.vorpal-list); the box around it and its
+		// size are this dialog's own.
 		var el = document.createElement('div');
+		el.className = 'vorpal-list';
+		el.setAttribute('role', 'listbox');
 		el.style.flex = '1 1 auto';
 		el.style.minHeight = '140px';
 		el.style.overflowY = 'auto';
+		el.style.padding = '4px';
 		el.style.border = '1px solid var(--vorpal-slate-300)';
 		el.style.borderRadius = '8px';
 		el.style.background = 'var(--vorpal-surface)';
-		el.style.fontSize = '12px';
 
 		var rows = [];
 		var chosen = null;
@@ -1348,10 +1352,8 @@ window.flowFsmar = (function() {
 			chosen = row;
 			for (var i = 0; i < rows.length; i++) {
 				var on = (rows[i].data === row);
-				rows[i].el.style.borderLeft = on
-					? '4px solid var(--vorpal-purple)' : '4px solid transparent';
-				rows[i].el.style.background = on ? 'var(--vorpal-purple-soft)' : 'transparent';
-				rows[i].el.style.fontWeight = on ? '700' : '400';
+				rows[i].el.classList.toggle('selected', on);
+				rows[i].el.setAttribute('aria-selected', on ? 'true' : 'false');
 				rows[i].marker.innerHTML = on ? '&#9656;' : '&#160;';
 			}
 			if (options.onSelect) options.onSelect(row);
@@ -1368,11 +1370,12 @@ window.flowFsmar = (function() {
 
 		function addRow(data, name, meta) {
 			var row = document.createElement('div');
+			row.className = 'vorpal-list-item';
+			row.setAttribute('role', 'option');
+			row.setAttribute('aria-selected', 'false');
 			row.style.display = 'flex';
 			row.style.alignItems = 'baseline';
-			row.style.padding = '3px 8px';
-			row.style.cursor = 'pointer';
-			row.style.borderLeft = '4px solid transparent';
+			row.style.gap = '6px';
 
 			var marker = document.createElement('span');
 			marker.innerHTML = '&#160;';
@@ -1388,8 +1391,9 @@ window.flowFsmar = (function() {
 
 			var detail = document.createElement('span');
 			detail.textContent = meta || '';
-			detail.style.color = 'var(--vorpal-slate-600)';
+			detail.className = 'vorpal-muted';
 			detail.style.flexShrink = '0';
+			detail.style.fontSize = '12px';
 			row.appendChild(detail);
 
 			row.onclick = function() { select(data); };

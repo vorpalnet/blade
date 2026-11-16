@@ -35,7 +35,7 @@
 	margin-bottom: .5rem;
 }
 .ev-form-row input[type="checkbox"] { justify-self: start; }
-.ev-form-row > .ev-muted { grid-column: 2 / -1; }
+.ev-form-row > .vorpal-muted { grid-column: 2 / -1; }
 
 /* Subsections inside a panel: a label over a rule. */
 .ev-subhead {
@@ -47,22 +47,12 @@
 	gap: .4rem;
 }
 
-/* Read-only previews are a <pre>, not an embedded editor. The Configurator
-   pulls Ace from a CDN and lazy-fetches themes at runtime, which breaks on an
-   air-gapped domain; no reason to inherit that for output nobody edits. No
-   shared code block exists yet. */
-.ev-code {
-	margin: 0;
-	padding: .85rem;
-	overflow: auto;
-	max-height: 30rem;
-	font-size: 12px;
-	line-height: 1.5;
-	white-space: pre;
-	background: var(--vorpal-slate-100);
-	border: 1px solid var(--vorpal-divider);
-	border-radius: var(--vorpal-radius-sm);
-}
+/* Read-only previews are a <pre class="vorpal-code">, not an embedded
+   editor. The Configurator pulls Ace from a CDN and lazy-fetches themes at
+   runtime, which breaks on an air-gapped domain; no reason to inherit that
+   for output nobody edits. Generated source keeps its lines unwrapped and
+   scrolls inside a held height. */
+.ev-code { padding: .85rem; overflow: auto; max-height: 30rem; white-space: pre; overflow-wrap: normal; }
 
 .ev-tabs { margin-bottom: .5rem; }
 
@@ -82,89 +72,36 @@
 .ev-finding.is-problem { border-left-width: 6px; }
 .ev-finding .ev-kind { font-weight: 600; }
 
-.ev-muted { color: var(--vorpal-slate-600); font-size: 13px; }
-
-/* The prose that used to sit inline now lives in tooltips and the Help
-   dialog. The ? is a real button: hover OR keyboard focus shows the tip, and
-   the same text is its aria-label, so a screen reader hears what a mouse
-   sees. */
-.ev-help {
-	position: relative;
-	flex: none;
-	width: 1.15rem;
-	height: 1.15rem;
-	padding: 0;
-	border: 1px solid var(--vorpal-slate-400);
-	border-radius: 50%;
-	background: var(--vorpal-surface);
-	color: var(--vorpal-slate-600);
-	font-size: 11px;
-	font-weight: 700;
-	line-height: 1;
-	cursor: help;
-}
-
-.ev-help::after {
-	content: attr(data-tip);
-	position: absolute;
+/* The prose that used to sit inline now lives in tips and the Help dialog.
+   The ? is a real button (.vorpal-help) holding its tip (.vorpal-tip):
+   hover OR keyboard focus shows the tip, and the same text is its
+   aria-label, so a screen reader hears what a mouse sees. */
+.ev-help { position: relative; }
+.ev-tip {
 	top: calc(100% + .4rem);
 	left: 50%;
 	transform: translateX(-50%);
 	width: max-content;
 	max-width: min(36ch, 70vw);
-	padding: .5rem .65rem;
-	border-radius: 6px;
-	background: var(--vorpal-ink-900);
-	color: var(--vorpal-surface);
-	font-size: 12px;
 	font-weight: 400;
-	line-height: 1.45;
 	letter-spacing: normal;
 	text-transform: none;
 	text-align: left;
 	white-space: normal;
 	opacity: 0;
 	visibility: hidden;
-	pointer-events: none;
 	transition: opacity .12s;
-	z-index: 30;
 }
-
-.ev-help:hover::after,
-.ev-help:focus-visible::after {
+.ev-help:hover > .ev-tip,
+.ev-help:focus-visible > .ev-tip {
 	opacity: 1;
 	visibility: visible;
 }
 
-.ev-help-dialog {
-	max-width: 44rem;
-	width: calc(100vw - 3rem);
-	padding: 0;
-	border: 1px solid var(--vorpal-slate-300);
-	border-radius: var(--vorpal-radius-md);
-	background: var(--vorpal-surface);
-	color: var(--vorpal-ink-900);
-}
-
-.ev-help-dialog::backdrop { background: rgba(26, 36, 52, .45); }
-
-.ev-help-dialog > header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: .75rem 1rem;
-	border-bottom: 1px solid var(--vorpal-divider);
-	background: var(--vorpal-surface-alt);
-	font-weight: 700;
-}
-
-.ev-help-dialog .ev-help-body {
-	padding: 1rem 1.25rem;
-	max-height: 70vh;
-	overflow: auto;
-	font-size: 14px;
-	line-height: 1.55;
-}
+/* The Help dialog: a native <dialog class="vorpal-dialog">, wider for its
+   reading. */
+.ev-help-dialog { width: min(44rem, calc(100vw - 3rem)); }
+.ev-help-dialog .ev-help-body { font-size: 14px; line-height: 1.55; }
 
 .ev-help-dialog h3 {
 	margin: 1.1rem 0 .35rem;

@@ -80,20 +80,13 @@
 	display: none;
 }
 
+/* The popup is the shared .vorpal-popover; it is fixed here because the
+   tasks window scrolls, and sits over the mxGraph windows. */
 #info-tip-pop {
 	position: fixed;
 	z-index: 10000;
 	max-width: 300px;
-	padding: 8px 10px;
-	background: var(--vorpal-surface);
-	border: 1px solid var(--vorpal-slate-300);
-	border-radius: var(--vorpal-radius-sm);
-	box-shadow: var(--vorpal-shadow-md);
 	font-size: 11.5px;
-	font-style: normal;
-	font-weight: normal;
-	line-height: 1.55;
-	color: var(--vorpal-ink-700);
 }
 #info-tip-pop code {
 	font-family: var(--vorpal-font-mono);

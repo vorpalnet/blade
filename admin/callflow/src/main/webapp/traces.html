@@ -135,11 +135,11 @@
 						</div>
 					</form>
 					<div class="cf-group-label vorpal-label">Captured calls</div>
-					<div id="tr-calls"><p class="cf-muted vorpal-empty">Nothing captured yet. Arm a rule, then place a matching call.</p></div>
+					<div id="tr-calls" class="vorpal-list"><p class="cf-muted vorpal-empty">Nothing captured yet. Arm a rule, then place a matching call.</p></div>
 					<button id="tr-rf-more" type="button" class="tr-btn tr-rf-more vorpal-btn vorpal-btn-secondary vorpal-btn-sm vorpal-btn-block" hidden
 						title="The next older page of recorded calls that match.">Load older</button>
 					<div class="cf-group-label vorpal-label">Timeline</div>
-					<div id="tr-timeline"><p class="cf-muted vorpal-empty">Pick a call above.</p></div>
+					<div id="tr-timeline" class="vorpal-list"><p class="cf-muted vorpal-empty">Pick a call above.</p></div>
 				</aside>
 
 				<!-- Right: tabbed detail — sequence diagram, raw message, source; an arrow also opens its message in a dialog -->
@@ -176,9 +176,9 @@
 						<pre id="tr-message" class="tr-sipmsg tr-panel" data-tab="msg" hidden></pre>
 						<pre id="tr-code-panel" class="cf-code tr-panel" data-tab="src" hidden><ol id="tr-code" class="tr-lines"></ol></pre>
 					</div>
-					<dialog id="tr-msg-dialog" class="tr-msg-dialog" aria-labelledby="tr-msg-title">
-						<div class="tr-msg-head">
-							<h2 id="tr-msg-title"></h2>
+					<dialog id="tr-msg-dialog" class="tr-msg-dialog vorpal-dialog" aria-labelledby="tr-msg-title">
+						<div class="tr-msg-head vorpal-dialog-head">
+							<h2 id="tr-msg-title" class="vorpal-dialog-title"></h2>
 							<button id="tr-pretty-popup" type="button" class="tr-btn tr-pretty vorpal-btn vorpal-btn-secondary vorpal-btn-sm" aria-pressed="true"
 								title="On: headers one per line, JSON and XML bodies indented. Off: the message exactly as recorded.">Pretty print: on</button>
 							<button id="tr-msg-close" type="button" class="tr-btn vorpal-btn vorpal-btn-secondary vorpal-btn-sm" aria-label="Close">Close</button>

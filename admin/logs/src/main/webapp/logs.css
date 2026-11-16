@@ -10,13 +10,6 @@
    step; the pane's colours are decoration layered on top of those two, and
    removing them loses nothing. */
 
-/* The `hidden` attribute is only a UA-stylesheet `display: none`, so any class
-   rule that sets `display` silently outranks it, which .log-menu-items and
-   .log-results both do, leaving the download menu and the results drawer
-   permanently on screen. Restore it once here rather than remembering to guard
-   every such rule. */
-[hidden] { display: none !important; }
-
 /* ---- Full-viewport work surface -----------------------------------------
    The viewer is a fixed-frame tool, not a document: the log pane owns the
    only scrollbar on the page, because the sliding window is driven by that
@@ -74,15 +67,6 @@ body.embedded .log-page { padding-top: 8px; }
 /* The buttons on a control strip line up with the inputs beside them. */
 .log-toolbar > .vorpal-btn,
 .log-menu > .vorpal-btn { height: 30px; }
-
-/* Follow is a toggle whose state must read from across a desk: pressed, it
-   is filled and bold, the same mark as a chosen tab. */
-.vorpal-btn[aria-pressed="true"] {
-	background: var(--vorpal-mark);
-	border-color: var(--vorpal-mark);
-	color: #fff;
-	font-weight: 800;
-}
 
 .log-meta {
 	font-size: 12px;
@@ -339,40 +323,23 @@ body.embedded .log-page { padding-top: 8px; }
 	font-variant-numeric: tabular-nums;
 }
 
+/* The matches are the shared pick-one list (.vorpal-list); the chosen one is
+   is-current plus aria-current, which the shared item marks with a bar and bold.
+   Here the list scrolls inside the drawer and its rows read as log text. */
 .log-results-list {
 	flex: 1 1 auto;
 	min-height: 0;
 	overflow: auto;
-	margin: 0;
-	padding: 0;
-	list-style: none;
+	padding: 4px;
 }
 
-.log-results-list li[data-i] {
-	padding: .35rem .6rem;
-	border-bottom: 1px solid var(--vorpal-slate-100);
-	cursor: pointer;
+.log-results-list .vorpal-list-item {
 	font-family: var(--vorpal-font-mono);
 	font-size: 11.5px;
 	line-height: 1.4;
 }
-.log-results-list li[data-i]:hover { background: var(--vorpal-purple-100); }
 
-/* The current target is marked by an inset border on the leading edge, so it
-   stays distinguishable from a hover and from plain rows without relying on
-   the fill colour alone. */
-.log-results-list li.is-current {
-	background: var(--vorpal-purple-soft);
-	box-shadow: inset 3px 0 0 var(--vorpal-purple);
-	font-weight: 600;
-}
-
-.log-results-list .r-off {
-	display: block;
-	color: var(--vorpal-slate-400);
-	font-size: 10.5px;
-	font-variant-numeric: tabular-nums;
-}
+.log-results-list .r-off { font-variant-numeric: tabular-nums; }
 
 .log-results-list .r-text {
 	display: block;
@@ -421,35 +388,3 @@ body.embedded .log-page { padding-top: 8px; }
 }
 
 @media (max-width: 900px) { .log-keys { display: none; } }
-
-/* ---- Download menu ------------------------------------------------------- */
-
-.log-menu { position: relative; }
-
-.log-menu-items {
-	position: absolute;
-	right: 0;
-	top: calc(100% + 4px);
-	z-index: 20;
-	min-width: 190px;
-	padding: 4px;
-	border: 1px solid var(--vorpal-slate-300);
-	border-radius: var(--vorpal-radius-md);
-	background: var(--vorpal-surface);
-	box-shadow: var(--vorpal-shadow-md);
-	display: flex;
-	flex-direction: column;
-}
-
-.log-menu-items button {
-	font: 13px/1.4 var(--vorpal-font-sans);
-	text-align: left;
-	padding: 7px 10px;
-	border: 0;
-	border-radius: var(--vorpal-radius-sm);
-	background: transparent;
-	color: var(--vorpal-ink-900);
-	cursor: pointer;
-}
-.log-menu-items button:hover { background: var(--vorpal-purple-100); }
-.log-menu-items button[disabled] { opacity: .45; cursor: default; background: transparent; }

@@ -599,8 +599,8 @@
 		var html = "";
 		for (var i = 0; i < state.fileMatches.length; i++) {
 			var m = state.fileMatches[i];
-			html += '<li data-i="' + i + '" data-off="' + m.offset + '">'
-				+ '<span class="r-off">' + m.offset.toLocaleString() + "</span>"
+			html += '<li class="vorpal-list-item" data-i="' + i + '" data-off="' + m.offset + '">'
+				+ '<span class="r-off vorpal-list-sub">' + m.offset.toLocaleString() + "</span>"
 				+ '<span class="r-text">' + P.escWithMarks(m.text, state.searchTerm) + "</span>"
 				+ "</li>";
 		}
@@ -652,7 +652,11 @@
 		state.fileMatchIdx = i;
 
 		var lis = $("resultsList").querySelectorAll("li");
-		for (var k = 0; k < lis.length; k++) lis[k].classList.toggle("is-current", k === i);
+		for (var k = 0; k < lis.length; k++) {
+			lis[k].classList.toggle("is-current", k === i);
+			if (k === i) lis[k].setAttribute("aria-current", "true");
+			else lis[k].removeAttribute("aria-current");
+		}
 
 		// Land a little above the hit so it has context, then highlight it in
 		// the pane using the same needle the scan used.

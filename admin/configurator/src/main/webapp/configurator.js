@@ -1321,13 +1321,13 @@ function attachContextAutocomplete(input) {
         if (opts.length === 0) { close(); return; }
         if (!popup) {
             popup = document.createElement('div');
-            popup.className = 'context-var-popup';
+            popup.className = 'context-var-popup vorpal-menu-list';
             document.body.appendChild(popup);
         }
         popup.innerHTML = '';
         opts.forEach(name => {
             const opt = document.createElement('div');
-            opt.className = 'context-var-option';
+            opt.className = 'context-var-option vorpal-menu-item';
             opt.textContent = name;
             opt.onmousedown = (e) => {
                 e.preventDefault(); // keep focus on the input
@@ -5554,7 +5554,7 @@ function handleTextFileList(raw) {
         return;
     }
     body.innerHTML = items.map(it =>
-        '<button type="button" class="files-rail-entry" data-path="' + escapeHtml(it.path) + '">' +
+        '<button type="button" class="files-rail-entry vorpal-list-item" data-path="' + escapeHtml(it.path) + '">' +
         escapeHtml(it.path) + '</button>'
     ).join('');
     body.querySelectorAll('.files-rail-entry').forEach(btn => {
@@ -6919,7 +6919,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // fixed positioning avoids overflow clipping, and keeping the tooltip out
     // of the label's DOM keeps textContent-based title matching intact.
     const helpTooltip = document.createElement('div');
-    helpTooltip.className = 'field-help-tooltip';
+    helpTooltip.className = 'field-help-tooltip vorpal-tip';
     document.body.appendChild(helpTooltip);
 
     document.addEventListener('mouseenter', function(e) {
@@ -7263,7 +7263,7 @@ function displayVersionList(versionListJson, context) {
         return;
     }
 
-    let html = '<ul class="version-list">';
+    let html = '<ul class="version-list vorpal-list">';
     versions.forEach((version, index) => {
         const date = new Date(version.timestamp);
         const dateStr = date.toLocaleString();
@@ -7271,10 +7271,10 @@ function displayVersionList(versionListJson, context) {
         const isRecent = index === 0;
 
         html += `
-            <li class="version-item ${isRecent ? 'version-current' : ''}">
+            <li class="version-item vorpal-list-item ${isRecent ? 'version-current' : ''}">
                 <div class="version-info">
                     <div class="version-date">${dateStr} ${isRecent ? '(the content before the last save)' : ''}</div>
-                    <div class="version-size">${sizeKB} KB</div>
+                    <div class="version-size vorpal-list-sub">${sizeKB} KB</div>
                 </div>
                 <div class="version-actions">
                     <button type="button" class="vorpal-btn vorpal-btn-ghost vorpal-btn-sm"

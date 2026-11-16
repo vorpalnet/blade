@@ -1300,6 +1300,7 @@ html[data-theme] body {
 	border: 1px solid var(--vorpal-slate-300); border-radius: 8px; padding: 5px 10px;
 }
 :where(.vorpal-shell) :where(button) { font-weight: 600; cursor: pointer; }
+:where(.vorpal-shell) :where(input[type="checkbox"], input[type="radio"]) { accent-color: var(--vorpal-mark); }
 :where(.vorpal-shell) :where(button:hover) { border-color: var(--vorpal-slate-400); background: var(--vorpal-slate-200); }
 :where(.vorpal-shell) :where(button:disabled) { opacity: .5; cursor: default; }
 :where(.vorpal-shell) :where(input, select, textarea)::placeholder { color: var(--vorpal-slate-400); }
@@ -1405,7 +1406,9 @@ textarea.vorpal-input { line-height: 1.45; }
 .vorpal-table td { padding: 7px 10px; border-bottom: 1px solid var(--vorpal-divider); vertical-align: top; }
 .vorpal-table tbody tr:hover td { background: var(--vorpal-slate-200); }
 .vorpal-table .num { text-align: right; font-family: var(--vorpal-font-mono); font-variant-numeric: tabular-nums; }
-.vorpal-table tr.selected td, .vorpal-table tr[aria-selected="true"] td { background: var(--vorpal-purple-soft); box-shadow: inset 3px 0 0 var(--vorpal-purple); }
+.vorpal-table tr.selected td, .vorpal-table tr[aria-selected="true"] td { background: var(--vorpal-purple-soft); }
+/* The bar marks the row once, at its left edge, not every cell. */
+.vorpal-table tr.selected td:first-child, .vorpal-table tr[aria-selected="true"] td:first-child { box-shadow: inset 3px 0 0 var(--vorpal-purple); }
 .vorpal-table-sticky th { position: sticky; top: 0; z-index: 1; }
 
 /* Badges: a state in a word, outlined; the colour only repeats the word. */
@@ -1452,8 +1455,8 @@ textarea.vorpal-input { line-height: 1.45; }
 	color: var(--vorpal-ink-900); background: var(--vorpal-warn-soft); border-left: 3px solid var(--vorpal-warn);
 	padding: 8px 12px; border-radius: 6px; font-size: 13px;
 }
-/* Secondary text. */
-.vorpal-muted { color: var(--vorpal-slate-600); font-size: 13px; }
+/* Secondary text, at the size of the text around it. */
+.vorpal-muted { color: var(--vorpal-slate-600); }
 /* A recessed block of code or log text on an application page. */
 .vorpal-code {
 	font-family: var(--vorpal-font-mono); font-size: 12px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere;
@@ -1471,3 +1474,111 @@ textarea.vorpal-input { line-height: 1.45; }
 .vorpal-shell .vorpal-hero::after { content: none; }
 .vorpal-shell .vorpal-hero h1 { font-size: 20px; font-weight: 700; margin: 0 0 4px; }
 .vorpal-shell .vorpal-hero p { font-size: 13px; }
+
+/* ---- More shared pieces: menus, lists, dialogs, switches, tips -------- */
+
+/* A dropdown menu: a trigger and, under it, a list of actions. The list is
+   shown by the application (hidden attribute or .open). */
+.vorpal-menu { position: relative; display: inline-block; }
+.vorpal-menu-list {
+	position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; min-width: 180px;
+	display: flex; flex-direction: column; padding: 4px;
+	background: var(--vorpal-surface); border: 1px solid var(--vorpal-slate-300); border-radius: 10px;
+	box-shadow: var(--vorpal-shadow-lg);
+}
+.vorpal-menu-list.vorpal-menu-right { left: auto; right: 0; }
+.vorpal-menu-item {
+	display: block; width: 100%; text-align: left; font: inherit; font-size: 13px; color: var(--vorpal-ink-900);
+	background: transparent; border: 0; border-radius: 6px; padding: 6px 10px; cursor: pointer; text-decoration: none;
+	white-space: nowrap;
+}
+.vorpal-menu-item:hover, .vorpal-menu-item:focus-visible { background: var(--vorpal-slate-200); color: var(--vorpal-ink-900); border-bottom: 0; }
+.vorpal-menu-item:disabled, .vorpal-menu-item[aria-disabled="true"] { opacity: .5; cursor: default; background: transparent; }
+.vorpal-menu-item-danger { color: var(--vorpal-error); }
+.vorpal-menu-sep { height: 1px; margin: 4px 2px; background: var(--vorpal-divider); }
+.vorpal-menu-head { padding: 6px 10px 2px; font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--vorpal-slate-400); }
+
+/* A list to pick one item from (files, calls, rule sets): the chosen item is
+   filled, bold and barred at its left edge, as the rail marks its app. */
+.vorpal-list { display: flex; flex-direction: column; gap: 1px; margin: 0; padding: 0; list-style: none; }
+.vorpal-list-item {
+	display: block; width: 100%; text-align: left; font: inherit; font-size: 13px; color: var(--vorpal-ink-900);
+	background: transparent; border: 0; border-radius: 6px; padding: 5px 10px; cursor: pointer; text-decoration: none;
+	overflow-wrap: anywhere;
+}
+.vorpal-list-item:hover { background: var(--vorpal-slate-200); border-bottom: 0; }
+.vorpal-list-item.selected, .vorpal-list-item.active, .vorpal-list-item[aria-selected="true"], .vorpal-list-item[aria-current] {
+	background: var(--vorpal-slate-200); font-weight: 700; box-shadow: inset 3px 0 0 var(--vorpal-purple);
+}
+.vorpal-list-sub { display: block; font-size: 11.5px; font-weight: 400; color: var(--vorpal-slate-400); }
+
+/* A dialog over the page: a scrim and, centred on it, a panel with a head,
+   a body that scrolls, and a row of actions. Works as a native <dialog> too. */
+.vorpal-backdrop { position: fixed; inset: 0; z-index: 1000; background: var(--vorpal-scrim); display: grid; place-items: center; padding: 16px; }
+.vorpal-dialog {
+	background: var(--vorpal-surface); color: var(--vorpal-ink-900); border: 1px solid var(--vorpal-slate-300);
+	border-radius: 14px; box-shadow: var(--vorpal-shadow-lg); padding: 0;
+	width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); display: flex; flex-direction: column;
+}
+dialog.vorpal-dialog::backdrop { background: var(--vorpal-scrim); }
+/* Closed, a <dialog> stays hidden: the display above would otherwise show it. */
+dialog.vorpal-dialog:not([open]) { display: none; }
+.vorpal-dialog-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--vorpal-divider); }
+.vorpal-dialog-title { margin: 0; font-size: 15px; font-weight: 700; flex: 1 1 auto; }
+.vorpal-dialog-body { padding: 14px 16px; overflow: auto; min-height: 0; }
+.vorpal-dialog-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--vorpal-divider); }
+
+/* An on/off switch: <label class="vorpal-switch"><input type="checkbox"> Words</label>.
+   On is the knob at the right AND the track filled, and the words say what it is. */
+.vorpal-switch { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; user-select: none; }
+.vorpal-switch input {
+	appearance: none; -webkit-appearance: none; margin: 0; flex: none; cursor: pointer;
+	position: relative; width: 32px; height: 18px; border-radius: 999px;
+	background: var(--vorpal-slate-300); border: 1px solid var(--vorpal-slate-400); transition: background 120ms ease;
+}
+.vorpal-switch input::after {
+	content: ""; position: absolute; top: 1px; left: 1px; width: 14px; height: 14px; border-radius: 50%;
+	background: var(--vorpal-surface); box-shadow: var(--vorpal-shadow-sm); transition: transform 120ms ease;
+}
+.vorpal-switch input:checked { background: var(--vorpal-mark); border-color: var(--vorpal-mark); }
+.vorpal-switch input:checked::after { transform: translateX(14px); background: #fff; }
+.vorpal-switch input:disabled { opacity: .5; cursor: default; }
+
+/* A tip or popover: a short explanation over the page, drawn inverted so it
+   reads as apart from the page. .vorpal-popover is the larger, page-coloured
+   kind for longer help. The application positions them. */
+.vorpal-tip {
+	position: absolute; z-index: 40; max-width: 320px; padding: 6px 10px; border-radius: 6px;
+	background: var(--vorpal-ink-900); color: var(--vorpal-surface); font-size: 12px; line-height: 1.45;
+	box-shadow: var(--vorpal-shadow-md); pointer-events: none;
+}
+.vorpal-popover {
+	position: absolute; z-index: 40; max-width: 380px; padding: 10px 12px; border-radius: 10px;
+	background: var(--vorpal-surface); color: var(--vorpal-ink-900); border: 1px solid var(--vorpal-slate-300);
+	font-size: 12.5px; line-height: 1.5; box-shadow: var(--vorpal-shadow-lg);
+}
+/* The round "?" that opens one. */
+.vorpal-help {
+	display: inline-grid; place-items: center; width: 18px; height: 18px; padding: 0; flex: none;
+	border-radius: 50%; border: 1px solid var(--vorpal-slate-300); background: var(--vorpal-surface);
+	color: var(--vorpal-slate-600); font: inherit; font-size: 11px; font-weight: 700; cursor: help;
+}
+.vorpal-help:hover { color: var(--vorpal-purple); border-color: var(--vorpal-purple); }
+
+/* A section that opens and closes: <details class="vorpal-details"><summary>…</summary>…</details>.
+   The triangle turns, and the summary says what is inside. */
+.vorpal-details { border: 1px solid var(--vorpal-divider); border-radius: 10px; background: var(--vorpal-surface); }
+.vorpal-details > summary {
+	list-style: none; cursor: pointer; padding: 8px 12px; font-size: 13px; font-weight: 700;
+	display: flex; align-items: center; gap: 8px;
+}
+.vorpal-details > summary::-webkit-details-marker { display: none; }
+.vorpal-details > summary::before { content: "\25B8"; color: var(--vorpal-slate-400); transition: transform 120ms ease; }
+.vorpal-details[open] > summary::before { transform: rotate(90deg); }
+.vorpal-details > :not(summary) { margin: 0 12px 12px; }
+
+/* A figure and what it counts: the dashboard's KPI tile. */
+.vorpal-stat { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border: 1px solid var(--vorpal-divider); border-radius: 10px; background: var(--vorpal-surface); min-width: 0; }
+.vorpal-stat-label { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--vorpal-slate-400); }
+.vorpal-stat-value { font-size: 22px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--vorpal-ink-900); }
+.vorpal-stat-sub { font-size: 11.5px; color: var(--vorpal-slate-600); }

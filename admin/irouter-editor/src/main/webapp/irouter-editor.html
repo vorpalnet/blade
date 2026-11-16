@@ -15,7 +15,7 @@
 		   from /blade/portal/lib/blade-editor.css. */
 		.page-content { max-width: 1400px; margin: 0 auto; padding: 24px; }
 		.page-content > h1 { margin: 0 0 8px; font-size: 20px; font-weight: 600; color: var(--vorpal-ink-900); }
-		.subtitle { color: var(--vorpal-slate-600); margin: 0 0 24px; }
+		.subtitle { margin: 0 0 24px; }
 		.subtitle code { color: var(--vorpal-ink-900); }
 		.check-toggle { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; color: var(--vorpal-ink-900); }
 		.check-toggle input { width: 15px; height: 15px; margin: 0; }
@@ -46,21 +46,11 @@
 		}
 		.result-table { margin-bottom: 10px; }
 		.result-table td.k { color: var(--vorpal-purple); white-space: nowrap; }
-		.result-note { font-size: 12px; color: var(--vorpal-slate-600); margin: 6px 0; }
+		.result-note { font-size: 12px; margin: 6px 0; }
 		.dry-warn { margin-top: 10px; white-space: pre-wrap; }
 		details.raw { margin-top: 10px; font-size: 12px; }
-		details.raw pre {
-			background: var(--vorpal-slate-100);
-			border: 1px solid var(--vorpal-divider);
-			border-radius: var(--vorpal-radius-sm);
-			color: var(--vorpal-ink-900);
-			padding: 8px 10px;
-			max-height: 240px;
-			overflow: auto;
-			font: 11px/1.4 var(--vorpal-font-mono);
-			white-space: pre-wrap;
-			word-break: break-all;
-		}
+		/* A .vorpal-code block, held to a height. */
+		details.raw pre { max-height: 240px; overflow: auto; word-break: break-all; }
 	</style>
 </head>
 <body class="vorpal-glass">
@@ -84,7 +74,7 @@
 
 	<main class="page-content" data-shell-main>
 	<h1>iRouter pipeline &amp; routing</h1>
-	<p class="subtitle" title="Save keeps the previous version; Publish tells the running iRouter to reload.">
+	<p class="subtitle vorpal-muted" title="Save keeps the previous version; Publish tells the running iRouter to reload.">
 		Editing <code id="targetFile">irouter.json</code>
 	</p>
 
@@ -115,7 +105,7 @@
 		<div class="versions-panel" id="versionsPanel" style="display:none;">
 			<div class="vorpal-panel-head"><h2 class="vorpal-panel-title">Version history</h2></div>
 			<div id="versionsBody"></div>
-			<pre id="versionPreview" style="display:none;"></pre>
+			<pre id="versionPreview" class="vorpal-code" style="display:none;"></pre>
 		</div>
 
 		<div class="versions-panel" id="jsonPanel" style="display:none;">
@@ -123,20 +113,20 @@
 				<h2 class="vorpal-panel-title" id="jsonTitle">Draft irouter.json · read-only, exactly what Save writes</h2>
 				<div class="vorpal-toolbar"><button id="copyJson" type="button" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm">copy</button></div>
 			</div>
-			<pre id="jsonBody"></pre>
+			<pre id="jsonBody" class="vorpal-code"></pre>
 		</div>
 
 		<div class="section-head">
 			<span class="step">1</span>
 			<span class="vorpal-panel-title" title="Connectors run in order on each initial INVITE, extracting values (and REST, database or directory lookups) into variables the routing decision reads.">Pipeline</span>
-			<button class="help-mini vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" data-help="pipeline">?</button>
+			<button class="help-mini vorpal-help" type="button" data-help="pipeline">?</button>
 		</div>
 		<div id="pipelinePanel" class="pipeline-panel"></div>
 
 		<div class="section-head">
 			<span class="step">2</span>
 			<span class="vorpal-panel-title" title="One strategy (table, conditional or direct) produces the Route: forward downstream, or answer with a final response.">Routing</span>
-			<button class="help-mini vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" data-help="routing">?</button>
+			<button class="help-mini vorpal-help" type="button" data-help="routing">?</button>
 		</div>
 		<div id="routingPanel" class="pipeline-panel"></div>
 
@@ -145,7 +135,7 @@
 	<div class="section-head on-glass">
 		<span class="step">3</span>
 		<span class="vorpal-panel-title" title="Runs the unsaved draft in-process on the AdminServer; nothing is proxied.">Dry-run</span>
-		<button class="help-mini vorpal-btn vorpal-btn-secondary vorpal-btn-sm" type="button" data-help="dryrun">?</button>
+		<button class="help-mini vorpal-help" type="button" data-help="dryrun">?</button>
 		<span class="vorpal-panel-sub">rest, jdbc and ldap connectors really call their backends</span>
 	</div>
 
@@ -166,28 +156,28 @@
 			<div class="vorpal-panel-head"><h2 class="vorpal-panel-title">Decision</h2></div>
 			<div id="outcome" class="outcome vorpal-note" style="display:none;"></div>
 			<div id="headersWrap" style="display:none;">
-				<div class="result-note">Headers stamped on the outbound message:</div>
+				<div class="result-note vorpal-muted">Headers stamped on the outbound message:</div>
 				<table class="result-table vorpal-table vorpal-mono" id="headersTable"></table>
 			</div>
-			<div id="skippedWrap" class="result-note" style="display:none;"></div>
+			<div id="skippedWrap" class="result-note vorpal-muted" style="display:none;"></div>
 			<div id="varsWrap" style="display:none;">
-				<div class="result-note">Variables after enrichment:</div>
+				<div class="result-note vorpal-muted">Variables after enrichment:</div>
 				<table class="result-table vorpal-table vorpal-mono" id="varsTable"></table>
 			</div>
 			<div id="warnPanel" class="dry-warn vorpal-error" style="display:none;"></div>
 			<details class="raw" id="rawWrap" style="display:none;">
 				<summary>Raw response</summary>
-				<pre id="rawBody"></pre>
+				<pre id="rawBody" class="vorpal-code"></pre>
 			</details>
 		</div>
 	</div>
 
-	<dialog id="helpDialog" class="help-dialog">
-		<div class="help-head">
-			<h2 class="vorpal-panel-title">How the iRouter works</h2>
+	<dialog id="helpDialog" class="help-dialog vorpal-dialog">
+		<div class="help-head vorpal-dialog-head">
+			<h2 class="vorpal-dialog-title">How the iRouter works</h2>
 			<button type="button" id="helpClose" class="vorpal-btn vorpal-btn-secondary vorpal-btn-sm">close</button>
 		</div>
-		<div class="help-body">
+		<div class="help-body vorpal-dialog-body">
 			<section id="help-pipeline">
 				<h3>The pipeline</h3>
 				<p>When an INVITE arrives, the iRouter runs an ordered list of

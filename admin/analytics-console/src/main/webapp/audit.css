@@ -65,16 +65,8 @@
 	margin: 0.75rem 0 0;
 }
 
-/* The step log of a provisioning run. No shared code block exists yet. */
-.audit-fix-log {
-	margin: 1rem 0 0;
-	padding: 0.75rem 1rem;
-	background: var(--vorpal-slate-100);
-	border: 1px solid var(--vorpal-divider);
-	border-radius: var(--vorpal-radius-sm);
-	font-size: 12px;
-	white-space: pre-wrap;
-}
+/* The step log of a provisioning run: the shared .vorpal-code block. */
+.audit-fix-log { margin-top: 1rem; }
 
 /* Overall pill, in the top bar: translucent state tints read on either
    theme. */

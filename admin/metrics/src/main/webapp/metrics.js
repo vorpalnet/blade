@@ -79,9 +79,9 @@
 		div.style.marginBottom = '.75rem';
 
 		var head = '<div><strong>' + esc(counter.name) + '</strong> '
-			+ '<span class="ev-muted">' + n(counter.total) + ' ' + esc(rate(counter.total, uptime)) + '</span></div>';
+			+ '<span class="vorpal-muted">' + n(counter.total) + ' ' + esc(rate(counter.total, uptime)) + '</span></div>';
 		if (counter.description) {
-			head += '<div class="ev-muted">' + esc(counter.description) + '</div>';
+			head += '<div class="vorpal-muted">' + esc(counter.description) + '</div>';
 		}
 
 		var values = counter.values || {};
@@ -107,8 +107,8 @@
 		var div = document.createElement('div');
 		div.style.marginBottom = '.5rem';
 		div.innerHTML = '<div><strong>' + esc(gauge.name) + '</strong> '
-			+ '<span class="ev-muted">' + n(gauge.value) + '</span></div>'
-			+ (gauge.description ? '<div class="ev-muted">' + esc(gauge.description) + '</div>' : '');
+			+ '<span class="vorpal-muted">' + n(gauge.value) + '</span></div>'
+			+ (gauge.description ? '<div class="vorpal-muted">' + esc(gauge.description) + '</div>' : '');
 		return div;
 	}
 
@@ -131,10 +131,10 @@
 		bars += '<div>+</div></div>';
 
 		div.innerHTML = '<div><strong>' + esc(h.name) + '</strong> '
-			+ '<span class="ev-muted">' + n(h.count) + ' samples · '
+			+ '<span class="vorpal-muted">' + n(h.count) + ' samples · '
 			+ 'p50 ' + n(h.p50Millis) + 'ms · p90 ' + n(h.p90Millis) + 'ms · p99 ' + n(h.p99Millis) + 'ms · '
 			+ 'max ' + n(h.maxMillis) + 'ms</span></div>'
-			+ (h.description ? '<div class="ev-muted">' + esc(h.description) + '</div>' : '')
+			+ (h.description ? '<div class="vorpal-muted">' + esc(h.description) + '</div>' : '')
 			+ bars
 			+ (h.mismatchedBounds
 				? '<div class="vorpal-error m-msg"><div class="m-kind">✕ mismatched buckets</div>'

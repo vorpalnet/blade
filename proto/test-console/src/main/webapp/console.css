@@ -16,11 +16,6 @@
 	margin-top: 14px;
 }
 
-.tc-feedback {
-	font-size: 13px;
-	color: var(--vorpal-slate-600);
-}
-
 .tc-node-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
