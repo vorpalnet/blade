@@ -18,11 +18,12 @@
   Colour never carries meaning here: a refusal says "Refused" and is marked with a cross.
 -->
 <style>
-  .bar { padding: 12px 20px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; }
+  .bar { padding: 16px 20px 12px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; }
   .bar h1 { font-size: 18px; margin: 0; }
   .bar form { align-items: flex-end; }
   .page .vorpal-note { margin: 0 20px; }
   .page main { padding: 12px 20px 32px; }
+  .page main > .vorpal-error { margin-bottom: 12px; }
   .page main .vorpal-panel { overflow-x: auto; }
   .page main table { min-width: 760px; }
   td.when { white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -30,7 +31,6 @@
   tr.refused td { background: var(--vorpal-slate-200); }
   tr.refused td.decision { font-weight: 700; }
   .mono { word-break: break-all; }
-  #status { color: var(--vorpal-slate-600); font-size: 13px; }
 </style>
 </head>
 <body>
@@ -48,15 +48,17 @@
     <label class="vorpal-field"><span class="vorpal-label">Who</span><input id="who" class="vorpal-input" type="search" placeholder="any"></label>
     <button type="submit" class="vorpal-btn">Show</button>
   </form>
-  <span id="status" aria-live="polite"></span>
+  <span id="status" class="vorpal-muted" aria-live="polite"></span>
 </div>
 <p class="vorpal-note">Every attempt to reach a recording or a transcript is here, permitted or refused. Reading this log is recorded too, and whoever reads it cannot remove that record.</p>
 <main>
-  <div class="vorpal-panel">
-  <table class="vorpal-table">
+  <div id="problem" class="vorpal-error" role="alert" hidden></div>
+  <div class="vorpal-panel" id="log">
+  <table class="vorpal-table" id="table">
     <thead><tr><th>When (UTC)</th><th>Who</th><th>Decision</th><th>Tried to</th><th>What</th><th>From</th><th>Rule</th></tr></thead>
     <tbody id="rows"></tbody>
   </table>
+  <div id="none" class="vorpal-empty" hidden>No access records for this day.</div>
   </div>
 </main>
 </div>
@@ -99,25 +101,32 @@
       body.append(tr);
     }
     $('status').textContent = shown.length + ' of ' + records.length + ' records';
+    $('table').hidden = shown.length === 0;
+    $('none').hidden = shown.length !== 0;
+    $('none').textContent = records.length ? 'Nobody by that name on this day.' : 'No access records for this day.';
+  }
+
+  // A refusal or failure, shown instead of the log; null shows the log again.
+  function problem(message) {
+    $('problem').hidden = !message;
+    $('problem').textContent = message || '';
+    $('log').hidden = !!message;
+    if (message) $('status').textContent = '';
   }
 
   async function load() {
     const [y, m, d] = $('day').value.split('-');
     $('status').textContent = 'Loading…';
     const res = await fetch('api/v1/audit/' + y + '/' + m + '/' + d, { credentials: 'same-origin' });
-    if (res.status === 403) {
-      records = [];
-      show();
-      $('status').textContent = 'You may not read the access log. That attempt has been recorded.';
-      return;
-    }
     if (!res.ok) {
+      // Refused or failed: say so in place of the log, not beside the button.
       records = [];
-      show();
-      const body = await res.json().catch(() => ({}));
-      $('status').textContent = body.error || ('The log could not be read (' + res.status + ').');
+      const body = res.status === 403 ? {} : await res.json().catch(() => ({}));
+      problem(res.status === 403 ? 'You may not read the access log. That attempt has been recorded.'
+        : body.error || ('The log could not be read (' + res.status + ').'));
       return;
     }
+    problem(null);
     records = (await res.json()).records || [];
     show();
   }

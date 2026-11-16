@@ -21,27 +21,59 @@
   muted recording says so in words; an incomplete record says so in words.
 -->
 <style>
-  main.review { display: grid; grid-template-columns: minmax(360px, 1fr) minmax(420px, 1.4fr); gap: 16px; padding: 16px 20px; align-items: start; }
-  form.filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin-bottom: 12px; }
-  form.filters .wide { grid-column: 1 / -1; }
-  form.filters button { grid-column: 1 / -1; justify-self: start; }
-  .status { color: var(--vorpal-slate-600); font-size: 13px; margin: 6px 0 10px; min-height: 1.4em; }
-  table.hits tr.hit { cursor: pointer; }
-  .snippet { color: var(--vorpal-slate-600); font-style: italic; }
+  /* One screen: the search column and the record, each scrolling inside
+     itself, so the list and the transcript never push each other away. */
+  html, body { height: 100%; }
+  body { overflow: hidden; }
+  .vorpal-app { height: 100vh; min-height: 0; }
+  main.review {
+    display: grid; grid-template-columns: minmax(340px, 420px) minmax(0, 1fr); gap: 16px;
+    padding: 16px 20px; min-height: 0; overflow: hidden;
+  }
+  .review > .vorpal-panel { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+
+  /* The search: words first, then when and who; the rarer filters fold away. */
+  form.filters { display: flex; flex-direction: column; gap: 10px; flex: none; }
+  .filters .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+  .filters .find { display: flex; gap: 8px; align-items: flex-end; }
+  .filters .find .vorpal-field { flex: 1 1 auto; }
+  .filters .more { border-radius: 8px; }
+  .filters .more > summary { padding: 6px 10px; font-size: 12.5px; }
+  .filters .more .row { margin-bottom: 8px; }
+  .filters .more .row:last-child { margin-bottom: 0; }
+  .filters .more .wide { grid-column: 1 / -1; }
+  .status { margin: 10px 0 6px; flex: none; }
+
+  /* The results: a list to pick a call from. */
+  .hits { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0 -6px; padding: 0 6px; }
+  .hit .who { display: block; font-weight: 600; overflow-wrap: anywhere; }
+  .hit .meta { display: block; font-size: 12px; font-weight: 400; color: var(--vorpal-slate-600); font-variant-numeric: tabular-nums; }
+  .hit .snippet { display: block; font-size: 12px; font-weight: 400; font-style: italic; color: var(--vorpal-slate-600); margin-top: 2px; }
+
+  /* The record: who and when, the player, then the transcript to the bottom. */
+  .record .head { flex: none; }
   .record h2 { margin: 0 0 4px; }
-  .facts { color: var(--vorpal-slate-600); font-size: 13px; margin-bottom: 12px; }
+  .facts { margin-bottom: 10px; font-size: 12.5px; }
   .facts span + span::before { content: " · "; }
-  .player { margin: 8px 0 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .player audio { width: 100%; max-width: 520px; }
-  .player .note { color: var(--vorpal-slate-600); font-size: 12px; }
-  .transcript { border: 1px solid var(--vorpal-divider); border-radius: var(--vorpal-radius-sm); padding: 6px 0; max-height: 60vh; overflow: auto; }
-  .line { display: grid; grid-template-columns: 64px 150px 1fr; gap: 10px; padding: 5px 12px; }
+  .player { flex: none; margin: 0 0 12px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .player audio { flex: 1 1 320px; max-width: 560px; }
+  .player .note { font-size: 12px; }
+  .transcript { flex: 1 1 auto; min-height: 0; overflow: auto; border-top: 1px solid var(--vorpal-divider); padding: 6px 0; }
+  .line { display: grid; grid-template-columns: 52px 130px 1fr; gap: 10px; padding: 6px 8px; border-radius: 6px; }
   .line:hover { background: var(--vorpal-slate-200); }
-  .line .t { color: var(--vorpal-slate-600); font-variant-numeric: tabular-nums; cursor: pointer; }
-  .line .p { font-weight: 600; overflow-wrap: anywhere; }
+  .line .t { color: var(--vorpal-purple); font-variant-numeric: tabular-nums; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+  .line .p { font-weight: 700; overflow-wrap: anywhere; }
   .line .p.callee { font-weight: 400; color: var(--vorpal-slate-600); }
-  .toggle { font-size: 12px; color: var(--vorpal-slate-600); }
-  .toggle input { vertical-align: middle; }
+  .record > .vorpal-empty { margin: auto; }
+
+  /* Narrow: one column, and the page scrolls as a whole. */
+  @media (max-width: 860px) {
+    body { overflow: auto; }
+    .vorpal-app { height: auto; }
+    main.review { grid-template-columns: 1fr; overflow: visible; }
+    .review > .vorpal-panel { overflow: visible; }
+    .hits, .transcript { overflow: visible; }
+  }
 </style>
 </head>
 <body>
@@ -52,38 +84,48 @@
   <div class="vorpal-topbar-right"></div>
 </header>
 <main class="review">
-  <section class="search vorpal-panel">
+  <section class="search vorpal-panel" aria-label="Find a call">
     <form class="filters" id="filters" autocomplete="off">
-      <label class="vorpal-field"><span class="vorpal-label">From day</span><input class="vorpal-input" type="date" name="from"></label>
-      <label class="vorpal-field"><span class="vorpal-label">To day</span><input class="vorpal-input" type="date" name="to"></label>
-      <label class="vorpal-field wide"><span class="vorpal-label">Number, calling or called (prefix)</span><input class="vorpal-input" name="number" placeholder="816555"></label>
-      <label class="vorpal-field"><span class="vorpal-label">Attribute</span><input class="vorpal-input" name="attrName" placeholder="department"></label>
-      <label class="vorpal-field"><span class="vorpal-label">equals</span><input class="vorpal-input" name="attrValue" placeholder="cardiology"></label>
-      <label class="vorpal-field"><span class="vorpal-label">Found in the call</span>
-        <select class="vorpal-input" name="kind">
-          <option value="">anything</option>
-          <option value="card">a card number</option>
-          <option value="ssn">a social security number</option>
-          <option value="phone">a phone number</option>
-          <option value="number">an account or member id</option>
-          <option value="date">a date</option>
-          <option value="address">an address</option>
-        </select>
-      </label>
-      <label class="vorpal-field"><span class="vorpal-label">Call id</span><input class="vorpal-input vorpal-mono" name="call" placeholder="0C360643.1a08…"></label>
-      <label class="vorpal-field wide"><span class="vorpal-label">Words said</span><input class="vorpal-input" name="q" placeholder="cancel my appointment"></label>
-      <label class="vorpal-field wide"><span class="vorpal-label">Protected value spoken (needs unredact)</span><input class="vorpal-input" name="value" placeholder="member id, card…"></label>
-      <button type="submit" class="vorpal-btn">Search</button>
+      <div class="find">
+        <label class="vorpal-field"><span class="vorpal-label">Words said</span><input class="vorpal-input" type="search" name="q" placeholder="cancel my appointment"></label>
+        <button type="submit" class="vorpal-btn">Search</button>
+      </div>
+      <div class="row">
+        <label class="vorpal-field"><span class="vorpal-label">From day (UTC)</span><input class="vorpal-input" type="date" name="from"></label>
+        <label class="vorpal-field"><span class="vorpal-label">To day (UTC)</span><input class="vorpal-input" type="date" name="to"></label>
+      </div>
+      <label class="vorpal-field"><span class="vorpal-label">Number, calling or called</span><input class="vorpal-input" name="number" placeholder="starts with, e.g. 816555"></label>
+      <details class="more vorpal-details" id="more">
+        <summary>More filters</summary>
+        <div class="row">
+          <label class="vorpal-field"><span class="vorpal-label">Attribute</span><input class="vorpal-input" name="attrName" placeholder="department"></label>
+          <label class="vorpal-field"><span class="vorpal-label">Equals</span><input class="vorpal-input" name="attrValue" placeholder="cardiology"></label>
+        </div>
+        <div class="row">
+          <label class="vorpal-field"><span class="vorpal-label">Found in the call</span>
+            <select class="vorpal-input" name="kind">
+              <option value="">anything</option>
+              <option value="card">a card number</option>
+              <option value="ssn">a social security number</option>
+              <option value="phone">a phone number</option>
+              <option value="number">an account or member id</option>
+              <option value="date">a date</option>
+              <option value="address">an address</option>
+            </select>
+          </label>
+          <label class="vorpal-field"><span class="vorpal-label">Call id</span><input class="vorpal-input vorpal-mono" name="call" placeholder="0C360643.1a08…"></label>
+        </div>
+        <div class="row">
+          <label class="vorpal-field wide"><span class="vorpal-label">Protected value spoken (needs unredact)</span><input class="vorpal-input" name="value" placeholder="member id, card…"></label>
+        </div>
+      </details>
     </form>
-    <div class="status" id="status"></div>
-    <table class="hits vorpal-table" id="hits" hidden>
-      <thead><tr><th>When (UTC)</th><th>From</th><th>To</th><th>Length</th><th>Found</th></tr></thead>
-      <tbody></tbody>
-    </table>
+    <div class="status vorpal-muted" id="status" aria-live="polite"></div>
+    <div class="hits vorpal-list" id="hits" role="listbox" aria-label="Matching calls" hidden></div>
     <div class="vorpal-empty" id="empty" hidden>Nothing you may see matches.</div>
   </section>
-  <section class="record vorpal-panel" id="record">
-    <div class="vorpal-empty">Search, then pick a call.</div>
+  <section class="record vorpal-panel" id="record" aria-label="The call">
+    <div class="vorpal-empty">Pick a call to hear it and read what was said.</div>
   </section>
 </main>
 </div>
@@ -92,7 +134,6 @@
   var api = 'api/v1/recordings';
   var statusEl = document.getElementById('status');
   var table = document.getElementById('hits');
-  var tbody = table.querySelector('tbody');
   var empty = document.getElementById('empty');
   var record = document.getElementById('record');
   var selected = null;
@@ -110,10 +151,21 @@
     return p.toString();
   }
 
-  document.getElementById('filters').addEventListener('submit', function (ev) {
-    ev.preventDefault();
+  var form = document.getElementById('filters');
+  var more = document.getElementById('more');
+  var list = table;
+
+  // The rarer filters open themselves when one is in use, so a search never
+  // narrows by something the reviewer cannot see.
+  function openIfUsed() {
+    var d = new FormData(form);
+    if (['attrName', 'attrValue', 'kind', 'call', 'value'].some(function (k) { return d.get(k); })) more.open = true;
+  }
+
+  function search() {
+    openIfUsed();
     text(statusEl, 'Searching…');
-    fetch(api + '/search?' + queryString(ev.target), { headers: { 'Accept': 'application/json' } })
+    fetch(api + '/search?' + queryString(form), { headers: { 'Accept': 'application/json' } })
       .then(function (r) {
         if (r.status === 403) throw new Error('You may not run that search.');
         if (r.status === 409) return r.json().then(function (b) { throw new Error(b.error); });
@@ -121,26 +173,28 @@
         return r.json();
       })
       .then(function (body) {
-        tbody.innerHTML = '';
+        list.innerHTML = '';
+        selected = null;
         var hits = body.hits || [];
-        text(statusEl, hits.length + ' of ' + body.candidates + ' matching call' + (body.candidates === 1 ? '' : 's') + ' you may see');
-        table.hidden = hits.length === 0; empty.hidden = hits.length !== 0;
+        text(statusEl, hits.length + ' of ' + body.candidates + ' matching call' + (body.candidates === 1 ? '' : 's') + ' you may see, newest first');
+        list.hidden = hits.length === 0; empty.hidden = hits.length !== 0;
         hits.forEach(function (h) {
-          var tr = el('tr', 'hit');
-          tr.appendChild(text(el('td'), fmtWhen(h.epochUtc)));
-          tr.appendChild(text(el('td'), h.from || ''));
-          tr.appendChild(text(el('td'), h.to || ''));
-          tr.appendChild(text(el('td'), fmtLen(h.durationMillis) + (h.complete ? '' : ' (incomplete)')));
-          tr.appendChild(text(el('td'), fmtKinds(h.kinds)));
-          tr.addEventListener('click', function () { select(tr, h); });
-          tbody.appendChild(tr);
-          if (h.snippet) {
-            var sr = el('tr'); var td = el('td', 'snippet'); td.colSpan = 5; text(td, '“' + h.snippet + '”'); sr.appendChild(td); tbody.appendChild(sr);
-          }
+          var item = el('button', 'hit vorpal-list-item');
+          item.type = 'button';
+          item.setAttribute('role', 'option');
+          item.appendChild(text(el('span', 'who'), (h.from || '?') + ' → ' + (h.to || '?')));
+          var meta = [fmtWhen(h.epochUtc), fmtLen(h.durationMillis) + (h.complete ? '' : ' (incomplete)')];
+          if (h.kinds) meta.push('found ' + fmtKinds(h.kinds));
+          item.appendChild(text(el('span', 'meta'), meta.join(' · ')));
+          if (h.snippet) item.appendChild(text(el('span', 'snippet'), '“' + h.snippet + '”'));
+          item.addEventListener('click', function () { select(item, h); });
+          list.appendChild(item);
         });
       })
-      .catch(function (e) { text(statusEl, e.message); table.hidden = true; empty.hidden = true; });
-  });
+      .catch(function (e) { text(statusEl, e.message); list.hidden = true; empty.hidden = true; });
+  }
+
+  form.addEventListener('submit', function (ev) { ev.preventDefault(); search(); });
 
   function feed(audio, url, note) {
     var mime = 'audio/mp4; codecs="mp4a.40.2"';
@@ -214,29 +268,31 @@
     attach(null);
   }
 
-  function select(tr, hit) {
-    if (selected) selected.classList.remove('selected');
-    selected = tr; tr.classList.add('selected');
+  function select(item, hit) {
+    if (selected) { selected.classList.remove('selected'); selected.removeAttribute('aria-selected'); }
+    selected = item; item.classList.add('selected'); item.setAttribute('aria-selected', 'true');
     show(hit, false);
   }
 
   function show(hit, verbatim) {
     record.innerHTML = '';
+    var head = el('div', 'head');
+    record.appendChild(head);
     var h2 = text(el('h2', 'vorpal-panel-title'), (hit.from || '?') + ' → ' + (hit.to || '?'));
-    record.appendChild(h2);
-    var facts = el('div', 'facts');
+    head.appendChild(h2);
+    var facts = el('div', 'facts vorpal-muted');
     facts.appendChild(text(el('span'), fmtWhen(hit.epochUtc) + ' UTC'));
     facts.appendChild(text(el('span'), fmtLen(hit.durationMillis)));
     if (hit.holds) facts.appendChild(text(el('span'), hit.holds + ' hold' + (hit.holds === 1 ? '' : 's')));
     if (hit.moves) facts.appendChild(text(el('span'), 'media moved'));
     Object.keys(hit.attributes || {}).forEach(function (k) { if (k !== 'call' && k !== 'from' && k !== 'to') facts.appendChild(text(el('span'), k + ' ' + hit.attributes[k])); });
-    facts.appendChild(text(el('span'), 'call ' + hit.call));
-    record.appendChild(facts);
+    facts.appendChild(text(el('span', 'vorpal-mono'), 'call ' + hit.call));
+    head.appendChild(facts);
 
     var player = el('div', 'player');
     var audio = el('audio'); audio.controls = true;
     player.appendChild(audio);
-    var note = el('span', 'note');
+    var note = el('span', 'note vorpal-muted');
     text(note, verbatim ? 'as stored' : 'protected spans are silenced');
     player.appendChild(note);
     // The recording is fragmented MP4 streamed without a length, which is
@@ -244,8 +300,8 @@
     // Extensions handles natively: fragments are appended as they arrive,
     // the duration is known once the last one lands, and seeking works.
     feed(audio, api + '/' + encodeURIComponent(hit.id) + '/media' + (verbatim ? '?verbatim=true' : ''), note);
-    var tog = el('label', 'toggle'); var cb = el('input'); cb.type = 'checkbox'; cb.checked = verbatim;
-    tog.appendChild(cb); tog.appendChild(document.createTextNode(' verbatim (needs unredact)'));
+    var tog = el('label', 'toggle vorpal-switch'); var cb = el('input'); cb.type = 'checkbox'; cb.checked = verbatim;
+    tog.appendChild(cb); tog.appendChild(document.createTextNode('verbatim (needs unredact)'));
     cb.addEventListener('change', function () { show(hit, cb.checked); });
     player.appendChild(tog);
     record.appendChild(player);
@@ -287,6 +343,9 @@
   }
 
   // Who is signed in, and Sign out: the shared frame's account menu (shell.js).
+
+  // Open on the latest calls rather than an empty page.
+  search();
 })();
 </script>
 </body>
